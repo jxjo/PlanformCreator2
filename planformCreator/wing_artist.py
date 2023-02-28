@@ -186,7 +186,7 @@ class Base_Artist():
             # default remove of user tip 
             if self.userTip:
                 self.userTip = ''
-                # self.plot()
+                self.plot()
 
         except: 
             print ("- Pick event couldn't be handled ", event.artist, "callback: ", self._pickCallback)
@@ -386,7 +386,7 @@ class RefPlanform_Artist (Planform_Artist):
         marker_y = y[iclosest] 
         marker_x = leadingEdge[iclosest] - 15
         text = self.refPlanform.planformType
-        p = self.ax.text (marker_y, marker_x, text , color = self.color, fontsize = 'small' )
+        p = self.ax.text (marker_y, marker_x, text , color = self.color)
         self._add (p)   
 
 
@@ -423,7 +423,7 @@ class RefPlanform_DXF_Artist (Planform_Artist):
         marker_x = leadingEdge[iclosest] - 15
 
         text = self.refPlanform_DXF.dxf_filename()
-        p = self.ax.text (marker_y, marker_x, text , color = self.color, fontsize = 'small' )
+        p = self.ax.text (marker_y, marker_x, text , color = self.color)
         self._add (p)   
 
 
@@ -540,7 +540,7 @@ class WingSections_Artist (Base_Artist):
             marker_top_x = le_to_te[0] - offset
 
         p = self.ax.text (marker_y, marker_x, textRight , 
-                         color = color, fontsize = 'small' )
+                         color = color )
         self._add (p)   
 
         p = self.ax.text (marker_top_y, marker_top_x, "%d" % (section.wing.wingSectionIndexOf (section)) , 

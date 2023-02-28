@@ -704,7 +704,7 @@ class Diagrams(ctk.CTkTabview):
     """ 
     Master frame for diagrams - childs are the different plot frames 
     """
-    def __init__(self, master, wingFn, *args, **kwargs):
+    def __init__(self, master, wingFn, *args, view_frame=None, **kwargs):
         super().__init__(master, *args, **kwargs)
         """
         Args:
@@ -720,7 +720,7 @@ class Diagrams(ctk.CTkTabview):
             tab_frame.grid_columnconfigure(0, weight=1)
             tab_frame.grid_rowconfigure(0, weight=1)
 
-            self.myPlot_frames.append (plot_cls (tab_frame,  self._wingFn, diagram_master=self))
+            self.myPlot_frames.append (plot_cls (tab_frame,  self._wingFn, view_frame=view_frame))
 
         # set size of tab view titles
         self._segmented_button.configure(font=("", 16))
@@ -752,12 +752,12 @@ class Diagram_Abstract(ctk.CTkFrame):
     Abstract super class of the specific plot frames like "Plot_Planform"
     """
     name = "This is the plot super class"
-    defaultTip = "Use switches to adapt diagram view"
+    defaultTip = "Use switches ...."
 
-    def __init__(self, master, wingFn, *args, diagram_master = None,  **kwargs):
+    def __init__(self, master, wingFn, *args, view_frame = None,  **kwargs):
         super().__init__( master, *args, **kwargs)
 
-        self.master : Diagrams = diagram_master
+        self.view_frame = view_frame
         self._wingFn = wingFn
 
         self.configure(fg_color= cl_background)
@@ -774,35 +774,23 @@ class Diagram_Abstract(ctk.CTkFrame):
         self.canvas._tkcanvas.grid (row=0, column=0, pady=0, padx=0, sticky="news")
         self.canvas._tkcanvas.configure(background= cl_background)
 
-        # add an info  view frame below the plot 
-        self.view_frame = ctk.CTkFrame (self, fg_color= cl_background)
-        self.view_frame.grid(row=1, column=0, pady=0, padx=0, sticky="ew")
-
-
         self.axes : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
         self.setup_axes ()
         self.setup_artists ()
 
-        # Define Frame below plot with all the on/offswitches 
         # Create the artists for the diagramm
 
         # grid on / off is always available 
-        col = 0 
-        Switch_Widget (self.view_frame,0,col, lab='Grid', 
+        row = 1 
+        Switch_Widget (self.view_frame,row, 0, lab='Grid', 
                        get=lambda: self.gridArtist.show, set=self.gridArtist.set_show)
         
-        col += 1
-        self.view_frame.grid_columnconfigure(col, weight=1)
-
         # add user tip label 
-        col += 1
+        row += 1
         self.tip = ctk.CTkLabel(self.view_frame, text=self.defaultTip, text_color ="goldenrod2")
-        self.tip.grid(row=0, column=col, padx=30, pady= 0, sticky='w')
+        self.tip.grid(row=row, column=0, padx=30, pady= 0, sticky='w')
 
-        self.setup_Switches (col=col)                       # init of switches / plots
-
-        self.view_frame.grid_columnconfigure(10, weight=2)  # center switches in middle 
-
+        self.setup_Switches (row=row)                       # init of switches / plots
 
         self.setChangeBindings ()
         self._active            = False                     # is active frame? control change events 
@@ -826,7 +814,7 @@ class Diagram_Abstract(ctk.CTkFrame):
         self.gridArtist.plot()          # force to show first time
 
 
-    def setup_Switches(self, col=0):
+    def setup_Switches(self, row=0):
         """ define on/off switches ffor this plot type"""
         pass
 
@@ -891,33 +879,33 @@ class Diagram_Planform (Diagram_Abstract):
         self.dxfArtist          = RefPlanform_DXF_Artist (self.axes, self._wingFn)
 
 
-    def setup_Switches (self, col = 0):
+    def setup_Switches (self, row = 0):
         """ define on/off switches for this plot types"""
 
         # the whole plot work will be done by the artists
         # plot the real planform on top     
-        col += 1
-        Switch_Widget (self.view_frame,0,col, lab='Planform', 
+        row += 1
+        Switch_Widget (self.view_frame,row,0, lab='Planform', 
                 get=lambda: self.planformArtist.show, set=self.planformArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,0,col, lab='Chord lines', 
+        row += 1
+        Switch_Widget (self.view_frame,row,0, lab='Chord lines', 
                 get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,0,col, lab='Wing sections', 
+        row += 1
+        Switch_Widget (self.view_frame,row,0, lab='Wing sections', 
                 get=lambda: self.sectionsArtist.show, set=self.sectionsArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,0,col, lab='Current section', 
+        row += 1
+        Switch_Widget (self.view_frame,row,0, lab='Current section', 
                 get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,0,col, lab='Flaps', 
+        row += 1
+        Switch_Widget (self.view_frame,row,0, lab='Flaps', 
                 get=lambda: self.flapArtist.show, set=self.flapArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,0,col, lab='Reference', 
+        row += 1
+        Switch_Widget (self.view_frame,row,0, lab='Reference', 
                 get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
 
         if (self.wing.refPlanform_DXF): 
-            col += 1
-            Switch_Widget (self.view_frame,0,col, lab='Reference DXF', 
+            row += 1
+            Switch_Widget (self.view_frame,row,0, lab='Reference DXF', 
                     get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
             
         # --- some info  - currently temp 
@@ -1047,27 +1035,27 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         self.dxfArtist          = RefChord_DXF_Artist (self.axes, self._wingFn, norm=True)
 
 
-    def setup_Switches(self, col=0):
+    def setup_Switches(self, row=0):
         """ define on/off switches ffor this plot type"""
 
-        # col += 1
-        # Switch_Widget  (self.view_frame,0,col, lab='Chord distribution', 
+        # row += 1
+        # Switch_Widget  (self.view_frame,row,0, lab='Chord distribution', 
         #                 get=lambda: self.chordArtist.show, set=self.chordArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,0,col, lab='Chord lines', 
+        row += 1
+        Switch_Widget (self.view_frame,row,0, lab='Chord lines', 
                 get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
-        col += 1
-        Switch_Widget  (self.view_frame,0,col, lab='Wing sections', 
+        row += 1
+        Switch_Widget  (self.view_frame,row,0, lab='Wing sections', 
                         get=lambda: self.sectionsArtist.show, set=self.sectionsArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,0,col, lab='Current section', 
+        row += 1
+        Switch_Widget (self.view_frame,row,0, lab='Current section', 
                 get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
-        col += 1
-        Switch_Widget  (self.view_frame,0,col, lab='Reference', 
+        row += 1
+        Switch_Widget  (self.view_frame,row,0, lab='Reference', 
                         get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
         if (self.wing.refPlanform_DXF.isValid): 
-            col += 1
-            Switch_Widget  (self.view_frame,0,col, lab='Reference DXF', 
+            row += 1
+            Switch_Widget  (self.view_frame,row,0, lab='Reference DXF', 
                             get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
 
 
@@ -1175,13 +1163,13 @@ class Diagram_Airfoils (Diagram_Abstract):
                                                   strak=False, onPick=self.airfoilPicked)
 
 
-    def setup_Switches(self, col=0):
-        """ define on/off switches ffor this plot type"""
-        col += 1
-        Switch_Widget (self.view_frame,0,col, lab='In real size', 
+    def setup_Switches(self, row=0):
+        """ define on/off switches for this plot type"""
+        row += 1
+        Switch_Widget (self.view_frame,row,0, lab='In real size', 
                        get=lambda: self.airfoilArtist.abs, set=self.airfoilArtist.set_abs)
-        col += 1
-        Switch_Widget (self.view_frame,0,col, lab='Straked airfoils', 
+        row += 1
+        Switch_Widget (self.view_frame,row,0, lab='Straked airfoils', 
                        get=self.show_strakedAirfoils, set=self.set_show_strakedAirfoils)
 
 
@@ -1419,6 +1407,23 @@ class Dialog_Load_DXF (Dialog_Abstract):
 
 #-------------------------------------------
 
+class View_Menu(Edit_Abstract):
+    """ 
+    Frame for the view settings (switches) of the diagram
+    The parent is the App itself
+    """
+    name = "View"
+
+    def __init__(self, master, wingFn, *args, **kwargs):
+        super().__init__(master, wingFn, *args, **kwargs)
+
+    def init (self):
+
+        self.grid_columnconfigure   (0, weight=0)
+        self.grid_rowconfigure      (7, weight=1)
+        Header_Widget (self,0,0, lab=self.name)
+
+
 
 class Edit_File_Menu(Edit_Abstract):
     """ 
@@ -1477,7 +1482,7 @@ class Edit_File_Menu(Edit_Abstract):
 class App(ctk.CTk):
 
     def __init__(self, myWing: Wing):
-        super().__init__()
+        super().__init__(fg_color= cl_background)
 
         global ctk_root                         # being event handler
 
@@ -1502,17 +1507,19 @@ class App(ctk.CTk):
         self._curWingSectionName = None         # Dispatcher field between Diagramm and Edit
 
         # create main frames        border_width= 1, ,border_width= 1
-        diagram_frame = Diagrams        (self, self.wing, fg_color= cl_background)
+        view_frame    = View_Menu       (self, self.wing, width=200)
+        diagram_frame = Diagrams        (self, self.wing, view_frame=view_frame, fg_color= cl_background)
         edit_frame    = Edit            (self, self.wing, height=500)
         file_frame    = Edit_File_Menu  (self, self.wing, width=200)
 
         # maingrid 2 x 2 - diagram on top, edit on bottom
-        self.grid_rowconfigure   (0, weight=1)
         self.grid_rowconfigure   (1, weight=1)
+        self.grid_rowconfigure   (2, weight=1)
         self.grid_columnconfigure(1, weight=1)
-        diagram_frame.grid (row=0, column=0, columnspan = 2, pady=0, padx=0, sticky="news")
-        file_frame.grid    (row=1, column=0, pady=0, padx=0, sticky="nesw")
-        edit_frame.grid    (row=1, column=1, pady=0, padx=0, sticky="nesw")
+        file_frame.grid    (row=0, column=0, pady=(5,5), padx=0, sticky="new")
+        view_frame.grid    (row=1, column=0, pady=(0,5), padx=0, sticky="nesw")
+        diagram_frame.grid (row=0, column=1, rowspan = 2, pady=0, padx=0, sticky="news")
+        edit_frame.grid    (row=2, column=0, columnspan= 2, pady=0, padx=0, sticky="nesw")
 
 
     def wing (self):

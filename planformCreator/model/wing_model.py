@@ -355,7 +355,6 @@ class Wing:
         aSection = self.get_wingSectionBy_norm_yPos (norm_yPos) 
         if aSection: 
             aSection.set_norm_chord (newChord)
-            print (aSection.norm_chord)
         else: 
             raise ValueError ("Section at norm position %f not found" % norm_yPos)
        
@@ -1125,9 +1124,11 @@ class Planform_Trapezoidal(Planform):
         yPosList, chordList = self.wing.get_wingSections_norm_chord()
 
         for index, yPos in enumerate(yPosList):        # skip root and tip 
-            if not (yPos == 0 or yPos == 1.0): 
-                newChord = self.wing.refPlanform.norm_chord_function(yPos)
-                print("current Chord:",chordList[index], "   newChord: ",  newChord)
+            if not (index == 0 or index == (len(yPosList)-1)): 
+                # go a little left to get chord so ellipsoid is better approx.
+                leftPos = yPosList [index-1]
+                refPos = leftPos + 0.95 *  (yPos - leftPos)
+                newChord = self.wing.refPlanform.norm_chord_function(refPos)
                 self.wing.set_wingSection_norm_chord(yPos, newChord)
 
 

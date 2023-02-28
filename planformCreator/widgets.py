@@ -710,7 +710,7 @@ class Switch_Widget(Base_Widget):
         super().__init__(*args, **kwargs)
 
         self.mainCTk = ctk.CTkSwitch(self.parent, text=self.label, onvalue=1, command=self.CTk_callback)
-        self.mainCTk.grid(row=self.row, column=self.column, padx=20)
+        self.mainCTk.grid(row=self.row, column=self.column, padx=20, sticky="w")
 
         self.set_CTkControl()
         self.set_CTkControl_state()
