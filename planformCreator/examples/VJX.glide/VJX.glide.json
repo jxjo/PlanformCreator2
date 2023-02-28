@@ -18,7 +18,7 @@
 	  "position": 0,
 	  "flapGroup": 1,
 	  "airfoil": {
-		  "file": "..\\examples\\VJX.glide\\JX-GP-100.dat"
+		  "file": ".\\examples\\VJX.glide\\JX-GP-100.dat"
 	  }
 	},
 	{
@@ -31,17 +31,17 @@
 	  "norm_chord": 0.55,
 	  "flapGroup": 2,
 	  "airfoil": {
-		  "file": "..\\examples\\VJX.glide\\JX-GP-055.dat"
+		  "file": ".\\examples\\VJX.glide\\JX-GP-055.dat"
 	  }
 	},
 	{
 	  "position": 1470,
 	  "flapGroup": 2,
 	  "airfoil": {
-		  "file": "..\\examples\\VJX.glide\\JX-GP-033.dat"
+		  "file": ".\\examples\\VJX.glide\\JX-GP-033.dat"
 	  }
 	}
   ],
   "leadingEdgeOrientation":"up",
-  "refPlanform_DXF_path":"..\\examples\\VJX.glide\\VJX.glide_planform.dxf"
+  "refPlanform_DXF_path":".\\examples\\VJX.glide\\VJX.glide_planform.dxf"
 }

@@ -186,7 +186,7 @@ class Base_Artist():
             # default remove of user tip 
             if self.userTip:
                 self.userTip = ''
-                self.plot()
+                # self.plot()
 
         except: 
             print ("- Pick event couldn't be handled ", event.artist, "callback: ", self._pickCallback)
@@ -690,7 +690,7 @@ class Airfoil_Artist (Base_Artist):
                     y = airfoil.y * section.chord 
 
                 color = next(self.ax._get_lines.prop_cycler)['color']
-                if section.name() == self._curLineLabel:
+                if self._curLineLabel == legend:
                     if not self._norm:                     # for norm it would be too much colorr confusion
                         p = self.ax.fill (x, y, facecolor=color, alpha=0.1)
                         self._add(p)

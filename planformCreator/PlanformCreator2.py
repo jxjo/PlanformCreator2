@@ -140,9 +140,7 @@ class Edit(ctk.CTkFrame):
         """ Eventhandler for changes of the current wing section selection in diagrams"""
         # refresh the wing section edit frame with new section
         myApp : App = self.winfo_toplevel()
-        self.editSectionMaster_frame.set_curSection (myApp.curWingSectionName())
-        self.editSectionMaster_frame.refresh()
-        self.editSectionMaster_frame.refresh_current()    # e.g. section position (wingSpan) 
+        self.editSectionMaster_frame.set_curSection (myApp.curWingSectionName(), inEvent=True)
 
 
 #-------------------------------------------
@@ -219,9 +217,8 @@ class Edit_Wing_Data (Edit_Abstract):
         unit = self.wing.unit
                 
         self.add (Field_Widget  (self,1,0, lab="Name",              get=lambda  : self.wing.name, 
-                                 event=WING_CHANGED,                set=lambda a: self.wing.set_name(a)))
-        self.add (Field_Widget  (self,1,3, lab="Airfoils nickname", get=lambda  : self.wing.airfoilNickBase, 
-                                 event=SECTION_CHANGED, width= 60,  set=lambda a: self.wing.set_airfoilNickBase(a)))
+                                 event=WING_CHANGED,                set=lambda a: self.wing.set_name(a),
+                                 width=140, columnspan= 2))
         self.add (Field_Widget  (self,2,0, lab="Wing span",         get=lambda  : self.wing.wingspan, 
                                  event=WING_CHANGED,                set=lambda a: self.wing.set_wingspan(a),
                                  lim=(100,20000), dec=1, spin= True, step=10, unit=unit))
@@ -245,9 +242,11 @@ class Edit_Wing_Data (Edit_Abstract):
         
         Blank_Widget (self,5,0, width=20, height = 15) 
 
-        self.add (Field_Widget  (self,6,0, lab="Reynolds at root",  get=lambda: self.wing.rootReynolds, 
+        self.add (Field_Widget  (self,6,0, lab="Re at root",  get=lambda: self.wing.rootReynolds, 
                                  event=SECTION_CHANGED,             set=lambda a: self.wing.set_rootReynolds(a),
                                  lim=(10,10000000), dec=0, spin=True, step=1000))
+        self.add (Field_Widget  (self,6,3, lab="Airfoils nick", get=lambda  : self.wing.airfoilNickBase, 
+                                 event=SECTION_CHANGED, width= 60,  set=lambda a: self.wing.set_airfoilNickBase(a)))
 
 
 #-------------------------------------------
@@ -551,7 +550,7 @@ class Edit_WingSection_Master(Edit_Abstract):
     def addDisabled (self):
         return self.curSection.isTip
 
-    def set_curSection (self, aName):
+    def set_curSection (self, aName, inEvent=False):
         """ 
         set the current section to edit in child frame
         if it's already set - do nothing
@@ -572,7 +571,8 @@ class Edit_WingSection_Master(Edit_Abstract):
         # inform diagram 
         myApp : App = self.winfo_toplevel()
         myApp.set_curWingSectionName(aName)
-        fireEvent (CURRENT_SECTION_CHANGED)    
+        if not inEvent:                         # avoid event ping pong
+            fireEvent (CURRENT_SECTION_CHANGED)    
 
 
     def get_SectionFromName (self, aName) -> WingSection:
@@ -978,8 +978,9 @@ class Diagram_Planform (Diagram_Abstract):
 
     def setActive(self, active: bool):
         # overloaded to set active section 
-        myApp : App = self.winfo_toplevel()
-        self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=False)    
+        if active: 
+            myApp : App = self.winfo_toplevel()
+            self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=False)    
         super().setActive(active)
 
 
@@ -1011,6 +1012,8 @@ class Diagram_Planform (Diagram_Abstract):
         myApp : App = self.winfo_toplevel()
         myApp.set_curWingSectionName(aSectionLabel)
         fireEvent (DIAGRAMM_SECTION_SELECTED)
+        self.curSectionArtist.set_current (aSectionLabel, figureUpdate=True)  
+
 
 
 #-------------------------------------------------------------------------------
@@ -1110,8 +1113,9 @@ class Diagram_ChordDistribution (Diagram_Abstract):
 
     def setActive(self, active: bool):
         # overloaded to set active section 
-        myApp : App = self.winfo_toplevel()
-        self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=False)    
+        if active: 
+            myApp : App = self.winfo_toplevel()
+            self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=False)    
         super().setActive(active)
 
 
@@ -1141,6 +1145,8 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         myApp : App = self.winfo_toplevel()
         myApp.set_curWingSectionName(aSectionLabel)
         fireEvent (DIAGRAMM_SECTION_SELECTED)
+        self.curSectionArtist.set_current (aSectionLabel, figureUpdate=True)  
+
 
 
 #-------------------------------------------------------------------------------
@@ -1228,14 +1234,16 @@ class Diagram_Airfoils (Diagram_Abstract):
             #retrieve new section name from App 
             myApp : App = self.winfo_toplevel()
             self.airfoilArtist.set_current (myApp.curWingSectionName(), figureUpdate=True)  
+            print ("  - set current airfoil in ", self.__class__.__name__," for airfoil artists")
 
     # -------- refresh my Artists which are on 'show mode' 
 
     def setActive(self, active: bool):
         # overloaded to set active section 
-        myApp : App = self.winfo_toplevel()
-        self.airfoilArtist.set_current (myApp.curWingSectionName(), figureUpdate=True)  
-        print ("  - set current in ", self.__class__.__name__," for active artists")
+        if active: 
+            myApp : App = self.winfo_toplevel()
+            self.airfoilArtist.set_current (myApp.curWingSectionName(), figureUpdate=True)  
+            print ("  - set current in ", self.__class__.__name__," for active artists")
         super().setActive(active)
 
     def refresh(self): 
@@ -1249,10 +1257,12 @@ class Diagram_Airfoils (Diagram_Abstract):
 
     def airfoilPicked (self, aAirfoilLabel):
         # call method - the user pciked a wing section in the plot
+        self.airfoilArtist.set_current (aAirfoilLabel, figureUpdate=True)  
         sectionName = aAirfoilLabel.split(":")[0]
         myApp : App = self.winfo_toplevel()
         myApp.set_curWingSectionName(sectionName)
         fireEvent (DIAGRAMM_SECTION_SELECTED)
+
 
 
 

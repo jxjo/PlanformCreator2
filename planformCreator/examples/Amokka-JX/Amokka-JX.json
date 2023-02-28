@@ -17,7 +17,7 @@
 	  "position": 0,
 	  "flapGroup": 1,
 	  "airfoil": {
-		  "file": "..\\examples\\Amokka-JX\\JX-RS-Root.dat"
+		  "file": ".\\examples\\Amokka-JX\\JX-RS-Root.dat"
 	  }
 	},
 	{
@@ -30,24 +30,24 @@
 	  "norm_chord": 0.65,
 	  "flapGroup": 2,
 	  "airfoil": {
-		  "file": "..\\examples\\Amokka-JX\\JX-RS.dat"
+		  "file": ".\\examples\\Amokka-JX\\JX-RS.dat"
 	  }
 	},
 	{
 	  "norm_chord": 0.35,
 	  "flapGroup": 2,
 	  "airfoil": {
-		  "file": "..\\examples\\Amokka-JX\\JX-RS-Tip.dat"
+		  "file": ".\\examples\\Amokka-JX\\JX-RS-Tip.dat"
 	  }
 	},
 	{
 	  "position": 1190,
 	  "flapGroup": 2,
 	  "airfoil": {
-		  "file": "..\\examples\\Amokka-JX\\JX-RS-Tip.dat"
+		  "file": ".\\examples\\Amokka-JX\\JX-RS-Tip.dat"
 	  }
 	}
   ],
   "leadingEdgeOrientation":"up",
-  "refPlanform_DXF_path":"..\\examples\\Amokka-JX\\Amokka-JX_wing_outline.dxf"
+  "refPlanform_DXF_path":".\\examples\\Amokka-JX\\Amokka-JX_wing_outline.dxf"
 }

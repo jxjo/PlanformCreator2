@@ -17,7 +17,7 @@ cl_text             = "#DCE4EE"
 cl_text_disabled    = "gray70"
 fs_header           = 18                          # font size header 
 def_height          = 25                          # base height in px
-def_width           = 110                         # base width in px for entry fields
+def_width           = 100                         # base width in px for entry fields
 def_lab_width      = 100                         # ... for labels of enty fields
 
 class AccessPath():
@@ -738,10 +738,11 @@ class Field_Widget(Base_Widget):
         spin -- Boolean if entry field should have a spinner       :)
         step -- integer step size              :)
     """
-    def __init__(self, *args, lab_width= None, **kwargs):
+    def __init__(self, *args, lab_width= None, columnspan=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         column = self.column
+        if columnspan is None:  columnspan = 1
         if (self.label):  
             if lab_width:
                 width = lab_width
@@ -755,9 +756,9 @@ class Field_Widget(Base_Widget):
         if self.spinner:
             # this new frame with 3 widget replaces the normal entry field in grid  
             entry_frame = ctk.CTkFrame(self.parent, fg_color="transparent")
-            button_width  = self.height 
+            button_width  = self.height - 4
             button_height = self.height
-            entry_width = self.width - 2 * button_width - 4
+            entry_width = self.width - 2 * button_width - 2
         else: 
             entry_frame = self.parent
             entry_width  = self.width
@@ -771,15 +772,15 @@ class Field_Widget(Base_Widget):
             self.addCTk = ctk.CTkButton(entry_frame, text="+", command=self.add_button_callback,
                                         width=button_width, height=button_height, fg_color=cl_spin)
             entry_frame.grid_columnconfigure((0, 2), weight=0)   # buttons don't expand
-            entry_frame.grid_columnconfigure(1, weight=1)        # entry expands
+            entry_frame.grid_columnconfigure(1, weight=0)        # entry expands
 
             self.subCTk.grid (row=0, column=0, padx=(1, 1), pady=1, sticky='w')
             self.mainCTk.grid(row=0, column=1, padx=(1, 1), pady=1, sticky='w')
             self.addCTk.grid (row=0, column=2, padx=(1, 1), pady=1, sticky='w')
 
-            entry_frame.grid (row=self.row, column=column, padx=(1, 1), pady=0, sticky='w')
+            entry_frame.grid (row=self.row, column=column, columnspan= columnspan, padx=(1, 1), pady=0, sticky='w')
         else:
-            self.mainCTk.grid(row=self.row, column=column, padx=(1, 1), pady=1, sticky='w')
+            self.mainCTk.grid(row=self.row, column=column, columnspan= columnspan, padx=(1, 1), pady=1, sticky='w')
 
         column += 1
         if (self.unit):
