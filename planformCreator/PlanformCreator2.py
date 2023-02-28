@@ -6,10 +6,9 @@
                 The Planform Creator App 
 
 """
+import os
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
-import os
-from colorama import just_fix_windows_console
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
@@ -187,6 +186,30 @@ class Edit_Abstract (ctk.CTkFrame):
 
 class Edit_Wing(Edit_Abstract):
     """ 
+    Frame to edit main data of the wing like wingspan. This is just the header
+    """
+    name = "Wing"
+
+    def init (self):
+
+        self.grid_rowconfigure      (1, weight=1)
+               
+        self.add (Header_Widget (self,0,0, lab=self.name, width=80))
+
+        self.dataFrame = Edit_Wing_Data (self, self._wingFn, fg_color='transparent')
+        self.dataFrame.grid (row=1, columnspan=2, pady=0, padx=(10,5), sticky="news")
+
+    def refresh(self):
+        # overloaded to refresh also child frame with data
+        super().refresh()
+        self.dataFrame.refresh()
+
+
+        
+#-------------------------------------------
+
+class Edit_Wing_Data (Edit_Abstract):
+    """ 
     Frame to edit main data of the wing like wingspan ...
     """
     name = "Wing"
@@ -194,11 +217,7 @@ class Edit_Wing(Edit_Abstract):
     def init (self):
 
         unit = self.wing.unit
-
-        self.grid_rowconfigure      (8, weight=1)
                 
-        self.add (Header_Widget (self,0,0, lab=self.name, width=80))
-
         self.add (Field_Widget  (self,1,0, lab="Name",              get=lambda  : self.wing.name, 
                                  event=WING_CHANGED,                set=lambda a: self.wing.set_name(a)))
         self.add (Field_Widget  (self,1,3, lab="Airfoils nickname", get=lambda  : self.wing.airfoilNickBase, 
@@ -1544,17 +1563,8 @@ if __name__ == "__main__":
     # init colorama
     just_fix_windows_console()
 
-    # check working-directory, have we been started from "scripts"-dir? (Debugging)
-    currentDir = os.getcwd()
-    if (currentDir.find("scripts")>=0):
-        startedFromScriptsFolder = True
-        os.chdir("..")
-    else:
-        startedFromScriptsFolder = False
-
-    # myWing = Wing.onFile (os.path.join (ressourcesPath, planformFile))
-    # myWing = Wing.onFile ("..\\examples\\vjx.glide\\VJX.glide.json")
-    myWing = Wing.onFile ("..\\examples\\Amokka-JX\\Amokka-JX.json")
+    # myWing = Wing.onFile (".\\examples\\vjx.glide\\VJX.glide.json")
+    myWing = Wing.onFile (".\\examples\\Amokka-JX\\Amokka-JX.json")
     # myWing = Wing.onFile ("")
 
     InfoMsg("Starting  User Interface...")

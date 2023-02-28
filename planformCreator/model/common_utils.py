@@ -6,6 +6,8 @@ Common Utility functions for convinience
 """
 
 from termcolor import colored
+from colorama import just_fix_windows_console
+
 
 #------------------------------------------------------------------------------
 # Colored messages
@@ -13,6 +15,10 @@ from termcolor import colored
 
 print_disabled = False
 trace_disabled = True
+
+# init colorama
+just_fix_windows_console()
+
 
 def my_print(message):
     if print_disabled:
