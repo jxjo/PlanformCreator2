@@ -1,0 +1,53 @@
+{
+  "wingName":"Amokka-JX PC2",
+  "rootchord":235.0,
+  "rootReynolds":400000,
+  "wingspan":2380.0,
+  "planformType":"elliptical TE straight",
+  "ellipseTipBelly":0.15,
+  "ellipseBellyWidth":0.35,
+  "ellipseCorrection":0,
+  "ellipseShift":0,
+  "tipchord":15.0,
+  "hingeLineAngle":-0.7,
+  "flapDepthRoot":28.0,
+  "flapDepthTip":27.0,
+  "wingSections":[
+	{
+	  "position": 0,
+	  "flapGroup": 1,
+	  "airfoil": {
+		  "file": "..\\examples\\Amokka-JX\\JX-RS-Root.dat"
+	  }
+	},
+	{
+	  "position": 400,
+	  "flapGroup": 2,
+	  "airfoil": {
+	  }
+	},
+	{
+	  "norm_chord": 0.65,
+	  "flapGroup": 2,
+	  "airfoil": {
+		  "file": "..\\examples\\Amokka-JX\\JX-RS.dat"
+	  }
+	},
+	{
+	  "norm_chord": 0.35,
+	  "flapGroup": 2,
+	  "airfoil": {
+		  "file": "..\\examples\\Amokka-JX\\JX-RS-Tip.dat"
+	  }
+	},
+	{
+	  "position": 1190,
+	  "flapGroup": 2,
+	  "airfoil": {
+		  "file": "..\\examples\\Amokka-JX\\JX-RS-Tip.dat"
+	  }
+	}
+  ],
+  "leadingEdgeOrientation":"up",
+  "refPlanform_DXF_path":"..\\examples\\Amokka-JX\\Amokka-JX_wing_outline.dxf"
+}
