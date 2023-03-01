@@ -7,7 +7,7 @@
 
 """
 import os
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, Frame
 import customtkinter as ctk
 
 import matplotlib.pyplot as plt
@@ -712,6 +712,9 @@ class Diagrams(ctk.CTkTabview):
         """
         
         self._wingFn = wingFn
+        # handle the view for the switches 
+        self._view_dict: dict[str, ctk.CTkFrame] = {}
+         
 
         self.myPlot_frames = []
         # Get all subclasses of Plot_Frame and create a tab for each 
@@ -720,13 +723,21 @@ class Diagrams(ctk.CTkTabview):
             tab_frame.grid_columnconfigure(0, weight=1)
             tab_frame.grid_rowconfigure(0, weight=1)
 
-            self.myPlot_frames.append (plot_cls (tab_frame,  self._wingFn, view_frame=view_frame))
+            # little view frame for switches
+            diagram_view_frame= self._create_view(view_frame)
+            self._view_dict[plot_cls.name] = diagram_view_frame 
+
+            # main plot frame
+            self.myPlot_frames.append (plot_cls (tab_frame,  self._wingFn,
+                                       view_frame=diagram_view_frame))
 
         # set size of tab view titles
         self._segmented_button.configure(font=("", 16))
         self.configure(fg_color=cl_background)
         self.configure(command=self.newTabSelected)
-        self.newTabSelected ()              
+        self.newTabSelected ()    
+
+         
 
     def newTabSelected (self):
         # activate the new selected frame for updates 
@@ -739,9 +750,34 @@ class Diagrams(ctk.CTkTabview):
 
         if newPlot_frame: newPlot_frame.setActive(True)    #  eactivate new one 
 
+        # handle view frame for switches
+        self._grid_forget_all_view()
+        self._set_grid_view_by_name(newName.strip())
+
+
+
     @property
     def wing(self) -> Wing:
         return self._wingFn()
+    
+    # --- handle chield view frame for switches
+    def _create_view(self, view_frame) -> ctk.CTkFrame:
+        new_view = ctk.CTkFrame(view_frame,
+                           height=0,
+                           width=0,
+                           fg_color="transparent",
+                           border_width=0,
+                           corner_radius=self._corner_radius)
+        return new_view
+
+    def _set_grid_view_by_name(self, name: str):
+        """ needs to be called for changes in corner_radius, border_width """
+        self._view_dict[name].grid(row=3, column=0, sticky="nsew", padx=10, pady=10)
+
+    def _grid_forget_all_view(self):
+        frame: Frame
+        for frame in self._view_dict.values():
+            frame.grid_forget()
 
 
 
@@ -786,9 +822,9 @@ class Diagram_Abstract(ctk.CTkFrame):
                        get=lambda: self.gridArtist.show, set=self.gridArtist.set_show)
         
         # add user tip label 
-        row += 1
-        self.tip = ctk.CTkLabel(self.view_frame, text=self.defaultTip, text_color ="goldenrod2")
-        self.tip.grid(row=row, column=0, padx=30, pady= 0, sticky='w')
+        # row += 1
+        # self.tip = ctk.CTkLabel(self.view_frame, text=self.defaultTip, text_color ="goldenrod2")
+        # self.tip.grid(row=row, column=0, padx=30, pady= 0, sticky='w')
 
         self.setup_Switches (row=row)                       # init of switches / plots
 
