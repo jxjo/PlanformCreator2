@@ -772,7 +772,7 @@ class Diagrams(ctk.CTkTabview):
 
     def _set_grid_view_by_name(self, name: str):
         """ needs to be called for changes in corner_radius, border_width """
-        self._view_dict[name].grid(row=3, column=0, sticky="nsew", padx=10, pady=10)
+        self._view_dict[name].grid(row=3, column=0, sticky="nsew", padx=15, pady=0)
 
     def _grid_forget_all_view(self):
         frame: Frame
@@ -793,7 +793,7 @@ class Diagram_Abstract(ctk.CTkFrame):
     def __init__(self, master, wingFn, *args, view_frame = None,  **kwargs):
         super().__init__( master, *args, **kwargs)
 
-        self.view_frame = view_frame
+        self.view_frame : Frame = view_frame
         self._wingFn = wingFn
 
         self.configure(fg_color= cl_background)
@@ -816,17 +816,13 @@ class Diagram_Abstract(ctk.CTkFrame):
 
         # Create the artists for the diagramm
 
-        # grid on / off is always available 
-        row = 1 
-        Switch_Widget (self.view_frame,row, 0, lab='Grid', 
-                       get=lambda: self.gridArtist.show, set=self.gridArtist.set_show)
         
         # add user tip label 
         # row += 1
         # self.tip = ctk.CTkLabel(self.view_frame, text=self.defaultTip, text_color ="goldenrod2")
         # self.tip.grid(row=row, column=0, padx=30, pady= 0, sticky='w')
 
-        self.setup_Switches (row=row)                       # init of switches / plots
+        self.setup_Switches (row=0)                       # init of switches / plots
 
         self.setChangeBindings ()
         self._active            = False                     # is active frame? control change events 
@@ -852,7 +848,15 @@ class Diagram_Abstract(ctk.CTkFrame):
 
     def setup_Switches(self, row=0):
         """ define on/off switches ffor this plot type"""
-        pass
+        # grid on / off is always available 
+        row += 1 
+        Blank_Widget  (self.view_frame,row, 0)
+        self.view_frame.grid_rowconfigure (row, weight=1)
+
+        row += 1 
+        Switch_Widget (self.view_frame,row, 0, pady=2, padx=5, lab='Grid', 
+                       get=lambda: self.gridArtist.show, set=self.gridArtist.set_show)
+
 
     def refresh(self, dummy): 
         # overwrite in sub class
@@ -921,29 +925,30 @@ class Diagram_Planform (Diagram_Abstract):
         # the whole plot work will be done by the artists
         # plot the real planform on top     
         row += 1
-        Switch_Widget (self.view_frame,row,0, lab='Planform', 
+        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Planform', 
                 get=lambda: self.planformArtist.show, set=self.planformArtist.set_show)
         row += 1
-        Switch_Widget (self.view_frame,row,0, lab='Chord lines', 
+        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Chord lines', 
                 get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
         row += 1
-        Switch_Widget (self.view_frame,row,0, lab='Wing sections', 
+        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Wing sections', 
                 get=lambda: self.sectionsArtist.show, set=self.sectionsArtist.set_show)
         row += 1
-        Switch_Widget (self.view_frame,row,0, lab='Current section', 
+        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Current section', 
                 get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
         row += 1
-        Switch_Widget (self.view_frame,row,0, lab='Flaps', 
+        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Flaps', 
                 get=lambda: self.flapArtist.show, set=self.flapArtist.set_show)
         row += 1
-        Switch_Widget (self.view_frame,row,0, lab='Reference', 
+        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Reference', 
                 get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
 
         if (self.wing.refPlanform_DXF): 
             row += 1
-            Switch_Widget (self.view_frame,row,0, lab='Reference DXF', 
+            Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Reference DXF', 
                     get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
-            
+        
+        super().setup_Switches(row)
         # --- some info  - currently temp 
 
         self.axes.text(.95,.9, self.wing.name, fontsize ='x-large', ha='right', transform=self.axes.transAxes)
@@ -1094,6 +1099,7 @@ class Diagram_ChordDistribution (Diagram_Abstract):
             Switch_Widget  (self.view_frame,row,0, lab='Reference DXF', 
                             get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
 
+        super().setup_Switches(row)
 
     # -------- event handler
 
@@ -1208,6 +1214,7 @@ class Diagram_Airfoils (Diagram_Abstract):
         Switch_Widget (self.view_frame,row,0, lab='Straked airfoils', 
                        get=self.show_strakedAirfoils, set=self.set_show_strakedAirfoils)
 
+        super().setup_Switches(row)
 
     # -------- switch call back 
 
@@ -1322,7 +1329,7 @@ class Dialog_Abstract (ctk.CTkToplevel):
         self.edit_frame    = ctk.CTkFrame (self) 
         self.grid_rowconfigure    (0, weight=1)
         self.grid_columnconfigure (0, weight=1)
-        self.edit_frame.grid    (row=0, column=0, pady=20, padx=20, sticky="nesw")
+        self.edit_frame.grid    (row=0, column=0, pady=10, padx=15, sticky="nesw")
 
         self.widgets = []                                   # for refresh logic  
 
@@ -1478,16 +1485,16 @@ class Edit_File_Menu(Edit_Abstract):
 
     def init (self):
 
-        self.grid_columnconfigure   (0, weight=0)
+        self.grid_columnconfigure   (0, weight=1)
         self.grid_rowconfigure      (7, weight=1)
 
         Header_Widget (self,0,0, lab=self.name)
 
-        Button_Widget (self,1,0, lab='New',         width=100, set=self.myApp.new)
-        Button_Widget (self,2,0, lab='Open',        width=100, set=self.myApp.open)
-        Button_Widget (self,3,0, lab='Save',        width=100, disable=True)
-        Button_Widget (self,4,0, lab='Save As...',  width=100, disable=True)
-        Button_Widget (self,5,0, lab='Import',      width=100, set=self.load_dxf)
+        Button_Widget (self,1,0, lab='New',         width=100, sticky = '', set=self.myApp.new)
+        Button_Widget (self,2,0, lab='Open',        width=100, sticky = '', set=self.myApp.open)
+        Button_Widget (self,3,0, lab='Save',        width=100, sticky = '', disable=True)
+        Button_Widget (self,4,0, lab='Save As...',  width=100, sticky = '', disable=True)
+        Button_Widget (self,5,0, lab='Import',      width=100, sticky = '', set=self.load_dxf)
 
         # Option_Widget (self,6,0, val="",            width = 100,
         #                                            set = self.set_importType,
@@ -1543,17 +1550,17 @@ class App(ctk.CTk):
         self._curWingSectionName = None         # Dispatcher field between Diagramm and Edit
 
         # create main frames        border_width= 1, ,border_width= 1
-        view_frame    = View_Menu       (self, self.wing, width=200)
+        view_frame    = View_Menu       (self, self.wing)
         diagram_frame = Diagrams        (self, self.wing, view_frame=view_frame, fg_color= cl_background)
         edit_frame    = Edit            (self, self.wing, height=500)
-        file_frame    = Edit_File_Menu  (self, self.wing, width=200)
+        file_frame    = Edit_File_Menu  (self, self.wing)
 
         # maingrid 2 x 2 - diagram on top, edit on bottom
         self.grid_rowconfigure   (1, weight=1)
         self.grid_rowconfigure   (2, weight=1)
         self.grid_columnconfigure(1, weight=1)
-        file_frame.grid    (row=0, column=0, pady=(5,5), padx=0, sticky="new")
-        view_frame.grid    (row=1, column=0, pady=(0,5), padx=0, sticky="nesw")
+        file_frame.grid    (row=0, column=0, pady=(5,5), padx=0, ipady=10,sticky="new")
+        view_frame.grid    (row=1, column=0, pady=(0,10), padx=0,  ipady=20, sticky="nesw")
         diagram_frame.grid (row=0, column=1, rowspan = 2, pady=0, padx=0, sticky="news")
         edit_frame.grid    (row=2, column=0, columnspan= 2, pady=0, padx=0, sticky="nesw")
 

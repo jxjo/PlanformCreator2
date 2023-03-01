@@ -664,11 +664,13 @@ class Button_Widget(Base_Widget):
         val or obj+getter -- val string to show or access path with obj and getter          :)
         set -- access path setter when button is pressed             :)
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, sticky= None, **kwargs):
         super().__init__(*args, **kwargs)
 
+        if sticky is None: sticky = 'w'
+
         self.mainCTk = ctk.CTkButton(self.parent, text=self.label, height=self.height, width=self.width, command=self.CTk_callback)
-        self.mainCTk.grid(row=self.row, column=self.column, padx=(10,10), pady=4, sticky="w")
+        self.mainCTk.grid(row=self.row, column=self.column, padx=(10,10), pady=4, sticky=sticky)
 
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
 
@@ -706,11 +708,43 @@ class Switch_Widget(Base_Widget):
         val or obj+getter -- val string to show or access path with obj and getter          :)
         set -- access path setter when switched              :)
     """
+    def __init__(self, *args, padx=None, pady=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if padx is None: padx = 20
+        if pady is None: pady = 0
+
+        self.mainCTk = ctk.CTkSwitch(self.parent, text=self.label, onvalue=1, command=self.CTk_callback)
+        self.mainCTk.grid(row=self.row, column=self.column, padx=padx, pady=pady, sticky="w")
+
+        self.set_CTkControl()
+        self.set_CTkControl_state()
+
+    def _getFrom_CTkControl (self):
+        return self.mainCTk.get()
+
+    def _set_CTkControl (self,  widgetCTk, newValStr: str):
+        if newValStr == "1":  widgetCTk.select()
+        else:                 widgetCTk.deselect()
+
+    def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
+        widgetCTk.configure (text=newLabelStr)
+
+
+class CheckBox_Widget(Base_Widget):
+    """CTKCheckBox - uses one column in the grid
+
+    Keyword Arguments:
+        val or obj+getter -- val string to show or access path with obj and getter          :)
+        set -- access path setter when switched              :)
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.mainCTk = ctk.CTkSwitch(self.parent, text=self.label, onvalue=1, command=self.CTk_callback)
-        self.mainCTk.grid(row=self.row, column=self.column, padx=20, sticky="w")
+        height = def_height - 10
+
+        self.mainCTk = ctk.CTkCheckBox (self.parent, text=self.label, onvalue=1, command=self.CTk_callback)
+        self.mainCTk.grid(row=self.row, column=self.column, padx=10, pady = 3, sticky="w")
 
         self.set_CTkControl()
         self.set_CTkControl_state()
