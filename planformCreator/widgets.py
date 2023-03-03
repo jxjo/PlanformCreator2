@@ -17,8 +17,8 @@ cl_text             = "#DCE4EE"
 cl_text_disabled    = "gray70"
 fs_header           = 18                          # font size header 
 def_height          = 25                          # base height in px
-def_width           = 100                         # base width in px for entry fields
-def_lab_width      = 100                         # ... for labels of enty fields
+def_width           = 105                         # base width in px for entry fields
+def_lab_width       = 95                         # ... for labels of enty fields
 
 class AccessPath():
     """
@@ -632,7 +632,7 @@ class Header_Widget(Base_Widget):
         super().__init__(*args, **kwargs)
             
         self.mainCTk = ctk.CTkLabel (self.parent, width=def_lab_width+5, text=self.label, anchor= "w", font= ("", fs_header))
-        self.mainCTk.grid(row=self.row, column=self.column,  columnspan= columnspan, pady=(10,10), padx=10, sticky="w")
+        self.mainCTk.grid(row=self.row, column=self.column,  columnspan= columnspan, pady=(7,7), padx=10, sticky="w")
 
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
         widgetCTk.configure (text=newLabelStr)
@@ -664,13 +664,13 @@ class Button_Widget(Base_Widget):
         val or obj+getter -- val string to show or access path with obj and getter          :)
         set -- access path setter when button is pressed             :)
     """
-    def __init__(self, *args, sticky= None, **kwargs):
+    def __init__(self, *args, sticky= None, columnspan = 1, **kwargs):
         super().__init__(*args, **kwargs)
 
         if sticky is None: sticky = 'w'
 
         self.mainCTk = ctk.CTkButton(self.parent, text=self.label, height=self.height, width=self.width, command=self.CTk_callback)
-        self.mainCTk.grid(row=self.row, column=self.column, padx=(10,10), pady=4, sticky=sticky)
+        self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=(10,10), pady=4, sticky=sticky)
 
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
 
@@ -790,7 +790,7 @@ class Field_Widget(Base_Widget):
         if self.spinner:
             # this new frame with 3 widget replaces the normal entry field in grid  
             entry_frame = ctk.CTkFrame(self.parent, fg_color="transparent")
-            button_width  = self.height - 4
+            button_width  = self.height  - 2
             button_height = self.height
             entry_width = self.width - 2 * button_width - 2
         else: 
@@ -809,7 +809,7 @@ class Field_Widget(Base_Widget):
             entry_frame.grid_columnconfigure(1, weight=0)        # entry expands
 
             self.subCTk.grid (row=0, column=0, padx=(1, 1), pady=1, sticky='w')
-            self.mainCTk.grid(row=0, column=1, padx=(1, 1), pady=1, sticky='w')
+            self.mainCTk.grid(row=0, column=1, padx=(1, 1), pady=1, sticky='we')
             self.addCTk.grid (row=0, column=2, padx=(1, 1), pady=1, sticky='w')
 
             entry_frame.grid (row=self.row, column=column, columnspan= columnspan, padx=(1, 1), pady=0, sticky='w')
@@ -871,6 +871,7 @@ class Field_Widget(Base_Widget):
         curCTk_state = widgetCTk.cget("state")
         if disable: 
             if curCTk_state == "normal":
+                pass
                 widgetCTk.configure (state ="disabled" )         # "normal" (standard) or "disabled" (not clickable, darker color)
                 widgetCTk.configure (text_color =cl_text_disabled )
         else: 

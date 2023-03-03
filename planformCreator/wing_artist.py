@@ -535,7 +535,7 @@ class WingSections_Artist (Base_Artist):
         marker_y = y[0] + offset
         marker_top_y = y[0] 
         if section.isTip: 
-            marker_top_x = le_to_te[0] - 2 * offset
+            marker_top_x = le_to_te[0] - 4 * offset
         else: 
             marker_top_x = le_to_te[0] - offset
 
@@ -543,7 +543,14 @@ class WingSections_Artist (Base_Artist):
                          color = color )
         self._add (p)   
 
-        p = self.ax.text (marker_top_y, marker_top_x, "%d" % (section.wing.wingSectionIndexOf (section)) , 
+        if section.isRoot:
+            label = "Root"
+        elif section.isTip:
+            label = "Tip"
+        else:
+            label = str(section.wing.wingSectionIndexOf (section))
+
+        p = self.ax.text (marker_top_y, marker_top_x, "%s" % label , 
                           horizontalalignment='center', verticalalignment='bottom',
                           color = cl_wingSection_fix, fontsize = 'x-large' )
         self._add (p)   

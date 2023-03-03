@@ -250,10 +250,13 @@ class Strak_Airfoil (Airfoil):
 
         newName = leftAir.name + ("_with_%.2f_" % blendBy) + rightAir.name
 
-        XfoilWorker().blendAirfoils(leftPathFile, rightPathFile,blendBy, newName)
+        result = XfoilWorker().blendAirfoils(leftPathFile, rightPathFile,blendBy, newName)
 
-        newPathFile = os.path.join(tmpDir,newName) + '.dat'
-        self.load (fromPath=newPathFile)
+        if result == 0:
+            newPathFile = os.path.join(tmpDir,newName) + '.dat'
+            self.load (fromPath=newPathFile)
+        else: 
+            ErrorMsg ("'xfoil_worker' couldn't be executed.")
 
         return
 

@@ -148,33 +148,33 @@ class Edit(ctk.CTkFrame):
 
 class Edit_Abstract (ctk.CTkFrame):
     """ 
-    Abstract superclass for all the planform type specific edit frames
+    Abstract superclass for all the edit like frames
     """
 
     def __init__(self, master, wingFn, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
 
-        self._wingFn = wingFn
+        self._wingFn = wingFn               # the function to the wing (indirect because of new wing could be set)
         self.widgets = []
         self.init()
     
-    @property
     def wing(self) -> Wing:
+        # it's a method - not a property to exchange the wing 
         return self._wingFn()
     
-    @property
     def planform(self) -> Planform:
         return self.wing.planform
 
-
     def init(self):
-        # overloaded by sub class
+        # main method - to be overloaded by sub class
         pass
 
     def add (self, aWidget): 
+        # kepp track of the widgets of self to be able to refresh them
         self.widgets.append (aWidget)
 
     def refresh(self):
+        # refresh typically based on changed events 
         for widget in self.widgets:
             if isinstance(widget, Base_Widget): widget.refresh()
         print ("  - refresh in ", self.__class__.__name__," for %s widgets" % len(self.widgets))
@@ -202,7 +202,6 @@ class Edit_Wing(Edit_Abstract):
         super().refresh()
         self.dataFrame.refresh()
 
-
         
 #-------------------------------------------
 
@@ -214,46 +213,39 @@ class Edit_Wing_Data (Edit_Abstract):
 
     def init (self):
 
-        unit = self.wing.unit
+        unit = self.wing().unit
                 
-        self.add (Field_Widget  (self,1,0, lab="Name",              get=lambda  : self.wing.name, 
-                                 event=WING_CHANGED,                set=lambda a: self.wing.set_name(a),
-                                 width=140, columnspan= 2))
-        self.add (Field_Widget  (self,2,0, lab="Wing span",         get=lambda  : self.wing.wingspan, 
-                                 event=WING_CHANGED,                set=lambda a: self.wing.set_wingspan(a),
-                                 lim=(100,20000), dec=1, spin= True, step=10, unit=unit))
-        self.add (Field_Widget  (self,2,3, lab="Hinge angle",       get=lambda  : self.wing.hingeAngle, 
-                                 event=WING_CHANGED,                set=lambda a: self.wing.set_hingeAngle(a),
-                                 lim=(-5,45), dec=1, spin=True, step=0.1, unit="°"))
-        self.add (Field_Widget  (self,3,0, lab="Chord at root",     get=lambda  : self.wing.rootchord, 
-                                 event=WING_CHANGED,                set=lambda a: self.wing.set_rootchord(a),
-                                 lim=(10,500), dec=1, spin=True, step=1, unit=unit))
-        self.add (Field_Widget  (self,3,3, lab="Chord at tip",      get=lambda  : self.wing.tipchord, 
-                                 event=CHORD_CHANGED,               set=lambda a: self.wing.set_tipchord(a),
+        self.add (Field_Widget  (self,1,0, lab="Name",          obj=self.wing, get='name', set='set_name',
+                                 event=WING_CHANGED, width=140, columnspan= 2))
+        self.add (Field_Widget  (self,2,0, lab="Wing span",     obj=self.wing, get='wingspan', set='set_wingspan',
+                                 event=WING_CHANGED, lim=(100,20000), dec=1, spin= True, step=10, unit=unit))
+        self.add (Field_Widget  (self,2,3, lab="Hinge angle",   obj=self.wing, get='hingeAngle', set='set_hingeAngle',
+                                 event=WING_CHANGED, lim=(-5,45), dec=1, spin=True, step=0.1, unit="°"))
+        self.add (Field_Widget  (self,3,0, lab="Chord at root", obj=self.wing, get='rootchord', set='set_rootchord',
+                                 event=WING_CHANGED, lim=(10,500), dec=1, spin=True, step=1, unit=unit))
+        self.add (Field_Widget  (self,3,3, lab="Chord at tip",  obj=self.wing, get='tipchord', set='set_tipchord',
+                                 event=CHORD_CHANGED,               
                                  lim=(1,500), dec=1, spin=True, step=1, unit=unit))
 
-
-        self.add (Field_Widget  (self,4,0, lab="Flap at root",      get=lambda  : self.wing.flapDepthRoot, 
-                                 event=PLANFORM_CHANGED,            set=lambda a: self.wing.set_flapDepthRoot(a),
-                                 lim=(0,50), dec=1, spin=True, step=0.5, unit='%'))
-        self.add (Field_Widget  (self,4,3, lab="Flap at tip",       get=lambda  : self.wing.flapDepthTip, 
-                                 event=PLANFORM_CHANGED,            set=lambda a: self.wing.set_flapDepthTip(a),
+        self.add (Field_Widget  (self,4,0, lab="Flap at root",  obj=self.wing, get='flapDepthRoot', set='set_flapDepthRoot',
+                                 event=PLANFORM_CHANGED, lim=(0,50), dec=1, spin=True, step=0.5, unit='%'))
+        self.add (Field_Widget  (self,4,3, lab="Flap at tip",   obj=self.wing, get='flapDepthTip', set='set_flapDepthTip',
+                                 event=PLANFORM_CHANGED,            
                                  lim=(0,50), dec=1, spin=True, step=0.5, unit='%'))
         
         Blank_Widget (self,5,0, width=20, height = 15) 
 
-        self.add (Field_Widget  (self,6,0, lab="Re at root",  get=lambda: self.wing.rootReynolds, 
-                                 event=SECTION_CHANGED,             set=lambda a: self.wing.set_rootReynolds(a),
-                                 lim=(10,10000000), dec=0, spin=True, step=1000))
-        self.add (Field_Widget  (self,6,3, lab="Airfoils nick", get=lambda  : self.wing.airfoilNickBase, 
-                                 event=SECTION_CHANGED, width= 60,  set=lambda a: self.wing.set_airfoilNickBase(a)))
+        self.add (Field_Widget  (self,6,0, lab="Re at root",    obj=self.wing, get='rootReynolds', set='set_rootReynolds',
+                                 event=SECTION_CHANGED, lim=(10,10000000), dec=0, spin=True, step=1000))
+        self.add (Field_Widget  (self,6,3, lab="Airfoils nick", obj=self.wing, get='airfoilNickBase', set='set_airfoilNickBase',
+                                 event=SECTION_CHANGED, width= 60))
 
 
 #-------------------------------------------
 
 class Edit_Wing_PlanformType(Edit_Abstract):
     """ 
-    Master frame for planform type specific sub frames
+    Master/Header frame for planform type specific sub frames
     """
     name = "Planform"
 
@@ -266,27 +258,29 @@ class Edit_Wing_PlanformType(Edit_Abstract):
         self.grid_rowconfigure      (3, weight=1)
 
         self.add(Header_Widget (self,0,0, lab=self.name, width=110))
-        self.add(Option_Widget (self,0,1, get=lambda: self.wing.planformType, set = self.set_planformType,
-                                                    width = 150,
-                                                    options=Planform.allTemplatePlanformTypes(),
-                                                    event=PLANFORM_CHANGED))
+        self.add(Option_Widget (self,0,1, get='planformType', set = 'set_planformType',
+                                width = 150, options=Planform.allTemplatePlanformTypes(),
+                                event=PLANFORM_CHANGED))
 
         self.add(Label_Widget  (self,1, 0, lab= self.shortDescription))
         self.add(Blank_Widget  (self,2, 0, height = 10))
 
         # set inital planform to edit 
-        self.set_planform_frame (self.wing.planformType)
+        self.set_planform_frame (self.wing().planformType)
 
     def shortDescription (self): 
-        return self.wing.planform.shortDescription
+        return self.wing().planform.shortDescription
 
+    @property
+    def planformType (self): 
+        return self.wing().planformType
 
     def set_planformType (self, aType):
         """ set a new planform selected by user
         """
-        if self.wing.planformType != aType:
+        if self.wing().planformType != aType:
             try: 
-                self.wing.set_planformType (aType) 
+                self.wing().set_planformType (aType) 
                 handled = True
             except Except_Planform_DXF_notValid:
                 handled = self.handle_Planform_DXF_notValid ()
@@ -327,13 +321,13 @@ class Edit_Wing_PlanformType(Edit_Abstract):
         # the current dxf planform doesn't have a valid planform 
         # aks for a new dxf file
 
-        dxf_dialog = Dialog_Load_DXF (self, wing = self.wing, dxf_Path=None, ref=False) 
+        dxf_dialog = Dialog_Load_DXF (self, wing = self.wing(), dxf_Path=None, ref=False) 
 
         self.wait_window (dxf_dialog)
 
         dxf_Path = dxf_dialog.dxf_pathFilename
         if dxf_Path:  
-            self.wing.planform =  Planform_DXF( self.wing, dxf_Path= dxf_Path, ref = False)
+            self.wing.planform =  Planform_DXF( self.wing(), dxf_Path= dxf_Path, ref = False)
             handled = True
             fireEvent (WING_CHANGED)                   # update hinge, flaps
         else: 
@@ -351,32 +345,24 @@ class Edit_Planform_Elliptical(Edit_Abstract):
     """
     name = Planform_Elliptical.planformType
 
-    @property
     def planform(self) -> Planform_Elliptical:
-        return self.wing.planform
+        return self.wing().planform
 
     def init(self):
 
         self.grid_columnconfigure   (0, weight=0)
         self.grid_rowconfigure      (6, weight=1)
 
-
-        self.add (Field_Widget  (self,0,0, lab="Tip belly",         get=lambda  : self.planform.ellipseTipBelly, 
-                                    event=CHORD_CHANGED,            set=lambda a: self.planform.set_ellipseTipBelly(a),
-                                    lim=(0,1), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,0,3,    lab="Tip belly width",get=lambda  : self.planform.ellipseBellyWidth, 
-                                    event=CHORD_CHANGED,            set=lambda a: self.planform.set_ellipseBellyWidth(a),
-                                    lim=(0,1), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,1,0,    lab="Ellipse shift",  get=lambda  : self.planform.ellipseShift, 
-                                    event=CHORD_CHANGED,            set=lambda a: self.planform.set_ellipseShift(a),
-                                    lim=(0,0.5), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,2,0,    lab="Ellipse correction",get=lambda: self.planform.ellipseCorrection,
-                                    event=CHORD_CHANGED,            set=lambda a: self.planform.set_ellipseCorrection(a),
-                                    lim=(-1,1), dec=2, spin=True, step=0.05))
-
-        self.add (Field_Widget  (self,3,0,    lab="LE correction",  get=lambda  : self.planform.leCorrection,
-                                    event=PLANFORM_CHANGED,         set=lambda a: self.planform.set_leCorrection(a),
-                                    lim=(-1,1), dec=2, spin=True, step=0.05))
+        self.add (Field_Widget  (self,0,0, lab="Tip belly",       obj=self.planform, get='ellipseTipBelly', set='set_ellipseTipBelly',
+                                    event=CHORD_CHANGED, lim=(0,1), dec=2, spin=True, step=0.05))
+        self.add (Field_Widget  (self,0,3, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
+                                    event=CHORD_CHANGED, lim=(0,1), dec=2, spin=True, step=0.05))
+        self.add (Field_Widget  (self,1,0, lab="Ellipse shift",   obj=self.planform,  get='ellipseShift', set='set_ellipseShift',
+                                    event=CHORD_CHANGED, lim=(0,0.5), dec=2, spin=True, step=0.05))
+        self.add (Field_Widget  (self,2,0, lab="Ellipse correction",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
+                                    event=CHORD_CHANGED, lim=(-1,1), dec=2, spin=True, step=0.05))
+        self.add (Field_Widget  (self,3,0, lab="LE correction",   obj=self.planform, get='leCorrection', set='set_leCorrection',
+                                    event=PLANFORM_CHANGED, lim=(-1,1), dec=2, spin=True, step=0.05))
         
 
 
@@ -386,22 +372,21 @@ class Edit_Planform_Trapezoid (Edit_Abstract):
     """
     name = Planform_Trapezoidal.planformType
 
-    @property
     def planform(self) -> Planform_Trapezoidal:
-        return self.wing.planform
+        return self.wing().planform
 
     def init(self):
 
-        self.grid_columnconfigure   (0, weight=1)
-        self.grid_columnconfigure   (2, weight=1)
+        self.grid_columnconfigure   (0, weight=0)
+        self.grid_columnconfigure   (1, weight=1)
         Blank_Widget (self,0,0,  height= 20)
 
-        self.add(Label_Widget  (self,1,0, lab='Adapt wing sections to reference'))
-        self.add(Button_Widget (self,1,1, lab='Adapt', width=60, set=self.adaptSections ))
+        self.add(Button_Widget (self,1,0, lab='Adapt', width=70, set=self.adaptSections ))
+        self.add(Label_Widget  (self,1,1, lab='wing sections to elliptical planform'))
 
     def adaptSections (self):
         # changes chord of sections to best fit to reference (elliptical) 
-        self.planform.adjust_planeform_to_reference()
+        self.planform().adjust_planeform_to_reference()
         fireEvent (PLANFORM_CHANGED)
 
 
@@ -414,28 +399,19 @@ class Edit_Planform_Elliptical_StraightTE (Edit_Abstract):
     """
     name = Planform_Elliptical_StraightTE.planformType
 
-    @property
     def planform(self) -> Planform_Elliptical_StraightTE:
-        return self.wing.planform
+        return self.wing().planform
 
     def init(self):
 
-        self.add (Field_Widget  (self,0,0,    lab="Tip belly",   get=lambda: self.planform.ellipseTipBelly, 
-                                    set=self.planform.set_ellipseTipBelly,
-                                    lim=(0,1), dec=2, spin=True, step=0.05,
-                                    event=CHORD_CHANGED))
-        self.add (Field_Widget  (self,0,3,    lab="Tip belly width",   get=lambda: self.planform.ellipseBellyWidth, 
-                                    set=self.planform.set_ellipseBellyWidth,
-                                    lim=(0,1), dec=2, spin=True, step=0.05,
-                                    event=CHORD_CHANGED))
-        self.add (Field_Widget  (self,1,0,    lab="Ellipse shift",   get=lambda: self.planform.ellipseShift, 
-                                    set=self.planform.set_ellipseShift,
-                                    lim=(0,0.5), dec=2, spin=True, step=0.05,
-                                    event=CHORD_CHANGED))
-        self.add (Field_Widget  (self,2,0,    lab="Ellipse correction",   get=lambda: self.planform.ellipseCorrection,
-                                    set=self.planform.set_ellipseCorrection,
-                                    lim=(-1,1), dec=2, spin=True, step=0.05,
-                                    event=CHORD_CHANGED))
+        self.add (Field_Widget  (self,0,0, lab="Tip belly",       obj=self.planform, get='ellipseTipBelly', set='set_ellipseTipBelly',
+                                 lim=(0,1),   dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
+        self.add (Field_Widget  (self,0,3, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
+                                 lim=(0,1),   dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
+        self.add (Field_Widget  (self,1,0, lab="Ellipse shift",   obj=self.planform, get='ellipseShift', set='set_ellipseShift',
+                                 lim=(0,0.5), dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
+        self.add (Field_Widget  (self,2,0, lab="Ellipse correct.",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
+                                 lim=(-1,1),  dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
 
 
 #-------------------------------------------
@@ -446,7 +422,6 @@ class Edit_Planform_DXF (Edit_Abstract):
     """
     name = Planform_DXF.planformType
 
-    @property
     def planform(self) -> Planform_DXF:
         return self.wing.planform
 
@@ -459,20 +434,20 @@ class Edit_Planform_DXF (Edit_Abstract):
         self.grid_rowconfigure      (5, weight=1)
 
         self.add(Field_Widget  (self,1,0, lab='Current file',   width= 120, get= self.dxf_filename))
-        self.add(Button_Widget (self,1,2, lab='Select',         width=90,   set=self.open_dxf_file ))
+        self.add(Button_Widget (self,1,2, lab='Select',         width=90,   set= self.open_dxf_file ))
 
 
         Blank_Widget (self,3,0,  height= 5)
-        self.add(Label_Widget  (self,4,0, lab=lambda: self.planform.infoText ))
+        self.add(Label_Widget  (self,4,0, lab=lambda: self.planform().infoText ))
         Blank_Widget (self,5,0,  height= 10)
 
     def dxf_filename(self): 
-        return self.planform.dxf_filename()
+        return self.planform().dxf_filename()
 
     def open_dxf_file (self):
 
-        wing = self.planform.wing
-        current_dxf_path = self.planform.dxf_pathFilename()
+        wing = self.planform().wing
+        current_dxf_path = self.planform().dxf_pathFilename()
 
         dxf_dialog = Dialog_Load_DXF (self, wing = wing, dxf_Path = current_dxf_path) 
 
@@ -498,7 +473,7 @@ class Edit_WingSection_Master(Edit_Abstract):
     def init(self):
 
         # set first section as initial 
-        self.curSection : WingSection = self.wing.wingSections[1]
+        self.curSection : WingSection = self.wing().wingSections[1]
         self.curSectionFrame = None
 
         # main grid:  header frame + - sub Frame for one section  
@@ -510,13 +485,12 @@ class Edit_WingSection_Master(Edit_Abstract):
 
         self.add(Option_Widget (hfrm,0,1,   get=self.curSectionName, set=self.set_curSection,
                                             spin=True, width=100, options=self.sectionNames))
-        self.add(Button_Widget (hfrm,0,2,   lab=' Add ',  width=50, set=self.addSection,
+        self.add(Button_Widget (hfrm,0,2,   lab=' Add ',  width=50,  set=self.addSection,
                                             disable=self.addDisabled))
         self.add(Button_Widget (hfrm,0,3,   lab='Delete',   width=50, set=self.deleteSection,
                                             disable=self.deleteDisabled))
 
-        # Blank_Widget  (hfrm,0, 4, width=60)
-        hfrm.grid (row=0, column=0, pady=0, padx=0, sticky="nwes")
+        hfrm.grid (row=0, column=0, pady=0, padx=0, sticky="w")
 
         # init and set section data frame to current section 
         self.set_curSection (self.curSection.name())
@@ -524,14 +498,14 @@ class Edit_WingSection_Master(Edit_Abstract):
 
     def curSectionName(self): return self.curSection.name()
     def sectionNames(self): 
-        return [s.name() for s in self.wing.wingSections]   
+        return [s.name() for s in self.wing().wingSections]   
     
     def deleteSection (self):
         """ delete the current, selected wing Section""" 
         if not self.deleteDisabled():
             # remind the neighbour before this section 
-            leftSec, rightSec = self.wing.getNeighbourSectionsOf (self.curSection)
-            self.wing.deleteSection (self.curSection)
+            leftSec, rightSec = self.wing().getNeighbourSectionsOf (self.curSection)
+            self.wing().deleteSection (self.curSection)
             fireEvent (SECTION_CHANGED)         # update diagram
             # delete done - set option list to old neighbour 
             self.set_curSection(rightSec.name())
@@ -543,7 +517,7 @@ class Edit_WingSection_Master(Edit_Abstract):
     def addSection (self):
         """ add a section after current Section""" 
         if not self.addDisabled():
-            newSection = self.wing.createSectionAfter (self.curSection)
+            newSection = self.wing().createSectionAfter (self.curSection)
             fireEvent (SECTION_CHANGED)         # update diagram
             self.set_curSection(newSection.name())
 
@@ -578,7 +552,7 @@ class Edit_WingSection_Master(Edit_Abstract):
     def get_SectionFromName (self, aName) -> WingSection:
         """ return the section with "aName"
         """
-        for sec in self.wing.wingSections:
+        for sec in self.wing().wingSections:
             if (sec.name() == aName): return sec
         raise ValueError ("Wing section not found: ", aName )
 
@@ -589,7 +563,7 @@ class Edit_WingSection_Master(Edit_Abstract):
 
     def reset (self):
         """reset everything - needed when a new wing is loaded """
-        self.set_curSection (self.wing.wingSections[0].name())
+        self.set_curSection (self.wing().wingSections[0].name())
 
 
 class Edit_WingSection(Edit_Abstract):
@@ -604,52 +578,49 @@ class Edit_WingSection(Edit_Abstract):
         super().__init__(master, wingFn, *args, **kwargs)
 
 
-    @property
     def wingSection (self) -> WingSection:
         return self._curSectionFunction()
 
 
     def init (self):
 
-        unit = self.wingSection.wing.unit
+        unit = self.wingSection().wing.unit
 
-        # special case! 
         # In this frame the dataObject (wingSection) changes during lifetime.
         # There the values can't be accessd via a 'bound method' in 'set' of the widget,
         # but is has to be a string which is evaluated during runtime
 
-        self.add(Field_Widget  (self,1,0, lab="Position", obj=lambda: self.wingSection, get= 'yPos', set='set_yPos',
+        self.add(Field_Widget  (self,1,0, lab="Position", obj=self.wingSection, get= 'yPos', set='set_yPos',
                                                 lim='limits_yPos', dec=1, spin=True, step=2, unit=unit,
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
-        self.add(Field_Widget  (self,1,3, lab="Relative Position", obj=lambda: self.wingSection, get='norm_yPos', set='set_norm_yPos',
+        self.add(Field_Widget  (self,1,3, lab="Position rel.", obj=self.wingSection, get='norm_yPos', set='set_norm_yPos',
                                                 lim=(0.0,1.0), dec=2, spin=True, step=0.01, unit='%',
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
         # self.add(Label_Widget  (self,1,3, lab=self.fixedPositionText))
 
-        self.add(Field_Widget  (self,2,0, lab="Chord", obj=lambda: self.wingSection, get='chord', set='set_chord',
+        self.add(Field_Widget  (self,2,0, lab="Chord", obj=self.wingSection, get='chord', set='set_chord',
                                                 lim='limits_Chord', dec=1, spin=True, step=0.5, unit=unit,
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
-        self.add(Field_Widget  (self,2,3, lab="Relative chord", obj=lambda: self.wingSection, get='norm_chord', set='set_norm_chord',
+        self.add(Field_Widget  (self,2,3, lab="Chord rel.", obj=self.wingSection, get='norm_chord', set='set_norm_chord',
                                                 lim='limits_normChord', dec=2, spin=True, step=0.01, unit='%',
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
 
-        self.add(Field_Widget  (self,3,0, lab="Reynolds", obj=lambda: self.wingSection ,get='Re', set='set_Re',
+        self.add(Field_Widget  (self,3,0, lab="Reynolds", obj=self.wingSection ,get='Re', set='set_Re',
                                                 lim='limits_Re', dec=0, spin=True, step=1000,
-                                                disable=False, event=SECTION_CHANGED))
-        #                                        disable='isReDisabled', event=SECTION_CHANGED))
+                                                disable='isReDisabled', event=SECTION_CHANGED))
 
         # self.add(Label_Widget  (self,3,3, lab=self.fixedPosAndChordText))
 
         Blank_Widget (self,4,0, width=20, height = 10) 
-        self.add(Field_Widget  (self,5,0, lab="Airfoil", get=lambda: self.wingSection.airfoilName(), set='',
+        self.add(Field_Widget  (self,5,0, lab="Airfoil", obj=self.wingSection, get='airfoilName', set='',
                                                 disable=True, event=SECTION_CHANGED))
         
-        self.add(Button_Widget (self,5,2, lab='Select', width=70, set=self.select_airfoil ))
-        self.add(Button_Widget (self,5,3, lab='Remove', width=70, set=self.remove_airfoil, 
+        self.add(Button_Widget (self,5,2, lab='Select', width=60, columnspan=2, sticky='w', set=self.select_airfoil ))
+        self.add(Button_Widget (self,5,2, lab='Remove', width=60, columnspan=2, sticky='e', set=self.remove_airfoil, 
                                 disable=self.remove_airfoil_disable ))
 
         Blank_Widget (self,6,0, width=20, height = 10) 
-        self.add(Field_Widget  (self,7,0, lab="Flap group", obj=lambda: self.wingSection ,get='flapGroup', set='set_flapGroup',
+        self.add(Field_Widget  (self,7,0, lab="Flap group", obj=self.wingSection ,get='flapGroup', set='set_flapGroup',
                                                 lim=(0,9), dec=0, spin=True, step=1,
                                                 disable='isTip', event=SECTION_CHANGED))
 
@@ -658,15 +629,15 @@ class Edit_WingSection(Edit_Abstract):
 
     def fixedPositionText (self): 
         text = ""
-        if self.wingSection.hasFixedPosition():
-            if   self.wingSection.isRoot: text = "Root "
-            elif self.wingSection.isTip:  text = "Tip "
+        if self.wingSection().hasFixedPosition():
+            if   self.wingSection().isRoot: text = "Root "
+            elif self.wingSection().isTip:  text = "Tip "
             text +="fixed"
         return text
 
     def fixedPosAndChordText (self): 
         text = ""
-        if self.wingSection.hasFixedPositionAndChord():
+        if self.wingSection().hasFixedPositionAndChord():
             text ="fixed also chord"
         return text
     
@@ -674,7 +645,7 @@ class Edit_WingSection(Edit_Abstract):
         """ select airfoil with explorer and load it if possible """
 
         filetypes  = [('dat files', '*.dat')]
-        pathFile   = self.wingSection.airfoil.pathFileName
+        pathFile   = self.wingSection().airfoil.pathFileName
         initialDir = os.path.dirname(pathFile) if pathFile != None else ''
 
         newPathFilename = filedialog.askopenfilename(
@@ -683,19 +654,19 @@ class Edit_WingSection(Edit_Abstract):
                     filetypes=filetypes)
 
         if newPathFilename: 
-            self.wingSection.set_airfoilWithPathFileName(newPathFilename)
+            self.wingSection().set_airfoilWithPathFileName(newPathFilename)
             self.refresh()
             fireEvent (AIRFOIL_CHANGED)
 
     def remove_airfoil(self):
 
-        if self.wingSection.airfoil_canBeRemoved():
-            self.wingSection.set_airfoilWithPathFileName(None)
+        if self.wingSection().airfoil_canBeRemoved():
+            self.wingSection().set_airfoilWithPathFileName(None)
             self.refresh()
             fireEvent (AIRFOIL_CHANGED)
         
     def remove_airfoil_disable (self):
-        return not self.wingSection.airfoil_canBeRemoved()
+        return not self.wingSection().airfoil_canBeRemoved()
 
 
 #--------------- Diagramm Plots --------------------------
@@ -760,7 +731,7 @@ class Diagrams(ctk.CTkTabview):
     def wing(self) -> Wing:
         return self._wingFn()
     
-    # --- handle chield view frame for switches
+    # --- handle child view frame for switches - belongs to parent diagram frame
     def _create_view(self, view_frame) -> ctk.CTkFrame:
         new_view = ctk.CTkFrame(view_frame,
                            height=0,
@@ -771,8 +742,7 @@ class Diagrams(ctk.CTkTabview):
         return new_view
 
     def _set_grid_view_by_name(self, name: str):
-        """ needs to be called for changes in corner_radius, border_width """
-        self._view_dict[name].grid(row=3, column=0, sticky="nsew", padx=15, pady=0)
+        self._view_dict[name].grid(row=3, column=0, sticky="nsew", padx=15, pady=(10,0))
 
     def _grid_forget_all_view(self):
         frame: Frame
@@ -798,8 +768,9 @@ class Diagram_Abstract(ctk.CTkFrame):
 
         self.configure(fg_color= cl_background)
 
+        # big diagram grid 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        #self.grid_rowconfigure(0, weight=1)
         self.grid(row=0, column=0, sticky="news")
 
         self.figure : plt.Figure = plt.Figure()
@@ -810,20 +781,17 @@ class Diagram_Abstract(ctk.CTkFrame):
         self.canvas._tkcanvas.grid (row=0, column=0, pady=0, padx=0, sticky="news")
         self.canvas._tkcanvas.configure(background= cl_background)
 
+        # common axes for this diagram
         self.axes : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
         self.setup_axes ()
-        self.setup_artists ()
 
         # Create the artists for the diagramm
+        self.setup_artists ()
 
-        
-        # add user tip label 
-        # row += 1
-        # self.tip = ctk.CTkLabel(self.view_frame, text=self.defaultTip, text_color ="goldenrod2")
-        # self.tip.grid(row=row, column=0, padx=30, pady= 0, sticky='w')
+        # init of switches / plots
+        self.setup_Switches (row=0)                       
 
-        self.setup_Switches (row=0)                       # init of switches / plots
-
+        # react on changes of model
         self.setChangeBindings ()
         self._active            = False                     # is active frame? control change events 
 
@@ -849,9 +817,9 @@ class Diagram_Abstract(ctk.CTkFrame):
     def setup_Switches(self, row=0):
         """ define on/off switches ffor this plot type"""
         # grid on / off is always available 
-        row += 1 
-        Blank_Widget  (self.view_frame,row, 0)
-        self.view_frame.grid_rowconfigure (row, weight=1)
+        # row += 1 
+        # Blank_Widget  (self.view_frame,row, 0, height=5)
+        # self.view_frame.grid_rowconfigure (row, weight=1)
 
         row += 1 
         Switch_Widget (self.view_frame,row, 0, pady=2, padx=5, lab='Grid', 
@@ -862,11 +830,6 @@ class Diagram_Abstract(ctk.CTkFrame):
         # overwrite in sub class
         if self._active:
             pass  
-
-    # ----- view Switches
-
-    def showTip(self, myTip): 
-        self.tip.configure(text=myTip)
 
     # ----- general refresh when getting active view again
 
@@ -913,7 +876,7 @@ class Diagram_Planform (Diagram_Abstract):
         self.planformArtist     = Planform_Artist (self.axes, self._wingFn, show=True)
         self.chordLinesArtist   = ChordLines_Artist (self.axes, self._wingFn, show=False)
         self.curSectionArtist   = CurrentWingSection_Artist (self.axes, self._wingFn, show=True)
-        self.sectionsArtist     = WingSections_Artist (self.axes, self._wingFn, onPick=self.sectionPicked)     
+        self.sectionsArtist     = WingSections_Artist (self.axes, self._wingFn, show=True,onPick=self.sectionPicked)     
         self.flapArtist         = Flap_Artist (self.axes, self._wingFn)
         self.referenceArtist    = RefPlanform_Artist (self.axes, self._wingFn)
         self.dxfArtist          = RefPlanform_DXF_Artist (self.axes, self._wingFn)
@@ -924,10 +887,9 @@ class Diagram_Planform (Diagram_Abstract):
 
         # the whole plot work will be done by the artists
         # plot the real planform on top     
-        row += 1
-        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Planform', 
-                get=lambda: self.planformArtist.show, set=self.planformArtist.set_show)
-        row += 1
+        # Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Planform', 
+        #         get=lambda: self.planformArtist.show, set=self.planformArtist.set_show)
+        # row += 1
         Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Chord lines', 
                 get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
         row += 1
@@ -1018,6 +980,7 @@ class Diagram_Planform (Diagram_Abstract):
         if self._active:
             self.planformArtist.refresh ()  
             self.chordLinesArtist.refresh ()  
+            self.sectionsArtist.refresh ()  
             self.curSectionArtist.refresh()
             self.referenceArtist.refresh() 
             self.dxfArtist.refresh      () 
@@ -1079,24 +1042,22 @@ class Diagram_ChordDistribution (Diagram_Abstract):
     def setup_Switches(self, row=0):
         """ define on/off switches ffor this plot type"""
 
-        # row += 1
         # Switch_Widget  (self.view_frame,row,0, lab='Chord distribution', 
         #                 get=lambda: self.chordArtist.show, set=self.chordArtist.set_show)
-        row += 1
-        Switch_Widget (self.view_frame,row,0, lab='Chord lines', 
+        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Chord lines', 
                 get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
         row += 1
-        Switch_Widget  (self.view_frame,row,0, lab='Wing sections', 
+        Switch_Widget  (self.view_frame,row,0, pady=2, padx=5, lab='Wing sections', 
                         get=lambda: self.sectionsArtist.show, set=self.sectionsArtist.set_show)
         row += 1
-        Switch_Widget (self.view_frame,row,0, lab='Current section', 
+        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Current section', 
                 get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
         row += 1
-        Switch_Widget  (self.view_frame,row,0, lab='Reference', 
+        Switch_Widget  (self.view_frame,row,0, pady=2, padx=5, lab='Reference', 
                         get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
         if (self.wing.refPlanform_DXF.isValid): 
             row += 1
-            Switch_Widget  (self.view_frame,row,0, lab='Reference DXF', 
+            Switch_Widget  (self.view_frame,row,0, pady=2, padx=5, lab='Reference DXF', 
                             get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
 
         super().setup_Switches(row)
@@ -1208,10 +1169,10 @@ class Diagram_Airfoils (Diagram_Abstract):
     def setup_Switches(self, row=0):
         """ define on/off switches for this plot type"""
         row += 1
-        Switch_Widget (self.view_frame,row,0, lab='In real size', 
+        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='In real size', 
                        get=lambda: self.airfoilArtist.abs, set=self.airfoilArtist.set_abs)
         row += 1
-        Switch_Widget (self.view_frame,row,0, lab='Straked airfoils', 
+        Switch_Widget (self.view_frame,row,0, pady=2, padx=5, lab='Straked airfoils', 
                        get=self.show_strakedAirfoils, set=self.set_show_strakedAirfoils)
 
         super().setup_Switches(row)
@@ -1463,8 +1424,8 @@ class View_Menu(Edit_Abstract):
     def init (self):
 
         self.grid_columnconfigure   (0, weight=0)
-        self.grid_rowconfigure      (7, weight=1)
-        Header_Widget (self,0,0, lab=self.name)
+        self.grid_rowconfigure      (0, weight=0)
+        # Header_Widget (self,0,0, lab=self.name)
 
 
 
@@ -1486,9 +1447,10 @@ class Edit_File_Menu(Edit_Abstract):
     def init (self):
 
         self.grid_columnconfigure   (0, weight=1)
-        self.grid_rowconfigure      (7, weight=1)
+        # self.grid_rowconfigure      (7, weight=1)
 
-        Header_Widget (self,0,0, lab=self.name)
+        # Header_Widget (self,0,0, lab=self.name)
+        Blank_Widget (self,0,0, height=10)
 
         Button_Widget (self,1,0, lab='New',         width=100, sticky = '', set=self.myApp.new)
         Button_Widget (self,2,0, lab='Open',        width=100, sticky = '', set=self.myApp.open)
@@ -1559,10 +1521,10 @@ class App(ctk.CTk):
         self.grid_rowconfigure   (1, weight=1)
         self.grid_rowconfigure   (2, weight=1)
         self.grid_columnconfigure(1, weight=1)
-        file_frame.grid    (row=0, column=0, pady=(5,5), padx=0, ipady=10,sticky="new")
-        view_frame.grid    (row=1, column=0, pady=(0,10), padx=0,  ipady=20, sticky="nesw")
-        diagram_frame.grid (row=0, column=1, rowspan = 2, pady=0, padx=0, sticky="news")
-        edit_frame.grid    (row=2, column=0, columnspan= 2, pady=0, padx=0, sticky="nesw")
+        file_frame.grid    (row=0, column=0,                pady=(5,5), padx=0, ipady=5,sticky="ew")
+        view_frame.grid    (row=1, column=0,                pady=(0,5), padx=0, ipady=5,sticky="nesw")
+        diagram_frame.grid (row=0, column=1, rowspan = 2,   pady=0,     padx=0, sticky="news")
+        edit_frame.grid    (row=2, column=0, columnspan= 2, pady=0,     padx=0, sticky="nesw")
 
 
     def wing (self):
