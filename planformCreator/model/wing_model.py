@@ -86,9 +86,12 @@ class Wing:
         # create an extra Planform as major reference ()
         self.refPlanform      = Planform_Pure_Elliptical (self)
 
+        # create an extra Planform for the paneled planform to export later to Xflr5, FLZ, ...
+        self.paneledPlanform  = Planform_Paneled (self, dataDict)
+
         # miscellaneous parms
-        self._rootReynolds    = fromDict (dataDict, "rootReynolds", 400000, wingExists)
-        self._airfoilNickBase = fromDict (dataDict, "airfoilBasicName", "JX", wingExists)
+        self._rootRe    = fromDict (dataDict, "rootRe", 400000, wingExists)
+        self._airfoilNickPrefix = fromDict (dataDict, "airfoilBasicName", "JX", wingExists)
         
         InfoMsg (str(self)  + ' created...')
 
@@ -232,12 +235,12 @@ class Wing:
     def halfwingspan (self):    return (self.wingspan / 2)
 
     @property
-    def rootReynolds(self): return self._rootReynolds
-    def set_rootReynolds(self, newRe): self._rootReynolds = newRe
+    def rootRe(self): return self._rootRe
+    def set_rootRe(self, newRe): self._rootRe = newRe
 
     @property
-    def airfoilNickBase(self): return self._airfoilNickBase
-    def set_airfoilNickBase(self, newStr): self._airfoilNickBase = newStr
+    def airfoilNickPrefix(self): return self._airfoilNickPrefix
+    def set_airfoilNickPrefix(self, newStr): self._airfoilNickPrefix = newStr
 
 
 
@@ -332,6 +335,19 @@ class Wing:
                 chordList.append(aSection.norm_chord)
                 yPosList.append  (aSection.norm_yPos)
         return yPosList, chordList
+
+    def get_wingSections_norm_Pos (self):
+        """
+        returns the normed y pos all wing sections 
+
+        returns: 
+            posList --  list of normed y positions 
+        """
+        aSection : WingSection = None
+        yPosList = []
+        for aSection in self.wingSections:
+            yPosList.append  (aSection.norm_yPos)
+        return yPosList
 
     def get_wingSectionBy_norm_yPos (self, norm_yPos) -> 'WingSection':
         """
@@ -1021,6 +1037,7 @@ class Planform_Elliptical_StraightTE (Planform_Elliptical):
 
 
 #-------------------------------------------------------------------------------
+
 class Planform_Trapezoidal(Planform):
     """ 
     Defines the outline of an elliptical planform  
@@ -1130,6 +1147,161 @@ class Planform_Trapezoidal(Planform):
 
 
 #-------------------------------------------------------------------------------
+
+class Planform_Paneled (Planform_Trapezoidal):
+    """ 
+    Helper (slave) Planform which presents the actual planform as a paneled (trapezoid) version
+    Used for Xflr5 and FLZ export   
+    """
+    planformType  = "paneled"
+    isTemplate    = False
+
+    wingSection_eitherPosOrChord = False   # both pos and chord my be defined by user
+
+    sections_depend_on_planform = False          
+    planform_depend_on_sections = True           # sections define the shape of the planform
+
+    shortDescription = "Planform defined by its wing sections,\n" + \
+                       "which have a defined position and chord." 
+
+    def __init__(self, myWing: Wing, dataDict: dict = None):
+        super().__init__(myWing, dataDict)
+        """
+        Args:
+            :myWing: the wing object self belongs to  
+            :dataDict: optional - dictonary with all the data for a valid section
+        """
+        # read additional parameters of this shapeform 
+        self._x_panels  = fromDict (dataDict, "x-panels", 5, False)
+        self._x_dist    = fromDict (dataDict, "x-distribution", "uniform", False)
+        self._y_panels  = fromDict (dataDict, "y-panels", 5, False)
+        self._y_dist    = fromDict (dataDict, "y-distribution", "uniform", False)
+        
+
+        self.distribution_fns = {}
+        self.distribution_fns["uniform"]= lambda y : y
+        self.distribution_fns["-sine"]  = lambda y : np.sin (y     * np.pi/2)
+        self.distribution_fns["sine"]   = lambda y : np.sin ((y+2) * np.pi/2) + 1
+        self.distribution_fns["cosine"] = lambda y : ((np.cos ((y+1) * np.pi)) + 1) / 2
+
+
+    # ---Properties --------------------- 
+    @property
+    def x_panels (self):                return self._x_panels
+    def set_x_panels (self, val: int):  self._x_panels = int(val)
+
+    @property
+    def x_dist (self):                return self._x_dist
+    def set_x_dist (self, val):  
+        if val in self.distribution_fns:
+            self._x_dist = val
+
+    @property
+    def y_panels (self):                return self._y_panels
+    def set_y_panels (self, val: int):  self._y_panels = int(val)
+
+    @property
+    def y_dist (self):                return self._y_dist
+    def set_y_dist (self, val):  
+        if val in self.distribution_fns:
+            self._y_dist = val
+
+    def distribution_fns_names (self):
+        """ a list of available distribution functions"""
+        return list(self.distribution_fns.keys())
+
+    def _norm_y_points (self):
+        """
+        array of y points along the span - here the wing sections pos 
+        """
+        # overwritten to get y of sections 
+        norm_y_points = self.wing.get_wingSections_norm_Pos () 
+        return np.asarray(norm_y_points)
+
+
+    def _planform_function (self, y):
+        """
+        the planform represented as trapezoid
+        """
+        y_Sections = self._norm_y_points() * self.halfwingspan
+
+        for iSec in range(len(y_Sections) - 1):
+            y_before = y_Sections [iSec]
+            y_after  = y_Sections [iSec+1]
+            if y  >= y_before and  y <= y_after:
+                le_before, te_before = self.wing.planform._planform_function (y_before)
+                le_after, te_after   = self.wing.planform._planform_function (y_after)
+                le = interpolate(y_before, y_after, le_before, le_after, y) 
+                te = interpolate(y_before, y_after, te_before, te_after, y) 
+                return le, te
+
+        # not found ...? 
+        raise ValueError ("Could not interpolate '%s'for paneled planform the value " % y)
+
+    def y_panel_lines (self):
+        """
+        the lines from LE to TE representing the y panels of the planform 
+        Returns:
+            :y: list of array of the y-stations of the line  
+            :x: list of array of x values of LE and TE 
+        """
+        lines_y = []
+        lines_le_to_te = []           
+        y_distribution_fn = self.distribution_fns [self.y_dist]
+        y_Sections = self._norm_y_points() * self.halfwingspan
+
+        for iSec in range(len(y_Sections) - 1):
+            y_left = y_Sections [iSec]
+            y_right  = y_Sections [iSec+1]
+            dy_sec = y_right - y_left
+
+            # line on section will be double
+            for dyn_pan in np.linspace (0, 1, self.y_panels +1): 
+                # ! perform the distribution function
+                yn_distrib_pan = y_distribution_fn (dyn_pan)
+                yPos = y_left + yn_distrib_pan * dy_sec
+
+                le, te = self._planform_function (yPos)
+                lines_y.append([yPos, yPos])
+                lines_le_to_te.append([le, te])
+
+        return lines_y, lines_le_to_te
+    
+    def x_panel_lines (self):
+        """
+        the lines from one section to the next representing the x panels of the planform 
+        Returns:
+            :y: list of array of the y-stations of the line  
+            :x: list of array of x values of LE and TE 
+        """
+        lines_y = []
+        lines_panels_x = []           
+        x_distribution_fn = self.distribution_fns [self.x_dist]
+        y_Sections = self._norm_y_points() * self.halfwingspan
+
+        for iSec in range(len(y_Sections) - 1):
+            y_left = y_Sections [iSec]
+            y_right  = y_Sections [iSec+1]
+
+            le_left, te_left   = self._planform_function (y_left)
+            chord_left = te_left - le_left
+            le_right, te_right = self._planform_function (y_right)
+            chord_right = te_right - le_right
+
+            # line on section will be double
+            for dxn_pan in np.linspace (0, 1, self.x_panels +1): 
+                # ! perform the distribution function
+                xn_distrib_pan = x_distribution_fn (dxn_pan)
+
+                x_left  = le_left  + xn_distrib_pan * chord_left
+                x_right = le_right + xn_distrib_pan * chord_right
+                lines_y.append          ([y_left, y_right])
+                lines_panels_x.append   ([x_left, x_right])
+
+        return lines_y, lines_panels_x
+
+
+#-------------------------------------------------------------------------------
 # Planform_DXF class
 #-------------------------------------------------------------------------------
 
@@ -1172,6 +1344,7 @@ class Planform_DXF(Planform):
         self.te_norm_dxf        = None   # the normalized trailing edge in points from DXF
         self.hingeLine_norm_dxf = None   # the normalized hinge line in points from DXF
         self.hingeAngle_dxf     = None
+        self.adaptHingeAngle    = True   # the hinge angle will be adapted to wing (for reference DXF)
         self.flapDepthRoot_dxf  = None
         self.flapDepthTip_dxf   = None 
         self.infoText           = ''     # info about dxf parsing 
@@ -1330,9 +1503,11 @@ class Planform_DXF(Planform):
         te = te_norm * self.rootchord
 
         # add hinge line angle 
-        deltaHinge = np.tan((self.hingeAngle/180) * np.pi) * y_norm * self.halfwingspan
-        le += deltaHinge 
-        te += deltaHinge
+        if self.adaptHingeAngle:
+            deltaHinge = np.tan((self.hingeAngle/180) * np.pi) * y_norm * self.halfwingspan
+            le += deltaHinge 
+            te += deltaHinge
+
         return le, te
 
 
@@ -1343,13 +1518,21 @@ class Planform_DXF(Planform):
             :y:  array of the y-stations of the line (root & tip) 
             :hinge: array of hinge x values
         """
-        if not self.isValid: return [],[]
+        if not self.isValid or not self.hingeLine_norm_dxf: return [],[]
 
-        y       = self._norm_y_points() 
-        hinge   = np.empty (y.size)
-        for i in range(y.size): 
-            hinge[i] = self.__get_xFromY(self.hingeLine_norm_dxf, y)
-        return y, hinge
+        npoints = len(self.hingeLine_norm_dxf)
+        y       = np.empty (npoints)
+        hinge   = np.empty (npoints)
+        for i in range(npoints): 
+            y[i]     = self.hingeLine_norm_dxf[i][0] * self.halfwingspan
+            hinge[i] = self.hingeLine_norm_dxf[i][1] * self.rootchord
+
+            # add hinge line angle to show original
+            if self.adaptHingeAngle:
+                deltaHinge = np.tan((self.hingeAngle/180) * np.pi) * y[i]
+                hinge[i] += deltaHinge 
+        
+        return y , hinge 
 
 
     def __get_xFromY(self, line, x):
@@ -1434,8 +1617,8 @@ class Planform_DXF(Planform):
         if self.le_norm_dxf != None:
             InfoMsg("DXF planform imported from file %s" % dxf_file)
 
-            infoText.append(" - Leading edge %d, Trailing edge %d points" \
-                             % (len(self.le_norm_dxf), len(self.te_norm_dxf)))
+            infoText.append(" - Leading edge %d points"  % (len(self.le_norm_dxf)))
+            infoText.append(" - Trailing edge %d points" % (len(self.te_norm_dxf)))
 
             if (self._dxf_mirrorX):
                 infoText.append(" - mirrored along y-axis")
@@ -1448,8 +1631,8 @@ class Planform_DXF(Planform):
 
                 yTip = 0.98
                 self.flapDepthRoot_dxf, self.flapDepthTip_dxf = self.flapDepth_dxf (tipAt = yTip)
-                infoText.append(" - Flap at root %.1f %%, at tip (%.2f) %.1f %%" \
-                                % (self.flapDepthRoot_dxf, yTip, self.flapDepthTip_dxf))
+                infoText.append(" - Flap at root %.1f %%"       % (self.flapDepthRoot_dxf))
+                infoText.append(" - Flap at tip (%.2f) %.1f %%" % (yTip, self.flapDepthTip_dxf))
             else:
                 infoText.append(" - No hinge line detected")
 
@@ -1611,7 +1794,6 @@ class WingSection:
         else:
             raise ValueError ("Wingsection: Both position and norm chord are not defined")
 
-
     def set_norm_chord (self, value):
         """ set the normaized chord 0..1 - the section will move to a new position   """
         if (value is None and self._yPos is None):
@@ -1649,6 +1831,15 @@ class WingSection:
     def isRootOrTip (self): 
         return self.isRoot or self.isTip
 
+    @property
+    def Re (self):
+        """ Reynolds number at this section calculated from chord """
+        return self.norm_chord * self.wing.rootRe
+    def set_Re (self, value):
+        """ set Re number of this section - the section will move to a new position  """
+        if (not value is None and value > 0) and (not self.isRootOrTip ):
+            self.set_norm_chord  (value / self.wing.rootRe)
+
     # ---Methods --------------------- 
 
     def eitherPosOrChord (self): 
@@ -1656,22 +1847,9 @@ class WingSection:
         Is defined by planform typ. Within a trapezoidal a section may have both   """
         return self.wing.wingSections_eitherPosOrChord()
 
-    def Re (self):
-        """ Reynolds number at this section calculated from chord """
-        if self.isReDisabled(): 
-            return 0 
-        else: 
-            return self.norm_chord * self.wing.rootReynolds
-
-    def set_Re (self, value):
-        """ set Re number of this section - the section will move to a new position
-        """
-        if (not value is None and value > 0) and (not self.isRootOrTip ):
-            self.set_norm_chord  (value / self.wing.rootReynolds)
-
     def isReDisabled (self):
         """ true if Re calculation is not possible  - e.g. missing Re at root"""
-        return (self.wing.rootReynolds is None or self.wing.rootReynolds <= 0) or (self.isRootOrTip)
+        return (self.wing.rootRe is None or self.wing.rootRe <= 0) or (self.isRootOrTip)
 
     def name (self) -> str:
         """ very short unique name for wing section like "Section 7"""
@@ -1695,8 +1873,8 @@ class WingSection:
             info = "at %.0fmm" %self._yPos
         elif (self._norm_chord != None):
             info = "with %.0fmm" % (self._norm_chord * self.wing.rootchord)
-        elif (self.Re() != None):
-            info = "Re %.0f" %self.Re()
+        elif (self.Re != None):
+            info = "Re %.0f" %self.Re
         else:
             info = "flex" 
         return f"{index}: {info}"
@@ -1813,12 +1991,35 @@ class WingSection:
         """  Re limits of self as tuple - must be between left and right neighbour
         """
         left, right = self.limits_normChord ()
-        left  = left  * self.wing.rootReynolds
-        right = right * self.wing.rootReynolds
+        left  = left  * self.wing.rootRe
+        right = right * self.wing.rootRe
         return (left, right)
 
     def airfoilName (self):
         return self.airfoil.name
+    
+    def airfoilNickPostfix(self): 
+        """ the postfix like '-16' of airfoils nickname
+        if there is rootRe takke this else use normchord"""
+
+        if self.wing.rootRe >= 100000:
+            return "-%d" % int(self.Re/10000)
+        elif self.wing.rootRe >= 10000:
+            return "-%d" % int(self.Re/1000)
+        elif self.wing.rootRe > 0:
+            return "-%d" % int(self.Re)
+        else:
+            return "-%d" % int(self.norm_chord * 100)
+        
+    def airfoilNick(self): 
+        """ the airfoil nickname like GP-16 from nickname prefix and reynolds (or normchord)"""
+
+        if self.wing.airfoilNickPrefix:
+            prefix = self.wing.airfoilNickPrefix
+        else:
+            prefix = "JX"
+        return prefix + self.airfoilNickPostfix()
+
 
     def airfoil_canBeRemoved (self):
         return (not self.isRootOrTip) and (not self.airfoil.isStrakAirfoil)

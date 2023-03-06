@@ -1,7 +1,7 @@
 {
   "wingName":"Amokka-JX PC2",
   "rootchord":235.0,
-  "rootReynolds":400000,
+  "rootRe":400000,
   "wingspan":2380.0,
   "planformType":"elliptical TE straight",
   "ellipseTipBelly":0.15,

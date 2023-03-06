@@ -645,12 +645,15 @@ class Label_Widget(Base_Widget):
         Label_Widget  (self, 3,0, lab='Loremm ipsumm') :)
         Label_Widget  (self, 3,0, width=200, lab=self.myLabeText) :)
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, sticky = None, columnspan=None, **kwargs):
         super().__init__(*args, **kwargs)
+
+        if sticky       is None: sticky = "sw"
+        if columnspan   is None: columnspan = 6
 
         self.mainCTk = ctk.CTkLabel(self.parent, width=self.width, justify ='left', 
                                     text=self.label, anchor= "w", text_color=cl_text_disabled)           
-        self.mainCTk.grid(row=self.row, column=self.column,  columnspan=6, padx=10, sticky="sw")
+        self.mainCTk.grid(row=self.row, column=self.column,  columnspan=columnspan, padx=10, sticky=sticky)
 
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
         widgetCTk.configure (text=newLabelStr)
@@ -664,13 +667,14 @@ class Button_Widget(Base_Widget):
         val or obj+getter -- val string to show or access path with obj and getter          :)
         set -- access path setter when button is pressed             :)
     """
-    def __init__(self, *args, sticky= None, columnspan = 1, **kwargs):
+    def __init__(self, *args, sticky= None, pady= None, columnspan = 1, **kwargs):
         super().__init__(*args, **kwargs)
 
         if sticky is None: sticky = 'w'
+        if pady   is None: pady = 0
 
         self.mainCTk = ctk.CTkButton(self.parent, text=self.label, height=self.height, width=self.width, command=self.CTk_callback)
-        self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=(10,10), pady=4, sticky=sticky)
+        self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=(10,10), pady=pady, sticky=sticky)
 
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
 
@@ -821,7 +825,7 @@ class Field_Widget(Base_Widget):
             unit_ctk  = ctk.CTkLabel (self.parent, text=self.unit, anchor='w')
             unit_ctk.grid (row=self.row, column=column, padx=(2,15), pady=1, sticky='w')
         else: 
-            unit_ctk  = ctk.CTkFrame (self.parent, width=5, height=5, fg_color="transparent")
+            unit_ctk  = ctk.CTkFrame (self.parent, width=1, height=1, fg_color="transparent")
             unit_ctk.grid (row=self.row, column=column, padx=(2,5),  pady=1, sticky='w')
 
         self.mainCTk.bind('<Return>', self.CTk_callback)
@@ -892,10 +896,13 @@ class Option_Widget(Base_Widget):
         set -- access path setter when switched              :)
         spin -- Boolean if entry field should have a spinner       :)
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, padx=None, pady=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         option_width = self.width 
+        if padx is None: padx = (1,1)
+        if pady is None: pady = 0
+
 
         # label support not active
         #if (self.label):  label_ctk = ctk.CTkLabel (self.parent, text=self.label)
@@ -929,9 +936,9 @@ class Option_Widget(Base_Widget):
             self.mainCTk.grid (row=self.row, column=self.column+1, padx=(2, 2), pady=0, sticky='w')
             self.nextCTk.grid (row=self.row, column=self.column+2, padx=(0, 0), pady=0, sticky='w')
 
-            option_frame.grid (row=self.row, column=self.column, padx=(1, 1), pady=0, sticky='w')
+            option_frame.grid (row=self.row, column=self.column, padx=padx, pady=pady, sticky='w')
         else:
-            self.mainCTk.grid (row=self.row, column=self.column, padx=(1, 1), pady=0, sticky='w')
+            self.mainCTk.grid (row=self.row, column=self.column, padx=padx, pady=pady, sticky='w')
 
         self.set_CTkControl()
         self.set_CTkControl_state()
@@ -996,6 +1003,57 @@ class Option_Widget(Base_Widget):
             self._set_CTkControl_state (self.prevCTk, prevDisabled)
             self._set_CTkControl_state (self.nextCTk, nextDisabled)
     
+
+class Combo_Widget(Base_Widget):
+    """ Compund widget existing out of 
+        column i    : Field label - optional (CTkLabel)
+        column i+1  : Option combox box  (CTkOption)
+
+    Keyword Arguments:
+        val or obj+getter -- val string to show or access path with obj and getter          :)
+        options -- list of string values or access path being options to select 
+        set -- access path setter when switched              :)
+        spin -- Boolean if entry field should have a spinner       :)
+    """
+    def __init__(self, *args, padx=None, pady=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if padx is None: padx = (1,1)
+        if pady is None: pady = 0
+
+        r = self.row
+        c = self.column
+
+        if (self.label):  label_ctk = ctk.CTkLabel (self.parent, text=self.label)
+        else:             label_ctk = ctk.CTkFrame (self.parent, width=10, height=5, fg_color="transparent")     # dummy frame
+        label_ctk.grid (row=r, column=c, padx=(15, 15), pady=1, sticky='e')
+
+        self.mainCTk = ctk.CTkComboBox (self.parent, values= self.options, 
+                                        width=self.width, height=self.height, 
+                                        command=self.CTk_callback)        
+
+        self.mainCTk.grid (row=r, column=c+1, padx=padx, pady=pady, sticky='w')
+        self.set_CTkControl()
+        self.set_CTkControl_state()
+
+    def _getFrom_CTkControl (self):
+        return self.mainCTk.get()
+
+    def _set_CTkControl (self, widgetCTk, newValStr: str):
+        if newValStr == '':
+            widgetCTk.set(self.options[0])
+        else:    
+            widgetCTk.set(newValStr)
+
+    def refresh (self):
+        # first refresh options list 
+        if not self.whileSetting:                           # avoid circular actions with refresh()
+            if self.optionsGetter:
+                self.options = self.get_value(self.optionsGetter, self.obj, self.parent)
+                self.mainCTk.configure (values=self.options)
+        # then refresh the selected item
+        super().refresh()
+
 
 
 #=========================================================

@@ -12,7 +12,7 @@ import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
 
 from model.common_utils import *
-from model.wing_model import (Wing, Planform, WingSection, Planform_DXF, Flap)
+from model.wing_model import (Wing, Planform, WingSection, Planform_DXF, Flap, Airfoil, Planform_Paneled)
 
 
 cl_planform         = 'whitesmoke'
@@ -25,6 +25,7 @@ cl_text             = '#D0D0D0'
 cl_userHint         = 'goldenrod'
 cl_wingSection_fix  = 'deeppink'
 cl_wingSection_flex = 'mediumvioletred'
+cl_paneled          = 'steelblue'
 
 
 
@@ -63,14 +64,14 @@ class Base_Artist():
     plt.rcParams.update({'grid.alpha': 0.2})                    # transparency, between 0.0 and 1.0  
 
 
-    def __init__ (self, axes, modelFn, norm = False, onPick=None, show=False):
+    def __init__ (self, axes, modelFn, norm = False, onPick=None, show=False, showMarker=True):
 
         self.ax : plt.Axes = axes
         self._modelFn = modelFn             # we get a bounded method to the model e.g. Wing 
 
         self._norm = norm                   # plot in normed coordinates
         self._show = show                   # should self be plotted? 
-
+        self.showMarker = showMarker
         self._myPlots = []                  # plots (line artists) made up to now 
     
         if onPick:
@@ -180,16 +181,17 @@ class Base_Artist():
         # callback of matplt - having matplt 'event' as argument
         try: 
             myLabel = event.artist.get_label()
-            # now callback parent with myLabel as argument
-            if self._pickCallback:
-                self._pickCallback(myLabel)
-            # default remove of user tip 
-            if self.userTip:
-                self.userTip = ''
-                self.plot()
-
         except: 
             print ("- Pick event couldn't be handled ", event.artist, "callback: ", self._pickCallback)
+
+        # now callback parent with myLabel as argument
+        if self._pickCallback:
+            self._pickCallback(myLabel)
+        # default remove of user tip 
+        if self.userTip:
+            self.userTip = ''
+            self.plot()
+
 
 
     def _showUserTip (self):
@@ -223,7 +225,7 @@ class Grid_Artist (Base_Artist):
         self.ax.figure.canvas.draw_idle()
 
 
-class CurrentWingSection_Artist (Base_Artist):
+class CurrentSection_Artist (Base_Artist):
     """Plot a Marker Symbol at the current (selected) wing sections.
     May plot in real coordinates and normed
 
@@ -290,9 +292,18 @@ class Planform_Artist (Base_Artist):
     """Plot the outline of the wing planform.
     """
 
+    def __init__ (self, axes, modelFn, planform=None, **kwargs):
+        super().__init__ (axes, modelFn, **kwargs)
+
+        # an alternative planform - not taken from Wing
+        self._planform = planform
+
     @property
     def planform (self) -> Planform:
-        return self.model.planform
+        if self._planform is None:
+            return self.model.planform
+        else:
+            return self._planform
     
     def _plot(self):
     
@@ -396,18 +407,36 @@ class RefPlanform_DXF_Artist (Planform_Artist):
     color = cl_dxf  
     @property
     def refPlanform_DXF (self) -> Planform_DXF :
-        return self.model.refPlanform_DXF
+        if self._planform is None:
+            return self.model.refPlanform_DXF
+        else:
+            return self._planform
 
     def _plot(self):
 
         # is there a DXF planform? 
         if (self.refPlanform_DXF): 
             y, leadingEdge, trailingEdge = self.refPlanform_DXF.lines ()
-            p = self.ax.plot(y, leadingEdge,  label='DXF contour', color=self.color)
-            self._add (p)              # remind plot to delete 
-            p = self.ax.plot(y, trailingEdge, label='DXF contour', color=self.color)
-            self._add (p)              # remind plot to delete 
-            self.plot_markers (y, leadingEdge)
+            if y != []: 
+                p = self.ax.plot(y, leadingEdge,  label='DXF contour', color=self.color)
+                self._add (p)              # remind plot to delete 
+                p = self.ax.plot(y, trailingEdge, label='DXF contour', color=self.color)
+                self._add (p)              # remind plot to delete 
+
+                # rootline 
+                yr = [y[0],y[0]]
+                xr = [leadingEdge[0],trailingEdge[0]]
+                p = self.ax.plot(yr, xr, color=self.color)
+                self._add (p)              # remind plot to delete 
+
+                # hinge line? 
+                yh, xh = self.refPlanform_DXF.hingeLine_dxf()
+                if yh != []:
+                    p = self.ax.plot(yh, xh, color=self.color)
+                    self._add (p)              # remind plot to delete 
+
+                if self.showMarker: 
+                    self.plot_markers (y, leadingEdge)
 
     def plot_markers (self, y, leadingEdge): 
 
@@ -423,8 +452,64 @@ class RefPlanform_DXF_Artist (Planform_Artist):
         marker_x = leadingEdge[iclosest] - 15
 
         text = self.refPlanform_DXF.dxf_filename()
-        p = self.ax.text (marker_y, marker_x, text , color = self.color)
+        p = self.ax.text (marker_y, marker_x, text , color = self.color, ha='right')
         self._add (p)   
+
+
+class PaneledPlanform_Artist (Planform_Artist):
+    """Plot the outline of the paneled planform for Xflr5 or FLZ export
+    """
+    color = cl_paneled 
+
+    @property
+    def planform (self) -> Planform_Paneled :
+        return self.model.paneledPlanform
+    @property
+    def wingSections (self): 
+        return self.model.wingSections
+
+    def _plot(self):
+
+        #outline
+        lw = 1
+        y, leadingEdge, trailingEdge = self.planform.lines()
+        p = self.ax.plot(y, leadingEdge,  color=self.color, linewidth=lw)
+        self._add (p)              # remind plot to delete 
+        p = self.ax.plot(y, trailingEdge, color=self.color, linewidth=lw)
+        self._add (p)              # remind plot to delete 
+
+        # y-panel lines 
+        lw = 0.7
+        ls ='-'
+        lines_y, lines_le_to_te = self.planform.y_panel_lines()
+
+        for iLine in range(len(lines_y)):
+            y = lines_y[iLine]
+            le_to_te = lines_le_to_te [iLine]
+            p = self.ax.plot(y, le_to_te, color=self.color, linewidth=lw)
+            self._add (p)              # remind plot to delete 
+
+        # x-panel lines 
+        lines_y, lines_panels_x = self.planform.x_panel_lines()
+
+        for iLine in range(len(lines_y)):
+            y = lines_y[iLine]
+            line_x = lines_panels_x [iLine]
+            p = self.ax.plot(y, line_x, color=self.color, linewidth=lw)
+            self._add (p)              # remind plot to delete 
+
+        # wing sections
+        section : WingSection
+        lw = 1
+        ls ='-'
+
+        for section in self.wingSections:
+            y, le_to_te = section.line()
+            p = self.ax.plot(y, le_to_te, color=cl_wingSection_fix, linestyle=ls, linewidth=lw)
+            self._add (p)              # remind plot to delete 
+
+
+        # self.plot_markers (y, leadingEdge)
 
 
 class Chord_Artist (Base_Artist):
@@ -460,7 +545,7 @@ class RefChord_DXF_Artist (Chord_Artist):
         return self.model.refPlanform_DXF.norm_chord_line ()
 
 
-class WingSections_Artist (Base_Artist):
+class Sections_Artist (Base_Artist):
     """Plot the wing sections as a vertical line. Add markers and text etc.
     May plot in real coordinates and normed
 
@@ -519,15 +604,14 @@ class WingSections_Artist (Base_Artist):
 
         sectionFix = section.hasFixedPosition()
 
-        if sectionFix: 
-            color = cl_text
-        else:
-            color = cl_text
         if self._norm:
+            if section.isRoot: return               # no norm_chord for root
+            color = cl_wingSection_fix
             offset = -0.03
             textRight = "%.2f" % (section.norm_chord)
             marker_x = (le_to_te[0] + le_to_te[1]) * 0.9
         else: 
+            color = cl_wingSection_fix
             offset = 5
             textRight = "%.0fmm" % section.chord
             marker_x = le_to_te[1] - (le_to_te[1] - le_to_te[0]) * 0.5
@@ -631,7 +715,7 @@ class Airfoil_Artist (Base_Artist):
 
     def _defaultUserTip (self):
         # overwritten in subclass"
-        return 'Click section to select'
+        return 'Click airfoil to select'
 
     def set_current (self, aLineLabel, figureUpdate=False):
         """ tries to set a highlighted airfoil  to section with name ''aLineLabel' 
@@ -702,6 +786,7 @@ class Airfoil_Artist (Base_Artist):
                         p = self.ax.fill (x, y, facecolor=color, alpha=0.1)
                         self._add(p)
                     linewidth=1.6
+                    self._plot_marker (x,y, color, section)
                 else:
                     linewidth=0.8
 
@@ -713,22 +798,81 @@ class Airfoil_Artist (Base_Artist):
 
         # activate event for clicking on line 
         if self._pickActive:
-            self.ax.figure.canvas.mpl_connect('pick_event', self._on_pick)
-        
+            self.ax.figure.canvas.mpl_connect('pick_event', self._on_pick)     
         if not self._norm: 
-            self._plot_markers (self.wing.rootchord)
+            self._plot_zero_marker (self.wing.rootchord)
 
-        self.ax.legend()
+        # self.ax.legend()
 
-    def  _plot_markers (self, rootChord): 
+
+    def _plot_marker (self, x,y, color, section: WingSection):
+        # annotate airfoil with name etc. 
+
+        text = "'"+ section.airfoilNick() + "'\n" + section.airfoilName() + "\n@" + section.name() 
+        y = np.amin(y) * 0.3
+        x = np.amax(x) * 0.8
+        p = self.ax.annotate(text, color=color, 
+                xy=(x, y), xycoords='data', ha='center',
+                xytext=(0, -50), textcoords='offset points')
+        self._add(p)
+
+
+    def  _plot_zero_marker (self, rootChord): 
 
         # draw a vertical line at x=0 to indicate quarter chord 
-        yfrom = - rootChord / 13
-        yto   =   rootChord / 10
-        p = self.ax.plot ([0,0],[yfrom,yto], color=  cl_labelGrid, linestyle="dashed", linewidth=0.7)
+        # yfrom = - rootChord / 15
+        # yto   = - rootChord / 25
+        yfrom = 0.1
+        yto   = 0.3
+        p = self.ax.plot ([0,0],[yfrom,yto], color=  cl_labelGrid, 
+                          transform=self.ax.get_xaxis_transform(), 
+                          linestyle="dashed", linewidth=0.7)
         self._add(p) 
 
-        p = self.ax.text(0 , yto + 2,  "quarter chord" , color=cl_labelGrid, 
-                         horizontalalignment='center')
+        y = 0.054
+        p = self.ax.text(0 , y,  "quarter chord" , color=cl_labelGrid, 
+                        transform=self.ax.get_xaxis_transform(), 
+                        horizontalalignment='center', verticalalignment= "bottom")
         self._add(p) 
 
+
+class AirfoilName_Artist (Base_Artist):
+    """shows the airfoil name in planform view """
+
+    @property   
+    def wing (self) -> Wing:
+        return self.model
+    @property
+    def wingSections (self): 
+        return self.wing.wingSections
+    
+    def _plot (self): 
+        """ do plot of wing sections in the prepared axes   
+        """
+        from cycler import cycler  
+
+        section : WingSection
+
+        # https://matplotlib.org/stable/gallery/color/colormap_reference.html
+        n= len(self.wing.wingSections)
+        new_colors = plt.get_cmap('Set2')(np.linspace(0, 1, n))
+        color_cycler = cycler('color', new_colors)  
+        self.ax.set_prop_cycle(color_cycler)
+
+        if self.norm: return                    # normalized view not supported 
+        for section in self.wingSections:
+            y, le_to_te = section.line()
+            self.plot_markers (y, le_to_te, section)
+
+    def plot_markers (self, y, le_to_te, section: WingSection): 
+        # print airfoil name and nickname below the planform 
+
+        marker_y = 0.02                         # in axis coordinates
+        marker_x = y[0]                         # in data coordinates
+        text = "'"+ section.airfoilNick() + "'" + "\n" + section.airfoilName()
+
+        color = next(self.ax._get_lines.prop_cycler)['color']
+        p = self.ax.text (marker_x, marker_y, text, color=color, # fontsize = 'small',
+                          transform=self.ax.get_xaxis_transform(), 
+                          horizontalalignment='center', verticalalignment='bottom')
+        self._add (p)   
