@@ -9,16 +9,15 @@
 import os
 from tkinter import filedialog, Frame
 import customtkinter as ctk
-from CTkMessagebox import CTkMessagebox
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
 
 from model.wing_model   import Planform, Planform_Elliptical, Planform_Elliptical_StraightTE, \
-                               Planform_DXF, Planform_Trapezoidal, Except_Planform_DXF_notValid, \
-                               InfoMsg
-from widgets            import * 
-from wing_artist        import *
-
+                               Planform_DXF, Planform_Trapezoidal, Except_Planform_DXF_notValid
+                               
+from ui_base.widgets            import * 
+from ui_base.wing_artist        import *
+from ui_base.CTkMessagebox.ctkmessagebox   import CTkMessagebox
 
 #------------------------------------------------
 
@@ -63,7 +62,7 @@ class Edit(ctk.CTkFrame):
         self.curSection = self.wing.wingSections[0]
 
         self.editWing_frame          = Edit_Wing               (self, wingFn, width=300)
-        self.editPlanform_frame      = Edit_Wing_PlanformType  (self, wingFn, width=500)
+        self.editPlanformType_frame  = Edit_Wing_PlanformType  (self, wingFn, width=500)
         self.editSectionMaster_frame = Edit_WingSection_Master (self, wingFn)
 
         # edit maingrid 1 x 4  with subframes
@@ -75,7 +74,7 @@ class Edit(ctk.CTkFrame):
         self.grid_columnconfigure   (3, weight=1, minsize=400)
 
         self.editWing_frame.grid          (row=0, column=1, pady=5, padx=5, sticky="news")
-        self.editPlanform_frame.grid      (row=0, column=2, pady=5, padx=5, sticky="news")
+        self.editPlanformType_frame.grid  (row=0, column=2, pady=5, padx=5, sticky="news")
         self.editSectionMaster_frame.grid (row=0, column=3, pady=5, padx=5, sticky="news")
 
         # major bindings for change management
@@ -105,7 +104,7 @@ class Edit(ctk.CTkFrame):
         """ Eventhandler for a new wing being set"""
         # refresh all 
         self.editWing_frame.refresh()
-        self.editPlanform_frame.refresh()    
+        self.editPlanformType_frame.refresh()    
         self.editSectionMaster_frame.reset()     
 
     def changed_wing (self, event): 
@@ -134,7 +133,7 @@ class Edit(ctk.CTkFrame):
         # doesn't change wing data
         # could change planform
         if self.planform.planform_depend_on_sections:
-            self.editPlanform_frame.refresh()   # e.g. chord changes section position 
+            self.editPlanformType_frame.refresh()   # e.g. chord changes section position 
         # refresh the other fields of current section
         self.editSectionMaster_frame.refresh_current()    # e.g. section position (wingSpan) 
 
@@ -193,11 +192,15 @@ class Edit_Wing(Edit_Abstract):
     def init (self):
 
         self.grid_rowconfigure      (1, weight=1)
+        self.grid_columnconfigure   (4, weight=1)
                
         self.add (Header_Widget (self,0,0, lab=self.name, width=80))
+        self.add (Field_Widget  (self,0,1, lab=None, obj=self.wing, get='name', set='set_name',
+                                 lab_width=1, event=WING_CHANGED, width=140))
+
 
         self.dataFrame = Edit_Wing_Data (self, self._wingFn, fg_color='transparent')
-        self.dataFrame.grid (row=1, columnspan=2, pady=0, padx=(10,5), sticky="news")
+        self.dataFrame.grid (row=1, column=0, columnspan=5, pady=0, padx=(10,5), sticky="news")
 
     def refresh(self):
         # overloaded to refresh also child frame with data
@@ -217,8 +220,6 @@ class Edit_Wing_Data (Edit_Abstract):
 
         unit = self.wing().unit
                 
-        self.add (Field_Widget  (self,1,0, lab="Name",          obj=self.wing, get='name', set='set_name',
-                                 event=WING_CHANGED, width=140, columnspan= 2))
         self.add (Field_Widget  (self,2,0, lab="Wing span",     obj=self.wing, get='wingspan', set='set_wingspan',
                                  event=WING_CHANGED, lim=(100,20000), dec=1, spin= True, step=10, unit=unit))
         self.add (Field_Widget  (self,2,3, lab="Hinge angle",   obj=self.wing, get='hingeAngle', set='set_hingeAngle',
@@ -344,6 +345,13 @@ class Edit_Wing_PlanformType(Edit_Abstract):
             handled = False
 
         return handled
+    
+    def refresh(self):
+        super().refresh()
+        # new wing - also new planformType? 
+        self.set_planform_frame (self.planformType)
+        self.currentPlanform_frame.refresh()
+
 
 
 #-------------------------------------------
@@ -418,9 +426,7 @@ class Edit_Planform_Elliptical_StraightTE (Edit_Abstract):
                                  lim=(0,1),   dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
         self.add (Field_Widget  (self,0,3, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
                                  lim=(0,1),   dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
-        self.add (Field_Widget  (self,1,0, lab="Ellipse shift",   obj=self.planform, get='ellipseShift', set='set_ellipseShift',
-                                 lim=(0,0.5), dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
-        self.add (Field_Widget  (self,2,0, lab="Ellipse correct.",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
+        self.add (Field_Widget  (self,1,0, lab="Ellipse correct.",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
                                  lim=(-1,1),  dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
 
 
@@ -474,7 +480,7 @@ class Edit_WingSection_Master(Edit_Abstract):
     Master frame for wingSection - to select, add, delete a wing section
     Is parent for a single wing section frame
     """
-    name = "Sections"
+    name = "Section"
 
     def init(self):
 
@@ -900,7 +906,7 @@ class Diagram_Planform (Diagram_Abstract):
         Switch_Widget (self.view_frame,row,col, padx=10, lab='Flaps', 
                 get=lambda: self.flapArtist.show, set=self.flapArtist.set_show)
         col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Reference', 
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Reference elliptical', 
                 get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
 
         if (self.wing.refPlanform_DXF): 
@@ -909,9 +915,6 @@ class Diagram_Planform (Diagram_Abstract):
                     get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
         
         super().setup_Switches(row,col)
-        # --- some info  - currently temp 
-
-        self.axes.text(.95,.9, self.wing.name, fontsize ='x-large', ha='right', transform=self.axes.transAxes)
 
 
     # -------- event handler
@@ -1099,7 +1102,7 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         Switch_Widget (self.view_frame,row,col, padx=10, lab='Current section', 
                 get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
         col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Reference', 
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Reference elliptical', 
                         get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
         if (self.wing.refPlanform_DXF.isValid): 
             col += 1
@@ -1495,67 +1498,85 @@ class Dialog_Load_DXF (Dialog_Abstract):
 #-------------------------------------------
 
 
-class Dialog_Export_PaneledWing (Dialog_Abstract):
+class Dialog_Export_Wing_Xflr5 (Dialog_Abstract):
     """ 
     Export planeform as paneled for Xlfr5 oder FLZ 
 
     """
     width  = 1000
-    height = 500
+    height = 470
     titleText  = "Export ..."
 
     def __init__(self, master, *args, wingFn = None,  **kwargs):
         super().__init__(master, *args, height=self.height/2, **kwargs)
 
-        wing : Wing = wingFn()
+        self.wing : Wing = wingFn()
+        self.paneledPlanform = self.wing.paneledPlanform
+
         # main grid 2 x 1  (preview + edit) 
 
         self.diagram_frame = Diagram_Planform_Mini (self.edit_frame, wingFn, size=(4,2.4))
         self.diagram_frame.grid(row=0, column=0, sticky="nwe")
 
         self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
-        self.input_frame.grid(row=1, column=0, sticky="nwes")
+        self.input_frame.grid(row=1, column=0, sticky="nwe")
 
         self.button_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
-        self.button_frame.grid(row=2, column=0, sticky="nwes", pady=10)
+        self.button_frame.grid(row=2, column=0, sticky="wes", pady=10)
 
         self.edit_frame.grid_columnconfigure (0, weight=1)
         self.edit_frame.grid_rowconfigure    (0, weight=1)
-        self.edit_frame.grid_rowconfigure    (1, weight=1)
+        self.edit_frame.grid_rowconfigure    (2, weight=1)
 
         # artists for preview
         self.diagram_axes = self.diagram_frame.axes
-        self.planformArtist = Planform_Artist (self.diagram_frame.axes, wingFn, show=True, showMarker=False)
-        self.planformArtist.refresh(figureUpdate=True)
-
         self.panelArtist    = PaneledPlanform_Artist (self.diagram_frame.axes, wingFn, show=True)
         self.panelArtist.refresh(figureUpdate=True)
 
-        # entry fields 
+        # header with hints 
         r = 0 
         c = 0 
-        Header_Widget (self.input_frame,r,c, lab="Xflr5 Export", width=110, columnspan=3)
-        r +=1  
-        Blank_Widget  (self.input_frame,r,c, height = 5)
+        Header_Widget (self.input_frame,r,c, lab="Xflr5 Export", width=110, pady=(7,20), columnspan=2)
+        hint = self.check_y_deviation() 
+        if hint: 
+            self.add (Label_Widget  (self.input_frame,r,c+2, lab=hint, sticky="w", 
+                                     columnspan=8, text_color='hint'))
 
+        # entry fields 
         r +=1  
         self.add (Field_Widget  (self.input_frame,r,c, lab="  x-panels", width=80,
-                                 obj=wing.paneledPlanform, get='x_panels', set='set_x_panels',
+                                 obj=self.paneledPlanform, get='x_panels', set='set_x_panels',
                                  event=PANELS_CHANGED, lim=(1,50), dec=0, spin=True, step=1))
         self.add (Combo_Widget  (self.input_frame,r,c+3, lab="x-distribution", width=90,
-                                 obj=wing.paneledPlanform, get='x_dist', set='set_x_dist',
-                                 options=wing.paneledPlanform.distribution_fns_names(),
+                                 obj=self.paneledPlanform, get='x_dist', set='set_x_dist',
+                                 options=self.paneledPlanform.distribution_fns_names(),
                                  event=PANELS_CHANGED ))
 
         r +=1  
         self.add (Field_Widget  (self.input_frame,r,c, lab="  y-panels", width=80,
-                                 obj=wing.paneledPlanform, get='y_panels', set='set_y_panels',
+                                 obj=self.paneledPlanform, get='y_panels', set='set_y_panels',
                                  event=PANELS_CHANGED, lim=(1,50), dec=0, spin=True, step=1))
         self.add (Combo_Widget  (self.input_frame,r,c+3, lab="y-distribution",  width=90,
-                                 obj=wing.paneledPlanform, get='y_dist', set='set_y_dist',
-                                 options=wing.paneledPlanform.distribution_fns_names(),
+                                 obj=self.paneledPlanform, get='y_dist', set='set_y_dist',
+                                 options=self.paneledPlanform.distribution_fns_names(),
                                  event=PANELS_CHANGED ))
+        r +=1  
+        self.add (Field_Widget  (self.input_frame,r,c, lab="  y min width", width=80,
+                                 obj=self.paneledPlanform, get='y_minWidth', set='set_y_minWidth',
+                                 event=PANELS_CHANGED, lim=(1,20), dec=0, spin=True, step=1, unit="mm"))
 
+        r = 1 
+        c = 7 
+        self.input_frame.grid_columnconfigure (6, weight=1)
+        self.input_frame.grid_columnconfigure (10, weight=2)
+
+        self.add(Field_Widget  (self.input_frame,r,c, lab="Xflr5 directory", obj=self.wing, get='xflr5Dir', set='',
+                                width=180, disable=True))
+        self.add(Button_Widget (self.input_frame,r,c+2, lab='Select', width=60, sticky='w', set=self.select_dir ))
+        self.add(Switch_Widget (self.input_frame,r+1,c, lab='Use airfoil nick names for Xflr5 airfoils', 
+                                columnspan=2, padx=0, 
+                                obj=self.wing, get='xflr5UseNick', set='set_xflr5UseNick'))
+ 
 
         self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok,     width=100))
         self.add(Button_Widget (self.button_frame,0,2, lab='Cancel', set=self.cancel, width=100))
@@ -1564,6 +1585,34 @@ class Dialog_Export_PaneledWing (Dialog_Abstract):
 
         # changed bindings
         ctk_root.bind(PANELS_CHANGED, self.refresh, add='+')
+
+    def select_dir(self):
+        " open dialog for directory selection"
+
+        initialDir = os.path.normpath (self.wing.xflr5Dir)
+        newDir = filedialog.askdirectory(
+                    title='Select directory for Xlfr5 export',
+                    initialdir=initialDir)
+        if newDir:
+            # store only relativ path 
+            self.wing.set_xflr5Dir (newDir)
+            super().refresh()
+
+    def check_y_deviation (self): 
+        # build a user message if the deviation of the paneled wing to the actual wing is too high
+
+        # in case of a trapezoidal planform there is per se no deviation 
+        if self.wing.planform.planform_depend_on_sections: return
+
+        threshold = 5                           # deviation in percent
+
+        _, _, deviations = self.paneledPlanform.y_panel_lines()
+        if max(deviations) > threshold:
+            hint = "The deviation to the actual chord at the highlighted y-stations is more than %d%%.\n" % threshold + \
+                   "Maybe you want to add sections to improve Xlfr5 results of the wing analysis?"
+        else: 
+            hint = None   
+        return hint
 
     def refresh(self, dummy):
         self.panelArtist.refresh(figureUpdate=True)
@@ -1575,14 +1624,10 @@ class Dialog_Export_PaneledWing (Dialog_Abstract):
         super().cancel()
 
     def ok(self): 
-        # changed bindings
+        # release changed bindings
         ctk_root.unbind(PANELS_CHANGED)
         super().ok()
 
-
-#-------------------------------------------------------------------------------
-# The App   
-#-------------------------------------------------------------------------------
 
 
 class Edit_File_Menu(Edit_Abstract):
@@ -1596,17 +1641,12 @@ class Edit_File_Menu(Edit_Abstract):
 
         # special here - self is child of App - needed for callbacks
         self.myApp : App  = master
-
         super().__init__(master, wingFn, *args, **kwargs)
-
 
     def init (self):
 
         self.grid_columnconfigure   (0, weight=1)
-        # self.grid_rowconfigure      (7, weight=1)
-
-        # Header_Widget (self,0,0, lab=self.name)
-        Blank_Widget (self,0,0, height=10)
+        self.add (Header_Widget (self,0,0, lab=self.name, width=80))
 
         Button_Widget (self,1,0, lab='New',         width=100, pady=4, sticky = '', set=self.myApp.new)
         Button_Widget (self,2,0, lab='Open',        width=100, pady=4, sticky = '', set=self.myApp.open)
@@ -1624,42 +1664,21 @@ class Edit_File_Menu(Edit_Abstract):
     def importDisplayValue (self): return "Import..."
     def set_importType (self, aType):
         self.option_import.refresh()
-        if aType == "Dxf as reference":  self.load_reference_dxf() 
+        if aType == "Dxf as reference":  self.myApp.load_reference_dxf() 
 
     def exportChoices (self):       return ["to Xflr5", "to FLZ_vortex", "Airfoils"]
     def exportDisplayValue (self):  return "Export..."
     def set_exportType (self, aType):
         self.option_export.refresh()
-        if aType == "to Xflr5":  self.export_paneled ()
+        if aType == "to Xflr5":  self.myApp.export_xflr5 ()
         if aType == "to FLZ_vortex":  pass
         if aType == "Airfoils":  pass
 
 
-    def export_paneled (self): 
-        """ export wing opaneled"""
 
-        export_dialog = Dialog_Export_PaneledWing (self, wingFn = self.wing) 
-
-        self.wait_window (export_dialog)
-
-    def load_reference_dxf (self): 
-        """ load a dxf planform into the reference_dxf planform"""
-        current_dxf_path = self.wing().refPlanform_DXF.dxf_pathFilename()
-
-        dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path = current_dxf_path, ref=True) 
-
-        self.wait_window (dxf_dialog)
-        if dxf_dialog.return_OK: 
-            new_dxf_Path = dxf_dialog.dxf_pathFilename
-            if new_dxf_Path:                            # dialog returned a valid path 
-                self.wing().refPlanform_DXF.set_dxf_pathFilename (new_dxf_Path) 
-                fireEvent(PLANFORM_CHANGED)
-            else:                                       # remove dxf reference file - extra code to make it clear
-                self.wing().refPlanform_DXF.set_dxf_pathFilename (None) 
-                fireEvent(PLANFORM_CHANGED)
-
-
-
+#-------------------------------------------------------------------------------
+# The App   
+#-------------------------------------------------------------------------------
 
 class App(ctk.CTk):
 
@@ -1729,7 +1748,7 @@ class App(ctk.CTk):
 
         text = "The current wing '%s' will be discarded." % self.wing().name
         msg  = CTkMessagebox(title="Create new wing", message=text,
-                  icon="warning", option_1="Cancel", option_2="Ok")
+                  icon="warning", option_2="Cancel", option_1="Ok")
             
         if msg.get() == "Ok":
             newWing = Wing.onFile ('')
@@ -1756,13 +1775,50 @@ class App(ctk.CTk):
                 self.set_wing (newWing)
 
 
+    def export_xflr5 (self): 
+        """ export wing to xflr5"""
+        from model.XFLR5_export import Export_Xflr5
+
+        export_dialog = Dialog_Export_Wing_Xflr5 (self, wingFn = self.wing) 
+        self.wait_window (export_dialog)
+
+        if export_dialog.return_OK:
+            xml_file = Export_Xflr5().export_wing(self.wing(), self.wing().paneledPlanform)
+
+            airfoilList = self.wing().do_export_airfoils (self.wing().xflr5Dir, useNick=self.wing().xflr5UseNick)
+
+            message = os.path.basename(xml_file) + "\n\n" + \
+                      "and  \n\n" + \
+                      ',  '.join(airfoilList) + "\n\n" + \
+                      "exported to \n\n " + self.wing().xflr5Dir
+            CTkMessagebox (message=message, icon="check", option_1="Ok", height=300, width=400)
+
+
+
+    def load_reference_dxf (self): 
+        """ load a dxf planform into the reference_dxf planform"""
+        current_dxf_path = self.wing().refPlanform_DXF.dxf_pathFilename()
+
+        dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path = current_dxf_path, ref=True) 
+        self.wait_window (dxf_dialog)
+
+        if dxf_dialog.return_OK: 
+            new_dxf_Path = dxf_dialog.dxf_pathFilename
+            if new_dxf_Path:                            # dialog returned a valid path 
+                self.wing().refPlanform_DXF.set_dxf_pathFilename (new_dxf_Path) 
+                fireEvent(PLANFORM_CHANGED)
+            else:                                       # remove dxf reference file - extra code to make it clear
+                self.wing().refPlanform_DXF.set_dxf_pathFilename (None) 
+                fireEvent(PLANFORM_CHANGED)
+
+
 if __name__ == "__main__":
 
     # init colorama
     just_fix_windows_console()
 
-    # myWing = Wing.onFile (".\\examples\\vjx.glide\\VJX.glide.json")
-    myWing = Wing.onFile (".\\examples\\Amokka-JX\\Amokka-JX.json")
+    myWing = Wing.onFile (".\\examples\\vjx.glide\\VJX.glide.json")
+    # myWing = Wing.onFile (".\\examples\\Amokka-JX\\Amokka-JX.json")
     # myWing = Wing.onFile ("")
 
     InfoMsg("Starting  User Interface...")

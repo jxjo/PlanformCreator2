@@ -22,7 +22,7 @@ cl_dxf              = 'chocolate'
 cl_background       = '#101010'
 cl_labelGrid        = '#B0B0B0'
 cl_text             = '#D0D0D0'
-cl_userHint         = 'goldenrod'
+cl_userHint         = '#E0A721'
 cl_wingSection_fix  = 'deeppink'
 cl_wingSection_flex = 'mediumvioletred'
 cl_paneled          = 'steelblue'
@@ -309,6 +309,8 @@ class Planform_Artist (Base_Artist):
     
         y, leadingEdge, trailingEdge = self.planform.lines()
 
+        self._show_wingData (y, leadingEdge, trailingEdge)
+
         p = self.ax.plot(y, leadingEdge,  '-', color=cl_planform)
         self._add (p)
         p = self.ax.plot(y, trailingEdge, '-', color=cl_planform)
@@ -331,6 +333,18 @@ class Planform_Artist (Base_Artist):
         p = self.ax.plot(y, le_to_te,  '-', color=cl_planform)
         self._add (p)
 
+    def _show_wingData (self, y, leadingEdge, trailingEdge):
+
+        area, aspectRatio = self.planform.calc_aspectRatio_with (y, leadingEdge, trailingEdge)
+        text  = "Wing span %.0f mm\n" % (self.planform.halfwingspan * 2)
+        text += "Wing area %.1f dm²\n" % (area / 10000)
+        text += "Aspect ratio %.1f\n" % (aspectRatio)
+
+        p = self.ax.text (0.90, 0.96, text, color=cl_labelGrid, # fontsize = 'small',
+                          transform=self.ax.transAxes, 
+                          horizontalalignment='left', verticalalignment='top')
+        self._add (p)   
+       
 
 
 class ChordLines_Artist (Base_Artist):
@@ -393,11 +407,11 @@ class RefPlanform_Artist (Planform_Artist):
                 aux.append(abs(Number-valor))
             return aux.index(min(aux))
         # print a line label with dxf filename 
-        iclosest = closest (y, 0.8 * y[-1])         # pos at 90% span 
+        iclosest = closest (y, 0.7 * y[-1])         # pos at 90% span 
         marker_y = y[iclosest] 
         marker_x = leadingEdge[iclosest] - 15
         text = self.refPlanform.planformType
-        p = self.ax.text (marker_y, marker_x, text , color = self.color)
+        p = self.ax.text (marker_y, marker_x, text , color = self.color, ha='left', va='bottom')
         self._add (p)   
 
 
@@ -447,12 +461,12 @@ class RefPlanform_DXF_Artist (Planform_Artist):
             return aux.index(min(aux))
         
         # print a line label with dxf filename 
-        iclosest = closest (y, 0.9 * y[-1])         # 90% span 
+        iclosest = closest (y, 0.82 * y[-1])         # 90% span 
         marker_y = y[iclosest] 
         marker_x = leadingEdge[iclosest] - 15
 
         text = self.refPlanform_DXF.dxf_filename()
-        p = self.ax.text (marker_y, marker_x, text , color = self.color, ha='right')
+        p = self.ax.text (marker_y, marker_x, text , color = self.color, ha='left', va='bottom')
         self._add (p)   
 
 
@@ -462,7 +476,10 @@ class PaneledPlanform_Artist (Planform_Artist):
     color = cl_paneled 
 
     @property
-    def planform (self) -> Planform_Paneled :
+    def planform (self) -> Planform :
+        return self.model.planform
+    @property
+    def paneledPlanform (self) -> Planform_Paneled :
         return self.model.paneledPlanform
     @property
     def wingSections (self): 
@@ -470,27 +487,33 @@ class PaneledPlanform_Artist (Planform_Artist):
 
     def _plot(self):
 
-        #outline
-        lw = 1
+        # le and te of the original planform 
         y, leadingEdge, trailingEdge = self.planform.lines()
-        p = self.ax.plot(y, leadingEdge,  color=self.color, linewidth=lw)
-        self._add (p)              # remind plot to delete 
-        p = self.ax.plot(y, trailingEdge, color=self.color, linewidth=lw)
-        self._add (p)              # remind plot to delete 
+        lw = 0.7
+        p = self.ax.plot(y, leadingEdge,  '--', lw=lw, color=cl_planform)
+        self._add (p)
+        p = self.ax.plot(y, trailingEdge, '--', lw=lw, color=cl_planform)
+        self._add (p)
 
         # y-panel lines 
         lw = 0.7
         ls ='-'
-        lines_y, lines_le_to_te = self.planform.y_panel_lines()
+        lines_y, lines_le_to_te, deviations = self.paneledPlanform.y_panel_lines()
 
         for iLine in range(len(lines_y)):
             y = lines_y[iLine]
             le_to_te = lines_le_to_te [iLine]
-            p = self.ax.plot(y, le_to_te, color=self.color, linewidth=lw)
+            if deviations[iLine] > 5:            # highlight y with too much deviation from actual 
+                lw = 1.5
+                color = cl_userHint
+            else:
+                lw = 0.7
+                color = self.color
+            p = self.ax.plot(y, le_to_te, color=color, linewidth=lw)
             self._add (p)              # remind plot to delete 
 
         # x-panel lines 
-        lines_y, lines_panels_x = self.planform.x_panel_lines()
+        lines_y, lines_panels_x = self.paneledPlanform.x_panel_lines()
 
         for iLine in range(len(lines_y)):
             y = lines_y[iLine]
@@ -507,9 +530,29 @@ class PaneledPlanform_Artist (Planform_Artist):
             y, le_to_te = section.line()
             p = self.ax.plot(y, le_to_te, color=cl_wingSection_fix, linestyle=ls, linewidth=lw)
             self._add (p)              # remind plot to delete 
+            self.plot_markers (y, le_to_te, section)
 
 
-        # self.plot_markers (y, leadingEdge)
+    def plot_markers (self, y, le_to_te, section: WingSection): 
+
+        # plot section name 
+        offset = 10
+        top_y = y[0] 
+        if section.isTip: 
+            top_x = le_to_te[0] - 4 * offset
+        else: 
+            top_x = le_to_te[0] - offset
+
+        if section.isRoot:
+            label = "Root"
+        elif section.isTip:
+            label = "Tip"
+        else:
+            label = str(section.wing.wingSectionIndexOf (section))
+
+        p = self.ax.text (top_y, top_x, "%s" % label, ha='center', va='bottom',
+                          color = cl_wingSection_fix )
+        self._add (p)   
 
 
 class Chord_Artist (Base_Artist):
@@ -604,6 +647,7 @@ class Sections_Artist (Base_Artist):
 
         sectionFix = section.hasFixedPosition()
 
+        # section chord
         if self._norm:
             if section.isRoot: return               # no norm_chord for root
             color = cl_wingSection_fix
@@ -627,6 +671,7 @@ class Sections_Artist (Base_Artist):
                          color = color )
         self._add (p)   
 
+        # + section name
         if section.isRoot:
             label = "Root"
         elif section.isTip:
@@ -634,8 +679,7 @@ class Sections_Artist (Base_Artist):
         else:
             label = str(section.wing.wingSectionIndexOf (section))
 
-        p = self.ax.text (marker_top_y, marker_top_x, "%s" % label , 
-                          horizontalalignment='center', verticalalignment='bottom',
+        p = self.ax.text (marker_top_y, marker_top_x, "%s" % label, ha='center', va='bottom',
                           color = cl_wingSection_fix, fontsize = 'x-large' )
         self._add (p)   
 

@@ -2,13 +2,14 @@
   "wingName":"VJX.glide eval PC",
   "rootchord":230.0,
   "rootRe":400000,
+  "airfoilNickPrefix": "GP",
   "wingspan":2940.0,
   "planformType":"elliptical",
   "ellipseTipBelly":0.15,
   "ellipseBellyWidth":0.35,
-  "leadingEdgeCorrection":0.1,
-  "ellipseCorrection":-0.012,
-  "ellipseShift":0.12,
+  "leCorrection":0.05,
+  "ellipseCorrection":0.04,
+  "ellipseShift":0.0,
   "tipchord":15.0,
   "hingeLineAngle":-0.7,
   "flapDepthRoot":28.0,
@@ -42,6 +43,7 @@
 	  }
 	}
   ],
-  "leadingEdgeOrientation":"up",
+  "xflr5Dir":".\\examples\\VJX.glide\\xflr5",
+  "dxf_mirrorX": "True",
   "refPlanform_DXF_path":".\\examples\\VJX.glide\\VJX.glide_planform.dxf"
 }

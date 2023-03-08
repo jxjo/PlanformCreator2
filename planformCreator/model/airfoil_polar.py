@@ -36,6 +36,8 @@ class Airfoil:
 
         self.pathFileName = None
         self.name = name
+        self.sourceName = None                     # the long name out of the two blended airfoils (TSrakAirfoil)
+
         self.x = []
         self.y = []
         self.polarSet = polarSet(self)
@@ -187,8 +189,12 @@ class Airfoil:
         """        
         if dir and not os.path.isdir (dir):
             os.mkdir(dir)
+
         if not destName:
-            destName = self.name
+            if self.isStrakAirfoil:
+                destName = self.sourceName              # strak: take the long name of the two airfoils
+            else:
+                destName = self.name
 
         newPathFileName = os.path.join (dir, destName) + '.dat'
 
@@ -239,8 +245,11 @@ class Strak_Airfoil (Airfoil):
         super().__init__()
 
         self.name = "<strak>" 
+        self.sourceName = None          # the long name out of the two belended airfoils
  
     def do_strak (self,myChord, leftAir : Airfoil, leftChord, rightAir:Airfoil, rightChord ):
+        """ straks (blends) self out of two airfoils to the left and right.
+        depending on its chordlength compared to the real neighbours."""
 
         tmpDir = "tmp"
         blendBy  = (myChord - leftChord) / (rightChord - leftChord)
@@ -255,6 +264,8 @@ class Strak_Airfoil (Airfoil):
         if result == 0:
             newPathFile = os.path.join(tmpDir,newName) + '.dat'
             self.load (fromPath=newPathFile)
+
+            self.sourceName = os.path.splitext(os.path.basename(newPathFile))[0]
         else: 
             ErrorMsg ("'xfoil_worker' couldn't be executed.")
 

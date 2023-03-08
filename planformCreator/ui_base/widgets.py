@@ -15,6 +15,7 @@ cl_edit             = "gray35"                    # background of entry fields
 cl_spin             = "gray25"                    # background of spin buttons
 cl_text             = "#DCE4EE"
 cl_text_disabled    = "gray70"
+cl_userHint         = "#E0A721"
 fs_header           = 18                          # font size header 
 def_height          = 25                          # base height in px
 def_width           = 105                         # base width in px for entry fields
@@ -628,11 +629,12 @@ class Header_Widget(Base_Widget):
         Header_Widget (self, 0,0, lab='Header from val') :)
         Header_Widget (self, 0,2, lab=self.localString) :)
     """
-    def __init__(self, *args, columnspan = 1, **kwargs):
+    def __init__(self, *args, columnspan = 1, pady=None, **kwargs):
         super().__init__(*args, **kwargs)
             
+        if pady is None: pady = (10,15)
         self.mainCTk = ctk.CTkLabel (self.parent, width=def_lab_width+5, text=self.label, anchor= "w", font= ("", fs_header))
-        self.mainCTk.grid(row=self.row, column=self.column,  columnspan= columnspan, pady=(7,7), padx=10, sticky="w")
+        self.mainCTk.grid(row=self.row, column=self.column,  columnspan= columnspan, pady=pady, padx=10, sticky="w")
 
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
         widgetCTk.configure (text=newLabelStr)
@@ -645,14 +647,18 @@ class Label_Widget(Base_Widget):
         Label_Widget  (self, 3,0, lab='Loremm ipsumm') :)
         Label_Widget  (self, 3,0, width=200, lab=self.myLabeText) :)
     """
-    def __init__(self, *args, sticky = None, columnspan=None, **kwargs):
+    def __init__(self, *args, sticky = None, columnspan=None, text_color=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         if sticky       is None: sticky = "sw"
         if columnspan   is None: columnspan = 6
+        if text_color   is None: 
+            text_color = cl_text_disabled
+        elif text_color == 'hint':
+            text_color = cl_userHint
 
         self.mainCTk = ctk.CTkLabel(self.parent, width=self.width, justify ='left', 
-                                    text=self.label, anchor= "w", text_color=cl_text_disabled)           
+                                    text=self.label, anchor= "w", text_color=text_color)           
         self.mainCTk.grid(row=self.row, column=self.column,  columnspan=columnspan, padx=10, sticky=sticky)
 
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
@@ -712,14 +718,15 @@ class Switch_Widget(Base_Widget):
         val or obj+getter -- val string to show or access path with obj and getter          :)
         set -- access path setter when switched              :)
     """
-    def __init__(self, *args, padx=None, pady=None, **kwargs):
+    def __init__(self, *args, padx=None, pady=None, columnspan=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         if padx is None: padx = 20
         if pady is None: pady = 0
+        if columnspan is None: columnspan = 1
 
         self.mainCTk = ctk.CTkSwitch(self.parent, text=self.label, onvalue=1, command=self.CTk_callback)
-        self.mainCTk.grid(row=self.row, column=self.column, padx=padx, pady=pady, sticky="w")
+        self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky="w")
 
         self.set_CTkControl()
         self.set_CTkControl_state()

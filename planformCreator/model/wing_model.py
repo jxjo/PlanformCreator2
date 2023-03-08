@@ -79,9 +79,7 @@ class Wing:
         self.wingSections     = self.createSectionsOn (fromDict(dataDict, "wingSections", None))
     
         # create an extra Planform as dxf reference  
-        self.planform_DXF_path    = fromDict (dataDict, "planform_DXF_path", "")
-        self.refPlanform_DXF_path = fromDict (dataDict, "refPlanform_DXF_path", "")
-        self.refPlanform_DXF  = Planform_DXF (self, {}, dxf_Path=self.refPlanform_DXF_path, ref=True)
+        self.refPlanform_DXF  = Planform_DXF (self, dataDict, ref=True)
         
         # create an extra Planform as major reference ()
         self.refPlanform      = Planform_Pure_Elliptical (self)
@@ -90,8 +88,11 @@ class Wing:
         self.paneledPlanform  = Planform_Paneled (self, dataDict)
 
         # miscellaneous parms
-        self._rootRe    = fromDict (dataDict, "rootRe", 400000, wingExists)
-        self._airfoilNickPrefix = fromDict (dataDict, "airfoilBasicName", "JX", wingExists)
+        self._rootRe            = fromDict (dataDict, "rootRe", 400000, wingExists)
+        self._airfoilNickPrefix = fromDict (dataDict, "airfoilNickPrefix", "JX", msg=False)
+        
+        self._xflr5Dir          = fromDict (dataDict, "xflr5Dir", "./xflr5", msg=False)
+        self._xflr5UseNick      = fromDict (dataDict, "xflr5UseNick", True, msg=False)
         
         InfoMsg (str(self)  + ' created...')
 
@@ -160,7 +161,6 @@ class Wing:
 
         # store dxf path in wing data - 
         if newPlanform.is_dxf:
-            self.planform_DXF_path = newPlanform.dxf_pathFilename () # keep for ater use
             newPlanform.assignToWing()              # get hinge and flap from dxf 
 
         # we got it 
@@ -242,6 +242,17 @@ class Wing:
     def airfoilNickPrefix(self): return self._airfoilNickPrefix
     def set_airfoilNickPrefix(self, newStr): self._airfoilNickPrefix = newStr
 
+    @property
+    def xflr5Dir(self):
+        """the directory for xflr5 export - path is relativ to current"""
+        return os.path.relpath(self._xflr5Dir)
+    def set_xflr5Dir(self, newStr): 
+        # insure a valid, relativ path 
+        self._xflr5Dir = os.path.relpath(newStr)
+
+    @property
+    def xflr5UseNick(self) -> bool: return self._xflr5UseNick
+    def set_xflr5UseNick(self, aBool): self._xflr5UseNick = aBool
 
 
     # ---Methods --------------------- 
@@ -457,7 +468,21 @@ class Wing:
                 leftSec, rightSec = self.getNeighbourSectionsHavingAirfoil(sec) 
                 sec.airfoil.do_strak(sec.norm_chord, leftSec.airfoil,  leftSec. norm_chord,
                                                      rightSec.airfoil, rightSec.norm_chord)
-                            
+
+
+    def do_export_airfoils (self,toDir, useNick=True): 
+        """
+        exports all also straked airfoils into directory 'toDir'. Optionally use airfoils Nickname
+        as new airfoil name."""
+        fileList  = []
+        
+        self.do_strak() 
+
+        sec: WingSection
+        for sec in self.wingSections:
+            fileList.append (sec.do_export_airfoil (toDir, useNick=useNick))
+        return fileList
+
 
     def getFlaps (self): 
         """
@@ -741,6 +766,17 @@ class Planform:
         xFlapLine.append(self.hingePointAt(yPos))
         return yFlapLine, xFlapLine
 
+    def calc_aspectRatio_with (self, y, le, te):
+        """calculates (approximates) wing area and aspect ration based 
+        on le and te points which are already calculated"""
+
+        area = 0 
+        # trapez verfahren 
+        for i in range(len(y) -1): 
+            area += (y[i+1] - y[i]) * ((te[i] - le[i]) + (te[i+1] - le[i+1])) / 2
+
+        aspectRatio = 2 * self.halfwingspan **2 / area
+        return area, aspectRatio
 
 
 #-------------------------------------------------------------------------------
@@ -835,9 +871,9 @@ class Planform_Elliptical(Planform):
         # read additional parameters of this shapeform 
         self._ellipseTipBelly        = fromDict (dataDict, "ellipseTipBelly", 0.25, False)
         self._ellipseBellyWidth      = fromDict (dataDict, "ellipseBellyWidth", 0.5, False)
-        self._leCorrection           = fromDict (dataDict, "leCorrection", 0, False)
-        self._ellipseCorrection      = fromDict (dataDict, "ellipseCorrection", 0, False)
-        self._ellipseShift           = fromDict (dataDict, "ellipseShift", 0, False)
+        self._leCorrection           = fromDict (dataDict, "leCorrection", 0.0, False)
+        self._ellipseCorrection      = fromDict (dataDict, "ellipseCorrection", 0.3, False)
+        self._ellipseShift           = fromDict (dataDict, "ellipseShift", 0.0, False)
 
 
     # ---Properties --------------------- 
@@ -1172,10 +1208,11 @@ class Planform_Paneled (Planform_Trapezoidal):
             :dataDict: optional - dictonary with all the data for a valid section
         """
         # read additional parameters of this shapeform 
-        self._x_panels  = fromDict (dataDict, "x-panels", 5, False)
-        self._x_dist    = fromDict (dataDict, "x-distribution", "uniform", False)
-        self._y_panels  = fromDict (dataDict, "y-panels", 5, False)
-        self._y_dist    = fromDict (dataDict, "y-distribution", "uniform", False)
+        self._x_panels   = fromDict (dataDict, "x-panels", 10, False)
+        self._x_dist     = fromDict (dataDict, "x-distribution", "cosine", False)
+        self._y_panels   = fromDict (dataDict, "y-panels", 10, False)
+        self._y_dist     = fromDict (dataDict, "y-distribution", "uniform", False)
+        self._y_minWidth = fromDict (dataDict, "y-minWidth", 5 , False)
         
 
         self.distribution_fns = {}
@@ -1184,14 +1221,14 @@ class Planform_Paneled (Planform_Trapezoidal):
         self.distribution_fns["sine"]   = lambda y : np.sin ((y+2) * np.pi/2) + 1
         self.distribution_fns["cosine"] = lambda y : ((np.cos ((y+1) * np.pi)) + 1) / 2
 
-
     # ---Properties --------------------- 
+
     @property
     def x_panels (self):                return self._x_panels
     def set_x_panels (self, val: int):  self._x_panels = int(val)
 
     @property
-    def x_dist (self):                return self._x_dist
+    def x_dist (self):                  return self._x_dist
     def set_x_dist (self, val):  
         if val in self.distribution_fns:
             self._x_dist = val
@@ -1201,10 +1238,28 @@ class Planform_Paneled (Planform_Trapezoidal):
     def set_y_panels (self, val: int):  self._y_panels = int(val)
 
     @property
-    def y_dist (self):                return self._y_dist
+    def y_dist (self):                  return self._y_dist
     def set_y_dist (self, val):  
         if val in self.distribution_fns:
             self._y_dist = val
+
+    @property
+    def y_minWidth (self):              return self._y_minWidth
+    def set_y_minWidth (self, val):     self._y_minWidth = val
+
+    def y_panels_forSection(self, iSec):
+        """y-panels for section i depending on min panel width"""
+        y_sections = self._norm_y_points() * self.halfwingspan
+        if iSec < len(y_sections)-1:
+            y_left = y_sections [iSec]
+            y_right  = y_sections [iSec+1]
+            dy_sec = y_right - y_left
+            # assure a min panel width in y-direction 
+            return min ( self.y_panels, round(dy_sec/self.y_minWidth))
+        else:
+            return 0 
+
+
 
     def distribution_fns_names (self):
         """ a list of available distribution functions"""
@@ -1223,11 +1278,11 @@ class Planform_Paneled (Planform_Trapezoidal):
         """
         the planform represented as trapezoid
         """
-        y_Sections = self._norm_y_points() * self.halfwingspan
+        y_sections = self._norm_y_points() * self.halfwingspan
 
-        for iSec in range(len(y_Sections) - 1):
-            y_before = y_Sections [iSec]
-            y_after  = y_Sections [iSec+1]
+        for iSec in range(len(y_sections) - 1):
+            y_before = y_sections [iSec]
+            y_after  = y_sections [iSec+1]
             if y  >= y_before and  y <= y_after:
                 le_before, te_before = self.wing.planform._planform_function (y_before)
                 le_after, te_after   = self.wing.planform._planform_function (y_after)
@@ -1244,28 +1299,59 @@ class Planform_Paneled (Planform_Trapezoidal):
         Returns:
             :y: list of array of the y-stations of the line  
             :x: list of array of x values of LE and TE 
+            :deviation: in percent to the actual planform chord 
         """
         lines_y = []
-        lines_le_to_te = []           
-        y_distribution_fn = self.distribution_fns [self.y_dist]
-        y_Sections = self._norm_y_points() * self.halfwingspan
+        lines_le_to_te = []  
 
-        for iSec in range(len(y_Sections) - 1):
-            y_left = y_Sections [iSec]
-            y_right  = y_Sections [iSec+1]
-            dy_sec = y_right - y_left
+        deviations = []        
+        tipArea   = 25                          # do not tke this tip mm into account for deviations 
+
+        y_distribution_fn = self.distribution_fns [self.y_dist]
+        y_sections = self._norm_y_points() * self.halfwingspan
+
+        # get le te for all sections 
+        sections_le_te = []
+        for y_sec in y_sections: 
+            # take actual planform .. function (maybe faster) 
+            sections_le_te.append(self.wing.planform._planform_function (y_sec))
+
+        # now calc a y line according to y distribution function between sections 
+        for iSec in range(len(y_sections) - 1):
+            y_left   = y_sections [iSec]
+            y_right  = y_sections [iSec+1]
+            dy_sec   = y_right - y_left
+            le_left  = sections_le_te[iSec][0]
+            te_left  = sections_le_te[iSec][1]
+            le_right = sections_le_te[iSec+1][0]
+            te_right = sections_le_te[iSec+1][1]
+
+            # assure a min panel width in y-direction 
+            y_panels = self.y_panels_forSection(iSec)
 
             # line on section will be double
-            for dyn_pan in np.linspace (0, 1, self.y_panels +1): 
+            for d_yn_pan in np.linspace (0, 1, y_panels +1): 
                 # ! perform the distribution function
-                yn_distrib_pan = y_distribution_fn (dyn_pan)
+                yn_distrib_pan = y_distribution_fn (d_yn_pan)
+
+                le = interpolate(0.0, 1, le_left, le_right, yn_distrib_pan)
+                te = interpolate(0.0, 1, te_left, te_right, yn_distrib_pan)
                 yPos = y_left + yn_distrib_pan * dy_sec
 
-                le, te = self._planform_function (yPos)
                 lines_y.append([yPos, yPos])
                 lines_le_to_te.append([le, te])
 
-        return lines_y, lines_le_to_te
+                # calculate the deviation to actual planform upto close to tip 
+                if yPos < (self.halfwingspan - tipArea):
+                    chord_paneled = te-le
+                    le,te  =  self.wing.planform._planform_function (yPos) 
+                    chord_actual  = te-le
+                    deviation = abs((chord_actual - chord_paneled) / chord_actual) * 100
+                else:
+                    deviation = 0 
+                deviations.append(deviation)
+
+        return lines_y, lines_le_to_te, deviations
     
     def x_panel_lines (self):
         """
@@ -1277,15 +1363,25 @@ class Planform_Paneled (Planform_Trapezoidal):
         lines_y = []
         lines_panels_x = []           
         x_distribution_fn = self.distribution_fns [self.x_dist]
-        y_Sections = self._norm_y_points() * self.halfwingspan
+        y_sections = self._norm_y_points() * self.halfwingspan
 
-        for iSec in range(len(y_Sections) - 1):
-            y_left = y_Sections [iSec]
-            y_right  = y_Sections [iSec+1]
+        # get le te for all sections 
+        sections_le_te = []
+        for y_sec in y_sections: 
+            sections_le_te.append(self.wing.planform._planform_function (y_sec))
 
-            le_left, te_left   = self._planform_function (y_left)
-            chord_left = te_left - le_left
-            le_right, te_right = self._planform_function (y_right)
+
+        # now calc a x horizontal line according to x distribution function between sections 
+        for iSec in range(len(y_sections) - 1):
+            y_left = y_sections [iSec]
+            y_right  = y_sections [iSec+1]
+
+            le_left  = sections_le_te[iSec][0]
+            te_left  = sections_le_te[iSec][1]
+            le_right = sections_le_te[iSec+1][0]
+            te_right = sections_le_te[iSec+1][1]
+
+            chord_left  = te_left  - le_left
             chord_right = te_right - le_right
 
             # line on section will be double
@@ -1339,7 +1435,8 @@ class Planform_DXF(Planform):
 
         self._dxf_isReference   = ref   # is it a reference planform 
 
-        self._dxf_mirrorX       = True   # mirrors the planform along y 
+        self._dxf_mirrorX       = fromDict (dataDict, "dxf_mirrorX", True, msg=False)   
+
         self.le_norm_dxf        = None   # the normalized leading edge in points from DXF
         self.te_norm_dxf        = None   # the normalized trailing edge in points from DXF
         self.hingeLine_norm_dxf = None   # the normalized hinge line in points from DXF
@@ -1352,12 +1449,14 @@ class Planform_DXF(Planform):
         if dxf_Path: 
             self._dxf_pathFilename  = dxf_Path
         else: 
-            self._dxf_pathFilename  = self.wing.planform_DXF_path
+            if ref:
+                self._dxf_pathFilename  = fromDict (dataDict, "refPlanform_DXF_path", "")
+            else:
+                self._dxf_pathFilename  = fromDict (dataDict, "planform_DXF_path", "")
+
 
         if self._dxf_pathFilename != None and os.path.isfile(self._dxf_pathFilename):
-
             self.load_dxf(self._dxf_pathFilename)
-
         else:
             if self._dxf_pathFilename:
                 ErrorMsg ("The dxf file '%s' doesn't exist" % self._dxf_pathFilename)
@@ -2030,6 +2129,21 @@ class WingSection:
         self._init_airfoil (pathFileName=pathFileName)
         self.airfoil.load()
 
+
+    def do_export_airfoil (self,toDir, useNick=True): 
+        """ exports airfoil into directory 'toDir'. Optionally use airfoils Nickname
+        as new airfoil name.
+        Returns the filename of the exported airfoil
+        """
+        if useNick: 
+            newName = self.airfoilNick()
+        else: 
+            newName = None
+
+        filePathName = self.airfoil.copyAs(dir=toDir, destName = newName)
+
+        return os.path.basename(filePathName) 
+        
 
     def find_yPosFromChord (self, chord):
         """

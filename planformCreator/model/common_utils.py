@@ -72,6 +72,7 @@ def fromDict(dict, key, default='no default', msg=True):
         :dict: the dictonary to look in \n
         :key: the key to look for       \n
         :default: the value if key is missing
+        :msg: if True a log message will be printed when a value is missing 
     """
     preferedType = None
 
