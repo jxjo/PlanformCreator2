@@ -1682,20 +1682,19 @@ class Edit_File_Menu(Edit_Abstract):
 
 class App(ctk.CTk):
 
-    def __init__(self, myWing: Wing):
+    def __init__(self, settingsFile):
         super().__init__(fg_color= cl_background)
 
-        global ctk_root                         # being event handler
+        global ctk_root                                 # being event handler
 
-        self._myWing = myWing
+        # create the 'wing' model 
+        self.settingsFile = '' 
+        self.loadNewWing (settingsFile)
 
         # configure customtkinter
-        self.appearance_mode = "Dark" # Modes: "System" (standard), "Dark", "Light"
-        ctk.set_appearance_mode(self.appearance_mode)    # Modes: "System" (standard), "Dark", "Light"
-        ctk.set_default_color_theme("blue") # Themes: "blue" (standard), "green", "dark-blue"
-
-        # set window title
-        self.title("Planform Creator [" + self.wing().name + "]")
+        self.appearance_mode = "Dark"                   
+        ctk.set_appearance_mode(self.appearance_mode)   # Modes: "System" (standard), "Dark", "Light"
+        ctk.set_default_color_theme("blue")             # Themes: "blue" (standard), "green", "dark-blue"
 
         # maximize the window using state property
         # self.state('zoomed')
@@ -1705,9 +1704,9 @@ class App(ctk.CTk):
         Base_Widget.ctk_root = self
         self.event_add(CHORD_CHANGED,'None')
         self.event_add(PLANFORM_CHANGED,'None')
-        self._curWingSectionName = None         # Dispatcher field between Diagramm and Edit
+        self._curWingSectionName = None                 # Dispatcher field between Diagramm and Edit
 
-        # create main frames        border_width= 1, ,border_width= 1
+        # create main frames        
         diagram_frame = Diagrams        (self, self.wing, fg_color= cl_background)
         edit_frame    = Edit            (self, self.wing, height=500)
         file_frame    = Edit_File_Menu  (self, self.wing)
@@ -1748,31 +1747,39 @@ class App(ctk.CTk):
 
         text = "The current wing '%s' will be discarded." % self.wing().name
         msg  = CTkMessagebox(title="Create new wing", message=text,
-                  icon="warning", option_2="Cancel", option_1="Ok")
-            
+                  icon="warning", option_2="Cancel", option_1="Ok")            
         if msg.get() == "Ok":
-            newWing = Wing.onFile ('')
-            if newWing:
-                self.set_wing (newWing)
+            self.loadNewWing ("")               # will create default winf
         
 
     def open (self):
         """ open a new wing definition json and load it"""
 
         filetypes  = [('PlaneformCreator2 files', '*.json')]
-        # pathFile   = self.wingSection.airfoil.pathFileName
-        # initialDir = os.path.dirname(pathFile) if pathFile != None else ''
         initialDir = "."
-
         newPathFilename = tk.filedialog.askopenfilename(
                     title='Select new wing definition',
                     initialdir=initialDir,
                     filetypes=filetypes)
 
-        if newPathFilename: 
-            newWing = Wing.onFile (newPathFilename)
-            if newWing:
-                self.set_wing (newWing)
+        if newPathFilename:                     # user pressed open
+            self.loadNewWing (newPathFilename)
+
+
+    def loadNewWing(self, pathFilename):
+        """loads and sets a new wing model returns - updates title """
+        
+        newWing = Wing.onFile (pathFilename)
+        if newWing:
+            self.settingsFile = pathFilename
+            self.set_wing (newWing)
+
+        # set window title
+        if pathFilename:
+            title = pathFilename
+        else:
+            title = "< new >"
+        self.title("Planform Creator [" + title + "]")
 
 
     def export_xflr5 (self): 
@@ -1794,7 +1801,6 @@ class App(ctk.CTk):
             CTkMessagebox (message=message, icon="check", option_1="Ok", height=300, width=400)
 
 
-
     def load_reference_dxf (self): 
         """ load a dxf planform into the reference_dxf planform"""
         current_dxf_path = self.wing().refPlanform_DXF.dxf_pathFilename()
@@ -1811,18 +1817,19 @@ class App(ctk.CTk):
                 self.wing().refPlanform_DXF.set_dxf_pathFilename (None) 
                 fireEvent(PLANFORM_CHANGED)
 
+#--------------------------------
 
 if __name__ == "__main__":
 
     # init colorama
     just_fix_windows_console()
 
-    myWing = Wing.onFile (".\\examples\\vjx.glide\\VJX.glide.json")
-    # myWing = Wing.onFile (".\\examples\\Amokka-JX\\Amokka-JX.json")
-    # myWing = Wing.onFile ("")
+    mySettings = ".\\examples\\vjx.glide\\VJX.glide.json"
+    # mySettings = ".\\examples\\Amokka-JX\\Amokka-JX.json"
+    # mySettings = ""
 
     InfoMsg("Starting  User Interface...")
 
-    myApp = App(myWing)
+    myApp = App(mySettings)
     myApp.mainloop()
  
