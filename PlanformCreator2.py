@@ -178,7 +178,7 @@ class Edit_Abstract (ctk.CTkFrame):
         # refresh typically based on changed events 
         for widget in self.widgets:
             if isinstance(widget, Base_Widget): widget.refresh()
-        print ("  - refresh in ", self.__class__.__name__," for %s widgets" % len(self.widgets))
+        # print ("  - refresh in ", self.__class__.__name__," for %s widgets" % len(self.widgets))
 
         
 #-------------------------------------------
@@ -836,7 +836,6 @@ class Diagram_Abstract(ctk.CTkFrame):
         #   if self is not visible
         if active: 
             self._active = True
-            print ("Actived - refresh artists: ", self)
             self.refresh()
         else: 
             self._active = False
@@ -867,7 +866,6 @@ class Diagram_Planform (Diagram_Abstract):
         self.axes.axis('equal')
         self.axes.relim()
         self.axes.autoscale(enable=True, axis='Both')
-        # self.axes.set_xlim([-0.05 * self.wing.halfwingspan, self.wing.halfwingspan * 1.05])
 
 
     def setup_artists (self):
@@ -993,7 +991,7 @@ class Diagram_Planform (Diagram_Abstract):
 
             self.axes.figure.canvas.draw_idle()     # draw ony if Windows is idle!
 
-            print ("  - refresh in ", self.__class__.__name__," for active artists")
+            # print ("  - refresh in ", self.__class__.__name__," for active artists")
 
     def refresh_sections(self): 
         if self._active:
@@ -1003,7 +1001,7 @@ class Diagram_Planform (Diagram_Abstract):
             self.curSectionArtist.refresh()
 
             self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
-            print ("  - refresh sections in ", self.__class__.__name__," for active artists")
+            # print ("  - refresh sections in ", self.__class__.__name__," for active artists")
 
     # -------- pick object in axes handling  
 
@@ -1172,14 +1170,14 @@ class Diagram_ChordDistribution (Diagram_Abstract):
             self.referenceArtist.refresh () 
             self.dxfArtist.refresh () 
             self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
-            print ("  - refresh in ", self.__class__.__name__," for active artists")
+            # print ("  - refresh in ", self.__class__.__name__," for active artists")
 
     def refresh_sections(self): 
         if self._active:
             self.sectionsArtist.refresh ()  
             self.curSectionArtist.refresh()
             self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
-            print ("  - refresh sections in ", self.__class__.__name__," for active artists")
+            # print ("  - refresh sections in ", self.__class__.__name__," for active artists")
   
     # -------- pick object in axes handling  
 
@@ -1277,7 +1275,6 @@ class Diagram_Airfoils (Diagram_Abstract):
             #retrieve new section name from App 
             myApp : App = self.winfo_toplevel()
             self.airfoilArtist.set_current (myApp.curWingSectionName(), figureUpdate=True)  
-            print ("  - set current airfoil in ", self.__class__.__name__," for airfoil artists")
 
     # -------- refresh my Artists which are on 'show mode' 
 
@@ -1286,7 +1283,6 @@ class Diagram_Airfoils (Diagram_Abstract):
         if active: 
             myApp : App = self.winfo_toplevel()
             self.airfoilArtist.set_current (myApp.curWingSectionName(), figureUpdate=True)  
-            print ("  - set current in ", self.__class__.__name__," for active artists")
         super().setActive(active)
 
     def refresh(self): 
@@ -1294,7 +1290,6 @@ class Diagram_Airfoils (Diagram_Abstract):
         if self._active:
             self.airfoilArtist.refresh ()  
             self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
-            print ("  - refresh in ", self.__class__.__name__," for active artists")
 
     # -------- pick object in axes handling  
 

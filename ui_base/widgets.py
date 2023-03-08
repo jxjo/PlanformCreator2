@@ -395,7 +395,7 @@ class Base_Widget():
         """refesh self by re-reading the 'getter' path 
         """
         if self.whileSetting:                           # avoid circular actions with refresh()
-            print(" - refresh while setting in ", self)
+            pass # print(" - refresh while setting in ", self)
  
         if self.limGetter:
             self.limits     = self.get_value(self.limGetter, self.obj, self.parent)
@@ -600,7 +600,7 @@ class Base_Widget():
 
     def fireEvent(self):
         if self.ctk_root and self.event:
-            print ("fire ", self.event, ' from ', self.__class__.__name__)
+            # print ("fire ", self.event, ' from ', self.__class__.__name__)
             self.ctk_root.event_generate (self.event) 
 
 

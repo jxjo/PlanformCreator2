@@ -1,54 +1,47 @@
 {
   "wingName":"Amokka-JX",
-  "rootchord":235.0,
-  "rootRe":400000,
-  "airfoilNickPrefix": "RS",
   "wingspan":2380.0,
-  "planformType":"elliptical TE straight",
-  "ellipseTipBelly":0.22,
-  "ellipseBellyWidth":0.45,
-  "ellipseCorrection":-0.32,
+  "rootchord":235.0,
   "tipchord":22.0,
-  "hingeLineAngle":-0.7,
+  "hingeLineAngle":-2.1999999999999997,
   "flapDepthRoot":22.0,
-  "flapDepthTip":28.5,
-  "wingSections":[
-	{
-	  "position": 0,
-	  "flapGroup": 1,
-	  "airfoil": {
-		  "file": ".\\examples\\Amokka-JX\\JX-RS-Root.dat"
-	  }
-	},
-	{
-	  "position": 400,
-	  "flapGroup": 2,
-	  "airfoil": {
-	  }
-	},
-	{
-	  "norm_chord": 0.65,
-	  "flapGroup": 2,
-	  "airfoil": {
-		  "file": ".\\examples\\Amokka-JX\\JX-RS.dat"
-	  }
-	},
-	{
-	  "norm_chord": 0.35,
-	  "flapGroup": 2,
-	  "airfoil": {
-		  "file": ".\\examples\\Amokka-JX\\JX-RS-Tip.dat"
-	  }
-	},
-	{
-	  "position": 1190,
-	  "flapGroup": 2,
-	  "airfoil": {
-		  "file": ".\\examples\\Amokka-JX\\JX-RS-Tip.dat"
-	  }
-	}
-  ],
+  "flapDepthTip":28.0,
+  "rootRe":400000,
+  "airfoilNickPrefix":"RS",
   "xflr5Dir":".\\examples\\Amokka-JX\\xflr5",
-  "dxfMirrorX":"True",
+  "xflr5UseNick":true,
+  "planformType":"elliptical TE straight",
+  "ellipseTipBelly":0.2,
+  "ellipseBellyWidth":0.39999999999999997,
+  "leCorrection":0.0,
+  "ellipseCorrection":-0.32,
+  "ellipseShift":0,
+  "wingSections":[
+    {
+      "position":0.0,
+      "norm_chord":1.0,
+      "flapGroup":1
+    },
+    {
+      "position":400,
+      "flapGroup":2
+    },
+    {
+      "norm_chord":0.65,
+      "flapGroup":2
+    },
+    {
+      "norm_chord":0.35,
+      "flapGroup":2
+    },
+    {
+      "position":1190,
+      "flapGroup":2
+    }
+  ],
+  "x-panels":10,
+  "x-distribution":"cosine",
+  "y-panels":10,
+  "y-minWidth":5,
   "refPlanform_dxfPath":".\\examples\\Amokka-JX\\Amokka-JX_wing_outline.dxf"
 }

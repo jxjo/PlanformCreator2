@@ -1,49 +1,44 @@
 {
   "wingName":"VJX.glide PC",
-  "rootchord":230.0,
+  "wingspan":2870.0,
+  "rootchord":270.0,
+  "tipchord":14.0,
+  "hingeLineAngle":-0.8,
+  "flapDepthRoot":28.0,
+  "flapDepthTip":25.5,
   "rootRe":400000,
-  "airfoilNickPrefix": "GP",
-  "wingspan":2940.0,
+  "airfoilNickPrefix":"GP",
+  "xflr5Dir":".\\examples\\VJX.glide\\xflr5",
+  "xflr5UseNick":1,
   "planformType":"elliptical",
-  "ellipseTipBelly":0.15,
-  "ellipseBellyWidth":0.35,
-  "leCorrection":0.05,
+  "ellipseTipBelly":0.16,
+  "ellipseBellyWidth":0.3,
+  "leCorrection":0.1,
   "ellipseCorrection":0.04,
   "ellipseShift":0.0,
-  "tipchord":15.0,
-  "hingeLineAngle":-0.7,
-  "flapDepthRoot":28.0,
-  "flapDepthTip":27.0,
   "wingSections":[
-	{
-	  "position": 0,
-	  "flapGroup": 1,
-	  "airfoil": {
-		  "file": ".\\examples\\VJX.glide\\JX-GP-100.dat"
-	  }
-	},
-	{
-	  "position": 600,
-	  "flapGroup": 2,
-	  "airfoil": {
-	  }
-	},
-	{
-	  "norm_chord": 0.55,
-	  "flapGroup": 2,
-	  "airfoil": {
-		  "file": ".\\examples\\VJX.glide\\JX-GP-055.dat"
-	  }
-	},
-	{
-	  "position": 1470,
-	  "flapGroup": 2,
-	  "airfoil": {
-		  "file": ".\\examples\\VJX.glide\\JX-GP-033.dat"
-	  }
-	}
+    {
+      "position":0.0,
+      "norm_chord":1.0,
+      "flapGroup":1
+    },
+    {
+      "position":585.7142857142858,
+      "flapGroup":2
+    },
+    {
+      "norm_chord":0.55,
+      "flapGroup":2
+    },
+    {
+      "position":1435.0,
+      "norm_chord":0.05185185185185185,
+      "flapGroup":2
+    }
   ],
-  "xflr5Dir":".\\examples\\VJX.glide\\xflr5",
-  "dxf_mirrorX": "True",
-  "refPlanform_DXF_path":".\\examples\\VJX.glide\\VJX.glide_planform.dxf"
+  "x-panels":10,
+  "x-distribution":"cosine",
+  "y-panels":10,
+  "y-minWidth":5,
+  "refPlanform_dxfPath":"E:/GitHub/PlaneformCreator2/examples/VJX.glide/VJX.glide_planform.dxf"
 }

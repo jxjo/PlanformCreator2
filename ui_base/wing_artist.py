@@ -117,7 +117,6 @@ class Base_Artist():
             self._showUserTip ()
             if figureUpdate:                    
                 self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
-                print ("Artist %s draw" % self.__class__.__name__)
 
 
     def refresh(self, figureUpdate=False):
@@ -182,7 +181,7 @@ class Base_Artist():
         try: 
             myLabel = event.artist.get_label()
         except: 
-            print ("- Pick event couldn't be handled ", event.artist, "callback: ", self._pickCallback)
+            pass # print ("- Pick event couldn't be handled ", event.artist, "callback: ", self._pickCallback)
 
         # now callback parent with myLabel as argument
         if self._pickCallback:

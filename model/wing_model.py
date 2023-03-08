@@ -1517,7 +1517,7 @@ class Planform_DXF(Planform):
         self.te_norm_dxf        = None   # the normalized trailing edge in points from DXF
         self.hingeLine_norm_dxf = None   # the normalized hinge line in points from DXF
         self.hingeAngle_dxf     = None
-        self.adaptHingeAngle    = True   # the hinge angle will be adapted to wing (for reference DXF)
+        self.adaptHingeAngle    = False   # the hinge angle will be adapted to wing (for reference DXF)
         self.flapDepthRoot_dxf  = None
         self.flapDepthTip_dxf   = None 
         self.infoText           = ''     # info about dxf parsing 
