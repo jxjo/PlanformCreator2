@@ -467,7 +467,7 @@ class Edit_Planform_DXF (Edit_Abstract):
         if dxf_dialog.return_OK:
             new_dxf_Path = dxf_dialog.dxf_pathFilename        
             if new_dxf_Path:                                    # dialog returned a valid path 
-                self.wing().planform.set_dxf_pathFilename (new_dxf_Path) 
+                self.wing().planform.set_dxfPathFilename (new_dxf_Path) 
                 self.wing().planform.assignToWing()             # take over hinge, flap
 
                 self.refresh()
@@ -520,7 +520,7 @@ class Edit_WingSection_Master(Edit_Abstract):
             self.wing().deleteSection (self.curSection)
             fireEvent (SECTION_CHANGED)         # update diagram
             # delete done - set option list to old neighbour 
-            self.set_curSection(rightSec.name())
+            self.set_curSection(leftSec.name())
 
     def deleteDisabled (self):
         return self.curSection.isRoot or self.curSection.isTip
@@ -860,11 +860,14 @@ class Diagram_Planform (Diagram_Abstract):
 
     def setup_axes (self):
         """ setup axes, axis for this plot type """
-        super().setup_axes ()
 
-        self.axes.set_ylim([self.wing.rootchord, 0.0])
-        self.axes.set_xlim([-0.05 * self.wing.halfwingspan, self.wing.halfwingspan * 1.05])
+        limy = self.axes.get_ylim()
+        if limy[0] < limy[1]: 
+            self.axes.invert_yaxis() 
         self.axes.axis('equal')
+        self.axes.relim()
+        self.axes.autoscale(enable=True, axis='Both')
+        # self.axes.set_xlim([-0.05 * self.wing.halfwingspan, self.wing.halfwingspan * 1.05])
 
 
     def setup_artists (self):
@@ -936,8 +939,6 @@ class Diagram_Planform (Diagram_Abstract):
 
     def changed_wing (self, dummy): 
         """ Eventhandler for changes of the complete wing - like wing span """
-        # self.axes.clear()
-        self.setup_axes()                       # maybe the axis limits changed
         self.gridArtist.plot()
         self.refresh()
         self.refresh_sections() 
@@ -987,7 +988,11 @@ class Diagram_Planform (Diagram_Abstract):
             self.referenceArtist.refresh() 
             self.dxfArtist.refresh      () 
             self.flapArtist.refresh     () 
-            self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
+
+            self.setup_axes()                       # maybe the axis limits changed
+
+            self.axes.figure.canvas.draw_idle()     # draw ony if Windows is idle!
+
             print ("  - refresh in ", self.__class__.__name__," for active artists")
 
     def refresh_sections(self): 
@@ -1067,8 +1072,6 @@ class Diagram_ChordDistribution (Diagram_Abstract):
 
     def setup_axes(self):
         """ setup axes, axis, artiss for this plot type """
-        super().setup_axes ()
-
         self.axes.set_ylim([ 0.0, 1.1])
         self.axes.set_xlim([ 0.0, 1.1])
         self.axes.text(.95,.9, self.wing.name, fontsize ='x-large', ha='right', transform=self.axes.transAxes)
@@ -1202,8 +1205,6 @@ class Diagram_Airfoils (Diagram_Abstract):
 
     def setup_axes(self):
         """ setup axes, axis, artiss for this plot type """
-        super().setup_axes ()
-
         self.axes.axis('equal')
 
 
@@ -1459,18 +1460,18 @@ class Dialog_Load_DXF (Dialog_Abstract):
         pathFile   = self.tmpPlanform.dxf_pathFilename()
         initialDir = os.path.dirname(pathFile) if pathFile != None else ''
 
-        newPathFilename = tk.filedialog.askopenfilename(
+        newPathFilename = filedialog.askopenfilename(
                     title='Open dxf file',
                     initialdir=initialDir,
                     filetypes=filetypes)
 
         if newPathFilename: 
-            self.tmpPlanform.set_dxf_pathFilename (newPathFilename)
+            self.tmpPlanform.set_dxfPathFilename (newPathFilename)
             self.refresh()
             self.planformArtist.refresh(figureUpdate=True)
 
     def remove_dxf_file (self):
-            self.tmpPlanform.set_dxf_pathFilename ("")
+            self.tmpPlanform.set_dxfPathFilename ("")
             self.refresh()
             self.planformArtist.refresh(figureUpdate=True)
 
@@ -1643,6 +1644,7 @@ class Edit_File_Menu(Edit_Abstract):
         self.myApp : App  = master
         super().__init__(master, wingFn, *args, **kwargs)
 
+
     def init (self):
 
         self.grid_columnconfigure   (0, weight=1)
@@ -1650,8 +1652,8 @@ class Edit_File_Menu(Edit_Abstract):
 
         Button_Widget (self,1,0, lab='New',         width=100, pady=4, sticky = '', set=self.myApp.new)
         Button_Widget (self,2,0, lab='Open',        width=100, pady=4, sticky = '', set=self.myApp.open)
-        Button_Widget (self,3,0, lab='Save',        width=100, pady=4, sticky = '', disable=True)
-        Button_Widget (self,4,0, lab='Save As...',  width=100, pady=4, sticky = '', disable=True)
+        Button_Widget (self,3,0, lab='Save',        width=100, pady=4, sticky = '', set=self.myApp.save)
+        Button_Widget (self,4,0, lab='Save As...',  width=100, pady=4, sticky = '', set=self.myApp.saveAs)
 
         self.option_import = Option_Widget (self,5,0, width = 100, padx=(10,0), pady=4, 
                                             get=self.importDisplayValue, set = self.set_importType,
@@ -1666,7 +1668,7 @@ class Edit_File_Menu(Edit_Abstract):
         self.option_import.refresh()
         if aType == "Dxf as reference":  self.myApp.load_reference_dxf() 
 
-    def exportChoices (self):       return ["to Xflr5", "to FLZ_vortex", "Airfoils"]
+    def exportChoices (self):       return ["to Xflr5", "(to FLZ_vortex)", "(Airfoils)"]
     def exportDisplayValue (self):  return "Export..."
     def set_exportType (self, aType):
         self.option_export.refresh()
@@ -1682,14 +1684,14 @@ class Edit_File_Menu(Edit_Abstract):
 
 class App(ctk.CTk):
 
-    def __init__(self, settingsFile):
+    def __init__(self, paramFile):
         super().__init__(fg_color= cl_background)
 
         global ctk_root                                 # being event handler
 
         # create the 'wing' model 
-        self.settingsFile = '' 
-        self.loadNewWing (settingsFile)
+        self.paramFile = '' 
+        self.loadNewWing (paramFile)
 
         # configure customtkinter
         self.appearance_mode = "Dark"                   
@@ -1720,7 +1722,7 @@ class App(ctk.CTk):
         edit_frame.grid    (row=1, column=1,               pady=(0,5), padx=(2,5), sticky="nesw")
 
 
-    def wing (self):
+    def wing (self) -> Wing:
         """ encapsulates current wing. Childs should acces only via this function
         to enable a new wing to be set """
         return self._myWing
@@ -1741,6 +1743,7 @@ class App(ctk.CTk):
         """ Dispatcher for current WingSection between Edit and Diagramm """
         self._curWingSectionName = aName
 
+    #------- file functions ----------------
 
     def new (self):
         """ reset - and start with example ddefinition"""
@@ -1757,7 +1760,7 @@ class App(ctk.CTk):
 
         filetypes  = [('PlaneformCreator2 files', '*.json')]
         initialDir = "."
-        newPathFilename = tk.filedialog.askopenfilename(
+        newPathFilename = filedialog.askopenfilename(
                     title='Select new wing definition',
                     initialdir=initialDir,
                     filetypes=filetypes)
@@ -1766,12 +1769,46 @@ class App(ctk.CTk):
             self.loadNewWing (newPathFilename)
 
 
+    def save (self):
+        """ save wing data to the action parameter file - if new wing to saveAs"""
+
+        if self.paramFile:
+            self.wing().save(self.paramFile)
+        else:
+            self.saveAs ()
+
+
+    def saveAs (self):
+        """ save wing data to a new file and set this as actual"""
+
+        filetypes  = [('PC2 files', '*.json')]
+        pathFile   = self.paramFile
+        initialDir = os.path.dirname(pathFile) if pathFile != None else ''
+
+        newPathFilename = filedialog.asksaveasfilename(title='Save parameter file',
+                                     initialdir=initialDir, filetypes=filetypes,
+                                     defaultextension = '.json')
+        if newPathFilename: 
+            ret =  self.wing().save(newPathFilename)
+            if ret == 0: 
+                self.paramFile = os.path.normpath(newPathFilename)
+                self.title("Planform Creator [" + self.paramFile + "]")
+                text = "The wing was successfully saved to \n\n'%s'" % newPathFilename
+                CTkMessagebox(title="Save wing", message=text, icon="check", option_1="Ok")  
+            else: 
+                text = "The wing couldn't be saved to '%s'" % newPathFilename
+                CTkMessagebox(title="Save wing", message=text, icon="cancel", option_1="Ok")  
+
+
     def loadNewWing(self, pathFilename):
         """loads and sets a new wing model returns - updates title """
         
         newWing = Wing.onFile (pathFilename)
         if newWing:
-            self.settingsFile = pathFilename
+            if pathFilename:
+                self.paramFile = os.path.normpath(pathFilename)
+            else:
+                self.paramFile = ""
             self.set_wing (newWing)
 
         # set window title
@@ -1811,10 +1848,10 @@ class App(ctk.CTk):
         if dxf_dialog.return_OK: 
             new_dxf_Path = dxf_dialog.dxf_pathFilename
             if new_dxf_Path:                            # dialog returned a valid path 
-                self.wing().refPlanform_DXF.set_dxf_pathFilename (new_dxf_Path) 
+                self.wing().refPlanform_DXF.set_dxfPathFilename (new_dxf_Path) 
                 fireEvent(PLANFORM_CHANGED)
             else:                                       # remove dxf reference file - extra code to make it clear
-                self.wing().refPlanform_DXF.set_dxf_pathFilename (None) 
+                self.wing().refPlanform_DXF.set_dxfPathFilename (None) 
                 fireEvent(PLANFORM_CHANGED)
 
 #--------------------------------

@@ -65,6 +65,11 @@ class Airfoil:
         name          = fromDict(dataDict, "name", None)
         return cls(pathFileName = pathFileName, name = name)
 
+    def _save (self, airfoilDict):
+        """ stores the variables into the dataDict - returns the filled dict"""
+        # will be overloaded 
+        toDict (airfoilDict, "file",    self.pathFileName) 
+ 
 
     def __repr__(self) -> str:
         # overwrite to get a nice print string 
@@ -246,7 +251,13 @@ class Strak_Airfoil (Airfoil):
 
         self.name = "<strak>" 
         self.sourceName = None          # the long name out of the two belended airfoils
- 
+
+
+    def _save (self, airfoilDict):
+        """ stores the variables into the dataDict - returns the filled dict"""
+        toDict (airfoilDict, "name",  self.name) 
+
+
     def do_strak (self,myChord, leftAir : Airfoil, leftChord, rightAir:Airfoil, rightChord ):
         """ straks (blends) self out of two airfoils to the left and right.
         depending on its chordlength compared to the real neighbours."""

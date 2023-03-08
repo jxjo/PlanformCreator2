@@ -97,3 +97,10 @@ def fromDict(dict, key, default='no default', msg=True):
             if value and msg:
                 NoteMsg('Parameter \'%s\' not specified, using default-value \'%s\'' % (key, str(value)))
     return value
+
+def toDict(dict, key, value):
+    """
+    writes tp the parameter dictionary. If 'value' is None the key is not written 
+    """
+    if not value is None: 
+        dict [key] = value

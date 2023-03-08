@@ -162,7 +162,6 @@ class Wing:
         # store dxf path in wing data - 
         if newPlanform.is_dxf:
             newPlanform.assignToWing()              # get hinge and flap from dxf 
-
         # we got it 
         self._planform = newPlanform
 
@@ -256,6 +255,64 @@ class Wing:
 
 
     # ---Methods --------------------- 
+
+    def _save (self):
+        """ stores the variables into the dataDict"""
+
+        dataDict = {}
+
+        toDict (dataDict, "wingName",           self._name) 
+        toDict (dataDict, "wingspan",           self._wingspan) 
+        toDict (dataDict, "rootchord",          self._rootchord) 
+        toDict (dataDict, "tipchord",           self._tipchord) 
+        toDict (dataDict, "hingeLineAngle",     self._hingeAngle) 
+        toDict (dataDict, "flapDepthRoot",      self._flapDepthRoot) 
+        toDict (dataDict, "flapDepthTip",       self._flapDepthTip) 
+
+        toDict (dataDict, "rootRe",             self._rootRe) 
+        toDict (dataDict, "airfoilNickPrefix",  self._airfoilNickPrefix) 
+        toDict (dataDict, "xflr5Dir",           self._xflr5Dir) 
+        toDict (dataDict, "xflr5UseNick",       self._xflr5UseNick) 
+
+        toDict (dataDict, "planformType", self.planform.planformType) 
+        self.planform._save (dataDict)
+
+        sectionsList = []
+        for section in self.wingSections:
+            sectionsList.append (section._save ({}))
+        toDict (dataDict, "wingSections", sectionsList) 
+
+        self.paneledPlanform._save (dataDict)
+        self.refPlanform_DXF._save (dataDict)
+
+        return dataDict
+
+
+    def save (self, pathFileName):
+        """ store data dict to file pathFileName
+        
+        :Returns: 
+            0 : if succeded, -1 if failed"""
+
+        try:
+            paramFile = open(pathFileName, 'w')
+        except:
+            ErrorMsg("Failed to open file %s" % pathFileName)
+            return -1
+
+        dataDict = self._save()
+
+        # save parameter dictionary to .json-file
+        try:
+            json.dump(dataDict, paramFile, indent=2, separators=(',', ':'))
+            paramFile.close()
+        except ValueError as e:
+            ErrorMsg('invalid json: %s' % e)
+            ErrorMsg('Error, failed to save data to file %s' % pathFileName)
+            paramFile.close()
+            return -1
+        return 0
+
 
     def createSectionsOn (self, sectionsDict): 
         """
@@ -549,17 +606,6 @@ class Planform:
 
         self.wing   = myWing
 
-
-        self._HH_height              = fromDict (dataDict, "HH_height"  , 0.0, False)
-        self._HH_width               = fromDict (dataDict, "HH_width"   , 0.5, False)
-        self._HH_position            = fromDict (dataDict, "HH_position", 0.7, False)
-
-        # --- ? ----
-        self.dihedral = 0.00
-        self.wingArea = 0.0
-        self.geometricalCenter = (0.0, 0.0)
-        self.aspectRatio = 0.0
-
         # self.__class__.instances.append(weakref.proxy(self))
         InfoMsg (' ' + str(self)  + ' created...')
 
@@ -571,11 +617,9 @@ class Planform:
     @classmethod
     def get_all_subclasses(cls, acls):
         all_subclasses = []
-
         for subclass in acls.__subclasses__():
             all_subclasses.append(subclass)
             all_subclasses.extend(cls.get_all_subclasses(subclass))
-
         return all_subclasses
 
 
@@ -636,10 +680,14 @@ class Planform:
     def flapDepthRoot(self):    return self.wing.flapDepthRoot
     @property
     def flapDepthTip(self):     return self.wing.flapDepthTip
-
     @property
     def isValid (self):         return self._isValid         # to overwrite
 
+
+    def _save (self, dataDict):
+        """ stores the variables into the dataDict"""
+        # to be overloaded
+        pass
 
     def _norm_y_points (self):
         """ array of y points along the spann for the different lines  """
@@ -780,6 +828,7 @@ class Planform:
 
 
 #-------------------------------------------------------------------------------
+
 class Planform_Pure_Elliptical(Planform):
     """ 
     Defines the outline of a unmodified (more or less) elliptical planform for
@@ -844,6 +893,7 @@ class Planform_Pure_Elliptical(Planform):
 
 #-------------------------------------------------------------------------------
 
+
 class Planform_Elliptical(Planform):
     """ 
     Defines the outline of an elliptical planform  
@@ -874,6 +924,16 @@ class Planform_Elliptical(Planform):
         self._leCorrection           = fromDict (dataDict, "leCorrection", 0.0, False)
         self._ellipseCorrection      = fromDict (dataDict, "ellipseCorrection", 0.3, False)
         self._ellipseShift           = fromDict (dataDict, "ellipseShift", 0.0, False)
+
+
+    def _save (self, dataDict):
+        """ stores the variables into the dataDict"""
+
+        toDict (dataDict, "ellipseTipBelly", self._ellipseTipBelly) 
+        toDict (dataDict, "ellipseBellyWidth", self._ellipseBellyWidth) 
+        toDict (dataDict, "leCorrection", self._leCorrection) 
+        toDict (dataDict, "ellipseCorrection", self._ellipseCorrection) 
+        toDict (dataDict, "ellipseShift", self._ellipseShift) 
 
 
     # ---Properties --------------------- 
@@ -1100,6 +1160,12 @@ class Planform_Trapezoidal(Planform):
         self._leCorrection  = fromDict (dataDict, "leCorrection", 0, False)
 
 
+    def _save (self, dataDict):
+        """ stores the variables into the dataDict"""
+
+        toDict (dataDict, "leCorrection", self._leCorrection) 
+
+
     def _norm_y_points (self):
         """
         array of y points along the spann for the different lines   
@@ -1220,6 +1286,16 @@ class Planform_Paneled (Planform_Trapezoidal):
         self.distribution_fns["-sine"]  = lambda y : np.sin (y     * np.pi/2)
         self.distribution_fns["sine"]   = lambda y : np.sin ((y+2) * np.pi/2) + 1
         self.distribution_fns["cosine"] = lambda y : ((np.cos ((y+1) * np.pi)) + 1) / 2
+
+
+    def _save (self, dataDict):
+        """ stores the variables into the dataDict"""
+        toDict (dataDict, "x-panels",       self._x_panels) 
+        toDict (dataDict, "x-distribution", self._x_dist) 
+        toDict (dataDict, "y-panels",       self._y_panels) 
+        toDict (dataDict, "y-panels",       self._y_panels) 
+        toDict (dataDict, "y-minWidth",     self._y_minWidth) 
+
 
     # ---Properties --------------------- 
 
@@ -1435,7 +1511,7 @@ class Planform_DXF(Planform):
 
         self._dxf_isReference   = ref   # is it a reference planform 
 
-        self._dxf_mirrorX       = fromDict (dataDict, "dxf_mirrorX", True, msg=False)   
+        self._dxfMirrorX       = fromDict (dataDict, "dxfMirrorX", True, msg=False)   
 
         self.le_norm_dxf        = None   # the normalized leading edge in points from DXF
         self.te_norm_dxf        = None   # the normalized trailing edge in points from DXF
@@ -1447,21 +1523,30 @@ class Planform_DXF(Planform):
         self.infoText           = ''     # info about dxf parsing 
 
         if dxf_Path: 
-            self._dxf_pathFilename  = dxf_Path
+            self._dxfPathFilename  = dxf_Path
         else: 
             if ref:
-                self._dxf_pathFilename  = fromDict (dataDict, "refPlanform_DXF_path", "")
+                self._dxfPathFilename  = fromDict (dataDict, "refPlanform_dxfPath", "")
             else:
-                self._dxf_pathFilename  = fromDict (dataDict, "planform_DXF_path", "")
+                self._dxfPathFilename  = fromDict (dataDict, "planform_dxfPath", "")
 
 
-        if self._dxf_pathFilename != None and os.path.isfile(self._dxf_pathFilename):
-            self.load_dxf(self._dxf_pathFilename)
+        if self._dxfPathFilename != None and os.path.isfile(self._dxfPathFilename):
+            self.load_dxf(self._dxfPathFilename)
         else:
-            if self._dxf_pathFilename:
-                ErrorMsg ("The dxf file '%s' doesn't exist" % self._dxf_pathFilename)
-            self._dxf_pathFilename = None
+            if self._dxfPathFilename:
+                ErrorMsg ("The dxf file '%s' doesn't exist" % self._dxfPathFilename)
+            self._dxfPathFilename = None
 
+
+    def _save (self, dataDict):
+        """ stores the variables into the dataDict"""
+        if self.isValid:
+            if self._dxf_isReference:
+                toDict (dataDict, "refPlanform_dxfPath", self._dxfPathFilename) 
+            else:
+                toDict (dataDict, "planform_dxfPath",    self._dxfPathFilename) 
+        
 
     # ---Properties --------------------- 
     @property
@@ -1472,26 +1557,26 @@ class Planform_DXF(Planform):
 
     def dxf_filename (self):
         """ just the filename without the path of the dxf file"""
-        if self._dxf_pathFilename != None: 
-            fileName = os.path.basename(self._dxf_pathFilename)
+        if self._dxfPathFilename != None: 
+            fileName = os.path.basename(self._dxfPathFilename)
         else: 
             fileName = ''
         return fileName
 
     def dxf_pathFilename (self):
         """ the complete filename with the path of the dxf file"""
-        return self._dxf_pathFilename
+        return self._dxfPathFilename
     
-    def set_dxf_pathFilename (self, aNewPathFile):
+    def set_dxfPathFilename (self, aNewPathFile):
         
         if aNewPathFile:
             # load and parse data from file
             self.load_dxf (aNewPathFile)
             if self.isValid:
-                self._dxf_pathFilename = aNewPathFile
+                self._dxfPathFilename = aNewPathFile
         else: 
             # clear self
-            self._dxf_pathFilename  = None
+            self._dxfPathFilename  = None
             self.le_norm_dxf        = None   
             self.te_norm_dxf        = None   
             self.hingeLine_norm_dxf = None   
@@ -1719,12 +1804,12 @@ class Planform_DXF(Planform):
             infoText.append(" - Leading edge %d points"  % (len(self.le_norm_dxf)))
             infoText.append(" - Trailing edge %d points" % (len(self.te_norm_dxf)))
 
-            if (self._dxf_mirrorX):
+            if (self._dxfMirrorX):
                 infoText.append(" - mirrored along y-axis")
                 InfoMsg("Mirroring DXF planform for LE showing upwards")
                 self.mirror_dxf()
             if self.hingeLine_norm_dxf != None: 
-                if self._dxf_mirrorX:               # also mirror hinge line 
+                if self._dxfMirrorX:               # also mirror hinge line 
                     self.hingeAngle_dxf = - self.hingeAngle_dxf
                 infoText.append(" - Hinge line angle %.2f degrees" %self.hingeAngle_dxf)
 
@@ -1769,6 +1854,7 @@ class WingSection:
 
         self._yPos       = fromDict (dataDict, "position", None)
         self._norm_chord = fromDict (dataDict, "norm_chord", None)
+        self._flapGroup  = fromDict (dataDict, "flapGroup", 1, False)
 
         if (self._yPos == 0.0 or self._norm_chord == 1.0): 
             self._yPos = 0.0
@@ -1798,12 +1884,24 @@ class WingSection:
             if (self._yPos is None) and (not self.isRootOrTip):
                 self._yPos = self.yPos
 
-        self._flapGroup   = fromDict (dataDict, "flapGroup", 1, False)
 
         # create airfoil and load coordinates if exist 
         self._init_airfoil (dataDict = fromDict (dataDict, "airfoil", None))
 
         InfoMsg ('  '   + str(self)  + ' created...')
+
+
+    def _save (self, sectionDict):
+        """ stores the variables into the dataDict - returns the filled dict"""
+
+        toDict (sectionDict, "position",    self._yPos) 
+        toDict (sectionDict, "norm_chord",  self._norm_chord) 
+        toDict (sectionDict, "flapGroup",   self._flapGroup) 
+
+        airfoilDict = self.airfoil._save ({})
+        toDict (sectionDict, "airfoil",  airfoilDict) 
+
+        return sectionDict
 
 
     def _init_airfoil (self, dataDict = None, pathFileName = None):

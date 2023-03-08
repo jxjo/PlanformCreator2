@@ -49,6 +49,6 @@
 	}
   ],
   "xflr5Dir":".\\examples\\Amokka-JX\\xflr5",
-  "dxf_mirrorX":"True",
-  "refPlanform_DXF_path":".\\examples\\Amokka-JX\\Amokka-JX_wing_outline.dxf"
+  "dxfMirrorX":"True",
+  "refPlanform_dxfPath":".\\examples\\Amokka-JX\\Amokka-JX_wing_outline.dxf"
 }
