@@ -334,7 +334,7 @@ class Planform_Artist (Base_Artist):
 
     def _show_wingData (self, y, leadingEdge, trailingEdge):
 
-        area, aspectRatio = self.planform.calc_aspectRatio_with (y, leadingEdge, trailingEdge)
+        area, aspectRatio = self.planform.calc_area_AR (y, leadingEdge, trailingEdge)
         text  = "Wing span %.0f mm\n" % (self.planform.halfwingspan * 2)
         text += "Wing area %.1f dm²\n" % (area / 10000)
         text += "Aspect ratio %.1f\n" % (aspectRatio)
@@ -650,31 +650,32 @@ class Sections_Artist (Base_Artist):
         if self._norm:
             if section.isRoot: return               # no norm_chord for root
             color = cl_wingSection_fix
-            offset = -0.03
-            textRight = "%.2f" % (section.norm_chord)
-            marker_x = (le_to_te[0] + le_to_te[1]) * 0.9
+            text = "%.2f" % (section.norm_chord)
+            marker_x = (le_to_te[0] + le_to_te[1]) * 0.6
+            marker_y = y[0] + 0.007
         else: 
             color = cl_wingSection_fix
-            offset = 5
-            textRight = "%.0fmm" % section.chord
-            marker_x = le_to_te[1] - (le_to_te[1] - le_to_te[0]) * 0.5
+            text = "%.0fmm" % section.chord
+            marker_x = le_to_te[1] - (le_to_te[1] - le_to_te[0]) * 0.6
+            marker_y = y[0] + 6
 
-        marker_y = y[0] + offset
-        marker_top_y = y[0] 
-        if section.isTip: 
-            marker_top_x = le_to_te[0] - 4 * offset
-        else: 
-            marker_top_x = le_to_te[0] - offset
-
-        p = self.ax.text (marker_y, marker_x, textRight , 
-                         color = color )
+        p = self.ax.text (marker_y, marker_x, text, ha='left',color = color )
         self._add (p)   
 
-        # + section name
+        # + section name above le
+
+        marker_top_y = y[0] 
+        if self._norm:
+            offset = - 0.03
+        else:
+            offset = 10
+        marker_top_x = le_to_te[0] - offset
+
         if section.isRoot:
             label = "Root"
         elif section.isTip:
             label = "Tip"
+            marker_top_x = le_to_te[0] - 4 * offset
         else:
             label = str(section.wing.wingSectionIndexOf (section))
 

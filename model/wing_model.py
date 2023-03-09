@@ -7,22 +7,19 @@ Wing model with planform, wing sections, airfoils
 
 """
 
-import argparse
 import os
 import numpy as np
 from math import  sin
 import json
-from common_utils import *
-from colorama import just_fix_windows_console
+
+from common_utils       import *
 from airfoil_polar      import Airfoil, Strak_Airfoil
 from airfoil_examples   import Root_Example, Tip_Example
 
 # disables all print output to console
 print_disabled = False
 
-
 # user exceptions 
-
 class Except_Planform_DXF_notValid (Exception):
     "Raised when an invalid Planform_DXF is assigned to the wing"
     pass
@@ -559,6 +556,23 @@ class Wing:
                 sectionStart = section 
 
         return flapList
+    
+
+    def export_toDxf (self):
+        """exports self to a dxf file specified in the dxf parameters"""
+
+        from .export_Dxf import Dxf_Artist
+
+        dxf = Dxf_Artist(self)
+
+        dxf.plot_planform()
+        dxf.plot_hingeLine ()
+        dxf.plot_wingSections ()
+        dxf.plot_title ()
+
+        pathFileName = "myDxfle.dxf"
+        dxf.save (pathFileName)
+
 
 
 
@@ -746,13 +760,11 @@ class Planform:
 
     def lines (self):
         """
-        returns the major lines of self such as leading edge  
-
-        Args:
+        returns the major lines leading and trailing edge as arrays  
         Returns:
-            :y: array of the y-stations of the lines 
-            :leadingEdge: array of x
-            :trailingEdge: array of x
+            :y: array of the spanwise y-stations of lines 
+            :leadingEdge:  array of x coordinates (chord direction)
+            :trailingEdge: array of x coordinates (chord direction)
         """
         y = self._norm_y_points() * self.halfwingspan
         leadingEdge  = np.empty (y.size)
@@ -768,9 +780,7 @@ class Planform:
         returns an y,x polygon describing a flap between fromY and toY   
 
         Keyword Arguments:
-            nPoints --  number of points for idealization of trailing edge - default 30
-            onPick --   call back command when line was picked by user - will activate picking :)
-            norm --     when implemented will plot in a normed coordinate systeme
+            nPoints --  number of points for idealization of trailing edge - default 20
         """
         yFlapLine = []
         xFlapLine = [] 
@@ -814,8 +824,9 @@ class Planform:
         xFlapLine.append(self.hingePointAt(yPos))
         return yFlapLine, xFlapLine
 
-    def calc_aspectRatio_with (self, y, le, te):
-        """calculates (approximates) wing area and aspect ration based 
+
+    def calc_area_AR (self, y, le, te):
+        """calculates (approximates) wing area and aspect ration AR based 
         on le and te points which are already calculated"""
 
         area = 0 
@@ -1585,12 +1596,7 @@ class Planform_DXF(Planform):
             self.flapDepthTip_dxf   = None 
             self.infoText           = ''     
 
-
-
-    
-    #-------------------------------------------------------------------------------
-    # overwrites of class Planform 
-    #-------------------------------------------------------------------------------
+    #---------- overwrites of class Planform ------------------------------
 
     @property
     def hingeAngle(self):      
@@ -2340,7 +2346,6 @@ class Flap:
 # Main program for testing 
 if __name__ == "__main__":
 
-    just_fix_windows_console()
 
     print ("Current directory: ",os.getcwd())
     filename = ".\\ressources\\planformdata.json"

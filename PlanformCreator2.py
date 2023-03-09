@@ -19,6 +19,7 @@ from ui_base.widgets            import *
 from ui_base.wing_artist        import *
 from ui_base.CTkMessagebox.ctkmessagebox   import CTkMessagebox
 
+
 #------------------------------------------------
 
 cl_background       = '#101010'                 # background color in diagrams
@@ -1663,13 +1664,21 @@ class Edit_File_Menu(Edit_Abstract):
         self.option_import.refresh()
         if aType == "Dxf as reference":  self.myApp.load_reference_dxf() 
 
-    def exportChoices (self):       return ["to Xflr5", "(to FLZ_vortex)", "(Airfoils)"]
+    def exportChoices (self):       return ["to Xflr5", "to DXF", "(to FLZ_vortex)", "(Airfoils)"]
     def exportDisplayValue (self):  return "Export..."
     def set_exportType (self, aType):
         self.option_export.refresh()
         if aType == "to Xflr5":  self.myApp.export_xflr5 ()
+        if aType == "to DXF":  self.export_dxf ()
         if aType == "to FLZ_vortex":  pass
         if aType == "Airfoils":  pass
+
+    def export_dxf (self):
+
+        self.wing().export_toDxf () 
+
+        text = "Wing successfully exported to ..."
+        CTkMessagebox(title="DXF export", message=text, icon="check", option_1="Ok")  
 
 
 
@@ -1787,11 +1796,11 @@ class App(ctk.CTk):
             ret =  self.wing().save(newPathFilename)
             if ret == 0: 
                 self.paramFile = os.path.normpath(newPathFilename)
-                self.title("Planform Creator [" + self.paramFile + "]")
-                text = "The wing was successfully saved to \n\n'%s'" % newPathFilename
+                self.title("Planform Creator 2  [" + self.paramFile + "]")
+                text = "Wing successfully saved to \n\n'%s'" % newPathFilename
                 CTkMessagebox(title="Save wing", message=text, icon="check", option_1="Ok")  
             else: 
-                text = "The wing couldn't be saved to '%s'" % newPathFilename
+                text = "Wing couldn't be saved to '%s'" % newPathFilename
                 CTkMessagebox(title="Save wing", message=text, icon="cancel", option_1="Ok")  
 
 
@@ -1816,7 +1825,7 @@ class App(ctk.CTk):
 
     def export_xflr5 (self): 
         """ export wing to xflr5"""
-        from model.XFLR5_export import Export_Xflr5
+        from model.export_Xflr5 import Export_Xflr5
 
         export_dialog = Dialog_Export_Wing_Xflr5 (self, wingFn = self.wing) 
         self.wait_window (export_dialog)
