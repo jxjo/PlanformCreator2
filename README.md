@@ -1,4 +1,4 @@
-# Planeform Creator 2
+# Planform Creator 2
 
 -- Work in Progress --
 
