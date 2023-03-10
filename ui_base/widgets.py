@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env pythonbutton_color
 # -*- coding: utf-8 -*-
 
 """  
@@ -16,10 +16,12 @@ cl_spin             = "gray25"                    # background of spin buttons
 cl_text             = "#DCE4EE"
 cl_text_disabled    = "gray70"
 cl_userHint         = "#E0A721"
+cl_button_primary   = ctk.ThemeManager.theme["CTkButton"]["fg_color"] # default Button darker  
+cl_button_secondary = ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"] # default Button darker  
 fs_header           = 18                          # font size header 
 def_height          = 25                          # base height in px
 def_width           = 105                         # base width in px for entry fields
-def_lab_width       = 95                         # ... for labels of enty fields
+def_lab_width       = 95                          # ... for labels of enty fields
 
 class AccessPath():
     """
@@ -316,7 +318,7 @@ class Base_Widget():
                  val = None, lab:str=None, obj=None, 
                  get =None, set =None, disable = False, 
                  event: str= None,
-                 lim:tuple=None, dec: int = 1, unit : str = None, 
+                 lim:tuple=None, dec = None, unit : str = None, 
                  spin: bool = False, step: float = 0.1,
                  options: list = None,
                  width:int=None, height:int=None):
@@ -334,9 +336,9 @@ class Base_Widget():
 
         if isinstance (self.val, bool):                       # supported data types
            self.valType = bool
-        elif isinstance  (self.val, float) or (self.val == 0 and dec > 0):    
+        elif isinstance  (self.val, float) or (spin and (int(dec or 0))>0):    
            self.valType = float
-        elif isinstance (self.val, int):
+        elif isinstance (self.val, int)    or (spin and (int(dec or 0))==0):
            self.valType = int
         elif isinstance (self.val, str):
            self.valType = str
@@ -547,7 +549,7 @@ class Base_Widget():
     def str_basedOnVal (self, val, valType, limits, decimals):
         """converts val to a string for ctk entry based on type of val 
         """
-        if   val is None:
+        if   val is None or val =="" :
             s = "" 
         elif valType == bool:
             if val: s = "1" 
@@ -673,15 +675,20 @@ class Button_Widget(Base_Widget):
         val or obj+getter -- val string to show or access path with obj and getter          :)
         set -- access path setter when button is pressed             :)
     """
-    def __init__(self, *args, sticky= None, pady= None, columnspan = 1, **kwargs):
+    def __init__(self, *args, sticky= None, pady= None, columnspan = 1, primary=False, **kwargs):
         super().__init__(*args, **kwargs)
 
         if sticky is None: sticky = 'w'
         if pady   is None: pady = 0
+        if primary: 
+            self.fg_color = cl_button_primary
+        else:
+            self.fg_color = cl_button_secondary
 
-        self.mainCTk = ctk.CTkButton(self.parent, text=self.label, height=self.height, width=self.width, command=self.CTk_callback)
+        self.mainCTk = ctk.CTkButton(self.parent, text=self.label, height=self.height, width=self.width, 
+                                     command=self.CTk_callback)
         self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=(10,10), pady=pady, sticky=sticky)
-
+     
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
 
     def _getFrom_CTkControl (self):
@@ -704,7 +711,7 @@ class Button_Widget(Base_Widget):
             widgetCTk.configure (fg_color =cl_spin )
         else: 
             widgetCTk.configure (text_color = cl_text)
-            widgetCTk.configure (fg_color ='#1F6AA5' )
+            widgetCTk.configure (fg_color =self.fg_color )
 
 
 
@@ -856,14 +863,16 @@ class Field_Widget(Base_Widget):
         curStr = self._getFrom_CTkControl ()
         try:    newVal = float(curStr) + self.step
         except: newVal = 0
-        self._set_CTkControl (self.mainCTk, str(newVal))
+        val_asString = self.str_basedOnVal (newVal, self.valType, self.limits, self.decimals)
+        self._set_CTkControl (self.mainCTk, val_asString)
         self.CTk_callback ('dummyEvent')
 
     def sub_button_callback(self):
         curStr = self._getFrom_CTkControl ()
         try:    newVal = float(curStr) - self.step
         except: newVal = 0
-        self._set_CTkControl (self.mainCTk, str(newVal))
+        val_asString = self.str_basedOnVal (newVal, self.valType, self.limits, self.decimals)
+        self._set_CTkControl (self.mainCTk, val_asString)
         self.CTk_callback ('dummyEvent')
 
     def set_CTkControl_state (self):

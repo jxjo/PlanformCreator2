@@ -22,7 +22,7 @@ class Export_Xflr5:
     distrib_name_map ["cosine"]  = "COSINE"
 
 
-    def export_wing (self, wing : Wing, planform : Planform_Paneled):
+    def export_wing (self, wing : Wing, planform : Planform_Paneled, xflr5File, xflr5Dir):
 
         # get file object with xflr xml templae 
         templateFile = Xflr5_template().get_template_wing()
@@ -107,8 +107,6 @@ class Export_Xflr5:
 
         # delete existing file, write all data to the new file
 
-        xflr5Dir  = 'to_Xflr5'
-        xflr5File = wing.name.strip() +  '_wing.xml'
         if xflr5Dir and not os.path.isdir (xflr5Dir):
             os.mkdir(xflr5Dir)
 
@@ -117,7 +115,7 @@ class Export_Xflr5:
 
         InfoMsg("XFLR5 data was successfully written to %s." % xflr5FilePath)
 
-        return xflr5FilePath
+        return 
 
 
 class Xflr5_template ():

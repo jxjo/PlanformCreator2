@@ -265,7 +265,7 @@ class Edit_Wing_PlanformType(Edit_Abstract):
 
         self.currentPlanform_frame = None
 
-        # main grid:  header - sub Frame for specific planeform 
+        # main grid:  header - sub Frame for specific planform 
         self.grid_columnconfigure   (2, weight=1)
         self.grid_rowconfigure      (3, weight=1)
 
@@ -405,7 +405,7 @@ class Edit_Planform_Trapezoid (Edit_Abstract):
 
     def adaptSections (self):
         # changes chord of sections to best fit to reference (elliptical) 
-        self.planform().adjust_planeform_to_reference()
+        self.planform().adjust_planform_to_reference()
         fireEvent (PLANFORM_CHANGED)
 
 
@@ -1440,7 +1440,7 @@ class Dialog_Load_DXF (Dialog_Abstract):
         frame.grid_rowconfigure (r, weight=1)
 
         r +=1  
-        self.add(Button_Widget (frame,r,2, lab='Ok',    set=self.ok,     width=100,
+        self.add(Button_Widget (frame,r,2, lab='Ok', primary=True, set=self.ok, width=100,
                                 disable= self.ok_disable ))
         self.add(Button_Widget (frame,r,3, lab='Cancel',set=self.cancel, width= 100))
 
@@ -1495,9 +1495,9 @@ class Dialog_Load_DXF (Dialog_Abstract):
 #-------------------------------------------
 
 
-class Dialog_Export_Wing_Xflr5 (Dialog_Abstract):
+class Dialog_Export_Xflr5 (Dialog_Abstract):
     """ 
-    Export planeform as paneled for Xlfr5 oder FLZ 
+    Export planform as paneled for Xlfr5 oder FLZ 
 
     """
     width  = 1000
@@ -1510,7 +1510,7 @@ class Dialog_Export_Wing_Xflr5 (Dialog_Abstract):
         self.wing : Wing = wingFn()
         self.paneledPlanform = self.wing.paneledPlanform
 
-        # main grid 2 x 1  (preview + edit) 
+        # main grid 3 x 1  (preview + edit + buttons) 
 
         self.diagram_frame = Diagram_Planform_Mini (self.edit_frame, wingFn, size=(4,2.4))
         self.diagram_frame.grid(row=0, column=0, sticky="nwe")
@@ -1575,7 +1575,7 @@ class Dialog_Export_Wing_Xflr5 (Dialog_Abstract):
                                 obj=self.wing, get='xflr5UseNick', set='set_xflr5UseNick'))
  
 
-        self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok,     width=100))
+        self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok, primary=True, width=100))
         self.add(Button_Widget (self.button_frame,0,2, lab='Cancel', set=self.cancel, width=100))
         self.button_frame.grid_columnconfigure (0, weight=1)
         self.button_frame.grid_columnconfigure (3, weight=1)
@@ -1627,6 +1627,114 @@ class Dialog_Export_Wing_Xflr5 (Dialog_Abstract):
 
 
 
+
+class Dialog_Export_Dxf (Dialog_Abstract):
+    """ 
+    Export wing / planform as dxf to file  
+
+    """
+    width  = 640
+    height = 300
+    titleText  = "Export DXF"
+
+    def __init__(self, master, *args, wingFn = None,  **kwargs):
+        super().__init__(master, *args, height=self.height/2, **kwargs)
+
+        self.wing : Wing = wingFn()
+
+        # main grid 3 x 1  (header + edit + buttons) 
+        self.header_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
+        self.header_frame.grid(row=0, column=0, sticky="we")
+
+        self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
+        self.input_frame.grid(row=1, column=0, sticky="nwes", padx=10, pady=40)
+
+        self.button_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
+        self.button_frame.grid(row=2, column=0, sticky="wes", pady=10)
+
+        self.edit_frame.grid_columnconfigure (0, weight=1)
+        self.edit_frame.grid_rowconfigure    (1, weight=1)
+
+        # header with hints 
+        r = 0 
+        c = 0 
+        Header_Widget (self.header_frame,r,c, lab="Dxf Export", width=90, pady=(7,20))
+        hint = self.hint_onlyPolylines () 
+        if hint: 
+            self.add (Label_Widget  (self.header_frame,r,c+1, lab=hint, sticky="w", 
+                                     columnspan=8, text_color='hint'))
+        self.header_frame.grid_columnconfigure (c+2, weight=1)
+
+        # entry fields 
+        r = 0 
+        c = 0 
+        self.add(Field_Widget  (self.input_frame,r,c, lab="DXF file ", width=180,
+                                lab_width=100, 
+                                obj=self.wing, get='dxfPathFileName', disable=True))
+        self.add(Button_Widget (self.input_frame,r,c+3, lab='Select', width=60, sticky='w', 
+                                set=self.select_file ))
+
+        r += 1 
+        Blank_Widget           (self.input_frame,r,c, width=50, height = 15) 
+
+        r += 1 
+        self.add(Switch_Widget (self.input_frame,r,c+1, lab='Include airfoils in DXF', 
+                                columnspan=2, padx=0, 
+                                obj=self.wing, get='dxfAirfoilsToo', set='set_dxfAirfoilsToo'))      
+       
+        self.add (Field_Widget (self.input_frame,r,c+3, lab="TE thickness", width=90,
+                                 obj=self.wing, get='dxfAirfoilsTeGap', set='set_dxfAirfoilsTeGap',
+                                 lim=(0,2), dec=1, spin=True, step=0.1, unit='mm'))
+
+
+        self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok, primary=True, width=100))
+        self.add(Button_Widget (self.button_frame,0,2, lab='Cancel', set=self.cancel, width=100))
+        self.button_frame.grid_columnconfigure (0, weight=1)
+        self.button_frame.grid_columnconfigure (3, weight=1)
+
+
+    def select_file(self):
+        " open dialog for file selection"
+
+        newFile = filedialog.asksaveasfilename(
+                    title='Select directory for DXF export',
+                    filetypes  = [('dxf files', '*.dxf')],
+                    initialfile=self.wing.dxfPathFileName, defaultextension=".dxf")
+        if newFile:
+            # store only relativ path 
+            self.wing.set_dxfPathFileName (os.path.relpath(newFile))
+            super().refresh()
+
+
+    def hint_onlyPolylines (self): 
+
+        if self.wing.planform.planform_depend_on_sections: 
+            hint = None              # in case of a trapezoidal planform no problem ;-)  
+        else: 
+            nLines = len(self.wing.planform._norm_y_points ())
+            hint = "Note: Leading and trailing edge will be approximated by %d straight lines.\n" % nLines + \
+                   "Therefore the dxf contour shouldn't be used for final CAD design - use splines."
+        return hint
+
+
+    def refresh(self, dummy):
+        self.panelArtist.refresh(figureUpdate=True)
+        super().refresh()
+
+    def cancel(self): 
+        # changed bindings
+        ctk_root.unbind(PANELS_CHANGED)
+        super().cancel()
+
+    def ok(self): 
+        # release changed bindings
+        ctk_root.unbind(PANELS_CHANGED)
+        super().ok()
+
+
+
+
+
 class Edit_File_Menu(Edit_Abstract):
     """ 
     Frame for the high level commands like load, save, ...
@@ -1669,16 +1777,9 @@ class Edit_File_Menu(Edit_Abstract):
     def set_exportType (self, aType):
         self.option_export.refresh()
         if aType == "to Xflr5":  self.myApp.export_xflr5 ()
-        if aType == "to DXF":  self.export_dxf ()
+        if aType == "to DXF":  self.myApp.export_dxf ()
         if aType == "to FLZ_vortex":  pass
         if aType == "Airfoils":  pass
-
-    def export_dxf (self):
-
-        self.wing().export_toDxf () 
-
-        text = "Wing successfully exported to ..."
-        CTkMessagebox(title="DXF export", message=text, icon="check", option_1="Ok")  
 
 
 
@@ -1747,6 +1848,14 @@ class App(ctk.CTk):
         """ Dispatcher for current WingSection between Edit and Diagramm """
         self._curWingSectionName = aName
 
+    @property
+    def paramDir (self): 
+        """directory of parameter file - which is default dir """
+        if self.paramFile: 
+            return os.path.dirname(self.paramFile)
+        else: 
+            return "."                                  # currentDir 
+
     #------- file functions ----------------
 
     def new (self):
@@ -1762,11 +1871,10 @@ class App(ctk.CTk):
     def open (self):
         """ open a new wing definition json and load it"""
 
-        filetypes  = [('PlaneformCreator2 files', '*.json')]
-        initialDir = "."
+        filetypes  = [('Planform Creator 2 files', '*.json')]
         newPathFilename = filedialog.askopenfilename(
                     title='Select new wing definition',
-                    initialdir=initialDir,
+                    initialdir=self.paramDir,
                     filetypes=filetypes)
 
         if newPathFilename:                     # user pressed open
@@ -1778,6 +1886,8 @@ class App(ctk.CTk):
 
         if self.paramFile:
             self.wing().save(self.paramFile)
+            text = "Wing successfully saved ...    " 
+            CTkMessagebox(title="Save wing", message=text, icon="check", option_1="Ok", width=300, height=150)  
         else:
             self.saveAs ()
 
@@ -1786,18 +1896,15 @@ class App(ctk.CTk):
         """ save wing data to a new file and set this as actual"""
 
         filetypes  = [('PC2 files', '*.json')]
-        pathFile   = self.paramFile
-        initialDir = os.path.dirname(pathFile) if pathFile != None else ''
-
         newPathFilename = filedialog.asksaveasfilename(title='Save parameter file',
-                                     initialdir=initialDir, filetypes=filetypes,
+                                     initialdir=self.paramDir, filetypes=filetypes,
                                      defaultextension = '.json')
         if newPathFilename: 
             ret =  self.wing().save(newPathFilename)
             if ret == 0: 
                 self.paramFile = os.path.normpath(newPathFilename)
                 self.title("Planform Creator 2  [" + self.paramFile + "]")
-                text = "Wing successfully saved to \n\n'%s'" % newPathFilename
+                text = "Wing saved to \n\n'%s'" % newPathFilename
                 CTkMessagebox(title="Save wing", message=text, icon="check", option_1="Ok")  
             else: 
                 text = "Wing couldn't be saved to '%s'" % newPathFilename
@@ -1825,21 +1932,26 @@ class App(ctk.CTk):
 
     def export_xflr5 (self): 
         """ export wing to xflr5"""
-        from model.export_Xflr5 import Export_Xflr5
 
-        export_dialog = Dialog_Export_Wing_Xflr5 (self, wingFn = self.wing) 
+        export_dialog = Dialog_Export_Xflr5 (self, wingFn = self.wing) 
         self.wait_window (export_dialog)
 
         if export_dialog.return_OK:
-            xml_file = Export_Xflr5().export_wing(self.wing(), self.wing().paneledPlanform)
 
-            airfoilList = self.wing().do_export_airfoils (self.wing().xflr5Dir, useNick=self.wing().xflr5UseNick)
+            message = self.wing().export_toXflr5 ()
+            CTkMessagebox (title="Xflr5 export", message=message, icon="check", option_1="Ok")
 
-            message = os.path.basename(xml_file) + "\n\n" + \
-                      "and  \n\n" + \
-                      ',  '.join(airfoilList) + "\n\n" + \
-                      "exported to \n\n " + self.wing().xflr5Dir
-            CTkMessagebox (message=message, icon="check", option_1="Ok", height=300, width=400)
+
+    def export_dxf (self):
+        """export wing to dxf"""
+
+        export_dialog = Dialog_Export_Dxf (self, wingFn = self.wing) 
+        self.wait_window (export_dialog)
+
+        if export_dialog.return_OK:
+
+            message = self.wing().export_toDxf () 
+            CTkMessagebox (title="DXF export", message=message, icon="check", option_1="Ok")
 
 
     def load_reference_dxf (self): 
@@ -1857,6 +1969,7 @@ class App(ctk.CTk):
             else:                                       # remove dxf reference file - extra code to make it clear
                 self.wing().refPlanform_DXF.set_dxfPathFilename (None) 
                 fireEvent(PLANFORM_CHANGED)
+
 
 #--------------------------------
 

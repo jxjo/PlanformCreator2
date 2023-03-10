@@ -1,4 +1,4 @@
-# Planeform Creator 2
+# Planform Creator 2
 
 -- Work in Progress --
 
@@ -12,7 +12,7 @@ An app to design a wing focusing on model sailplanes
 * Export wing definition to Xflr5 
 * Export wing definition to FLZ_vortex (to come) 
 
-Inspired and partially based on the 'Planeform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine) - Thanks Matthias!  
+Inspired and partially based on the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine) - Thanks Matthias!  
 
 
 

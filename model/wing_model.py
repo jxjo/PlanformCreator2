@@ -90,7 +90,11 @@ class Wing:
         
         self._xflr5Dir          = fromDict (dataDict, "xflr5Dir", "./xflr5", msg=False)
         self._xflr5UseNick      = fromDict (dataDict, "xflr5UseNick", True, msg=False)
-        
+
+        self._dxfPathFileName   = fromDict (dataDict, "dxfFile", "", msg=False)
+        self._dxfAirfoilsTeGap  = fromDict (dataDict, "dxfAirfoilsTeGap", None, msg=False)
+        self._dxfAirfoilsToo    = fromDict (dataDict, "dxfAirfoilsToo", True, msg=False)
+
         InfoMsg (str(self)  + ' created...')
 
         # not in use
@@ -128,7 +132,42 @@ class Wing:
 
         return cls(dataDict)
 
+    # --- save --------------------- 
+
+    def _save (self):
+        """ stores the variables into the dataDict"""
+
+        dataDict = {}
+
+        toDict (dataDict, "wingName",           self._name) 
+        toDict (dataDict, "wingspan",           self._wingspan) 
+        toDict (dataDict, "rootchord",          self._rootchord) 
+        toDict (dataDict, "tipchord",           self._tipchord) 
+        toDict (dataDict, "hingeLineAngle",     self._hingeAngle) 
+        toDict (dataDict, "flapDepthRoot",      self._flapDepthRoot) 
+        toDict (dataDict, "flapDepthTip",       self._flapDepthTip) 
+
+        toDict (dataDict, "rootRe",             self._rootRe) 
+        toDict (dataDict, "airfoilNickPrefix",  self._airfoilNickPrefix) 
+        toDict (dataDict, "xflr5Dir",           self._xflr5Dir) 
+        toDict (dataDict, "xflr5UseNick",       self._xflr5UseNick) 
+        toDict (dataDict, "dxfFile",            self._dxfPathFileName) 
+
+        toDict (dataDict, "planformType", self.planform.planformType) 
+        self.planform._save (dataDict)
+
+        sectionsList = []
+        for section in self.wingSections:
+            sectionsList.append (section._save ({}))
+        toDict (dataDict, "wingSections", sectionsList) 
+
+        self.paneledPlanform._save (dataDict)
+        self.refPlanform_DXF._save (dataDict)
+
+        return dataDict
+
     # ---Properties --------------------- 
+
     @property
     def name(self):  return self._name
     def set_name(self, newName):  self._name = newName
@@ -250,39 +289,25 @@ class Wing:
     def xflr5UseNick(self) -> bool: return self._xflr5UseNick
     def set_xflr5UseNick(self, aBool): self._xflr5UseNick = aBool
 
+    @property
+    def dxfPathFileName(self):
+        if self._dxfPathFileName:
+            return self._dxfPathFileName
+        else: 
+            return self.name + ".dxf"
+    def set_dxfPathFileName(self, newPathFilename):
+        self._dxfPathFileName = os.path.normpath(newPathFilename)
+
+    @property
+    def dxfAirfoilsTeGap (self): return self._dxfAirfoilsTeGap
+    def set_dxfAirfoilsTeGap (self, aVal): self._dxfAirfoilsTeGap = aVal 
+
+    @property
+    def dxfAirfoilsToo (self): return self._dxfAirfoilsToo
+    def set_dxfAirfoilsToo (self, aVal): self._dxfAirfoilsToo = bool(aVal) 
+
 
     # ---Methods --------------------- 
-
-    def _save (self):
-        """ stores the variables into the dataDict"""
-
-        dataDict = {}
-
-        toDict (dataDict, "wingName",           self._name) 
-        toDict (dataDict, "wingspan",           self._wingspan) 
-        toDict (dataDict, "rootchord",          self._rootchord) 
-        toDict (dataDict, "tipchord",           self._tipchord) 
-        toDict (dataDict, "hingeLineAngle",     self._hingeAngle) 
-        toDict (dataDict, "flapDepthRoot",      self._flapDepthRoot) 
-        toDict (dataDict, "flapDepthTip",       self._flapDepthTip) 
-
-        toDict (dataDict, "rootRe",             self._rootRe) 
-        toDict (dataDict, "airfoilNickPrefix",  self._airfoilNickPrefix) 
-        toDict (dataDict, "xflr5Dir",           self._xflr5Dir) 
-        toDict (dataDict, "xflr5UseNick",       self._xflr5UseNick) 
-
-        toDict (dataDict, "planformType", self.planform.planformType) 
-        self.planform._save (dataDict)
-
-        sectionsList = []
-        for section in self.wingSections:
-            sectionsList.append (section._save ({}))
-        toDict (dataDict, "wingSections", sectionsList) 
-
-        self.paneledPlanform._save (dataDict)
-        self.refPlanform_DXF._save (dataDict)
-
-        return dataDict
 
 
     def save (self, pathFileName):
@@ -558,8 +583,26 @@ class Wing:
         return flapList
     
 
+    def export_toXflr5 (self): 
+        """exports self to a Xflr5 xml and airfoils into Xflr5 directory
+          - returns a text string of exported artefacts """
+        from .export_Xflr5 import Export_Xflr5
+
+        xflr5File  = self.name.strip() +  '_wing.xml'
+        xflr5Dir   = self.xflr5Dir
+
+        Export_Xflr5().export_wing(self, self.paneledPlanform, xflr5File, xflr5Dir)
+        airfoilList = self.do_export_airfoils (xflr5Dir, useNick=self.xflr5UseNick)
+
+        message = xflr5File + "\n\n" + \
+                    ',  '.join(airfoilList) + "\n\n\n" + \
+                    "exported to '" + xflr5Dir + "'"
+        return message
+
+
     def export_toDxf (self):
-        """exports self to a dxf file specified in the dxf parameters"""
+        """exports self to a dxf file specified in the dxf parameters
+          - returns a text string of exported artefacts """
 
         from .export_Dxf import Dxf_Artist
 
@@ -570,8 +613,15 @@ class Wing:
         dxf.plot_wingSections ()
         dxf.plot_title ()
 
+        if self.dxfAirfoilsToo:
+            self.do_strak ()                    # ensure strak airfoils are uptodate 
+            dxf.plot_airfoils (teGap_mm=self.dxfAirfoilsTeGap)
+
         pathFileName = "myDxfle.dxf"
         dxf.save (pathFileName)
+
+        message = "Wing exported to '" + self.dxfPathFileName + "'"
+        return message
 
 
 
@@ -1243,7 +1293,7 @@ class Planform_Trapezoidal(Planform):
 
         return leadingEdge, trailingEdge
     
-    def adjust_planeform_to_reference (self):
+    def adjust_planform_to_reference (self):
         """
         Adjust the relevant wing sections of trapezoid to become close to reference(ellipse)
         """

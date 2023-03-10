@@ -10,6 +10,7 @@
   "airfoilNickPrefix":"GP",
   "xflr5Dir":".\\examples\\VJX.glide\\xflr5",
   "xflr5UseNick":1,
+  "dxfFile":"",
   "planformType":"elliptical",
   "ellipseTipBelly":0.16,
   "ellipseBellyWidth":0.3,
@@ -23,7 +24,7 @@
       "flapGroup":1
     },
     {
-      "position":585.7142857142858,
+      "position":585.7,
       "flapGroup":2
     },
     {
@@ -32,7 +33,7 @@
     },
     {
       "position":1435.0,
-      "norm_chord":0.05185185185185185,
+      "norm_chord":0.051852,
       "flapGroup":2
     }
   ],
@@ -40,5 +41,5 @@
   "x-distribution":"cosine",
   "y-panels":10,
   "y-minWidth":5,
-  "refPlanform_dxfPath":"E:/GitHub/PlaneformCreator2/examples/VJX.glide/VJX.glide_planform.dxf"
+  "refPlanform_dxfPath":"E:/GitHub/PlanformCreator2/examples/VJX.glide/VJX.glide_planform.dxf"
 }

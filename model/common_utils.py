@@ -100,7 +100,10 @@ def fromDict(dict, key, default='no default', msg=True):
 
 def toDict(dict, key, value):
     """
-    writes tp the parameter dictionary. If 'value' is None the key is not written 
+    writes t0 the parameter dictionary. If 'value' is None the key is not written 
     """
     if not value is None: 
+        # limit decimals in file 
+        if isinstance  (value, float):
+            value = round (value,6)
         dict [key] = value

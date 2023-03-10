@@ -211,21 +211,76 @@ class Airfoil:
 
         return newPathFileName
 
+    def with_TEGap (self, newGap, xBlend = 0.8):
+        """ returns self x,y coordinates with a new te gap.
+         The procdere is based on xfoil allowing to define a blending distance from le.
+
+        Arguments: 
+            newGap:   in y-coordinates - typically 0.01 or so 
+            xblend:   the blending distance from trailing edge 0..1 - Default 0.8
+        Returns: 
+            x,y:      np coordinate arrays with new Te 
+        """
+
+        # currently le must be at 0,0 - te must be at 1,gap/2 (normalized airfoil) 
+        x = np.copy (self.x) 
+        y = np.copy (self.y) 
+
+        if x[0] != 1.0 or x[-1] != 1.0:
+            ErrorMsg ("Te gap can't be set. TE is not at x=1.0")
+            return x,y
+        
+        if y[0] != - y[-1]:
+            ErrorMsg ("Te gap can't be set. Mid of TE is not at y=0.0")
+            return x,y
+        
+        ile = np.argmin (x)
+        if x[ile] != 0.0 or y[ile] != 0.0:
+            ErrorMsg ("Te gap can't be set. LE is not at x=1.0")
+            return x,y
+
+        xBlend = min( max( xBlend , 0.0 ) , 1.0 )
+
+        gap = y[0] - y[-1]
+        dgap = newGap - gap 
+
+        # go over each point, changing the y-thickness appropriately
+        for i in range(len(x)):
+
+            # thickness factor tails off exponentially away from trailing edge
+            if (xBlend == 0.0): 
+                tfac = 0.0
+                if (i == 0 or i == (len(x)-1)):
+                    tfac = 1.0
+            else:
+                arg = min ((1.0 - x[i]) * (1.0/xBlend -1.0), 15.0)
+                tfac = np.exp(-arg)
+
+            if i <= ile: 
+                y[i] = y[i] + 0.5 * dgap * x[i] * tfac # * gap 
+            else:
+                y[i] = y[i] - 0.5 * dgap * x[i] * tfac # * gap   
+
+        return x,y 
 
 
-    def plot(self):
+    def plot(self, x=None, y=None):
         """
         Plot the airfoil for testing 
+        Alternative coordinates can be supplied 
         """
         import matplotlib.pyplot as plt
 
-        if (self.x == []): 
+        if x is None: x = self.x
+        if y is None: y = self.y
+
+        if (x is None or x == []): 
             ErrorMsg ("No coordinates to plot")
             return 
 
         fig = plt.figure()
         plt.style.use('seaborn-v0_8-ticks')
-        fig.set_figwidth (fig.get_figwidth()  * 1.5)     # enlarge window because of 4 plots
+        fig.set_figwidth (fig.get_figwidth()  * 2 )     # enlarge window because of 4 plots
 
         ax = fig.add_subplot(1, 1, 1)
         ax.set_xlim([0.0, 1.0])
@@ -235,7 +290,7 @@ class Airfoil:
         ax.set_title (self.name)
         ax.grid()
 
-        ax.plot(self.x, self.y, '-', color='grey')
+        ax.plot(x, y, '-')
 
         plt.subplots_adjust(left=0.10, bottom=0.10, right=0.95, top=0.90, wspace=None, hspace=None)
         plt.show()    
@@ -528,15 +583,40 @@ class polar:
 
 if __name__ == "__main__":
 
-    from .worker import XfoilWorker
+    from worker import XfoilWorker
+    from airfoil_examples import Root_Example
+    import matplotlib.pyplot as plt
+
 
     # ---- Test -----
     # loadFromFile = False
 
-    # myAirfoil = 
-    # print ("New airfoil created: ", myAirfoil)
-    # myAirfoil.load()
-    # myAirfoil.plot()
+    myAirfoil = Root_Example()
+    print ("New airfoil created: ", myAirfoil)
+    myAirfoil.load()
+
+
+    fig = plt.figure()
+    plt.style.use('seaborn-v0_8-ticks')
+    fig.set_figwidth (fig.get_figwidth()  * 2 )     # enlarge window because of 4 plots
+
+    ax = fig.add_subplot(1, 1, 1)
+    ax.axis('equal')
+    ax.set_title (myAirfoil.name)
+    ax.grid()
+
+
+    gap = 0.04
+
+    for gap in np.linspace (0.0, 0.08, 3):
+        for xBlend in np.linspace (0.1, 1, 4):
+            x, y = myAirfoil.with_TEGap (gap,xBlend)
+            ax.plot(x, y, '-', label="gap=%.2f xBlend=%.2f" % (gap, xBlend))
+
+        # myAirfoil.plot(x=x, y=y)
+    ax.legend()
+    plt.subplots_adjust(left=0.10, bottom=0.10, right=0.95, top=0.90, wspace=None, hspace=None)
+    plt.show()    
 
     # print ("Starting polar generation")
     # myAirfoil.polarSet.load_or_generatePolars ([200000, 220000, 270000, 500000])
