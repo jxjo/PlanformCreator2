@@ -9,8 +9,11 @@ An app to design a wing focusing on model sailplanes
 * Add an arbitrary number of wing sections with fixed position or relative chord length
 * Generate blended airfoils for intermediate wing sections ('strak')
 * Import dxf outline of a wing either as template for a new wing or as reference for an existing wing
-* Export wing definition to Xflr5 
-* Export wing definition to FLZ_vortex (to come) 
+* Export wing definition to
+  * Xflr5
+  * FLZ_vortex
+  * dxf file  - for use in CAD
+
 
 Inspired and partially based on the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine) - Thanks Matthias!  
 
