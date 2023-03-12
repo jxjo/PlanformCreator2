@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 
-import os, re
-import io
 import numpy as np
 import ezdxf
 from ezdxf import enums
 from common_utils import *
-from wing_model import Wing, WingSection, Planform
+from wing_model import Wing, WingSection
 
 
 class Dxf_Artist:

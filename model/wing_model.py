@@ -16,6 +16,7 @@ from common_utils       import *
 from airfoil_polar      import Airfoil, Strak_Airfoil
 from airfoil_examples   import Root_Example, Tip_Example
 
+
 # disables all print output to console
 print_disabled = False
 
@@ -56,7 +57,7 @@ class Wing:
             wingExists = True
 
 
-        self.dataDict      = dataDict
+        self.dataDict = dataDict
 
         self._name            = fromDict (dataDict, "wingName", "My new Wing", wingExists)
         self._wingspan        = fromDict (dataDict, "wingspan", 2000.0, wingExists) 
@@ -81,16 +82,14 @@ class Wing:
         # create an extra Planform as major reference ()
         self.refPlanform      = Planform_Pure_Elliptical (self)
 
-        # create an extra Planform for the paneled planform to export later to Xflr5, FLZ, ...
-        self.paneledPlanform  = Planform_Paneled (self, dataDict)
+        # will hold the class which manages Xflr5, FLZ export including its parameters
+        self._xflr5Exporter   = None 
+        self._flzExporter     = None 
 
         # miscellaneous parms
         self._rootRe            = fromDict (dataDict, "rootRe", 400000, wingExists)
         self._airfoilNickPrefix = fromDict (dataDict, "airfoilNickPrefix", "JX", msg=False)
         
-        self._xflr5Dir          = fromDict (dataDict, "xflr5Dir", "./xflr5", msg=False)
-        self._xflr5UseNick      = fromDict (dataDict, "xflr5UseNick", True, msg=False)
-
         self._dxfPathFileName   = fromDict (dataDict, "dxfFile", "", msg=False)
         self._dxfAirfoilsTeGap  = fromDict (dataDict, "dxfAirfoilsTeGap", None, msg=False)
         self._dxfAirfoilsToo    = fromDict (dataDict, "dxfAirfoilsToo", True, msg=False)
@@ -149,11 +148,9 @@ class Wing:
 
         toDict (dataDict, "rootRe",             self._rootRe) 
         toDict (dataDict, "airfoilNickPrefix",  self._airfoilNickPrefix) 
-        toDict (dataDict, "xflr5Dir",           self._xflr5Dir) 
-        toDict (dataDict, "xflr5UseNick",       self._xflr5UseNick) 
         toDict (dataDict, "dxfFile",            self._dxfPathFileName) 
 
-        toDict (dataDict, "planformType", self.planform.planformType) 
+        toDict (dataDict, "planformType",       self.planform.planformType) 
         self.planform._save (dataDict)
 
         sectionsList = []
@@ -161,8 +158,9 @@ class Wing:
             sectionsList.append (section._save ({}))
         toDict (dataDict, "wingSections", sectionsList) 
 
-        self.paneledPlanform._save (dataDict)
         self.refPlanform_DXF._save (dataDict)
+
+        toDict (dataDict, "xflr5",              self.xflr5Exporter._save()) 
 
         return dataDict
 
@@ -278,18 +276,6 @@ class Wing:
     def set_airfoilNickPrefix(self, newStr): self._airfoilNickPrefix = newStr
 
     @property
-    def xflr5Dir(self):
-        """the directory for xflr5 export - path is relativ to current"""
-        return os.path.relpath(self._xflr5Dir)
-    def set_xflr5Dir(self, newStr): 
-        # insure a valid, relativ path 
-        self._xflr5Dir = os.path.relpath(newStr)
-
-    @property
-    def xflr5UseNick(self) -> bool: return self._xflr5UseNick
-    def set_xflr5UseNick(self, aBool): self._xflr5UseNick = aBool
-
-    @property
     def dxfPathFileName(self):
         if self._dxfPathFileName:
             return self._dxfPathFileName
@@ -305,6 +291,29 @@ class Wing:
     @property
     def dxfAirfoilsToo (self): return self._dxfAirfoilsToo
     def set_dxfAirfoilsToo (self, aVal): self._dxfAirfoilsToo = bool(aVal) 
+
+    @property
+    def xflr5Exporter (self): 
+        """ returns class managing Xflr5 export """
+        from export_Xflr5       import Export_Xflr5         # here - otherwise circular errors
+
+        if self._xflr5Exporter is None: 
+            # init class for Xlfr5 export with parameters in sub dict xlfr5 
+            xflr5Dict           = fromDict (self.dataDict, "xlfr5", "", msg=False)
+            self._xflr5Exporter = Export_Xflr5(self, xflr5Dict) 
+        return self._xflr5Exporter     
+
+    @property
+    def flzExporter (self): 
+        """ returns class managing FLZ export """
+        from export_FLZ  import Export_FLZ         # here - otherwise circular errors
+
+        if self._flzExporter is None: 
+            # init class for Xlfr5 export with parameters in sub dict xlfr5 
+            flzDict           = fromDict (self.dataDict, "xlfr5", "", msg=False)
+            self._flzExporter = Export_FLZ(self, flzDict) 
+        return self._flzExporter     
+
 
 
     # ---Methods --------------------- 
@@ -393,6 +402,7 @@ class Wing:
             aSection_index = self.wingSections.index (aSection)
 
             newSection = WingSection (self, {"norm_chord": new_norm_chord})
+            newSection.set_flapGroup (aSection.flapGroup)
             self.wingSections.insert(aSection_index+1,newSection)
         return newSection
 
@@ -582,23 +592,6 @@ class Wing:
 
         return flapList
     
-
-    def export_toXflr5 (self): 
-        """exports self to a Xflr5 xml and airfoils into Xflr5 directory
-          - returns a text string of exported artefacts """
-        from .export_Xflr5 import Export_Xflr5
-
-        xflr5File  = self.name.strip() +  '_wing.xml'
-        xflr5Dir   = self.xflr5Dir
-
-        Export_Xflr5().export_wing(self, self.paneledPlanform, xflr5File, xflr5Dir)
-        airfoilList = self.do_export_airfoils (xflr5Dir, useNick=self.xflr5UseNick)
-
-        message = xflr5File + "\n\n" + \
-                    ',  '.join(airfoilList) + "\n\n\n" + \
-                    "exported to '" + xflr5Dir + "'"
-        return message
-
 
     def export_toDxf (self):
         """exports self to a dxf file specified in the dxf parameters
@@ -1395,7 +1388,6 @@ class Planform_Paneled (Planform_Trapezoidal):
             return min ( self.y_panels, round(dy_sec/self.y_minWidth))
         else:
             return 0 
-
 
 
     def distribution_fns_names (self):

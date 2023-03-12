@@ -11,7 +11,7 @@ from wing_model import Wing, WingSection, Planform_Paneled
 class Export_Xflr5:
     """ 
 
-    Handle export of a paneled planform to an Xflr5 xml fil   
+    Handle export of a paneled planform to an Xflr5 xml file   
 
     """
 
@@ -21,8 +21,80 @@ class Export_Xflr5:
     distrib_name_map ["sine"]    = "SINE"
     distrib_name_map ["cosine"]  = "COSINE"
 
+    def __init__(self, myWing: Wing, myDict: dict = None): 
 
-    def export_wing (self, wing : Wing, planform : Planform_Paneled, xflr5File, xflr5Dir):
+        self.wing       = myWing
+        self._baseDir        = None         # will be set - root dir for exportDir (which is relative)    
+        self._exportDir      = fromDict (myDict, "exportDir", "./xflr5", msg=False)
+        self._useNick        = fromDict (myDict, "useNick", True, msg=False)
+
+        # create an extra Planform for the paneled planform to export later to Xflr5, FLZ, ...
+        self.paneledPlanform  = Planform_Paneled (self.wing, myDict)
+
+
+    def _save (self):
+        """ returns the parameters of self in dataDict"""
+
+        myDict = {}
+        toDict (myDict, "exportDir",         self._exportDir) 
+        toDict (myDict, "useNick",            self._useNick) 
+        self.paneledPlanform._save (myDict)
+
+        return myDict
+
+    @property
+    def baseDir(self):
+        """the directory for flz export - path is relativ to current"""
+        return self._baseDir
+    
+    def set_baseDir(self, newStr): 
+        self._baseDir = newStr
+
+    @property
+    def exportDir(self):
+        """the directory for xflr5 export - path is relativ to current"""
+        return os.path.relpath(self._exportDir)
+    def set_exportDir(self, newStr): 
+        # insure a valid, relativ path 
+        self._exportDir = os.path.relpath(newStr)
+
+    @property
+    def baseAndExportDir(self):
+        """the directory for flz export including current dir """
+        return os.path.join (self.baseDir, self.exportDir)
+
+    @property
+    def useNick(self) -> bool: return self._useNick
+    def set_useNick(self, aBool): self._useNick = aBool
+
+    @property
+    def fileName(self): 
+        return self.wing.name.strip() +  '_wing.xml'
+
+
+    def doIt (self): 
+        """ main entry: start the export to the file defined in paramters.
+        Airfoils will also be copied into the xflr5 directory
+        Returns a message string what was done """
+
+        targetDir = os.path.join (self.baseDir, self.exportDir)
+
+        if not os.path.exists(targetDir): os.makedirs(targetDir)
+        pathFileName = os.path.join (targetDir, self.fileName)
+
+        self.export_wing (pathFileName)
+
+        airfoilList = self.wing.do_export_airfoils (targetDir, useNick=self.useNick)
+
+        InfoMsg("Xflr5 data successfully written to %s." % pathFileName)
+        message = self.wing.name + " + airfoils: \n\n" + \
+                  ',  '.join(airfoilList)  + \
+                  "\n\n exported to \n\n" + \
+                  "'" +  targetDir + "'"      
+        return message
+
+
+    def export_wing (self, pathFileName):
 
         # get file object with xflr xml templae 
         templateFile = Xflr5_template().get_template_wing()
@@ -42,7 +114,7 @@ class Export_Xflr5:
 
         # wing name
         for nameXml in wingXml.iter('Name'):
-            nameXml.text = wing.name
+            nameXml.text = self.wing.name
         for descriptionXml in wingXml.iter('Description'):
             descriptionXml.text = "by Planform Creator 2"
 
@@ -57,24 +129,24 @@ class Export_Xflr5:
         # write the new section-data to the wing
         section : WingSection
 
-        for iSec, section in enumerate(wing.wingSections):
+        for iSec, section in enumerate(self.wing.wingSections):
             # copy the template
             newSectionXml = deepcopy(sectionTemplateXml)
 
             # x
             for x_number_of_panels in newSectionXml.iter('x_number_of_panels'):
-                x_number_of_panels.text = str(planform.x_panels)
+                x_number_of_panels.text = str(self.paneledPlanform.x_panels)
             for x_panel_distribution in newSectionXml.iter('x_panel_distribution'):
                 # map to xflr5 distribution names 
-                xflr5_dist = self.distrib_name_map[planform.x_dist]
+                xflr5_dist = self.distrib_name_map[self.paneledPlanform.x_dist]
                 x_panel_distribution.text = str(xflr5_dist)
 
             # y
             for y_number_of_panels in newSectionXml.iter('y_number_of_panels'):
-                y_number_of_panels.text = str(planform.y_panels_forSection(iSec))
+                y_number_of_panels.text = str(self.paneledPlanform.y_panels_forSection(iSec))
             for y_panel_distribution in newSectionXml.iter('y_panel_distribution'):
                 # map to xflr5 distribution names 
-                xflr5_dist = self.distrib_name_map[planform.y_dist]
+                xflr5_dist = self.distrib_name_map[self.paneledPlanform.y_dist]
                 y_panel_distribution.text = str(xflr5_dist)
 
             for yPosition in newSectionXml.iter('y_position'):
@@ -84,7 +156,7 @@ class Export_Xflr5:
                 chord.text = str(section.chord)
 
             for xOffset in newSectionXml.iter('xOffset'):
-                le, te = planform._planform_function (section.yPos)
+                le, te = self.paneledPlanform._planform_function (section.yPos)
                 xOffset.text = str(le)
 
             for dihedral in newSectionXml.iter('Dihedral'):
@@ -92,7 +164,7 @@ class Export_Xflr5:
                 dihedral.text = str(0)
 
             # airfoil - use nick name? 
-            if wing.xflr5UseNick:
+            if self.useNick:
                 airfoilName = section.airfoilNick()
             else: 
                 airfoilName = section.airfoilName()
@@ -105,15 +177,7 @@ class Export_Xflr5:
             # add the new section to the tree
             wingXml.append(newSectionXml)
 
-        # delete existing file, write all data to the new file
-
-        if xflr5Dir and not os.path.isdir (xflr5Dir):
-            os.mkdir(xflr5Dir)
-
-        xflr5FilePath = os.path.join (xflr5Dir, xflr5File)
-        tree.write(xflr5FilePath)
-
-        InfoMsg("XFLR5 data was successfully written to %s." % xflr5FilePath)
+        tree.write(pathFileName)
 
         return 
 

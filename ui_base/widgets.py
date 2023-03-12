@@ -336,9 +336,9 @@ class Base_Widget():
 
         if isinstance (self.val, bool):                       # supported data types
            self.valType = bool
-        elif isinstance  (self.val, float) or (spin and (int(dec or 0))>0):    
+        elif isinstance  (self.val, float) or (spin and (not dec is None) and (dec > 0)):    
            self.valType = float
-        elif isinstance (self.val, int)    or (spin and (int(dec or 0))==0):
+        elif isinstance (self.val, int) or (spin and (not dec is None) and (dec == 0)):
            self.valType = int
         elif isinstance (self.val, str):
            self.valType = str

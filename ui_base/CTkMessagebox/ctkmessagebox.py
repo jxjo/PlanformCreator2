@@ -177,7 +177,7 @@ class CTkMessagebox(customtkinter.CTkToplevel):
                                             fg_color="transparent", hover=False, text_color=self.text_color, image=self.icon)
         self.info_text = customtkinter.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=self.message, font=self.font,
                                             fg_color="transparent", hover=False, text_color=self.text_color, image=None)
-        self.info_text._text_label.configure(wraplength=self.width *0.8, justify="left")
+        self.info_text._text_label.configure(wraplength=self.width *0.8, justify="center")
         self.info_icon.grid(row=0, column=0, columnspan=1, sticky="nes")
         self.info_text.grid(row=0, column=1, columnspan=2, sticky="nwes")
         
@@ -191,7 +191,7 @@ class CTkMessagebox(customtkinter.CTkToplevel):
         self.button_1 = customtkinter.CTkButton(self.frame_bottom, text=self.option_text_1, fg_color=self.button_color,
                                                 width=self.button_width, height=25, font=self.font, text_color=self.bt_text_color,
                                                 command=lambda: self.button_event(self.option_text_1))
-        self.button_1.grid(row=0, column=1, sticky="e", padx=(0,10), pady=10)
+        self.button_1.grid(row=0, column=1, sticky="e", padx=(30,10), pady=10)
 
         if option_2:
             self.option_text_2 = option_2      

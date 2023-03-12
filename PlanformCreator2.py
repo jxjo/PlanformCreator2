@@ -7,14 +7,14 @@
 
 """
 import os
-from tkinter import filedialog, Frame
-import customtkinter as ctk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
 
 from model.wing_model   import Planform, Planform_Elliptical, Planform_Elliptical_StraightTE, \
                                Planform_DXF, Planform_Trapezoidal, Except_Planform_DXF_notValid
                                
+from tkinter import filedialog, Frame
+import customtkinter as ctk
 from ui_base.widgets            import * 
 from ui_base.wing_artist        import *
 from ui_base.CTkMessagebox.ctkmessagebox   import CTkMessagebox
@@ -928,6 +928,7 @@ class Diagram_Planform (Diagram_Abstract):
         ctk_root.bind(CHORD_CHANGED,            self.changed_chord, add='+')
         ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
         ctk_root.bind(SECTION_CHANGED,          self.changed_sections, add='+')
+        ctk_root.bind(AIRFOIL_CHANGED,          self.changed_airfoil, add='+')
         ctk_root.bind(CURRENT_SECTION_CHANGED,  self.changed_currentSection, add='+')
 
     def wing_new (self, dummy): 
@@ -950,6 +951,10 @@ class Diagram_Planform (Diagram_Abstract):
     def changed_planform (self, dummy): 
         """ Eventhandler for changes of planform"""
         self.refresh()
+        self.refresh_sections() 
+
+    def changed_airfoil (self, dummy): 
+        """ Eventhandler for changes of planform"""
         self.refresh_sections() 
 
     def changed_sections (self, dummy): 
@@ -1495,20 +1500,31 @@ class Dialog_Load_DXF (Dialog_Abstract):
 #-------------------------------------------
 
 
-class Dialog_Export_Xflr5 (Dialog_Abstract):
+class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
     """ 
-    Export planform as paneled for Xlfr5 oder FLZ 
+    Export planform as paneled for Xflr5 oder FLZ 
 
     """
     width  = 1000
     height = 470
-    titleText  = "Export ..."
+    titleText  = "Export to ..."
 
-    def __init__(self, master, *args, wingFn = None,  **kwargs):
+    def __init__(self, master, wingFn, Xflr5=False, Flz=False, workingDir=None, *args, **kwargs):
         super().__init__(master, *args, height=self.height/2, **kwargs)
 
         self.wing : Wing = wingFn()
-        self.paneledPlanform = self.wing.paneledPlanform
+        self.workingDir = workingDir
+
+        if Xflr5:
+            self.exporter = self.wing.xflr5Exporter
+            self.mode = "Xflr5"
+        elif Flz:
+            self.exporter = self.wing.flzExporter
+            self.mode = "FLZ_vortex"
+        else:
+            return  
+        self.exporter.set_baseDir (self.workingDir)
+        self.paneledPlanform = self.exporter.paneledPlanform
 
         # main grid 3 x 1  (preview + edit + buttons) 
 
@@ -1527,13 +1543,14 @@ class Dialog_Export_Xflr5 (Dialog_Abstract):
 
         # artists for preview
         self.diagram_axes = self.diagram_frame.axes
-        self.panelArtist    = PaneledPlanform_Artist (self.diagram_frame.axes, wingFn, show=True)
+        self.panelArtist    = PaneledPlanform_Artist (self.diagram_frame.axes, 
+                                wingFn, self.paneledPlanform, show=True)
         self.panelArtist.refresh(figureUpdate=True)
 
         # header with hints 
         r = 0 
         c = 0 
-        Header_Widget (self.input_frame,r,c, lab="Xflr5 Export", width=110, pady=(7,20), columnspan=2)
+        Header_Widget (self.input_frame,r,c, lab= self.mode+" export", width=110, pady=(7,20), columnspan=2)
         hint = self.check_y_deviation() 
         if hint: 
             self.add (Label_Widget  (self.input_frame,r,c+2, lab=hint, sticky="w", 
@@ -1567,18 +1584,25 @@ class Dialog_Export_Xflr5 (Dialog_Abstract):
         self.input_frame.grid_columnconfigure (6, weight=1)
         self.input_frame.grid_columnconfigure (10, weight=2)
 
-        self.add(Field_Widget  (self.input_frame,r,c, lab="Xflr5 directory", obj=self.wing, get='xflr5Dir', set='',
+        self.add(Field_Widget  (self.input_frame,r,c, lab=self.mode+ " directory", obj=self.exporter, get='baseAndExportDir', set='',
                                 width=180, disable=True))
         self.add(Button_Widget (self.input_frame,r,c+2, lab='Select', width=60, sticky='w', set=self.select_dir ))
-        self.add(Switch_Widget (self.input_frame,r+1,c, lab='Use airfoil nick names for Xflr5 airfoils', 
+        self.add(Switch_Widget (self.input_frame,r+1,c, lab='Use airfoil nick names for airfoils', 
                                 columnspan=2, padx=0, 
-                                obj=self.wing, get='xflr5UseNick', set='set_xflr5UseNick'))
+                                obj=self.exporter, get='useNick', set='set_useNick'))
  
 
-        self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok, primary=True, width=100))
-        self.add(Button_Widget (self.button_frame,0,2, lab='Cancel', set=self.cancel, width=100))
+        r = 0 
+        c = 1 
+        self.add(Button_Widget (self.button_frame,r,c, lab='Export', set=self.ok, primary=True, width=100))
+        if Flz: 
+            c += 1 
+            self.add(Button_Widget (self.button_frame,r,c, lab='Launch FLZ', set=self.launch_Flz, width=100,
+                                    disable=self.launch_Flz_disabled))
+        c += 1 
+        self.add(Button_Widget (self.button_frame,r,c, lab='Cancel', set=self.cancel, width=100))
         self.button_frame.grid_columnconfigure (0, weight=1)
-        self.button_frame.grid_columnconfigure (3, weight=1)
+        self.button_frame.grid_columnconfigure (4, weight=1)
 
         # changed bindings
         ctk_root.bind(PANELS_CHANGED, self.refresh, add='+')
@@ -1586,13 +1610,13 @@ class Dialog_Export_Xflr5 (Dialog_Abstract):
     def select_dir(self):
         " open dialog for directory selection"
 
-        initialDir = os.path.normpath (self.wing.xflr5Dir)
+        initialDir = os.path.normpath (os.path.join (self.workingDir, self.exporter.exportDir))
         newDir = filedialog.askdirectory(
-                    title='Select directory for Xlfr5 export',
+                    title='Select directory for export',
                     initialdir=initialDir)
         if newDir:
             # store only relativ path 
-            self.wing.set_xflr5Dir (newDir)
+            self.exporter.set_exportDir (os.path.relpath(newDir, start = self.workingDir))
             super().refresh()
 
     def check_y_deviation (self): 
@@ -1606,7 +1630,7 @@ class Dialog_Export_Xflr5 (Dialog_Abstract):
         _, _, deviations = self.paneledPlanform.y_panel_lines()
         if max(deviations) > threshold:
             hint = "The deviation to the actual chord at the highlighted y-stations is more than %d%%.\n" % threshold + \
-                   "Maybe you want to add sections to improve Xlfr5 results of the wing analysis?"
+                   "Maybe you want to add sections to improve quality of the wing analysis?"
         else: 
             hint = None   
         return hint
@@ -1620,11 +1644,34 @@ class Dialog_Export_Xflr5 (Dialog_Abstract):
         ctk_root.unbind(PANELS_CHANGED)
         super().cancel()
 
+    def launch_Flz(self): 
+        """try to open FLZ_vortex on the exportet file"""
+        
+        pathFileName = os.path.join (self.exporter.baseAndExportDir, self.exporter.fileName) 
+        message = self.exporter.doIt()
+        try: 
+            os.startfile(pathFileName, 'open')
+        except: 
+            message = "Could not launch FLZ_vortex on exported file: \n\n" + \
+                    pathFileName + \
+                    "\n\n Is FLZ_vortex neatly installed and associated with file extension '.flz'?"
+            CTkMessagebox (title="Launch FLZ_vortex", message=message, icon="cancel", option_1="Ok")
+
+
+    def launch_Flz_disabled (self):
+        """ FLZ only on Windows"""
+
+        return not os.name == 'nt'
+
     def ok(self): 
-        # release changed bindings
+
+        # release changed bindings and close
         ctk_root.unbind(PANELS_CHANGED)
         super().ok()
 
+        # do the export 
+        message = self.exporter.doIt()
+        CTkMessagebox (title=self.mode + " export", message=message, icon="check", option_1="Ok")
 
 
 
@@ -1772,12 +1819,13 @@ class Edit_File_Menu(Edit_Abstract):
         self.option_import.refresh()
         if aType == "Dxf as reference":  self.myApp.load_reference_dxf() 
 
-    def exportChoices (self):       return ["to Xflr5", "to DXF", "(to FLZ_vortex)", "(Airfoils)"]
+    def exportChoices (self):       return ["to Xflr5", "to DXF", "to FLZ_vortex", "(Airfoils)"]
     def exportDisplayValue (self):  return "Export..."
     def set_exportType (self, aType):
         self.option_export.refresh()
-        if aType == "to Xflr5":  self.myApp.export_xflr5 ()
-        if aType == "to DXF":  self.myApp.export_dxf ()
+        if aType == "to Xflr5":         self.myApp.export_xflr5 ()
+        if aType == "to FLZ_vortex":    self.myApp.export_flz ()
+        if aType == "to DXF":           self.myApp.export_dxf ()
         if aType == "to FLZ_vortex":  pass
         if aType == "Airfoils":  pass
 
@@ -1856,6 +1904,12 @@ class App(ctk.CTk):
         else: 
             return "."                                  # currentDir 
 
+    @property
+    def workingDir (self): 
+        """default home directory for output files (e.g. export)
+        Currently equals paramDir """
+        return self.paramDir        
+
     #------- file functions ----------------
 
     def new (self):
@@ -1932,14 +1986,12 @@ class App(ctk.CTk):
 
     def export_xflr5 (self): 
         """ export wing to xflr5"""
+        self.wait_window (Dialog_Export_Xflr5_Flz (self, self.wing, Xflr5=True, workingDir=self.workingDir))
 
-        export_dialog = Dialog_Export_Xflr5 (self, wingFn = self.wing) 
-        self.wait_window (export_dialog)
 
-        if export_dialog.return_OK:
-
-            message = self.wing().export_toXflr5 ()
-            CTkMessagebox (title="Xflr5 export", message=message, icon="check", option_1="Ok")
+    def export_flz (self): 
+        """ export wing to xflr5"""
+        self.wait_window (Dialog_Export_Xflr5_Flz (self, self.wing, Flz=True, workingDir=self.workingDir))
 
 
     def export_dxf (self):

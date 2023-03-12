@@ -474,12 +474,17 @@ class PaneledPlanform_Artist (Planform_Artist):
     """
     color = cl_paneled 
 
+    def __init__ (self, axes, dataModel, paneledPlanform, **kwargs):
+        super().__init__ (axes, dataModel, **kwargs)
+
+        self._paneledPlanform = paneledPlanform
+
     @property
     def planform (self) -> Planform :
         return self.model.planform
     @property
     def paneledPlanform (self) -> Planform_Paneled :
-        return self.model.paneledPlanform
+        return self._paneledPlanform
     @property
     def wingSections (self): 
         return self.model.wingSections
