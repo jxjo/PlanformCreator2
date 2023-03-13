@@ -96,9 +96,6 @@ class Wing:
 
         InfoMsg (str(self)  + ' created...')
 
-        # not in use
-        # self.dihedral         = fromDict (dataDict, "dihedral", 3, False)
-
 
     def __repr__(self) -> str:
         # overwrite to get a nice print string 
@@ -161,6 +158,7 @@ class Wing:
         self.refPlanform_DXF._save (dataDict)
 
         toDict (dataDict, "xflr5",              self.xflr5Exporter._save()) 
+        toDict (dataDict, "flz",                self.flzExporter._save()) 
 
         return dataDict
 
@@ -331,18 +329,27 @@ class Wing:
             ErrorMsg("Failed to open file %s" % pathFileName)
             return -1
 
-        dataDict = self._save()
+        currentDict = self._save()
 
         # save parameter dictionary to .json-file
         try:
-            json.dump(dataDict, paramFile, indent=2, separators=(',', ':'))
+            json.dump(currentDict, paramFile, indent=2, separators=(',', ':'))
             paramFile.close()
+            InfoMsg ("Parameters saved to '%s'" % pathFileName)
+            # store the actual dict to allow changed detection 
+            self.dataDict = currentDict
+
         except ValueError as e:
             ErrorMsg('invalid json: %s' % e)
             ErrorMsg('Error, failed to save data to file %s' % pathFileName)
             paramFile.close()
             return -1
         return 0
+
+    def hasChanged (self):
+        """returns true if the parameters has been changed since last save() of parameters"""
+
+        return self._save() != self.dataDict
 
 
     def createSectionsOn (self, sectionsDict): 

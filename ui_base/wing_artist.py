@@ -196,7 +196,7 @@ class Base_Artist():
     def _showUserTip (self):
 
         if self.userTip: 
-            p = self.ax.text(0.5, 0.05, self.userTip , color=cl_userHint, 
+            p = self.ax.text(0.5, 0.06, self.userTip , color=cl_userHint, 
                             horizontalalignment='center', transform=self.ax.transAxes)
             self._add(p)
  
@@ -339,9 +339,9 @@ class Planform_Artist (Base_Artist):
         text += "Wing area %.1f dm²\n" % (area / 10000)
         text += "Aspect ratio %.1f\n" % (aspectRatio)
 
-        p = self.ax.text (0.90, 0.96, text, color=cl_labelGrid, # fontsize = 'small',
+        p = self.ax.text (0.91, 0.05, text, color=cl_labelGrid, # fontsize = 'small',
                           transform=self.ax.transAxes, 
-                          horizontalalignment='left', verticalalignment='top')
+                          horizontalalignment='left', verticalalignment='bottom')
         self._add (p)   
        
 
@@ -619,6 +619,7 @@ class Sections_Artist (Base_Artist):
         for section in self.wingSections:
             if self._norm: 
                 y, le_to_te = section.norm_line()
+                le_to_te [1] =  0.08
             else:
                 y, le_to_te = section.line()
 
@@ -651,24 +652,47 @@ class Sections_Artist (Base_Artist):
 
         sectionFix = section.hasFixedPosition()
 
-        # section chord
+        # section chord - print along chord
         if self._norm:
-            if section.isRoot: return               # no norm_chord for root
-            color = cl_wingSection_fix
+            # if section.isRoot: return               # no norm_chord for root
             text = "%.2f" % (section.norm_chord)
             marker_x = (le_to_te[0] + le_to_te[1]) * 0.6
             marker_y = y[0] + 0.007
         else: 
-            color = cl_wingSection_fix
             text = "%.0fmm" % section.chord
             marker_x = le_to_te[1] - (le_to_te[1] - le_to_te[0]) * 0.6
             marker_y = y[0] + 6
 
+        if not sectionFix:                          # fixed chord 
+            text = "fix\n" + text 
+
+        color = cl_wingSection_fix
+
         p = self.ax.text (marker_y, marker_x, text, ha='left',color = color )
         self._add (p)   
 
-        # + section name above le
+        # section pos at bottom  
+        if not section.isRootOrTip: 
+            if self._norm:
+                marker_y = -0.05                            # in axis coordinates
+                text = "%.2f" % (section.norm_yPos)
+                if sectionFix:                                  # fixed position 
+                    text = "fix\n\n" + text 
+            else: 
+                marker_y = 0.02                             # in axis coordinates
+                text = "%.0fmm" % section.yPos
+                if sectionFix:                                  # fixed position 
+                    text = "fix\n" + text 
 
+            color = cl_wingSection_fix
+            marker_x = y[0]                                 # in data coordinates
+
+            p = self.ax.text (marker_x, marker_y, text, color=color, # fontsize = 'small',
+                            transform=self.ax.get_xaxis_transform(), 
+                            horizontalalignment='center', verticalalignment='bottom')
+            self._add (p)   
+
+        # section name above le
         marker_top_y = y[0] 
         if self._norm:
             offset = - 0.03
@@ -687,7 +711,6 @@ class Sections_Artist (Base_Artist):
         p = self.ax.text (marker_top_y, marker_top_x, "%s" % label, ha='center', va='bottom',
                           color = cl_wingSection_fix, fontsize = 'x-large' )
         self._add (p)   
-
 
 
 
@@ -916,12 +939,12 @@ class AirfoilName_Artist (Base_Artist):
     def plot_markers (self, y, le_to_te, section: WingSection): 
         # print airfoil name and nickname below the planform 
 
-        marker_y = 0.02                         # in axis coordinates
+        marker_y = 0.97                         # in axis coordinates
         marker_x = y[0]                         # in data coordinates
         text = "'"+ section.airfoilNick() + "'" + "\n" + section.airfoilName()
 
         color = next(self.ax._get_lines.prop_cycler)['color']
         p = self.ax.text (marker_x, marker_y, text, color=color, # fontsize = 'small',
                           transform=self.ax.get_xaxis_transform(), 
-                          horizontalalignment='center', verticalalignment='bottom')
+                          horizontalalignment='center', verticalalignment='top')
         self._add (p)   

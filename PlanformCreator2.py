@@ -1,9 +1,34 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """
+    The Planform Creator 2 App 
 
-                The Planform Creator App 
+    Object model overview (a little simplified) 
+
+    App                                         - root frame 
+        |-- Edit_File_Menu                      - file level functions
+                |-- Dialog_Export_Xflr5_Flz     - handle export to Xflr5 and FLZ_vortex 
+                |-- Dialog_Export_Dxf           - handle export to DXF file 
+                |-- Dialog_Load_DXF             - import DXF as reference or a main planform  
+        |-- Edit                                - parent frame for  edit sub frames 
+                |-- Edit_Wing                   - main wing data 
+                |-- Edit_Wing_Planform          - parameters for a specific planform type 
+                |-- Edit_WingSection            - select and edit a single wing section 
+                        :
+                        |-- Widgets             - wrapper for CTk widgets - get, set their data 
+                        |-- Field_Widget        - entry field with label and spin buttons
+                        |-- Header_Widget       - a page header  
+                        ...                     - ...
+
+        |-- Diagramms                           - the master to select one of the diagrams
+                |-- Diagram_Planform            - the planform (outline) of a half wing 
+                |-- ChordDistribution           - normalized chord distribution of the wing
+                |-- Airfoils                    - the airfoils at the wing sections 
+                        :
+                        |-- Artists             - helper to plot a wing object on a matplotlib axes
+                        |-- PlanformArtist      - plots the planform 
+                        |-- SectionArtist       - plots the wing sections 
+                        ...                     - ...
 
 """
 import os
@@ -22,13 +47,12 @@ from ui_base.CTkMessagebox.ctkmessagebox   import CTkMessagebox
 
 #------------------------------------------------
 
-cl_background       = '#101010'                 # background color in diagrams
-
+cl_background               = '#101010'                     # background color in diagrams
 
 #   change events for updating mainly plots
 
-WING_NEW                    = "<<WING_NEW>>"             #tk event types
-WING_CHANGED                = "<<WING_CHANGED>>"             #tk event types
+WING_NEW                    = "<<WING_NEW>>"                #tk event types
+WING_CHANGED                = "<<WING_CHANGED>>"             
 CHORD_CHANGED               = "<<CHORD_CHANGED>>"             
 PLANFORM_CHANGED            = "<<PLANFORM_CHANGED>>"
 SECTION_CHANGED             = "<<SECTION_CHANGED>>"
@@ -37,13 +61,14 @@ DIAGRAMM_SECTION_SELECTED   = "<<DIAGRAMM_SECTION_SELECTED>>"
 AIRFOIL_CHANGED             = "<<AIRFOIL_CHANGED>>"
 PANELS_CHANGED              = "<<PANELS_CHANGED>>"
 
-
-ctk_root : ctk.CTk = None
+ctk_root : ctk.CTk = None                                   # root event handler
 
 def fireEvent(eventType): 
     print ("- fire event from root", eventType)
     if ctk_root: ctk_root.event_generate (eventType) 
 
+
+#------------------------------------------------
 
 
 class Edit(ctk.CTkFrame):
@@ -1819,7 +1844,7 @@ class Edit_File_Menu(Edit_Abstract):
         self.option_import.refresh()
         if aType == "Dxf as reference":  self.myApp.load_reference_dxf() 
 
-    def exportChoices (self):       return ["to Xflr5", "to DXF", "to FLZ_vortex", "(Airfoils)"]
+    def exportChoices (self):       return ["to Xflr5","to FLZ_vortex", "to DXF", "(Airfoils)"]
     def exportDisplayValue (self):  return "Export..."
     def set_exportType (self, aType):
         self.option_export.refresh()
@@ -1842,6 +1867,10 @@ class App(ctk.CTk):
 
         global ctk_root                                 # being event handler
 
+        self.name = "Planform Creator 2"
+        self.version = "0.5"
+
+
         # create the 'wing' model 
         self.paramFile = '' 
         self.loadNewWing (paramFile)
@@ -1854,12 +1883,16 @@ class App(ctk.CTk):
         # maximize the window using state property
         # self.state('zoomed')
 
+
         # register events which will be fired when editing the planform to update views
         ctk_root = self
         Base_Widget.ctk_root = self
         self.event_add(CHORD_CHANGED,'None')
         self.event_add(PLANFORM_CHANGED,'None')
         self._curWingSectionName = None                 # Dispatcher field between Diagramm and Edit
+
+        # intercept app close by user  
+        self.protocol("WM_DELETE_WINDOW", self.onExit)
 
         # create main frames        
         diagram_frame = Diagrams        (self, self.wing, fg_color= cl_background)
@@ -1873,6 +1906,7 @@ class App(ctk.CTk):
         diagram_frame.grid (row=0, column=0, columnspan=2, pady=0, padx=0, sticky="news")
         file_frame.grid    (row=1, column=0,               pady=(0,5), padx=(5,3), ipady=5,sticky="news")
         edit_frame.grid    (row=1, column=1,               pady=(0,5), padx=(2,5), sticky="nesw")
+
 
 
     def wing (self) -> Wing:
@@ -1978,10 +2012,10 @@ class App(ctk.CTk):
 
         # set window title
         if pathFilename:
-            title = pathFilename
+            project = pathFilename
         else:
-            title = "< new >"
-        self.title("Planform Creator [" + title + "]")
+            project = "< new >"
+        self.title(self.name + " [" + project + "]")
 
 
     def export_xflr5 (self): 
@@ -2021,6 +2055,27 @@ class App(ctk.CTk):
             else:                                       # remove dxf reference file - extra code to make it clear
                 self.wing().refPlanform_DXF.set_dxfPathFilename (None) 
                 fireEvent(PLANFORM_CHANGED)
+
+    def onExit(self): 
+        """ interception of user closing the app - check for changes made"""
+
+        if self.wing().hasChanged(): 
+
+            message = "There are unsaved changes.\n\n" + \
+                       "Do you want to save before exit?"
+            mb = CTkMessagebox (title="Close "+ self.name, message=message, icon="question", 
+                           option_1="Yes", option_2="No", option_3="Cancel")
+            response = mb.get()
+
+            if response == "Yes":
+                self.save()
+                self.destroy()
+            elif response == "No":
+                self.destroy() 
+            else:
+                pass
+        else:
+            self.destroy()
 
 
 #--------------------------------
