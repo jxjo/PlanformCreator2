@@ -1,10 +1,22 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """  
 
-Wing model with planform, wing sections, airfoils 
+    Wing model with planform, wing sections, airfoils 
 
+    Wing                                - main class of data model 
+        |-- WingSection                 - the various stations defined by user 
+                |-- Airfoil             - the airfoil at a section
+        |-- Planform                    - describes geometry, outline of the wing  
+        |     (ellipsoid, trapezoid, straightTE, DXF)
+        |-- Flap                        - the outline of a flap - dynamically created based on flap group
+        |
+        |-- refPlanform                 - a ellipsoid reference planform 
+        |-- refPlanform_DXF             - a DXF based reference planform 
+        |-- xflr5Exporter               - handles export to Xflr5
+                |--Planform_Paneled     - Planform which is paneled in x,y direction 
+        |-- flzExporter                 - handles export to FLZ_vortex
+                |--Planform_Paneled     - Planform which is paneled in x,y direction 
 """
 
 import os
@@ -26,17 +38,11 @@ class Except_Planform_DXF_notValid (Exception):
     pass
 
 
-
-#-------------------------------------------------------------------------------
-# wing  - the root class
-#-------------------------------------------------------------------------------
 class Wing:
     """ 
-    Wing                            - main class of data model 
-        |-- WingSection             - the various stations defined by user 
-                |-- Airfoil         - the airfoil at an section
-        |-- Planform                - describes geometry, outline of the wing  
-        |-- Flap                    - the outline of a flap - dynamically created based on flap group
+
+    Main object - holds the model 
+
     """
 
     unit = 'mm'
@@ -44,9 +50,8 @@ class Wing:
     def __init__(self, dataDict):
         """
         Args:
-            :dataDict: dictonary having all data nedded for a complete wing definition  
+            :dataDict: dictonary having the parameters nededed for a complete wing definition  
         """
-
 
         InfoMsg("Starting wing model ...")
 
@@ -55,7 +60,6 @@ class Wing:
             wingExists = False
         else: 
             wingExists = True
-
 
         self.dataDict = dataDict
 
@@ -105,9 +109,9 @@ class Wing:
     @classmethod
     def onFile(cls, paramFilePath):
         """
-        Alternate constructor for new wing based on a file  
+        Alternate constructor for new wing based on a file - returns the dataDicionary with paramters
         Args:
-            :aFilePath: string of parameter file path
+            :paramFilePath: string of parameter file path
         """
         dataDict = None
         if (len(paramFilePath)):
@@ -174,6 +178,7 @@ class Wing:
     
     @planform.setter 
     def planform (self, newPlanform: 'Planform'): 
+        """ assign new planform to wing"""
 
         # special treatment for dxf because it could be invalid 
         if newPlanform.is_dxf and not newPlanform.isValid:
@@ -202,7 +207,7 @@ class Wing:
     def planformType(self): return self.planform.planformType
     def set_planformType(self, newPlanformType):
         """
-        set planformType - create a new planform object for this wing
+        set planformType - will create a new planform object for this wing
         """
         if (self.planformType != newPlanformType):
 
@@ -1846,7 +1851,7 @@ class Planform_DXF(Planform):
     def load_dxf (self, dxf_file):
         """ parse and load a dxf planform from file"""
 
-        from .dxf_utils import import_fromDXF
+        from dxf_utils import import_fromDXF
 
         infoText = []
         self.le_norm_dxf, self.te_norm_dxf, self.hingeLine_norm_dxf, self.hingeAngle_dxf = \
@@ -2411,7 +2416,7 @@ if __name__ == "__main__":
     ax.legend()
     plt.show()
 
-    print  (myWing.planform.flapPolygon (0,500, nPoints=4) )
+    # print  (myWing.planform.flapPolygon (0,500, nPoints=4) )
 
 """     for i in range(5):
         if myWing.planformType == "elliptical": 

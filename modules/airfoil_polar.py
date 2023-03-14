@@ -8,10 +8,10 @@
 """
 
 import os
-from common_utils import * 
 import numpy as np
 
-from worker import XfoilWorker
+from common_utils import * 
+from worker_driver import XfoilWorker
 
 
 class Airfoil:
@@ -316,8 +316,9 @@ class Strak_Airfoil (Airfoil):
     def do_strak (self,myChord, leftAir : Airfoil, leftChord, rightAir:Airfoil, rightChord ):
         """ straks (blends) self out of two airfoils to the left and right.
         depending on its chordlength compared to the real neighbours."""
+        import shutil
 
-        tmpDir = "tmp"
+        tmpDir = "~tmp"
         blendBy  = (myChord - leftChord) / (rightChord - leftChord)
 
         leftPathFile  = leftAir.copyAs  (dir=tmpDir)
@@ -334,6 +335,8 @@ class Strak_Airfoil (Airfoil):
             self.sourceName = os.path.splitext(os.path.basename(newPathFile))[0]
         else: 
             ErrorMsg ("'xfoil_worker' couldn't be executed.")
+
+        shutil.rmtree(tmpDir)
 
         return
 
@@ -583,7 +586,7 @@ class polar:
 
 if __name__ == "__main__":
 
-    from worker import XfoilWorker
+    from worker_driver import XfoilWorker
     from airfoil_examples import Root_Example
     import matplotlib.pyplot as plt
 

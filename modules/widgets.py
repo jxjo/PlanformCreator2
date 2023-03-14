@@ -6,8 +6,10 @@
 Additional generic (compound) widgets based on original CTK widgets
 
 """
+import os
 import customtkinter as ctk
 import tkinter as tk
+from PIL import Image
 from typing import Union, Callable
 
 # some additional color definitions 
@@ -286,6 +288,132 @@ class Base_Widget2():
         else:
             s = '???'
         return s
+
+
+
+class Messagebox(ctk.CTkToplevel):
+
+    
+    def __init__(self, master, 
+                 width: int = 400,
+                 height: int = 200,
+                 title: str = "Messagebox",
+                 message: str = "This is a Messagebox!",
+                 option_1: str = "Ok",
+                 option_2: str = None,
+                 option_3: str = None,
+                 border_width: int = 1,
+                 button_color: str = "default",
+                 button_width: int = None,
+                 icon: str = "info",
+                 font: tuple = None):
+        
+        import sys
+    
+        super().__init__(master)
+
+        self.master_window = master
+
+        self.width   = 250 if width<250 else width
+        self.height  = 150 if height<150 else  height
+        self.spawn_x = int(self.master_window.winfo_width() * .5 + self.master_window.winfo_x() - .5 * self.width + 7)
+        self.spawn_y = int(self.master_window.winfo_height() * .5 + self.master_window.winfo_y() - .5 * self.height + 20)
+        self.geometry(f"{self.width}x{self.height}+{self.spawn_x}+{self.spawn_y}")
+
+        self.title(title)
+        self.protocol("WM_DELETE_WINDOW", self.button_event)
+        self.resizable(width=False, height=False)
+        self.transient(master)
+
+        self.focus_force()
+        self.grab_set()
+        self.after(10)
+
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)   
+        self.x = self.winfo_x()
+        self.y = self.winfo_y()
+        self._title = title
+        self.message = message
+        self.font = font
+        self.button_width = button_width if button_width else 80 
+        self.border_width = border_width if border_width<6 else 5
+        
+
+        if button_color=="default":
+            self.button_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
+            # jxjo second and third button in a darker color 
+            self.button2_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"])
+        else:
+            self.button_color = button_color
+            self.button2_color = self.button_color
+            
+        
+        if icon in ["check", "cancel", "info", "question", "warning"]:
+            self.icon = ctk.CTkImage(Image.open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon+'.png')),
+                                               size=(25, 25))
+        else:
+            self.icon = ctk.CTkImage(Image.open(icon), size=(25, 25)) if icon else None
+
+        # ---------------
+
+        self.bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        self.fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+
+        self.frame_middle = ctk.CTkFrame(self, bg_color=self.bg_color, fg_color=self.fg_color)
+        self.frame_middle.grid(row=0, column=0, columnspan=3, sticky="nwes", padx=(0,0), pady=(0,0))
+        self.frame_middle.grid_rowconfigure   (0, weight=1)
+        self.frame_middle.grid_columnconfigure(0, weight=1)
+        self.frame_middle.grid_columnconfigure(1, weight=6)
+        self.frame_middle.grid_columnconfigure(2, weight=1)
+
+        self.message_icon = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=None, font=self.font,
+                                            fg_color="transparent", hover=False,  image=self.icon)
+        self.message_text = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=self.message, font=self.font,
+                                            fg_color="transparent", hover=False,  image=None)
+        self.message_text._text_label.configure(wraplength=self.width *0.8, justify="center")
+        self.message_icon.grid(row=0, column=0, columnspan=1, sticky="nes")
+        self.message_text.grid(row=0, column=1, columnspan=2, sticky="nwes")
+        
+
+        # ---------------
+        self.frame_bottom = ctk.CTkFrame(self, fg_color="transparent")
+        self.frame_bottom.grid(row=1, column=0, columnspan=3, sticky="nwes", padx=(0,0))
+        self.frame_bottom.grid_columnconfigure((0,4), weight=1)
+
+        self.option_text_1 = option_1
+        self.button_1 = ctk.CTkButton(self.frame_bottom, text=self.option_text_1, fg_color=self.button_color,
+                                                width=self.button_width, height=25, font=self.font, 
+                                                command=lambda: self.button_event(self.option_text_1))
+        self.button_1.grid(row=0, column=1, sticky="e", padx=(30,10), pady=10)
+
+        if option_2:
+            self.option_text_2 = option_2      
+            self.button_2 = ctk.CTkButton(self.frame_bottom, text=self.option_text_2, fg_color=self.button2_color,
+                                                    width=self.button_width, height=25, font=self.font, 
+                                                    command=lambda: self.button_event(self.option_text_2))
+            self.button_2.grid(row=0, column=2, sticky="e", padx=10, pady=10)
+            
+        if option_3:
+            self.option_text_3 = option_3
+            self.button_3 = ctk.CTkButton(self.frame_bottom, text=self.option_text_3, fg_color=self.button2_color,
+                                                    width=self.button_width, height=25, font=self.font, 
+                                                    command=lambda: self.button_event(self.option_text_3))
+            self.button_3.grid(row=0, column=3, sticky="e", padx=(10,0), pady=10)
+        
+
+            
+    def get(self):
+        self.master.wait_window(self)
+        return self.event
+                    
+    def button_event(self, event=None):
+        self.grab_release()
+        self.destroy()
+        self.event = event
+
+
 
 
 class Base_Widget():
@@ -1075,7 +1203,7 @@ class Combo_Widget(Base_Widget):
 #=========================================================
 #========     Test App    ================================
 
-class ModelObject (): 
+class TestModelObject (): 
     def __init__(self):
         self._aString = 'Hello jo'
         self._aInt    = 654321
@@ -1153,14 +1281,14 @@ class TestApp(ctk.CTk):
         #self.grid_rowconfigure   (1, weight=1)
         #self.grid_rowconfigure   (1, weight=1)
 
-        mo = ModelObject()
+        mo = TestModelObject()
         self.localBool = True
         self.localFloat = 0
         self.mymo = mo
 
-        mo1 = ModelObject()
+        mo1 = TestModelObject()
         mo1.set_aString ("des erschte")
-        mo2 = ModelObject()
+        mo2 = TestModelObject()
         mo2.set_aString ("des zwoite")
 
         self.mos = [mo1,mo2]

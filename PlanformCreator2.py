@@ -35,14 +35,17 @@ import os
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
 
-from model.wing_model   import Planform, Planform_Elliptical, Planform_Elliptical_StraightTE, \
-                               Planform_DXF, Planform_Trapezoidal, Except_Planform_DXF_notValid
-                               
+
 from tkinter import filedialog, Frame
 import customtkinter as ctk
-from ui_base.widgets            import * 
-from ui_base.wing_artist        import *
-from ui_base.CTkMessagebox.ctkmessagebox   import CTkMessagebox
+import sys
+# let python find the other modules if they are launched in this directory (for testing) 
+sys.path.append('./modules')
+from modules.common_utils       import * 
+from modules.wing_model       import Planform, Planform_Elliptical, Planform_Elliptical_StraightTE, \
+                        Planform_DXF, Planform_Trapezoidal, Except_Planform_DXF_notValid                             
+from modules.widgets            import * 
+from modules.wing_artist        import *
 
 
 #------------------------------------------------
@@ -1632,6 +1635,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         # changed bindings
         ctk_root.bind(PANELS_CHANGED, self.refresh, add='+')
 
+
     def select_dir(self):
         " open dialog for directory selection"
 
@@ -1680,7 +1684,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
             message = "Could not launch FLZ_vortex on exported file: \n\n" + \
                     pathFileName + \
                     "\n\n Is FLZ_vortex neatly installed and associated with file extension '.flz'?"
-            CTkMessagebox (title="Launch FLZ_vortex", message=message, icon="cancel", option_1="Ok")
+            Messagebox (self, title="Launch FLZ_vortex", message=message, icon="cancel", option_1="Ok")
 
 
     def launch_Flz_disabled (self):
@@ -1690,14 +1694,13 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
 
     def ok(self): 
 
+        # do the export 
+        message = self.exporter.doIt()
+        msg = Messagebox (self, title=self.mode + " export", message=message, icon="check", option_1="Ok")
+        msg.get()                               # wait until pressed ok
         # release changed bindings and close
         ctk_root.unbind(PANELS_CHANGED)
         super().ok()
-
-        # do the export 
-        message = self.exporter.doIt()
-        CTkMessagebox (title=self.mode + " export", message=message, icon="check", option_1="Ok")
-
 
 
 class Dialog_Export_Dxf (Dialog_Abstract):
@@ -1950,11 +1953,11 @@ class App(ctk.CTk):
         """ reset - and start with example ddefinition"""
 
         text = "The current wing '%s' will be discarded." % self.wing().name
-        msg  = CTkMessagebox(title="Create new wing", message=text,
+        msg  = Messagebox(self, title="Create new wing", message=text,
                   icon="warning", option_2="Cancel", option_1="Ok")            
         if msg.get() == "Ok":
             self.loadNewWing ("")               # will create default winf
-        
+
 
     def open (self):
         """ open a new wing definition json and load it"""
@@ -1975,7 +1978,7 @@ class App(ctk.CTk):
         if self.paramFile:
             self.wing().save(self.paramFile)
             text = "Wing successfully saved ...    " 
-            CTkMessagebox(title="Save wing", message=text, icon="check", option_1="Ok", width=300, height=150)  
+            Messagebox(self, title="Save wing", message=text, icon="check", option_1="Ok", width=300, height=150)  
         else:
             self.saveAs ()
 
@@ -1993,10 +1996,10 @@ class App(ctk.CTk):
                 self.paramFile = os.path.normpath(newPathFilename)
                 self.title("Planform Creator 2  [" + self.paramFile + "]")
                 text = "Wing saved to \n\n'%s'" % newPathFilename
-                CTkMessagebox(title="Save wing", message=text, icon="check", option_1="Ok")  
+                Messagebox(self, title="Save wing", message=text, icon="check", option_1="Ok")  
             else: 
                 text = "Wing couldn't be saved to '%s'" % newPathFilename
-                CTkMessagebox(title="Save wing", message=text, icon="cancel", option_1="Ok")  
+                Messagebox(self, title="Save wing", message=text, icon="cancel", option_1="Ok")  
 
 
     def loadNewWing(self, pathFilename):
@@ -2017,7 +2020,6 @@ class App(ctk.CTk):
             project = "< new >"
         self.title(self.name + " [" + project + "]")
 
-
     def export_xflr5 (self): 
         """ export wing to xflr5"""
         self.wait_window (Dialog_Export_Xflr5_Flz (self, self.wing, Xflr5=True, workingDir=self.workingDir))
@@ -2037,7 +2039,7 @@ class App(ctk.CTk):
         if export_dialog.return_OK:
 
             message = self.wing().export_toDxf () 
-            CTkMessagebox (title="DXF export", message=message, icon="check", option_1="Ok")
+            Messagebox (self, title="DXF export", message=message, icon="check", option_1="Ok")
 
 
     def load_reference_dxf (self): 
@@ -2063,7 +2065,7 @@ class App(ctk.CTk):
 
             message = "There are unsaved changes.\n\n" + \
                        "Do you want to save before exit?"
-            mb = CTkMessagebox (title="Close "+ self.name, message=message, icon="question", 
+            mb = Messagebox (self, title="Close "+ self.name, message=message, icon="question", 
                            option_1="Yes", option_2="No", option_3="Cancel")
             response = mb.get()
 

@@ -11,8 +11,8 @@ import matplotlib.cm as cm
 import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
 
-from model.common_utils import *
-from model.wing_model import (Wing, Planform, WingSection, Planform_DXF, Flap, Airfoil, Planform_Paneled)
+from common_utils import *
+from wing_model import (Wing, Planform, WingSection, Planform_DXF, Flap, Airfoil, Planform_Paneled)
 
 
 cl_planform         = 'whitesmoke'
