@@ -19,6 +19,20 @@ class XfoilWorker:
     exePath = ''
     workerName = 'xfoil_worker'
 
+    _ckeckPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'xfoil_worker')
+    if os.path.isfile(os.path.join(_ckeckPath, workerName +'.exe')) : 
+        exePath = _ckeckPath 
+        print (" - Xfoil_worker found in: ", _ckeckPath)
+    else: 
+        # hack: when making an exe with Pyinstaller --onedir __file__ points to the root dir of PC2
+        #       ... append directory of xfoil_worker manually 
+        _ckeckPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'modules', 'xfoil_worker')
+        if os.path.isfile(os.path.join(_ckeckPath, workerName +'.exe')) : 
+            exePath = _ckeckPath 
+            print (" - Xfoil_worker found in: ", _ckeckPath)
+        else:
+            print (" - No Xfoil_worker found in: ", _ckeckPath, " - using OS PATH")
+
     #def __init__(self):
 
     def blendAirfoils(self, airfoilFileName, withAirfoilFileName, byPercent, blendedAirfoil=''):

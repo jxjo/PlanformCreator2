@@ -27,7 +27,7 @@ def_lab_width       = 95                          # ... for labels of enty field
 
 class AccessPath():
     """
-    Base class of an access path
+    Work in Progress! - Base class of an access path
 
     Returns:
             _description_
@@ -95,6 +95,9 @@ class AccessPath():
 
 
 class Base_Widget2():
+    #
+    # Work in Progress - new Implementation
+    #
     """Base class of all compound widget 
 
     Arguments:
@@ -292,6 +295,7 @@ class Base_Widget2():
 
 
 class Messagebox(ctk.CTkToplevel):
+    """ Message in different styles - inspired vom CTKMessagebox"""
 
     
     def __init__(self, master, 
@@ -305,7 +309,7 @@ class Messagebox(ctk.CTkToplevel):
                  border_width: int = 1,
                  button_color: str = "default",
                  button_width: int = None,
-                 icon: str = "info",
+                 icon: str = "info",             #  "check", "cancel", "info", "question", "warning"
                  font: tuple = None):
         
         import sys
@@ -348,8 +352,7 @@ class Messagebox(ctk.CTkToplevel):
         else:
             self.button_color = button_color
             self.button2_color = self.button_color
-            
-        
+                    
         if icon in ["check", "cancel", "info", "question", "warning"]:
             self.icon = ctk.CTkImage(Image.open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon+'.png')),
                                                size=(25, 25))

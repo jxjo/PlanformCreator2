@@ -23,8 +23,13 @@ import os
 import numpy as np
 from math import  sin
 import json
+import sys
+
+# let python find the other modules if they are launched in this directory (for testing) 
+sys.path.append('./modules')
 
 from common_utils       import *
+from worker_driver      import *
 from airfoil_polar      import Airfoil, Strak_Airfoil
 from airfoil_examples   import Root_Example, Tip_Example
 
@@ -36,6 +41,8 @@ print_disabled = False
 class Except_Planform_DXF_notValid (Exception):
     "Raised when an invalid Planform_DXF is assigned to the wing"
     pass
+
+
 
 
 class Wing:

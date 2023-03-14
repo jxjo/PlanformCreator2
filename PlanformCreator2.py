@@ -35,18 +35,19 @@ import os
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
 
-
 from tkinter import filedialog, Frame
 import customtkinter as ctk
-import sys
-# let python find the other modules if they are launched in this directory (for testing) 
-sys.path.append('./modules')
 from modules.common_utils       import * 
-from modules.wing_model       import Planform, Planform_Elliptical, Planform_Elliptical_StraightTE, \
-                        Planform_DXF, Planform_Trapezoidal, Except_Planform_DXF_notValid                             
+from modules.wing_model         import Planform, Planform_Elliptical, Planform_Elliptical_StraightTE, \
+                                       Planform_DXF, Planform_Trapezoidal, Except_Planform_DXF_notValid                             
 from modules.widgets            import * 
 from modules.wing_artist        import *
 
+
+#------------------------------------------------
+
+AppName    = "Planform Creator 2"
+AppVersion = "0.50"
 
 #------------------------------------------------
 
@@ -67,7 +68,7 @@ PANELS_CHANGED              = "<<PANELS_CHANGED>>"
 ctk_root : ctk.CTk = None                                   # root event handler
 
 def fireEvent(eventType): 
-    print ("- fire event from root", eventType)
+    # print ("- fire event from root", eventType)
     if ctk_root: ctk_root.event_generate (eventType) 
 
 
@@ -1865,14 +1866,12 @@ class Edit_File_Menu(Edit_Abstract):
 
 class App(ctk.CTk):
 
+    name = AppName  
+
     def __init__(self, paramFile):
         super().__init__(fg_color= cl_background)
 
         global ctk_root                                 # being event handler
-
-        self.name = "Planform Creator 2"
-        self.version = "0.5"
-
 
         # create the 'wing' model 
         self.paramFile = '' 
@@ -2018,7 +2017,7 @@ class App(ctk.CTk):
             project = pathFilename
         else:
             project = "< new >"
-        self.title(self.name + " [" + project + "]")
+        self.title (AppName + "  v" + str(AppVersion) + "  [" + project + "]")
 
     def export_xflr5 (self): 
         """ export wing to xflr5"""
@@ -2065,7 +2064,7 @@ class App(ctk.CTk):
 
             message = "There are unsaved changes.\n\n" + \
                        "Do you want to save before exit?"
-            mb = Messagebox (self, title="Close "+ self.name, message=message, icon="question", 
+            mb = Messagebox (self, title="Close "+ AppName, message=message, icon="warning", 
                            option_1="Yes", option_2="No", option_3="Cancel")
             response = mb.get()
 
