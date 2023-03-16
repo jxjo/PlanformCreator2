@@ -53,7 +53,6 @@ class Dxf_Artist:
 
     def plot_planform (self):
         
-        y : np.ndarray 
         y, le, te, = self.wing.planform.lines()
 
         # mirror the lines along span so that root-te will be at 0,0 

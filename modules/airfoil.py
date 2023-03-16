@@ -37,10 +37,8 @@ class Airfoil:
         self.name         = name if name is not None else ''
         self.sourceName = None                     # the long name out of the two blended airfoils (TSrakAirfoil)
 
-        if not self.isInterpolated:
-            self.x = []
-            self.y = []
-        self.polarSet = None
+        self._x   = None
+        self._y   = None
 
         if (pathFileName is not None): 
             if os.path.isabs (pathFileName):
@@ -55,7 +53,6 @@ class Airfoil:
                 self.name = os.path.splitext(os.path.basename(self.pathFileName))[0]
         elif (not name):
             self.name = "-- ? --"
-
 
 
     @classmethod
@@ -84,21 +81,35 @@ class Airfoil:
         return f"{type(self).__name__} {info}"
 
     @property
+    def x (self): return self._x
+        
+    @property
+    def y (self): return self._y
+        
+
+    @property
     def isExisting (self):
         return not self.pathFileName is None
     
     @property
     def isLoaded (self):
-        return self.x is not None and len(self.x) > 10
+        return self._x is not None and len(self._x) > 10
+    
+    @property
+    def isNormalized (self):
+        
+        if self._x is None: return False
+        if self._x[0] != 1.0 or self._x[-1] != 1.0: return False
+        if self._y[0] != - self._y[-1]: return False
+        ile = np.argmin (self._x)
+        if self._x[ile] != 0.0 or self._y[ile] != 0.0: return False
+        return True
 
     #-----------------------------------------------------------
 
     def set_name (self, newName):
         """
         Set der name of the airfoil 
-
-        Args:
-            :newName: String like 'JX-GT-15'
         Note: 
             This will not rename an existing airfoil (file). Use rename instead...
         """
@@ -133,15 +144,6 @@ class Airfoil:
         else:
             return None
 
-
-    def polars (self):
-        """
-        Get polars of this airfoil from the polarSet
-
-        Returns: 
-            :List: of polar instances 
-        """        
-        return self.polarSet.polars() 
         
 
     def load (self, fromPath = None):
@@ -176,8 +178,8 @@ class Airfoil:
                 splitline = line.strip().split(" ",1)
                 x.append (float(splitline[0].strip()))
                 y.append (float(splitline[1].strip()))
-        self.x = np.asarray (x)
-        self.y = np.asarray (y)
+        self._x = np.asarray (x)
+        self._y = np.asarray (y)
 
 
     def saveAs (self, dir = None, destName = None):
@@ -232,30 +234,20 @@ class Airfoil:
         """
 
         # currently le must be at 0,0 - te must be at 1,gap/2 (normalized airfoil) 
+        if not self.isNormalized: 
+            ErrorMsg ("Airfoil '%s' not normalized. Te gap can't be set." % self.name)
+            return self.x,self.y
+        
         x = np.copy (self.x) 
         y = np.copy (self.y) 
-
-        if x[0] != 1.0 or x[-1] != 1.0:
-            ErrorMsg ("Te gap can't be set. TE is not at x=1.0")
-            return x,y
-        
-        if y[0] != - y[-1]:
-            ErrorMsg ("Te gap can't be set. Mid of TE is not at y=0.0")
-            return x,y
-        
-        ile = np.argmin (x)
-        if x[ile] != 0.0 or y[ile] != 0.0:
-            ErrorMsg ("Te gap can't be set. LE is not at x=1.0")
-            return x,y
-
         xBlend = min( max( xBlend , 0.0 ) , 1.0 )
 
         gap = y[0] - y[-1]
         dgap = newGap - gap 
+        ile = np.argmin (x)
 
         # go over each point, changing the y-thickness appropriately
         for i in range(len(x)):
-
             # thickness factor tails off exponentially away from trailing edge
             if (xBlend == 0.0): 
                 tfac = 0.0
@@ -269,7 +261,6 @@ class Airfoil:
                 y[i] = y[i] + 0.5 * dgap * x[i] * tfac # * gap 
             else:
                 y[i] = y[i] - 0.5 * dgap * x[i] * tfac # * gap   
-
         return x,y 
 
 
@@ -330,6 +321,7 @@ class Airfoil_Interpolated (Airfoil):
             :pathFileName: optional - string of existinng airfoil path and name \n
             :name: optional - name of airfoil - no checks performed 
         """
+        super().__init__()
 
         self._x_upper = None
         self._y_upper = None
@@ -337,30 +329,25 @@ class Airfoil_Interpolated (Airfoil):
         self._y_lower = None
         self._y_upper_interp = None
         self._y_lower_interp = None
-        self._x_org   = None
-        self._y_org   = None
 
         if anAirfoil is not None: 
             if anAirfoil.isLoaded: 
-                self._x_org = np.asarray (anAirfoil.x)
-                self._y_org = np.asarray (anAirfoil.y) 
+                self._x = np.asarray (anAirfoil.x)
+                self._y = np.asarray (anAirfoil.y) 
                 self.pathFileName = anAirfoil.pathFileName
                 self.name         = anAirfoil.name + " -interpolated-"
             else: 
                 raise ValueError ("Airfoil "+ anAirfoil.name + "not loaded")
         elif pathFileName: 
-            super().__init__()
             self.load()
-            self._x_org = np.asarray (self.x)
-            self._y_org = np.asarray (self.y) 
         else:
             self.name = "<strak>"
             self.pathFileName = None
 
-        if self._x_org is not None:
-            if np.size(self._x_org) > 20 and np.size(self._x_org) == np.size(self._y_org):
+        if self._x is not None:
+            if np.size(self._x) > 20 and np.size(self._x) == np.size(self._y):
 
-                self._splitUpperLower (self._x_org, self._y_org )
+                self._splitUpperLower ()
                 self._y_upper_interp = self._get_interpol_fn ( self._x_upper, self._y_upper)
                 self._y_lower_interp = self._get_interpol_fn ( self._x_lower, self._y_lower)
 
@@ -372,7 +359,6 @@ class Airfoil_Interpolated (Airfoil):
         else:
             return np.concatenate ((np.flip(self._x_upper), self._x_lower[1:]))
         
-
     @property
     def y (self):
         "y coordinates - rebuild from upper and lower "
@@ -381,18 +367,22 @@ class Airfoil_Interpolated (Airfoil):
         else:
             return np.concatenate ((np.flip(self._y_upper), self._y_lower[1:]))
 
+    @property
+    def isLoaded (self):
+        return self._x_upper is not None
+    
 
-    def _splitUpperLower (self, x, y):
-        """ split x,y into upper and lower coordinates of self """
+    def _splitUpperLower (self):
+        """ split self._x,y into upper and lower coordinates """
 
-        iLe = np.argmin (x) 
-        if x[iLe] != 0.0: 
-            raise ValueError ("Leading edge of " + self.name + " isn't at 0,0")
-        else: 
-            self._x_upper = np.flip (x [0: iLe + 1])
-            self._y_upper = np.flip (y [0: iLe + 1])
-            self._x_lower = x[iLe:]
-            self._y_lower = y[iLe:]
+        if not self.isNormalized:
+            raise ValueError ("Airfoil '" + self.name + "' isn't normalized. Cannot split.")
+        
+        iLe = np.argmin (self._x) 
+        self._x_upper = np.flip (self._x [0: iLe + 1])
+        self._y_upper = np.flip (self._y [0: iLe + 1])
+        self._x_lower = self._x[iLe:]
+        self._y_lower = self._y[iLe:]
 
     def _get_interpol_fn (self, x, y):
 
@@ -421,21 +411,8 @@ class Airfoil_Interpolated (Airfoil):
         return newX
          
 
-    def with_TEGap (self, newGap, xBlend = 0.8):
-        """ returns self x,y coordinates with a new te gap.
-         The procedere is based on xfoil allowing to define a blending distance from le.
-
-        Arguments: 
-            newGap:   in y-coordinates - typically 0.01 or so 
-            xblend:   the blending distance from trailing edge 0..1 - Default 0.8
-        Returns: 
-            x,y:      np coordinate arrays with new Te 
-        """
-        raise ValueError ("to be implemented")
-    
-
     def set_x_upper_lower (self,x): 
-        """set new values (array) for upper and lower x"""
+        """set new values (array) for upper and lower x - evaluate y with interpolation"""
 
         self._x_upper = x
         self._x_lower = x
@@ -490,6 +467,9 @@ class Airfoil_Straked (Airfoil_Interpolated):
         self._x_lower = x_ref_lower
         self._y_lower = (1 - blendBy) * airfoil1._y_lower + \
                              blendBy  * airfoil2._y_lower_interp(x_ref_lower)
+        
+        self._x = np.concatenate ((np.flip(self._x_upper), self._x_lower[1:]))
+        self._y = np.concatenate ((np.flip(self._y_upper), self._y_lower[1:]))
         
         self.sourceName = airfoil_in1.name + ("_with_%.2f_" % blendBy) + airfoil_in2.name
 

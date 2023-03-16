@@ -281,7 +281,9 @@ class Wing:
         else: 
             return self.name + ".dxf"
     def set_dxfPathFileName(self, newPathFilename):
-        self._dxfPathFileName = os.path.normpath(newPathFilename)
+        """ store newPathFilename as relative path to current paramDir """
+        self._dxfPathFileName = os.path.relpath(newPathFilename, start = self.paramDir)
+        pass
 
     @property
     def dxfAirfoilsTeGap (self): return self._dxfAirfoilsTeGap
@@ -608,7 +610,7 @@ class Wing:
         """exports self to a dxf file specified in the dxf parameters
           - returns a text string of exported artefacts """
 
-        from .export_Dxf import Dxf_Artist
+        from export_Dxf import Dxf_Artist
 
         dxf = Dxf_Artist(self)
 
@@ -621,10 +623,11 @@ class Wing:
             self.do_strak ()                    # ensure strak airfoils are uptodate 
             dxf.plot_airfoils (teGap_mm=self.dxfAirfoilsTeGap)
 
-        pathFileName = "myDxfle.dxf"
+        pathFileName = os.path.join (self.paramDir, self.dxfPathFileName)
         dxf.save (pathFileName)
 
-        message = "Wing exported to '" + self.dxfPathFileName + "'"
+        InfoMsg ("DXF file '%s'written to '%s' " % (self.dxfPathFileName, self.paramDir) ) 
+        message = "Wing exported as DXF to \n\n'" + pathFileName + "'"
         return message
 
 
@@ -1633,6 +1636,7 @@ class Planform_DXF(Planform):
         return self._dxfPathFilename
     
     def set_dxfPathFilename (self, aNewPathFile):
+        """ set path and import dxf"""
         
         if aNewPathFile:
             # the path could be either absolute or relative to parameter dict

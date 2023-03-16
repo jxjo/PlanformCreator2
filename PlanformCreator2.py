@@ -1786,10 +1786,11 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         newFile = filedialog.asksaveasfilename(
                     title='Select directory for DXF export',
                     filetypes  = [('dxf files', '*.dxf')],
+                    initialdir=self.wing.paramDir,
                     initialfile=self.wing.dxfPathFileName, defaultextension=".dxf")
         if newFile:
             # store only relativ path 
-            self.wing.set_dxfPathFileName (os.path.relpath(newFile))
+            self.wing.set_dxfPathFileName (newFile)
             super().refresh()
 
 

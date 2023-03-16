@@ -8,7 +8,6 @@
   "flapDepthTip":27.035923,
   "rootRe":400000,
   "airfoilNickPrefix":"GP",
-  "dxfFile":"",
   "planformType":"elliptical",
   "ellipseTipBelly":0.25,
   "ellipseBellyWidth":0.5,
