@@ -10,7 +10,7 @@
 
 import io
 from common_utils import * 
-from airfoil_polar import Airfoil
+from airfoil import Airfoil
 
 class Example_Airfoil (Airfoil): 
 

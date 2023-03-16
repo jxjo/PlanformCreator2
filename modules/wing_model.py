@@ -29,20 +29,12 @@ import sys
 sys.path.append('./modules')
 
 from common_utils       import *
-from worker_driver      import *
-from airfoil_polar      import Airfoil, Strak_Airfoil
+from airfoil            import Airfoil, Airfoil_Straked
 from airfoil_examples   import Root_Example, Tip_Example
 
 
 # disables all print output to console
 print_disabled = False
-
-# user exceptions 
-class Except_Planform_DXF_notValid (Exception):
-    "Raised when an invalid Planform_DXF is assigned to the wing"
-    pass
-
-
 
 
 class Wing:
@@ -51,22 +43,26 @@ class Wing:
     Main object - holds the model 
 
     """
-
     unit = 'mm'
 
-    def __init__(self, dataDict):
+    def __init__(self, paramFilePath):
         """
-        Args:
-            :dataDict: dictonary having the parameters nededed for a complete wing definition  
+        Init wing from parameters in paramFilePath
         """
 
         InfoMsg("Starting wing model ...")
 
+        dataDict = self._loadDataDict (paramFilePath)
         if dataDict is None:
             NoteMsg ('No input data - a default wing will be created')
             wingExists = False
+            self.paramFilePath = None
+            self.paramDir = None
         else: 
+            InfoMsg ('Reading wing parameter from %s' % paramFilePath)
             wingExists = True
+            self.paramFilePath = paramFilePath
+            self.paramDir = os.path.dirname(paramFilePath)
 
         self.dataDict = dataDict
 
@@ -105,7 +101,7 @@ class Wing:
         self._dxfAirfoilsTeGap  = fromDict (dataDict, "dxfAirfoilsTeGap", None, msg=False)
         self._dxfAirfoilsToo    = fromDict (dataDict, "dxfAirfoilsToo", True, msg=False)
 
-        InfoMsg (str(self)  + ' created...')
+        InfoMsg (str(self)  + ' created')
 
 
     def __repr__(self) -> str:
@@ -113,15 +109,12 @@ class Wing:
         return f"{type(self).__name__} \'{self.name}\'"
 
 
-    @classmethod
-    def onFile(cls, paramFilePath):
+    def _loadDataDict (self, paramFilePath):
         """
-        Alternate constructor for new wing based on a file - returns the dataDicionary with paramters
-        Args:
-            :paramFilePath: string of parameter file path
+        loads the dataDict of wing paramters from json-File 'paramFilePath'
         """
         dataDict = None
-        if (len(paramFilePath)):
+        if paramFilePath is not None:
             try:
                 paramFile = open(paramFilePath)
                 try:
@@ -133,11 +126,7 @@ class Wing:
                     dataDict = None
             except:
                 ErrorMsg ("Input file %s not found" % paramFilePath)
-
-        if (dataDict):
-            InfoMsg ('Reading data from %s' % paramFilePath)
-
-        return cls(dataDict)
+        return dataDict
 
     # --- save --------------------- 
 
@@ -189,7 +178,7 @@ class Wing:
 
         # special treatment for dxf because it could be invalid 
         if newPlanform.is_dxf and not newPlanform.isValid:
-            raise Except_Planform_DXF_notValid             # assure no corrupt data
+            raise Exception            
         
         # adapt existing wing sections to new planform 
         if self.planform:                           # is there already a planform
@@ -574,8 +563,11 @@ class Wing:
         for sec in self.wingSections:
             if sec.airfoil.isStrakAirfoil: 
                 leftSec, rightSec = self.getNeighbourSectionsHavingAirfoil(sec) 
-                sec.airfoil.do_strak(sec.norm_chord, leftSec.airfoil,  leftSec. norm_chord,
-                                                     rightSec.airfoil, rightSec.norm_chord)
+
+                blendBy  = (sec.norm_chord - leftSec. norm_chord) / \
+                           (rightSec.norm_chord - leftSec. norm_chord)
+
+                sec.airfoil.do_strak(leftSec.airfoil,  rightSec.airfoil, blendBy)
 
 
     def do_export_airfoils (self,toDir, useNick=True): 
@@ -683,7 +675,7 @@ class Planform:
         self.wing   = myWing
 
         # self.__class__.instances.append(weakref.proxy(self))
-        InfoMsg (' ' + str(self)  + ' created...')
+        InfoMsg (' ' + str(self)  + ' created')
 
     def __repr__(self) -> str:
         # overwrite class method to get a nice print string of self 
@@ -1598,17 +1590,18 @@ class Planform_DXF(Planform):
             self._dxfPathFilename  = dxf_Path
         else: 
             if ref:
-                self._dxfPathFilename  = fromDict (dataDict, "refPlanform_dxfPath", "")
+                self._dxfPathFilename  = fromDict (dataDict, "refPlanform_dxfPath", None)
             else:
-                self._dxfPathFilename  = fromDict (dataDict, "planform_dxfPath", "")
+                self._dxfPathFilename  = fromDict (dataDict, "planform_dxfPath", None)
 
 
-        if self._dxfPathFilename != None and os.path.isfile(self._dxfPathFilename):
-            self.load_dxf(self._dxfPathFilename)
-        else:
-            if self._dxfPathFilename:
+        if self._dxfPathFilename is not None:
+            dxfFullPathName = os.path.join(self.wing.paramDir, self._dxfPathFilename ) 
+            if os.path.isfile (dxfFullPathName):
+                self.load_dxf (dxfFullPathName)
+            else:
                 ErrorMsg ("The dxf file '%s' doesn't exist" % self._dxfPathFilename)
-            self._dxfPathFilename = None
+                self._dxfPathFilename = None
 
 
     def _save (self, dataDict):
@@ -1642,10 +1635,19 @@ class Planform_DXF(Planform):
     def set_dxfPathFilename (self, aNewPathFile):
         
         if aNewPathFile:
-            # load and parse data from file
-            self.load_dxf (aNewPathFile)
+            # the path could be either absolute or relative to parameter dict
+            if os.path.isabs (aNewPathFile):
+                loadPathFile = aNewPathFile
+            else:
+                loadPathFile = os.path.join (self.wing.paramDir, aNewPathFile)
+            if not os.path.isfile(loadPathFile):
+                ErrorMsg ("DXF file \'%s\' does not exist" % loadPathFile)
+            else:
+                # load and parse data from file
+                self.load_dxf (loadPathFile)
+
             if self.isValid:
-                self._dxfPathFilename = aNewPathFile
+                self._dxfPathFilename = os.path.relpath(loadPathFile, start = self.wing.paramDir)
         else: 
             # clear self
             self._dxfPathFilename  = None
@@ -1955,7 +1957,7 @@ class WingSection:
         # create airfoil and load coordinates if exist 
         self._init_airfoil (dataDict = fromDict (dataDict, "airfoil", None))
 
-        InfoMsg ('  '   + str(self)  + ' created...')
+        InfoMsg ('  '   + str(self)  + ' created')
 
 
     def _save (self, sectionDict):
@@ -1971,13 +1973,17 @@ class WingSection:
         return sectionDict
 
 
-    def _init_airfoil (self, dataDict = None, pathFileName = None):
-        # read data for airfoil from dict and create new 'Airfoil' 
+    def _init_airfoil (self, dataDict = None, pathFileName = None, workingDir=None):
+        """create airfoil for section """
+ 
+        # read data for airfoil either from dict of parameter file 
+        #  or get filepath from user selection 
+        # then create new 'Airfoil' 
 
         if dataDict: 
-            airfoil = Airfoil.onDict (dataDict)
+            airfoil = Airfoil.onDict (dataDict, workingDir= self.wing.paramDir)
         else: 
-            airfoil = Airfoil (pathFileName= pathFileName)
+            airfoil = Airfoil (pathFileName= pathFileName, workingDir=workingDir)
 
         if not airfoil.isExisting:
             if self.isRoot: 
@@ -1985,7 +1991,7 @@ class WingSection:
             elif self.isTip:
                 airfoil = Tip_Example()
             else:
-                airfoil = Strak_Airfoil()
+                airfoil = Airfoil_Straked()
         if airfoil.isExisting:
             airfoil.load()
 
@@ -2288,10 +2294,10 @@ class WingSection:
     def airfoil_canBeRemoved (self):
         return (not self.isRootOrTip) and (not self.airfoil.isStrakAirfoil)
     
-    def set_airfoilWithPathFileName (self, pathFileName):
+    def set_airfoilWithPathFileName (self, pathFileName, workingDir = None):
         """ sets a new real Airfoil based on its path and loads it """
 
-        self._init_airfoil (pathFileName=pathFileName)
+        self._init_airfoil (pathFileName=pathFileName, workingDir= workingDir)
         self.airfoil.load()
 
 
@@ -2411,7 +2417,7 @@ if __name__ == "__main__":
     print ("Current directory: ",os.getcwd())
     filename = ".\\ressources\\planformdata.json"
     # filename = ""
-    myWing = Wing.onFile (filename)
+    myWing = Wing (filename)
 
     y, x = myWing.planform.flapPolygon (0,500, nPoints=50)
 

@@ -413,6 +413,6 @@ class EINSTELLUNGEN (FLZ_Element):
 # Main program for testing 
 if __name__ == "__main__":
 
-    myWing = Wing.onFile ("")
+    myWing = Wing ("")
 
     Export_FLZ(myWing).doIt ()

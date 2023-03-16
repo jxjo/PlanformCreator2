@@ -39,7 +39,7 @@ from tkinter import filedialog, Frame
 import customtkinter as ctk
 from modules.common_utils       import * 
 from modules.wing_model         import Planform, Planform_Elliptical, Planform_Elliptical_StraightTE, \
-                                       Planform_DXF, Planform_Trapezoidal, Except_Planform_DXF_notValid                             
+                                       Planform_DXF, Planform_Trapezoidal                          
 from modules.widgets            import * 
 from modules.wing_artist        import *
 
@@ -47,7 +47,7 @@ from modules.wing_artist        import *
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "0.50"
+AppVersion = "0.51"
 
 #------------------------------------------------
 
@@ -195,6 +195,18 @@ class Edit_Abstract (ctk.CTkFrame):
     
     def planform(self) -> Planform:
         return self.wing().planform
+    
+    @property
+    def myApp (self) -> 'App':
+        """ the App self belongs to"""
+        return self.winfo_toplevel()
+    
+    @property
+    def workingDir (self): 
+        """ the current (default) working for file saves etc. """
+        return self.myApp.workingDir
+
+
 
     def init(self):
         # main method - to be overloaded by sub class
@@ -319,11 +331,12 @@ class Edit_Wing_PlanformType(Edit_Abstract):
     def set_planformType (self, aType):
         """ set a new planform selected by user
         """
+
         if self.wing().planformType != aType:
             try: 
                 self.wing().set_planformType (aType) 
                 handled = True
-            except Except_Planform_DXF_notValid:
+            except:
                 handled = self.handle_Planform_DXF_notValid ()
 
             if handled: 
@@ -585,8 +598,7 @@ class Edit_WingSection_Master(Edit_Abstract):
             self.refresh()                          # update prev/next buttons  / option widget
 
         # inform diagram 
-        myApp : App = self.winfo_toplevel()
-        myApp.set_curWingSectionName(aName)
+        self.myApp.set_curWingSectionName(aName)
         if not inEvent:                         # avoid event ping pong
             fireEvent (CURRENT_SECTION_CHANGED)    
 
@@ -673,15 +685,15 @@ class Edit_WingSection(Edit_Abstract):
         """ select airfoil with explorer and load it if possible """
 
         filetypes  = [('dat files', '*.dat')]
-        pathFile   = self.wingSection().airfoil.pathFileName
-        initialDir = os.path.dirname(pathFile) if pathFile != None else ''
+        initialDir = self.workingDir if self.workingDir is not None else os.getcwd()
 
         newPathFilename = filedialog.askopenfilename(
                     title='Select airfoil file',
                     initialdir=initialDir,
                     filetypes=filetypes)
         if newPathFilename: 
-            self.wingSection().set_airfoilWithPathFileName(newPathFilename)
+            newRelPathFilename = os.path.relpath(newPathFilename, start = self.workingDir)
+            self.wingSection().set_airfoilWithPathFileName(newRelPathFilename, workingDir=self.workingDir)
             self.refresh()
             fireEvent (AIRFOIL_CHANGED)
 
@@ -1487,8 +1499,7 @@ class Dialog_Load_DXF (Dialog_Abstract):
     def open_dxf_file (self):
 
         filetypes  = [('dxf files', '*.dxf')]
-        pathFile   = self.tmpPlanform.dxf_pathFilename()
-        initialDir = os.path.dirname(pathFile) if pathFile != None else ''
+        initialDir = self.tmpPlanform.wing.paramDir
 
         newPathFilename = filedialog.askopenfilename(
                     title='Open dxf file',
@@ -1818,13 +1829,6 @@ class Edit_File_Menu(Edit_Abstract):
     """
     name = "File"
 
-    def __init__(self, master, wingFn, *args, **kwargs):
-
-        # special here - self is child of App - needed for callbacks
-        self.myApp : App  = master
-        super().__init__(master, wingFn, *args, **kwargs)
-
-
     def init (self):
 
         self.grid_columnconfigure   (0, weight=1)
@@ -1886,11 +1890,9 @@ class App(ctk.CTk):
         # self.state('zoomed')
 
 
-        # register events which will be fired when editing the planform to update views
+        # setup event root for the widgets - so there will be a single root -> ctk root
         ctk_root = self
         Base_Widget.ctk_root = self
-        self.event_add(CHORD_CHANGED,'None')
-        self.event_add(PLANFORM_CHANGED,'None')
         self._curWingSectionName = None                 # Dispatcher field between Diagramm and Edit
 
         # intercept app close by user  
@@ -2004,20 +2006,17 @@ class App(ctk.CTk):
     def loadNewWing(self, pathFilename):
         """loads and sets a new wing model returns - updates title """
         
-        newWing = Wing.onFile (pathFilename)
-        if newWing:
-            if pathFilename:
-                self.paramFile = os.path.normpath(pathFilename)
-            else:
-                self.paramFile = ""
-            self.set_wing (newWing)
+        self.set_wing (Wing (pathFilename))
 
-        # set window title
         if pathFilename:
-            project = pathFilename
+            self.paramFile = os.path.relpath(pathFilename, start = os.getcwd())
+            project = self.paramFile
         else:
+            self.paramFile = ""
             project = "< new >"
+
         self.title (AppName + "  v" + str(AppVersion) + "  [" + project + "]")
+
 
     def export_xflr5 (self): 
         """ export wing to xflr5"""

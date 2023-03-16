@@ -8,8 +8,6 @@
   "flapDepthTip":28.0,
   "rootRe":400000,
   "airfoilNickPrefix":"RS",
-  "xflr5Dir":".\\examples\\Amokka-JX\\xflr5",
-  "xflr5UseNick":1,
   "dxfFile":"",
   "planformType":"elliptical TE straight",
   "ellipseTipBelly":0.2,
@@ -21,28 +19,55 @@
     {
       "position":0.0,
       "norm_chord":1.0,
-      "flapGroup":1
+      "flapGroup":1,
+      "airfoil":{
+        "file":"JX-RS-Root.dat"
+      }
     },
     {
       "position":400,
-      "flapGroup":2
+      "flapGroup":2,
+      "airfoil":{
+        "name":"<strak>"
+      }
     },
     {
       "norm_chord":0.65,
-      "flapGroup":2
+      "flapGroup":2,
+      "airfoil":{
+        "file":"JX-RS.dat"
+      }
     },
     {
       "norm_chord":0.35,
-      "flapGroup":2
+      "flapGroup":2,
+      "airfoil":{
+        "file":"JX-RS-Tip.dat"
+      }
     },
     {
       "position":1190,
-      "flapGroup":2
+      "flapGroup":2,
+      "airfoil":{
+        "file":"JX-RS-Tip.dat"
+      }
     }
   ],
-  "x-panels":10,
-  "x-distribution":"cosine",
-  "y-panels":10,
-  "y-minWidth":5,
-  "refPlanform_dxfPath":".\\examples\\Amokka-JX\\Amokka-JX_wing_outline.dxf"
+  "refPlanform_dxfPath":"Amokka-JX_wing_outline.dxf",
+  "xflr5":{
+    "exportDir":"./xflr5",
+    "useNick":true,
+    "x-panels":10,
+    "x-distribution":"cosine",
+    "y-panels":10,
+    "y-minWidth":5
+  },
+  "flz":{
+    "exportDir":"./Flz_vortex",
+    "useNick":true,
+    "x-panels":10,
+    "x-distribution":"cosine",
+    "y-panels":10,
+    "y-minWidth":5
+  }
 }
