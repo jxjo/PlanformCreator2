@@ -329,6 +329,8 @@ class Airfoil_Interpolated (Airfoil):
         self._y_lower = None
         self._y_upper_interp = None
         self._y_lower_interp = None
+        self._x   = None
+        self._y   = None
 
         if anAirfoil is not None: 
             if anAirfoil.isLoaded: 
@@ -498,9 +500,192 @@ class Airfoil_Straked (Airfoil_Interpolated):
 
         return
 
+from scipy.interpolate import splprep, splev, interp1d, sproot
+
+class SplineOfAirfoil: 
+    """ Spline representation of airfoil"""
+
+
+    def __init__ (self, x,y):
+
+
+        # thickness and camber 
+        self._thickness = None                  # array of thickness distribution
+        self._camber    = None                  # array of camber distribution
+        self._xthick    = None                  # x values for thickness and camber
+
+        # B-spline representation of an N-D curve.
+        s = 0.0                                 # no smoothing 
+        k = 3                                   # oder of spline - cubic
+        self._u    = None                       # the arc positionen around airfoil 0..1
+        self._tck  = 0                          # spline parameters - see scipy splprep 
+        self._x = x  #test
+        self._tck, self._u = splprep([x, y], s=s, k=k)
+
+        # leading edge 
+        self.iLe = np.argmin (x)            # index of LE in x,y and u 
+        self.uLe = self._u [self.iLe]             # u value at LE 
+
+        # for i in range(len(x)):
+        #     print (i, x[i], y[i], self._u[i])
+
+
+    @property
+    def deriv1 (self): 
+        """ return derivate 1 of spline at knots"""
+
+        #  splev returns dx/du and dy/du at knot. 
+        dx, dy = splev(self._u, self._tck, der=1)
+        #  derivative 1 (gradient) is dy/dx = dy/du / dx/du
+
+
+        return dy/dx
+
+    @property
+    def angle (self): 
+        """ return the angle in degrees at knots"""
+        return np.arctan (self.deriv1) * 180 / np.pi
+
+    @property
+    def curvature (self): 
+        " return the curvature at knots 0..npoints"
+
+        dx, dy   = splev(self._u, self._tck, der=1)
+        ddx, ddy = splev(self._u, self._tck, der=2)
+
+        deriv2 = dx * ddy - dy * ddx
+
+        # get curvature from derivative 2
+        n = dx**2 + dy**2
+        curv = deriv2 / n**(3./2.)
+        return curv 
+
+
+    def thickness_camber (self): 
+        """returns thickness and camber distribution.
+        
+        Note: 
+        
+        It's an approximation as thickness is just the sum of y_upper(x) and y_lower(x)
+        and camber is just the mean value y_upper(x) and y_lower(x)
+        
+        """
+
+        # get a new high res distribution for upper and lower 
+        u_new_upper = np.linspace (self.uLe, 0.0, 400)
+        u_new_lower = np.linspace (self.uLe, 1.0, 400)
+        
+        x_upper, y_upper = splev (u_new_upper, self._tck, der= 0)
+        x_lower, y_lower = splev (u_new_lower, self._tck, der= 0)
+
+        x_upper = np.asarray(x_upper).round(10)
+        y_upper = np.asarray(y_upper).round(10)
+        x_lower = np.asarray(x_lower).round(10)
+        y_lower = np.asarray(y_lower).round(10)
+
+        # take x-distrib of upper and interpolate y_lower with these values
+        y_lower = interp1d(x_lower, y_lower,  kind='cubic') (x_upper)
+        y_lower = np.asarray(y_lower).round(10)
+        x_lower = x_upper
+
+        # thickness and camber can now easily calculated 
+        self._thickness = ((y_upper - y_lower)      ).round(10) 
+        self._camber    = ((y_upper + y_lower) / 2.0).round(10)
+        self._xthick    = x_upper 
+
+        # for i in range(len(x_upper)):
+        #     print (i, self._thickness[i], self._camber[i])
+
+        return self._xthick, self._thickness, self._camber 
+
+ 
+    def get_maxThickness (self): 
+        """returns max. thickness (normed) and its position along x"""
+        if self._thickness is None: self.thickness_camber()
+
+        # todo interpolate t_max on spline 
+        tmax   = np.max(self._thickness)
+        tmax_x = self._xthick[np.argmax (self._thickness)]
+        return tmax, tmax_x
+
+    def get_maxCamber (self): 
+        """returns max. camber (normed) and its position along x"""
+
+        if self._camber is None: self.thickness_camber()
+
+        # todo interpolate c_max on spline 
+        cmax   = np.max(self._camber)
+        cmax_x = self._xthick[np.argmax (self._camber)]
+        return cmax, cmax_x
+
+    def _x_cos_distributed (self, xfacStart, xfacEnd, nPoints):
+
+        xfacStart = max(0.0, xfacStart)
+        xfacStart = min(2.0, xfacStart)
+        xfacEnd   = max(0.0, xfacEnd)
+        xfacEnd   = min(2.0, xfacEnd)
+
+        if xfacStart >= xfacEnd: raise ValueError ("Airfoil x-distribution: start > end")
+
+        newX = np.sin (np.pi / 2 * (np.linspace(xfacStart, xfacEnd, nPoints) +3.0)) 
+
+        # normalize to 0..1
+        xmin = np.amin(newX)
+        xmax = np.amax(newX) 
+        newX = (newX - xmin) / (xmax-xmin)
+
+        # round - ensure 0.0 .. 1.0 
+        newX = np.around (newX,10) 
+        return newX
+
 
 
 # Main program for testing -----------------------------------
+
+def cubicSplineTest ():
+
+    import matplotlib.pyplot as plt
+    from airfoil_examples import Root_Example, Tip_Example
+    
+    air1 = Tip_Example()
+    air = Airfoil_Interpolated.fromAirfoil(air1)
+
+    y = air.y
+    x = air.x
+
+    spl = SplineOfAirfoil (x,y) 
+    x_upper, t, c = spl.thickness_camber()
+
+    print ("Thickness: ", spl.get_maxThickness())
+    print ("Camber:    ", spl.get_maxCamber())
+
+    fig, axa = plt.subplots(3, 1, figsize=(16,8))
+    ax1 = axa[0]
+    ax2 = axa[1]
+    ax3 = axa[2]
+    ax1.axis('equal')
+    ax1.set_ylim([ -0.2,  0.2])
+    # ax1.set_xlim([ 0.0, 1.1])
+
+    ax2.set_ylim([ -20,  20])
+    ax3.set_ylim([ -1,  1])
+
+    ax1.grid(True)
+    ax2.grid(True)
+    ax3.grid(True)
+
+    ax1.plot(x, y, '-', label='x y')
+    ax1.plot(x_upper, t, '-.', label='thickness')
+    ax1.plot(x_upper, c, '-', label='camber')
+    ax2.plot (x,spl.angle, label='Angle')
+    ax3.plot (x,spl.curvature, label='Curvature')
+
+    ax1.legend()
+    ax2.legend()
+    ax3.legend()
+    plt.show()
+
+
 
 def blendTest():
 
@@ -510,7 +695,7 @@ def blendTest():
     air2 = Tip_Example()
     air2.load()
 
-    airStrak = Airfoil_Interpolated.fromAirfoil(air1)
+    airStrak = Airfoil_Straked.fromAirfoil(air1)
     airStrak.do_strak (air1, air2, 0.5)
 
     airNewX = Airfoil_Interpolated.fromAirfoil(air1)
@@ -552,14 +737,17 @@ def blendTest():
 
 if __name__ == "__main__":
 
-    from worker_driver import XfoilWorker
+    # from worker_driver import XfoilWorker
     from airfoil_examples import Root_Example
     import matplotlib.pyplot as plt
 
 
     # ---- Test -----
     # loadFromFile = False
-    blendTest()
+
+    # blendTest()
+
+    cubicSplineTest()
     # myAirfoil = Root_Example()
     # print ("New airfoil created: ", myAirfoil)
     # myAirfoil.load()

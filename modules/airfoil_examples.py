@@ -20,7 +20,10 @@ class Example_Airfoil (Airfoil):
         # super().__init__()
         """Abstract superclass for exmaple airfoils
         """
+        self._x   = None
+        self._y   = None
         self.pathFileName = None
+        self.load ()
 
     @property
     def isExisting (self):
@@ -485,7 +488,5 @@ if __name__ == "__main__":
     myTip     = Tip_Example()
 
     print ("New airfoil created: ", myAirfoil)
-    myAirfoil.load()
     myAirfoil.plot()
-    myTip.load()
     myTip.plot()

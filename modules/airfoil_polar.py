@@ -258,64 +258,16 @@ class polar:
 
 # Main program for testing -----------------------------------
 
-def blendTest():
-
-    from airfoil_examples import Root_Example, Tip_Example
-    air1 = Root_Example()
-    air1.load()
-    air2 = Tip_Example()
-    air2.load()
-
-    airStrak = Airfoil_Interpolated.fromAirfoil(air1)
-    airStrak.do_strak (air1, air2, 0.5)
-
-    airNewX = Airfoil_Interpolated.fromAirfoil(air1)
-
-
-    fig = plt.figure()
-    plt.style.use('seaborn-v0_8-ticks')
-    fig.set_figwidth (fig.get_figwidth()  * 2 )     # enlarge window because of 4 plots
-    plt.subplots_adjust(left=0.10, bottom=0.10, right=0.95, top=0.90, wspace=None, hspace=None)
-
-    ax = fig.add_subplot(1, 1, 1)
-    ax.set_xlim([0.0, 1.0])
-    ax.axis('equal')
-    # ax.set_title (self.name)
-    ax.grid()
-
-    ax.plot(air1.x, air1.y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label=air1.name)
-    ax.plot(air2.x, air2.y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label=air2.name)
-    ax.plot(airStrak.x, airStrak.y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label=airStrak.name)
-    newX = airNewX._x_distributed (0.0, 1.0, 100)
-    airNewX.set_x_upper_lower (newX)
-    ax.plot(airNewX.x, airNewX.y, '-', marker='o', lw=1, fillstyle='none', markersize=6, label=air1.name + " new 0.0, 1.0, 50")
-    newX = airNewX._x_distributed (0.0, 2.0, 100)
-    airNewX.set_x_upper_lower (newX)
-    ax.plot(airNewX.x, airNewX.y, '-', marker='o', lw=1, fillstyle='none', markersize=6, label=air1.name + " new 0.0, 2.0, 50")
-    newX = airNewX._x_distributed (0.0, 1.3, 100)
-    airNewX.set_x_upper_lower (newX)
-    ax.plot(airNewX.x, airNewX.y, '-', marker='o', lw=1, fillstyle='none', markersize=6, label=air1.name + " new 0.0, 1.3, 50")
-
-    air1.saveAs()
-    air2.saveAs()
-    airStrak.saveAs()
-    airNewX.name = airNewX.name + " newX"
-    airNewX.saveAs()
-    ax.legend()
-    plt.show()    
-
-
 
 if __name__ == "__main__":
 
-    from worker_driver import XfoilWorker
+    # from worker_driver import XfoilWorker
     from airfoil_examples import Root_Example
     import matplotlib.pyplot as plt
 
 
     # ---- Test -----
     # loadFromFile = False
-    blendTest()
     # myAirfoil = Root_Example()
     # print ("New airfoil created: ", myAirfoil)
     # myAirfoil.load()
