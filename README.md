@@ -26,6 +26,20 @@ Inspired and partially based on the 'Planform Creator' being part of [The Strak 
 
 ###  Install
 
+A pre-build Windows-Exe is available in the releases section https://github.com/jxjo/PlanformCreator2/releases  
+
+or 
+
+Download python sources which can also be found there https://github.com/jxjo/PlanformCreator2/releases
+
+or 
+
+Clone the repository 
+
+and 
+
+Install 
+
 ```
 pip3 install numpy
 pip3 install matplotlib
