@@ -24,7 +24,7 @@ class Export_Xflr5:
     def __init__(self, myWing: Wing, myDict: dict = None): 
 
         self.wing       = myWing
-        self._baseDir        = None         # will be set - root dir for exportDir (which is relative)    
+        self.workingDir = None         # will be set - root dir for exportDir (which is relative)    
         self._exportDir      = fromDict (myDict, "exportDir", "./xflr5", msg=False)
         self._useNick        = fromDict (myDict, "useNick", True, msg=False)
 
@@ -41,19 +41,12 @@ class Export_Xflr5:
         self.paneledPlanform._save (myDict)
 
         return myDict
-
-    @property
-    def baseDir(self):
-        """the directory for flz export - path is relativ to current"""
-        return self._baseDir
     
-    def set_baseDir(self, newStr): 
-        self._baseDir = newStr
-
     @property
     def exportDir(self):
         """the directory for xflr5 export - path is relativ to current"""
-        return os.path.relpath(self._exportDir)
+        return self._exportDir
+    
     def set_exportDir(self, newStr): 
         # insure a valid, relativ path 
         self._exportDir = os.path.relpath(newStr)
@@ -61,7 +54,7 @@ class Export_Xflr5:
     @property
     def baseAndExportDir(self):
         """the directory for flz export including current dir """
-        return os.path.join (self.baseDir, self.exportDir)
+        return os.path.join (self.workingDir, self.exportDir)
 
     @property
     def useNick(self) -> bool: return self._useNick
@@ -77,7 +70,7 @@ class Export_Xflr5:
         Airfoils will also be copied into the xflr5 directory
         Returns a message string what was done """
 
-        targetDir = os.path.join (self.baseDir, self.exportDir)
+        targetDir = self.baseAndExportDir
 
         if not os.path.exists(targetDir): os.makedirs(targetDir)
         pathFileName = os.path.join (targetDir, self.fileName)

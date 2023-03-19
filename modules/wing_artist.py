@@ -42,6 +42,7 @@ class Base_Artist():
         norm --     when implemented will plot in a normed coordinate systeme
     """
     
+    # plt.rcParams.update({'figure.dpi': 180})
     plt.rcParams.update({'font.size': 9})                       # default font.size: 10.0
     plt.rcParams.update({'font.weight': 'light'})   
     plt.rcParams.update({'text.color': cl_text})   

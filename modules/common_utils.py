@@ -7,6 +7,7 @@ Common Utility functions for convinience
 
 from termcolor import colored
 from colorama import just_fix_windows_console
+import os
 
 
 #------------------------------------------------------------------------------
@@ -27,7 +28,7 @@ def my_print(message):
        print(message)
 
 def InfoMsg(message):
-    my_print(' - ' + colored(message, 'white', attrs=["dark"]))
+    my_print(colored('Info: ' + message, 'white', attrs=["dark"]))
 
 def ErrorMsg(message):
     my_print(colored('\nError: ', 'red') + message)
@@ -40,7 +41,7 @@ def NoteMsg(message):
 
 def TraceMsg(message):
     if (not trace_disabled):
-        my_print(colored(' - ' + message, 'white', attrs=["dark"]))
+        my_print(colored('Trace ' + message, 'white', attrs=["dark"]))
 
 def DoneMsg():
     my_print("Done.\n")
@@ -107,3 +108,62 @@ def toDict(dict, key, value):
         if isinstance  (value, float):
             value = round (value,6)
         dict [key] = value
+
+
+        
+#------------------------------------------------------------------------------
+# Fiel, Path handling 
+#------------------------------------------------------------------------------
+
+class FilePathHandler(): 
+    """ handles relative Path of actual files to a workingDir """
+
+    def __init__ (self, workingDir=None, onFile=None): 
+
+        self._workingDir = None
+
+        if workingDir is not None: 
+           self.workingDir = workingDir 
+        elif onFile is not None:
+           self.set_workingDirFromFile (onFile)
+           
+
+    @property 
+    def workingDir (self):
+        return self._workingDir 
+    
+    @workingDir.setter
+    def workingDir (self, newDir):
+
+        if newDir is None: 
+            self._workingDir = os.getcwd ()      # if no directory set, take current working Dir 
+        elif not newDir: 
+            self._workingDir = os.getcwd ()      # if no directory set, take current working Dir 
+        elif not os.path.isdir(newDir): 
+            raise ValueError (self.__name__+ ": '%s' is not a directory" % newDir)
+        else: 
+            self._workingDir = os.path.normpath(newDir) 
+
+    def set_workingDirFromFile (self, aFilePath):
+
+        if aFilePath is None: 
+            self.workingDir = None
+        elif not aFilePath: 
+            self._workingDir = os.getcwd ()      # if no directory set, take current working Dir 
+        else: 
+            if not os.path.isfile(aFilePath): 
+                raise ValueError (self.__class__.__name__+ ": '%s' is not a file" % aFilePath)
+            else: 
+                self.workingDir = os.path.dirname(aFilePath) 
+
+    def get_relFilePath (self, aFilePath):
+        """ returns the relative path of aFilePath to the workingDir of self"""
+        if aFilePath is not None: 
+            return os.path.normpath(os.path.relpath(aFilePath, start = self.workingDir))
+        else: 
+            return None
+    
+    def get_fullFilePath (self, aRelPath):
+        """ returns the full path of relative aRelPath and  the workingDir of self"""
+
+        return os.path.normpath(os.path.join (self.workingDir, aRelPath))

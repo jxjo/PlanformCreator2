@@ -375,13 +375,13 @@ class Edit_Wing_PlanformType(Edit_Abstract):
         # the current dxf planform doesn't have a valid planform 
         # aks for a new dxf file
 
-        dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path=None, ref=False) 
+        dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path=None, ref=False, workingDir = self.workingDir) 
 
         self.wait_window (dxf_dialog)
    
         dxf_Path = dxf_dialog.dxf_pathFilename
         if dxf_Path:  
-            self.wing().planform =  Planform_DXF( self.wing(), dxf_Path= dxf_Path, ref = False)
+            self.wing().planform =  Planform_DXF( self.wing(), dxf_Path= dxf_Path, ref = False, workingkDir = self.workingDir)
             handled = True
             fireEvent (WING_CHANGED)                   # update hinge, flaps
         else: 
@@ -503,7 +503,7 @@ class Edit_Planform_DXF (Edit_Abstract):
 
         current_dxf_path = self.planform().dxf_pathFilename()
 
-        dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path = current_dxf_path) 
+        dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path = current_dxf_path,  workingDir = self.workingDir) 
 
         self.wait_window (dxf_dialog)
 
@@ -685,15 +685,13 @@ class Edit_WingSection(Edit_Abstract):
         """ select airfoil with explorer and load it if possible """
 
         filetypes  = [('dat files', '*.dat')]
-        initialDir = self.workingDir if self.workingDir is not None else os.getcwd()
-
+    
         newPathFilename = filedialog.askopenfilename(
                     title='Select airfoil file',
-                    initialdir=initialDir,
+                    initialdir=self.workingDir,
                     filetypes=filetypes)
         if newPathFilename: 
-            newRelPathFilename = os.path.relpath(newPathFilename, start = self.workingDir)
-            self.wingSection().set_airfoilWithPathFileName(newRelPathFilename, workingDir=self.workingDir)
+            self.wingSection().set_airfoilWithPathFileName(newPathFilename)
             self.refresh()
             fireEvent (AIRFOIL_CHANGED)
 
@@ -1366,8 +1364,11 @@ class Dialog_Abstract (ctk.CTkToplevel):
     height = 400
     titleText  = "My little title"
 
-    def __init__(self, master, *args, **kwargs):
+    def __init__(self, master, workingDir=None, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
+
+        # the default directory for file activities
+        self.workingDir = workingDir
 
         # the attribute for return ok
         self.return_OK = False
@@ -1499,11 +1500,9 @@ class Dialog_Load_DXF (Dialog_Abstract):
     def open_dxf_file (self):
 
         filetypes  = [('dxf files', '*.dxf')]
-        initialDir = self.tmpPlanform.wing.paramDir
-
         newPathFilename = filedialog.askopenfilename(
                     title='Open dxf file',
-                    initialdir=initialDir,
+                    initialdir=self.workingDir,
                     filetypes=filetypes)
 
         if newPathFilename: 
@@ -1549,11 +1548,10 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
     height = 470
     titleText  = "Export to ..."
 
-    def __init__(self, master, wingFn, Xflr5=False, Flz=False, workingDir=None, *args, **kwargs):
+    def __init__(self, master, wingFn, Xflr5=False, Flz=False, *args, **kwargs):
         super().__init__(master, *args, height=self.height/2, **kwargs)
 
         self.wing : Wing = wingFn()
-        self.workingDir = workingDir
 
         if Xflr5:
             self.exporter = self.wing.xflr5Exporter
@@ -1786,7 +1784,7 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         newFile = filedialog.asksaveasfilename(
                     title='Select directory for DXF export',
                     filetypes  = [('dxf files', '*.dxf')],
-                    initialdir=self.wing.paramDir,
+                    initialdir=self.wing.workingDir,
                     initialfile=self.wing.dxfPathFileName, defaultextension=".dxf")
         if newFile:
             # store only relativ path 
@@ -1935,19 +1933,12 @@ class App(ctk.CTk):
         """ Dispatcher for current WingSection between Edit and Diagramm """
         self._curWingSectionName = aName
 
-    @property
-    def paramDir (self): 
-        """directory of parameter file - which is default dir """
-        if self.paramFile: 
-            return os.path.dirname(self.paramFile)
-        else: 
-            return "."                                  # currentDir 
 
     @property
     def workingDir (self): 
         """default home directory for output files (e.g. export)
-        Currently equals paramDir """
-        return self.paramDir        
+        Currently equals to dir of parameter file """
+        return self.wing().workingDir        
 
     #------- file functions ----------------
 
@@ -1967,7 +1958,7 @@ class App(ctk.CTk):
         filetypes  = [('Planform Creator 2 files', '*.json')]
         newPathFilename = filedialog.askopenfilename(
                     title='Select new wing definition',
-                    initialdir=self.paramDir,
+                    initialdir=self.workingDir,
                     filetypes=filetypes)
 
         if newPathFilename:                     # user pressed open
@@ -1990,7 +1981,7 @@ class App(ctk.CTk):
 
         filetypes  = [('PC2 files', '*.json')]
         newPathFilename = filedialog.asksaveasfilename(title='Save parameter file',
-                                     initialdir=self.paramDir, filetypes=filetypes,
+                                     initialdir=self.workingDir, filetypes=filetypes,
                                      defaultextension = '.json')
         if newPathFilename: 
             ret =  self.wing().save(newPathFilename)
@@ -2032,7 +2023,7 @@ class App(ctk.CTk):
     def export_dxf (self):
         """export wing to dxf"""
 
-        export_dialog = Dialog_Export_Dxf (self, wingFn = self.wing) 
+        export_dialog = Dialog_Export_Dxf (self, wingFn = self.wing, workingDir = self.workingDir) 
         self.wait_window (export_dialog)
 
         if export_dialog.return_OK:
@@ -2045,7 +2036,7 @@ class App(ctk.CTk):
         """ load a dxf planform into the reference_dxf planform"""
         current_dxf_path = self.wing().refPlanform_DXF.dxf_pathFilename()
 
-        dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path = current_dxf_path, ref=True) 
+        dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path = current_dxf_path, ref=True, workingDir = self.workingDir) 
         self.wait_window (dxf_dialog)
 
         if dxf_dialog.return_OK: 
