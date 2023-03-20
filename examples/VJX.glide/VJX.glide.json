@@ -56,7 +56,7 @@
   ],
   "refPlanform_dxfPath":"VJX.glide_planform.dxf",
   "xflr5":{
-    "exportDir":"./xflr5",
+    "exportDir":"Xflr5",
     "useNick":true,
     "x-panels":10,
     "x-distribution":"cosine",
@@ -64,7 +64,7 @@
     "y-minWidth":5
   },
   "flz":{
-    "exportDir":"./Flz_vortex",
+    "exportDir":"Flz_vortex",
     "useNick":true,
     "x-panels":10,
     "x-distribution":"cosine",

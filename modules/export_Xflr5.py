@@ -21,12 +21,12 @@ class Export_Xflr5:
     distrib_name_map ["sine"]    = "SINE"
     distrib_name_map ["cosine"]  = "COSINE"
 
-    def __init__(self, myWing: Wing, myDict: dict = None): 
+    def __init__(self, wing: Wing, myDict: dict = None): 
 
-        self.wing       = myWing
-        self.workingDir = None         # will be set - root dir for exportDir (which is relative)    
-        self._exportDir      = fromDict (myDict, "exportDir", "./xflr5", msg=False)
-        self._useNick        = fromDict (myDict, "useNick", True, msg=False)
+        self.wing       = wing
+        self.workingDir = wing.workingDir       
+        self._exportDir = fromDict (myDict, "exportDir", "xflr5", msg=False)
+        self._useNick   = fromDict (myDict, "useNick", True, msg=False)
 
         # create an extra Planform for the paneled planform to export later to Xflr5, FLZ, ...
         self.paneledPlanform  = Planform_Paneled (self.wing, myDict)
@@ -44,17 +44,17 @@ class Export_Xflr5:
     
     @property
     def exportDir(self):
-        """the directory for xflr5 export - path is relativ to current"""
+        """the directory for flz export - path is relativ to current or absolute """
         return self._exportDir
     
     def set_exportDir(self, newStr): 
         # insure a valid, relativ path 
-        self._exportDir = os.path.relpath(newStr)
+        self._exportDir = PathHandler (workingDir=self.workingDir).relFilePath (newStr)
 
     @property
     def baseAndExportDir(self):
         """the directory for flz export including current dir """
-        return os.path.join (self.workingDir, self.exportDir)
+        return PathHandler (workingDir=self.workingDir).fullFilePath (self.exportDir)
 
     @property
     def useNick(self) -> bool: return self._useNick
@@ -62,7 +62,7 @@ class Export_Xflr5:
 
     @property
     def fileName(self): 
-        return self.wing.name.strip() +  '_wing.xml'
+        return self.wing.name.strip() +  '_wing.flz'
 
 
     def doIt (self): 

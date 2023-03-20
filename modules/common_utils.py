@@ -115,7 +115,7 @@ def toDict(dict, key, value):
 # Fiel, Path handling 
 #------------------------------------------------------------------------------
 
-class FilePathHandler(): 
+class PathHandler(): 
     """ handles relative Path of actual files to a workingDir """
 
     def __init__ (self, workingDir=None, onFile=None): 
@@ -156,14 +156,31 @@ class FilePathHandler():
             else: 
                 self.workingDir = os.path.dirname(aFilePath) 
 
-    def get_relFilePath (self, aFilePath):
+    def relFilePath (self, aFilePath):
         """ returns the relative path of aFilePath to the workingDir of self"""
-        if aFilePath is not None: 
-            return os.path.normpath(os.path.relpath(aFilePath, start = self.workingDir))
-        else: 
+        if aFilePath is None: 
             return None
+        else: 
+            try: 
+                relPath =  os.path.normpath(os.path.relpath(aFilePath, start = self.workingDir))
+                if len(relPath) > len(aFilePath): 
+                    return aFilePath                # relPath would be more complicated
+                else: 
+                    return relPath 
+            except:                                 # aFilePath is on different drive 
+                return aFilePath 
     
-    def get_fullFilePath (self, aRelPath):
-        """ returns the full path of relative aRelPath and  the workingDir of self"""
+    def fullFilePath (self, aRelPath):
+        """ returns the full path of relative aRelPath and the workingDir of self"""
 
-        return os.path.normpath(os.path.join (self.workingDir, aRelPath))
+        if aRelPath is None: 
+            return self.workingDir
+        else: 
+            if os.path.isabs (aRelPath): 
+                # maybe we can make a rel path out of it? 
+                newPath = self.relFilePath (aRelPath)
+                if os.path.isabs (newPath):
+                    return aRelPath                 # we surrender - it's absolute
+                else: 
+                    aRelPath = newPath              # now we have a real real path 
+            return os.path.normpath(os.path.join (self.workingDir, aRelPath))

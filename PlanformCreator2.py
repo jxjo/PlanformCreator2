@@ -1561,7 +1561,6 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
             self.mode = "FLZ_vortex"
         else:
             return  
-        self.exporter.set_baseDir (self.workingDir)
         self.paneledPlanform = self.exporter.paneledPlanform
 
         # main grid 3 x 1  (preview + edit + buttons) 
@@ -1581,7 +1580,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
 
         # artists for preview
         self.diagram_axes = self.diagram_frame.axes
-        self.panelArtist    = PaneledPlanform_Artist (self.diagram_frame.axes, 
+        self.panelArtist  = PaneledPlanform_Artist (self.diagram_frame.axes, 
                                 wingFn, self.paneledPlanform, show=True)
         self.panelArtist.refresh(figureUpdate=True)
 
@@ -1649,14 +1648,13 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
     def select_dir(self):
         " open dialog for directory selection"
 
-        initialDir = os.path.normpath (os.path.join (self.workingDir, self.exporter.exportDir))
         newDir = filedialog.askdirectory(
                     title='Select directory for export',
-                    initialdir=initialDir)
+                    initialdir=self.exporter.baseAndExportDir)
         if newDir:
-            # store only relativ path 
-            self.exporter.set_exportDir (os.path.relpath(newDir, start = self.workingDir))
+            self.exporter.set_exportDir (newDir)
             super().refresh()
+
 
     def check_y_deviation (self): 
         # build a user message if the deviation of the paneled wing to the actual wing is too high

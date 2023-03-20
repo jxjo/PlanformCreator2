@@ -64,7 +64,7 @@ class Wing:
             self.paramFilePath = paramFilePath
 
         # handler for the realtive path to the paramter file (working directory)
-        self.pathHandler = FilePathHandler (onFile=paramFilePath)
+        self.pathHandler = PathHandler (onFile=paramFilePath)
 
         self.dataDict = dataDict
 
@@ -284,7 +284,7 @@ class Wing:
             return self.name + ".dxf"
     def set_dxfPathFileName(self, newPathFilename):
         """ store newPathFilename as relative path to current working dir """
-        self._dxfPathFileName =  self.pathHandler.get_relFilePath (newPathFilename)
+        self._dxfPathFileName =  self.pathHandler.relFilePath (newPathFilename)
 
     @property
     def dxfAirfoilsTeGap (self): return self._dxfAirfoilsTeGap
@@ -633,7 +633,7 @@ class Wing:
             dxf.plot_airfoils (teGap_mm=self.dxfAirfoilsTeGap)
 
         # dxfPathFileName was saved before relativ to working Dir 
-        pathFileName = self.pathHandler.get_fullFilePath (self.dxfPathFileName)
+        pathFileName = self.pathHandler.fullFilePath (self.dxfPathFileName)
         dxf.save (pathFileName)
 
         InfoMsg ("DXF file '%s' written to '%s' " % (self.dxfPathFileName, self.pathHandler.workingDir) ) 
@@ -1609,7 +1609,7 @@ class Planform_DXF(Planform):
 
 
         if self._dxfPathFilename is not None:
-            dxfFullPathName = self.wing.pathHandler.get_fullFilePath (self._dxfPathFilename)
+            dxfFullPathName = self.wing.pathHandler.fullFilePath (self._dxfPathFilename)
             if os.path.isfile (dxfFullPathName):
                 self.load_dxf (dxfFullPathName)
             else:
@@ -1650,10 +1650,7 @@ class Planform_DXF(Planform):
         
         if aNewPathFile:
             # the path could be either absolute or relative to parameter dict
-            if os.path.isabs (aNewPathFile):
-                loadPathFile = aNewPathFile
-            else:
-                loadPathFile = self.wing.pathHandler.get_fullFilePath (aNewPathFile)
+            loadPathFile = self.wing.pathHandler.fullFilePath (aNewPathFile)
             if not os.path.isfile(loadPathFile):
                 ErrorMsg ("DXF file \'%s\' does not exist" % loadPathFile)
             else:
@@ -1661,7 +1658,7 @@ class Planform_DXF(Planform):
                 self.load_dxf (loadPathFile)
 
             if self.isValid:
-                self._dxfPathFilename = self.wing.pathHandler.get_relFilePath(loadPathFile)
+                self._dxfPathFilename = self.wing.pathHandler.relFilePath(loadPathFile)
         else: 
             # clear self
             self._dxfPathFilename  = None
@@ -2311,7 +2308,7 @@ class WingSection:
     def set_airfoilWithPathFileName (self, pathFileName):
         """ sets a new real Airfoil based on its path and loads it """
 
-        relPathFile = self.wing.pathHandler.get_relFilePath (pathFileName)
+        relPathFile = self.wing.pathHandler.relFilePath (pathFileName)
         self._init_airfoil (pathFileName=relPathFile, workingDir= self.wing.workingDir)
         self.airfoil.load()
 
@@ -2419,36 +2416,12 @@ class Flap:
         self.lineRight  = myWing.planform.flapLineAt  (sectionRight.yPos)
          
 
-
 #-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
-
-
 
 # Main program for testing 
 if __name__ == "__main__":
 
-
     print ("Current directory: ",os.getcwd())
-    filename = ".\\ressources\\planformdata.json"
+    filename = "..\examples\Amokka-JX\Amokka-JX.json"
     # filename = ""
     myWing = Wing (filename)
-
-    y, x = myWing.planform.flapPolygon (0,500, nPoints=50)
-
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for flap in myWing.getFlaps():
-       ax.plot (flap.y,flap.x, label = flap.flapGroup) 
-    ax.legend()
-    plt.show()
-
-    # print  (myWing.planform.flapPolygon (0,500, nPoints=4) )
-
-"""     for i in range(5):
-        if myWing.planformType == "elliptical": 
-            myWing.set_planformType ("trapezoidal")
-        else:
-            myWing.set_planformType ("elliptical")
- """
