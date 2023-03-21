@@ -881,11 +881,16 @@ class Airfoil_Artist (Base_Artist):
     def _plot_marker (self, x,y, color, section: WingSection):
         # annotate airfoil with name etc. 
 
-        text = "'"+ section.airfoilNick() + "'\n" + section.airfoilName() + "\n@" + section.name() 
+        airfoil = section.airfoil 
+        text = "'"+ section.airfoilNick() + "' - " + section.airfoilName() + "  @" + section.name() + \
+               "\n" + \
+               "\nThickness  %.2f%%  at  %.2f%%" % (airfoil.maxThickness[0]*100, airfoil.maxThickness[1]*100) +\
+               "\nCamber     %.2f%%  at  %.2f%%" % (airfoil.maxCamber[0]*100, airfoil.maxCamber[1]*100) 
+
         y = np.amin(y) * 0.3
         x = np.amax(x) * 0.8
         p = self.ax.annotate(text, color=color, 
-                xy=(x, y), xycoords='data', ha='center',
+                xy=(x, y), xycoords='data', ha='left', va= 'top',
                 xytext=(0, -50), textcoords='offset points')
         self._add(p)
 
@@ -945,7 +950,7 @@ class AirfoilName_Artist (Base_Artist):
         text = "'"+ section.airfoilNick() + "'" + "\n" + section.airfoilName()
 
         color = next(self.ax._get_lines.prop_cycler)['color']
-        p = self.ax.text (marker_x, marker_y, text, color=color, # fontsize = 'small',
+        p = self.ax.text (marker_x, marker_y, text, color=color, 
                           transform=self.ax.get_xaxis_transform(), 
                           horizontalalignment='center', verticalalignment='top')
         self._add (p)   

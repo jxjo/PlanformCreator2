@@ -56,7 +56,7 @@
   ],
   "refPlanform_dxfPath":"VJX.glide_planform.dxf",
   "xflr5":{
-    "exportDir":"Xflr5",
+    "exportDir":"xflr5",
     "useNick":true,
     "x-panels":10,
     "x-distribution":"cosine",

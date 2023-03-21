@@ -1936,18 +1936,12 @@ class WingSection:
         self._norm_chord = fromDict (dataDict, "norm_chord", None)
         self._flapGroup  = fromDict (dataDict, "flapGroup", 1, False)
 
-        if (self._yPos == 0.0 or self._norm_chord == 1.0): 
-            self._yPos = 0.0
+        self.isRoot = (self._yPos == 0.0) 
+        self.isTip  = (self._yPos == self.wing.halfwingspan)
+
+        if self.isRoot:
             self._norm_chord = 1.0
-            self.isRoot = True
-        else:
-            self.isRoot = False
-
-        if (self._yPos == self.wing.halfwingspan): 
-            self.isTip  = True
-        else:
-            self.isTip  = False
-
+ 
         if (self._yPos is None and self._norm_chord is None):
             ErrorMsg ("Wing section: Either position or chord / reynolds must be set")
             NoteMsg  ("Wing section: Setting chord to 0.8 of root")
@@ -2425,3 +2419,4 @@ if __name__ == "__main__":
     filename = "..\examples\Amokka-JX\Amokka-JX.json"
     # filename = ""
     myWing = Wing (filename)
+

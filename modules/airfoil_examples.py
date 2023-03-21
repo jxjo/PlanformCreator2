@@ -20,8 +20,11 @@ class Example_Airfoil (Airfoil):
         # super().__init__()
         """Abstract superclass for exmaple airfoils
         """
-        self._x   = None
-        self._y   = None
+        self._x       = None
+        self._y       = None
+        self._upper   = None                    # upper surface line object 
+        self._lower   = None                    # lower surface line object 
+
         self.pathFileName = None
         self.load ()
 
