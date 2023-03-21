@@ -10,6 +10,39 @@
 import os
 import numpy as np
 from common_utils import * 
+from scipy.interpolate import splprep, splrep, splev, interp1d, sproot
+from scipy.optimize import fmin, brentq
+
+
+
+
+def _cosinus_distribution (xfacStart=0, xfacEnd=1, nPoints=100):
+    """ 
+    returns an array with cosinues distributed values 0..1
+    
+    xfacStart: shift of cosinus start point - default 0 towards 1
+    xfacEnd:   shift of cosinus endpoint - default 1 towards 0 
+    npoints:    number of points to generate - default 100
+    """
+
+    xfacStart = max(0.0, xfacStart)
+    xfacStart = min(1.0, xfacStart)
+    xfacEnd   = max(0.0, xfacEnd)
+    xfacEnd   = min(1.0, xfacEnd)
+
+    if xfacStart >= xfacEnd: raise ValueError ("Airfoil x-distribution: start > end")
+
+    beta = np.linspace(xfacStart, xfacEnd * np.pi, nPoints)
+    xnew = (1.0 - np.cos(beta)) * 0.5
+
+    # normalize to 0..1
+    xmin = np.amin(xnew)
+    xmax = np.amax(xnew) 
+    xnew = (xnew - xmin) / (xmax-xmin)
+
+    return xnew.round(10)
+ 
+
 
 
 class Airfoil:
@@ -20,7 +53,6 @@ class Airfoil:
     """
 
     isStrakAirfoil  = False
-    isInterpolated  = False 
     isExample       = False                     # vs. Example_Airfoil 
 
     def __init__(self, pathFileName = None, name = None, workingDir= None):
@@ -35,10 +67,13 @@ class Airfoil:
         self.pathFileName = None
         self.workingDir   = workingDir if workingDir is not None else ''
         self.name         = name if name is not None else ''
-        self.sourceName = None                     # the long name out of the two blended airfoils (TSrakAirfoil)
+        self.sourceName = None                  # the long name out of the two blended airfoils (TSrakAirfoil)
 
-        self._x   = None
-        self._y   = None
+        self._x       = None
+        self._y       = None
+        self._upper   = None                    # upper surface line object 
+        self._lower   = None                    # lower surface line object 
+
 
         if (pathFileName is not None): 
             if os.path.isabs (pathFileName):
@@ -85,6 +120,22 @@ class Airfoil:
         
     @property
     def y (self): return self._y
+
+    @property
+    def x_rebuild (self):
+        "x coordinates - rebuild from upper and lower "
+        if self._upper is None: 
+            return []
+        else:
+            return np.concatenate ((np.flip(self._upper.x), self._lower.x[1:]))
+        
+    @property
+    def y_rebuild (self):
+        "y coordinates - rebuild from upper and lower "
+        if self._upper is None: 
+            return []
+        else:
+            return np.concatenate ((np.flip(self._upper.y), self._lower.y[1:]))
         
 
     @property
@@ -104,6 +155,56 @@ class Airfoil:
         ile = np.argmin (self._x)
         if self._x[ile] != 0.0 or self._y[ile] != 0.0: return False
         return True
+    
+    @property
+    def maxThickness (self): 
+        """ returns max thickness and its x-Position"""
+        xt, tmax = self.thickness.maximum() 
+        return tmax, xt 
+
+    @property
+    def maxCamber (self): 
+        """ returns max camber and its x-Position"""
+        xt, tmax = self.camber.maximum() 
+        return tmax, xt 
+
+    @property
+    def upper(self) -> 'LineOfAirfoil': 
+        """returns the upper surface as a line object - where x 0..1"""
+        if self.isLoaded:
+            if self._upper is None: 
+                self._splitUpperLower ()
+            return self._upper
+        else: 
+            return None
+            
+    @property
+    def lower(self) -> 'LineOfAirfoil': 
+        """returns the lower surface as a line object - where x 0..1"""
+        if self.isLoaded:
+            if self._lower is None: 
+                self._splitUpperLower ()
+            return self._lower
+        else: 
+            return None
+
+    @property
+    def camber(self) -> 'LineOfAirfoil': 
+        """returns the camber line object - where x 0..1  with cosinus distribution"""
+        if self.isLoaded:
+            return LineOfAirfoil (self.upper.x, (self.upper.y + self.lower.y_interpol(self.upper.x))/2, 
+                                  cosinus=True)
+        else: 
+            return None
+
+    @property
+    def thickness(self) -> 'LineOfAirfoil': 
+        """returns the thickness distribution line object - where x 0..1 with cosinus distribution"""
+        if self.isLoaded:
+            return LineOfAirfoil (self.upper.x, (self.upper.y - self.lower.y_interpol(self.upper.x)), 
+                                  cosinus=True)
+        else: 
+            return None
 
     #-----------------------------------------------------------
 
@@ -295,85 +396,6 @@ class Airfoil:
 
         plt.show()    
 
-
-
-class Airfoil_Interpolated (Airfoil):
-    """ Airfoil which coordinates are (can be) interpolated using scipy.interpolate"""
-
-    isInterpolated  = True 
-    isStrakAirfoil  = False
-    
-    @classmethod
-    def fromAirfoil (cls, anAirfoil: Airfoil):
-        """
-        Alternate constructor for new interpolated Airfoil based on another"""
-    
-        pathFileName  = anAirfoil.pathFileName
-        name          = anAirfoil.name
-
-        return cls(pathFileName = pathFileName, name = name, anAirfoil = anAirfoil)
-    
-    def __init__(self, pathFileName = '', name = '', anAirfoil : Airfoil = None):
-        """
-        Main constructor for new Airfoil
-
-        Args:
-            :pathFileName: optional - string of existinng airfoil path and name \n
-            :name: optional - name of airfoil - no checks performed 
-        """
-        super().__init__()
-
-        self._x_upper = None
-        self._y_upper = None
-        self._x_lower = None
-        self._y_lower = None
-        self._y_upper_interp = None
-        self._y_lower_interp = None
-        self._x   = None
-        self._y   = None
-
-        if anAirfoil is not None: 
-            if anAirfoil.isLoaded: 
-                self._x = np.asarray (anAirfoil.x)
-                self._y = np.asarray (anAirfoil.y) 
-                self.pathFileName = anAirfoil.pathFileName
-                self.name         = anAirfoil.name + " -interpolated-"
-            else: 
-                raise ValueError ("Airfoil "+ anAirfoil.name + "not loaded")
-        elif pathFileName: 
-            self.load()
-        else:
-            self.name = "<strak>"
-            self.pathFileName = None
-
-        if self._x is not None:
-            if np.size(self._x) > 20 and np.size(self._x) == np.size(self._y):
-
-                self._splitUpperLower ()
-                self._y_upper_interp = self._get_interpol_fn ( self._x_upper, self._y_upper)
-                self._y_lower_interp = self._get_interpol_fn ( self._x_lower, self._y_lower)
-
-    @property
-    def x (self):
-        "x coordinates - rebuild from upper and lower "
-        if self._x_upper is None: 
-            return []
-        else:
-            return np.concatenate ((np.flip(self._x_upper), self._x_lower[1:]))
-        
-    @property
-    def y (self):
-        "y coordinates - rebuild from upper and lower "
-        if self._y_upper is None: 
-            return []
-        else:
-            return np.concatenate ((np.flip(self._y_upper), self._y_lower[1:]))
-
-    @property
-    def isLoaded (self):
-        return self._x_upper is not None
-    
-
     def _splitUpperLower (self):
         """ split self._x,y into upper and lower coordinates """
 
@@ -381,49 +403,16 @@ class Airfoil_Interpolated (Airfoil):
             raise ValueError ("Airfoil '" + self.name + "' isn't normalized. Cannot split.")
         
         iLe = np.argmin (self._x) 
-        self._x_upper = np.flip (self._x [0: iLe + 1])
-        self._y_upper = np.flip (self._y [0: iLe + 1])
-        self._x_lower = self._x[iLe:]
-        self._y_lower = self._y[iLe:]
 
-    def _get_interpol_fn (self, x, y):
-
-        from scipy.interpolate import interp1d
-
-        return interp1d(x, y, kind='cubic', bounds_error=False, fill_value="extrapolate") 
-    
-    def _x_distributed (self, xfacStart, xfacEnd, nPoints):
-
-        xfacStart = max(0.0, xfacStart)
-        xfacStart = min(2.0, xfacStart)
-        xfacEnd   = max(0.0, xfacEnd)
-        xfacEnd   = min(2.0, xfacEnd)
-
-        if xfacStart >= xfacEnd: raise ValueError ("Airfoil x-distribution: start > end")
-
-        newX = np.sin (np.pi / 2 * (np.linspace(xfacStart, xfacEnd, nPoints) +3.0)) 
-
-        # normalize to 0..1
-        xmin = np.amin(newX)
-        xmax = np.amax(newX) 
-        newX = (newX - xmin) / (xmax-xmin)
-
-        # round - ensure 0.0 .. 1.0 
-        newX = np.around (newX,10) 
-        return newX
-         
-
-    def set_x_upper_lower (self,x): 
-        """set new values (array) for upper and lower x - evaluate y with interpolation"""
-
-        self._x_upper = x
-        self._x_lower = x
-        self._y_upper = self._y_upper_interp(x)
-        self._y_lower = self._y_lower_interp(x)
-         
+        # upper - extract coordinates - reverse it - now running from 0..1
+        self._upper = LineOfAirfoil(np.flip (self._x [0: iLe + 1]), np.flip (self._y [0: iLe + 1]))
+        # lower - extract coordinates 
+        self._lower = LineOfAirfoil(self._x[iLe:], self._y[iLe:])
 
 
-class Airfoil_Straked (Airfoil_Interpolated):
+
+
+class Airfoil_Straked (Airfoil):
     """ Airfoil which is straked (blended) from it's neighbours"""
 
     isStrakAirfoil = True
@@ -441,70 +430,46 @@ class Airfoil_Straked (Airfoil_Interpolated):
         return airfoilDict
 
 
-    def do_strak (self, airfoil_in1 : Airfoil, airfoil_in2:Airfoil, blendBy):
+    def do_strak (self, airfoil1 : Airfoil, airfoil2 : Airfoil, blendBy):
         """ straks (blends) self out of two airfoils to the left and right
         depending on the blendBy factor"""
-
-        if airfoil_in1.isInterpolated: 
-            airfoil1 = airfoil_in1
-        else:
-            airfoil1 = Airfoil_Interpolated.fromAirfoil(airfoil_in1)
-
-        if airfoil_in2.isInterpolated: 
-            airfoil2 = airfoil_in2
-        else:
-            airfoil2 = Airfoil_Interpolated.fromAirfoil(airfoil_in2)
     
-        if blendBy <= 0.5:
-            x_ref_upper = airfoil1._x_upper
-            x_ref_lower = airfoil1._x_lower
+        if blendBy <= 0.5:                      # the closer airfoil provides x-coordinates
+            x_ref_upper = airfoil1.upper.x
+            x_ref_lower = airfoil1.lower.x
         else:
-            x_ref_upper = airfoil2._x_upper
-            x_ref_lower = airfoil2._x_lower
+            x_ref_upper = airfoil2.upper.x
+            x_ref_lower = airfoil2.lower.x
 
-        self._x_upper = x_ref_upper
-        self._y_upper = (1 - blendBy) * airfoil1._y_upper + \
-                             blendBy  * airfoil2._y_upper_interp(x_ref_upper)
+        x_upper = x_ref_upper
+        y_upper = (1 - blendBy) * airfoil1.upper.y + \
+                             blendBy  * airfoil2.upper.y_interpol(x_ref_upper)
 
-        self._x_lower = x_ref_lower
-        self._y_lower = (1 - blendBy) * airfoil1._y_lower + \
-                             blendBy  * airfoil2._y_lower_interp(x_ref_lower)
+        x_lower = x_ref_lower
+        y_lower = (1 - blendBy) * airfoil1.lower.y + \
+                             blendBy  * airfoil2.lower.y_interpol(x_ref_lower)
         
-        self._x = np.concatenate ((np.flip(self._x_upper), self._x_lower[1:]))
-        self._y = np.concatenate ((np.flip(self._y_upper), self._y_lower[1:]))
-        
-        self.sourceName = airfoil_in1.name + ("_with_%.2f_" % blendBy) + airfoil_in2.name
+        self._x = np.concatenate ((np.flip(x_upper), x_lower[1:]))
+        self._y = np.concatenate ((np.flip(y_upper), y_lower[1:]))
 
-    def do_strak_Worker  (self, leftAir : Airfoil, rightAir:Airfoil, blendBy):
-        """ straks (blends) self out of two airfoils to the left and right."""
-        # import shutil
+        self._upper = LineOfAirfoil(x_upper, y_upper)
+        self._lower = LineOfAirfoil(x_lower, y_lower)
 
-        # tmpDir = "~tmp"
+        self.sourceName = airfoil1.name + ("_with_%.2f_" % blendBy) + airfoil2.name
 
-        # leftPathFile  = leftAir.copyAs  (dir=tmpDir)
-        # rightPathFile = rightAir.copyAs (dir=tmpDir)
 
-        # newName = leftAir.name + ("_with_%.2f_" % blendBy) + rightAir.name
 
-        # result = XfoilWorker().blendAirfoils(leftPathFile, rightPathFile,blendBy, newName)
+#------------ Spline Classes -----------------------------------
 
-        # if result == 0:
-        #     newPathFile = os.path.join(tmpDir,newName) + '.dat'
-        #     self.load (fromPath=newPathFile)
 
-        #     self.sourceName = os.path.splitext(os.path.basename(newPathFile))[0]
-        # else: 
-        #     ErrorMsg ("'xfoil_worker' couldn't be executed.")
-
-        # shutil.rmtree(tmpDir)
-
-        return
-
-from scipy.interpolate import splprep, splev, interp1d, sproot
 
 class SplineOfAirfoil: 
-    """ Spline representation of airfoil"""
-
+    """ 
+    2D B-Spline representation of airfoil all around the contour
+    
+    Parameter is the arc length 0..1 of the splined contour. 
+    The 2D spline is used to get the best approximation of the airfoil e.g. for re-paneling
+    """
 
     def __init__ (self, x,y):
 
@@ -516,7 +481,7 @@ class SplineOfAirfoil:
 
         # B-spline representation of an N-D curve.
         s = 0.0                                 # no smoothing 
-        k = 3                                   # oder of spline - cubic
+        k = 5                                   # oder of spline - cubic
         self._u    = None                       # the arc positionen around airfoil 0..1
         self._tck  = 0                          # spline parameters - see scipy splprep 
         self._x = x  #test
@@ -572,9 +537,11 @@ class SplineOfAirfoil:
         """
 
         # get a new high res distribution for upper and lower 
-        u_new_upper = np.linspace (self.uLe, 0.0, 400)
-        u_new_lower = np.linspace (self.uLe, 1.0, 400)
-        
+        # u_new_upper = np.linspace (self.uLe, 0.0, 100)
+        # u_new_lower = np.linspace (self.uLe, 1.0, 100)
+        u_new_upper = np.abs (np.flip(_cosinus_distribution (0.1, 1.2, 100)) -1) * self.uLe
+        u_new_lower = _cosinus_distribution (0.1, 1.2, 100) * (1- self.uLe) + self.uLe
+
         x_upper, y_upper = splev (u_new_upper, self._tck, der= 0)
         x_lower, y_lower = splev (u_new_lower, self._tck, der= 0)
 
@@ -618,37 +585,228 @@ class SplineOfAirfoil:
         cmax_x = self._xthick[np.argmax (self._camber)]
         return cmax, cmax_x
 
-    def _x_cos_distributed (self, xfacStart, xfacEnd, nPoints):
 
-        xfacStart = max(0.0, xfacStart)
-        xfacStart = min(2.0, xfacStart)
-        xfacEnd   = max(0.0, xfacEnd)
-        xfacEnd   = min(2.0, xfacEnd)
 
-        if xfacStart >= xfacEnd: raise ValueError ("Airfoil x-distribution: start > end")
+class LineOfAirfoil: 
+    """ 
+    1D line of an airfoil like upper, lower side, camber line, curvature etc...
 
-        newX = np.sin (np.pi / 2 * (np.linspace(xfacStart, xfacEnd, nPoints) +3.0)) 
+    Uses 1D interpolation to get intermediate points
+    """
 
-        # normalize to 0..1
-        xmin = np.amin(newX)
-        xmax = np.amax(newX) 
-        newX = (newX - xmin) / (xmax-xmin)
+    default_cosinus = _cosinus_distribution (0.1, 0.8, 80)
 
-        # round - ensure 0.0 .. 1.0 
-        newX = np.around (newX,10) 
-        return newX
+    def __init__ (self, x,y, cosinus=False):
+
+        if cosinus:                             # spline new with cosinus distrivution 
+            tck = splrep(x, y, k=3)  
+            self._x = self.default_cosinus # "soft" cosinus 
+            self._y = splev(self._x, tck, der=0)
+        else: 
+            self._x = np.asarray(x).round(10)
+            self._y = np.asarray(y).round(10)
+
+        self._cosinus = cosinus
+        self._tck = splrep(x, y, k=3)           # scipy splrep spline definition  
+
+    @property
+    def x (self):
+        return self._x
+    
+    @property
+    def y (self): 
+        return self._y
+    
+    @property
+    def deriv1 (self): 
+        """ return derivate 1 of spline at x"""
+
+        # ensure a smooth leading edge - otherwise derivative tends to oscillate at LE 
+        if self._cosinus: 
+            x = self._x
+        else:                                   
+            x = self.default_cosinus            
+        y_deriv1 = splev(x, self._tck, der=1).round(10)
+
+        return LineOfAirfoil (x, y_deriv1)
+    
+    @property
+    def angle (self): 
+        """ return the angle in degrees at knots"""
+
+        angle  = (np.arctan (self.deriv1.y) * 180 / np.pi).round(10)
+        return LineOfAirfoil (self.deriv1.x, angle)
+
+    @property
+    def deriv2 (self): 
+        """ return derivate 2 of spline at x"""
+        # ensure a smooth leading edge - otherwise derivative tends to oscillate at LE 
+        if self._cosinus: 
+            x = self._x
+        else:                                   
+            x = self.default_cosinus            
+        y_deriv2 = splev(x, self._tck, der=2).round(10)
+
+        return LineOfAirfoil (x, y_deriv2)
+
+    @property
+    def deriv3 (self): 
+        """ return derivate 3 of spline at x - starting at x=0.05 because of oscillations """
+        # ensure a smooth leading edge - otherwise derivative tends to oscillate at LE 
+        if self._cosinus: 
+            x = self._x
+        else:                                   
+            x = self.default_cosinus  
+
+        # re-spline deriv1 to get a smoother deriv 3
+        tck = splrep(x, self.deriv1.y, k=3)  
+
+        # now get deriv 2 of the splined deriv 1          
+        newx = np.linspace (0.05,1, 150)
+        y_deriv3 = splev(newx, tck, der=2).round(10)
+
+        return LineOfAirfoil (newx, y_deriv3)
+    
+    @property
+    def curvature (self): 
+        " return the curvature at knots at x"
+
+        yd1 = self.deriv1.y
+        x   = self.deriv1.x
+        yd2 = self.deriv2.y
+
+        curv = yd2 / (1 + yd1**2) ** 1.5
+        
+        return LineOfAirfoil (x, curv) 
+
+    def reversals (self): 
+        """ 
+        returns a list of reversals (change of curvature sign equals curvature = 0 )
+        A reversal is a tuple (x,y) indicating the reversal on self. 
+        """
+        curv = self.curvature 
+
+        roots = []
+        for i in range(len(curv.x)-1):
+            if (curv.y[i] * curv.y[i+1]) < 0.0:
+                # interpolate the exact x position of the root (curvature = 0)
+                x0 = brentq(lambda y: curv.y_interpol(y), curv.x[i] , curv.x[i+1])
+                # get the y-value 
+                y  = self.y_interpol (x0)
+                roots.append((round(x0,10),round(y,10)))
+        return roots
+
+    def maximum (self): 
+        """ 
+        returns the x and y position of the maximum y value of self
+        """
+        # scipy only allows finding minimum - so take negative abs-function  
+        # use scipy to find the minimum
+        xmax = fmin(lambda x : - abs(self.y_interpol (x)), 0.5, disp=False)[0]
+
+        ymax = self.y_interpol (xmax)
+        return round(xmax,10), round(ymax,10)
+    
+    
+    def y_interpol (self,x):
+        """ returns interpolated y values based on new x-distribution"""
+                
+        a = splev(x, self._tck, der=0, ext=3)
+        return a.round(10)
+
+
+
+    # def set_x_upper_lower (self,x): 
+    #     """set new values (array) for upper and lower x - evaluate y with interpolation"""
+
+    #     self._x_upper = x
+    #     self._x_lower = x
+    #     self._y_upper = self._y_upper_interp(x)
+    #     self._y_lower = self._y_lower_interp(x)
+         
+
 
 
 
 # Main program for testing -----------------------------------
+
+
+def lineTest ():
+
+    import matplotlib.pyplot as plt
+    from airfoil_examples import Root_Example, Tip_Example
+    
+    air =Tip_Example()
+
+    y = air.y
+    x = air.x
+
+    # spl = SplineOfAirfoil (x,y) 
+    # x_upper, t, c = spl.thickness_camber()
+
+    # print ("Thickness: ", spl.get_maxThickness())
+    # print ("Camber:    ", spl.get_maxCamber())
+
+    fig, axa = plt.subplots(3, 1, figsize=(16,8))
+    fig.subplots_adjust(left=0.05, bottom=0.05, right=0.98, top=0.95, wspace=None, hspace=0.15)
+
+    fig.suptitle(air.name)
+    ax1 = axa[0]
+    ax2 = axa[1]
+    ax3 = axa[2]
+ 
+    ax1.grid(True)
+    ax2.grid(True)
+    ax3.grid(True)
+
+    ax1.axis('equal')
+    ax1.set_ylim([ -0.2,  0.2])
+    # ax1.plot(x, y, '-', label='x y')
+    ax1.plot(x, y,      marker='o', lw=1, fillstyle='none', markersize=4, label='x y points')
+    #ax1.plot(x_upper, t, '-.', label='thickness')
+    #ax1.plot(x_upper, c, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='camber 2D')
+    ax1.plot(air.upper.x, air.upper.y, '-', label='upper')
+    ax1.plot(air.lower.x, air.lower.y, '-', label='lower')
+    ax1.plot(air.camber.x, air.camber.y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='camber 1D')
+    ax1.plot(air.thickness.x, air.thickness.y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='thickness 1D')
+
+    # ax2.set_ylim([ -1.5,  1.5])
+    # ax2.plot (air.upper.angle.x,air.upper.angle.y, marker='o', lw=1, fillstyle='none', markersize=4, label='upper angle')
+    # ax2.plot (air.lower.angle.x,air.lower.angle.y, marker='o', lw=1, fillstyle='none', markersize=4, label='lower angle')
+
+    # ax2.set_ylim([ -1.5,  1.5])
+    # ax2.plot (air.upper.deriv2.x,air.upper.deriv2.y, marker='o', lw=1, fillstyle='none', markersize=4, label='upper deriv2')
+    # ax2.plot (air.lower.deriv2.x,air.lower.deriv2.y, marker='o', lw=1, fillstyle='none', markersize=4, label='lower deriv2')
+
+    ax2.set_ylim([ -1.0,  1.0])
+    ax2.plot (air.upper.curvature.x, -air.upper.curvature.y, label='upper curvature')
+    ax2.plot (air.lower.curvature.x, -air.lower.curvature.y, label='lower curvature')
+
+    ax3.set_ylim([ -10.0,  10.0])
+    ax3.set_xlim([ -0.05, 1.05])
+    ax3.plot (air.upper.deriv3.x, air.upper.deriv3.y, label='upper deriv3')
+    ax3.plot (air.lower.deriv3.x, air.lower.deriv3.y, label='lower deriv3')
+
+    ax1.legend()
+    ax2.legend()
+    ax3.legend()
+
+    print ("Max   upper:  ", air.upper.maximum())
+    print ("Roots upper:  ", air.upper.reversals())
+    print ("Max   lower:  ", air.lower.maximum())
+    print ("Roots lower:  ", air.lower.reversals())
+
+    print ("Max Thickness: %.2f%%  at %.2f%%" % (air.maxThickness[0]*100, air.maxThickness[1]*100) )
+    print ("Max Camber:    %.2f%%  at %.2f%%" % (air.maxCamber[0]*100, air.maxCamber[1]*100) )
+    plt.show()
+
 
 def cubicSplineTest ():
 
     import matplotlib.pyplot as plt
     from airfoil_examples import Root_Example, Tip_Example
     
-    air1 = Tip_Example()
-    air = Airfoil_Interpolated.fromAirfoil(air1)
+    air = Tip_Example()
 
     y = air.y
     x = air.x
@@ -667,7 +825,6 @@ def cubicSplineTest ():
     ax1.set_ylim([ -0.2,  0.2])
     # ax1.set_xlim([ 0.0, 1.1])
 
-    ax2.set_ylim([ -20,  20])
     ax3.set_ylim([ -1,  1])
 
     ax1.grid(True)
@@ -676,8 +833,12 @@ def cubicSplineTest ():
 
     ax1.plot(x, y, '-', label='x y')
     ax1.plot(x_upper, t, '-.', label='thickness')
-    ax1.plot(x_upper, c, '-', label='camber')
-    ax2.plot (x,spl.angle, label='Angle')
+    ax1.plot(x_upper, c, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='camber 2D')
+    ax1.plot(air.camber.x, air.camber.y, '-', label='camber 1D')
+
+    # ax2.set_ylim([ -20,  20])
+    ax2.plot (x,spl.angle, marker='o', lw=1, fillstyle='none', markersize=4, label='Angle')
+    # ax2.plot (x,spl.deriv1, label='Angle')
     ax3.plot (x,spl.curvature, label='Curvature')
 
     ax1.legend()
@@ -695,11 +856,8 @@ def blendTest():
     air2 = Tip_Example()
     air2.load()
 
-    airStrak = Airfoil_Straked.fromAirfoil(air1)
-    airStrak.do_strak (air1, air2, 0.5)
-
-    airNewX = Airfoil_Interpolated.fromAirfoil(air1)
-
+    airStrak = Airfoil_Straked()
+    airStrak.do_strak (air1, air2, 0.7)
 
     fig = plt.figure()
     plt.style.use('seaborn-v0_8-ticks')
@@ -713,23 +871,13 @@ def blendTest():
     ax.grid()
 
     ax.plot(air1.x, air1.y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label=air1.name)
+    ax.plot(air1.camber.x, air1.camber.y, '-', lw=1, fillstyle='none', markersize=4, label=air1.name+ " camber")
     ax.plot(air2.x, air2.y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label=air2.name)
-    ax.plot(airStrak.x, airStrak.y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label=airStrak.name)
-    newX = airNewX._x_distributed (0.0, 1.0, 100)
-    airNewX.set_x_upper_lower (newX)
-    ax.plot(airNewX.x, airNewX.y, '-', marker='o', lw=1, fillstyle='none', markersize=6, label=air1.name + " new 0.0, 1.0, 50")
-    newX = airNewX._x_distributed (0.0, 2.0, 100)
-    airNewX.set_x_upper_lower (newX)
-    ax.plot(airNewX.x, airNewX.y, '-', marker='o', lw=1, fillstyle='none', markersize=6, label=air1.name + " new 0.0, 2.0, 50")
-    newX = airNewX._x_distributed (0.0, 1.3, 100)
-    airNewX.set_x_upper_lower (newX)
-    ax.plot(airNewX.x, airNewX.y, '-', marker='o', lw=1, fillstyle='none', markersize=6, label=air1.name + " new 0.0, 1.3, 50")
+    ax.plot(airStrak.camber.x, airStrak.camber.y, '-', lw=1, fillstyle='none', markersize=4, label=airStrak.name + " camber")
 
     air1.saveAs()
     air2.saveAs()
     airStrak.saveAs()
-    airNewX.name = airNewX.name + " newX"
-    airNewX.saveAs()
     ax.legend()
     plt.show()    
 
@@ -746,8 +894,9 @@ if __name__ == "__main__":
     # loadFromFile = False
 
     # blendTest()
+    # cubicSplineTest()
+    lineTest()
 
-    cubicSplineTest()
     # myAirfoil = Root_Example()
     # print ("New airfoil created: ", myAirfoil)
     # myAirfoil.load()
