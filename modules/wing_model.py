@@ -24,10 +24,11 @@ import numpy as np
 from math import  sin
 import json
 import sys
+from pathlib import Path
 
-# let python find the other modules if they are launched in this directory (for testing) 
-sys.path.append('./modules')
 
+# let python find the other modules in the dir of self  
+sys.path.append(Path(__file__).parent)
 from common_utils       import *
 from airfoil            import Airfoil, Airfoil_Straked
 from airfoil_examples   import Root_Example, Tip_Example
@@ -2227,6 +2228,11 @@ class WingSection:
                 rightLimit = self.yPos
         return (leftLimit * safety, rightLimit / safety)
     
+    def limits_norm_yPos (self): 
+        """ position limits as tuple of self before touching the neighbour section
+        """
+        left, right = self.limits_yPos()
+        return ( left / self.wing.halfwingspan, right / self.wing.halfwingspan)
     
     def limits_normChord (self): 
         """ norm chord limits of self as tuple - must be between left and right neighbour

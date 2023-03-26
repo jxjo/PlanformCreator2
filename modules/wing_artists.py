@@ -6,210 +6,25 @@
 The "Artists" to plot a wing object on a matplotlib axes
 
 """
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import numpy as np
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
-
 from common_utils import *
+from artist import *
 from wing_model import (Wing, Planform, WingSection, Planform_DXF, Flap, Airfoil, Planform_Paneled)
-
 
 cl_planform         = 'whitesmoke'
 cl_quarter          = 'lightgrey'
 cl_pureElliptical   = 'royalblue'
 cl_dxf              = 'chocolate'
-cl_background       = '#101010'
-cl_labelGrid        = '#B0B0B0'
-cl_text             = '#D0D0D0'
-cl_userHint         = '#E0A721'
 cl_wingSection_fix  = 'deeppink'
 cl_wingSection_flex = 'mediumvioletred'
 cl_paneled          = 'steelblue'
 
 
 
-
-class Base_Artist():
-    """Base class of all artists
-
-    Arguments:
-        axes --     the plt axes to plot onto
-        dataModel -- the object the artist should plot 
-
-    Keyword Arguments:
-        onPick --   call back command when line was picked by user - will activate picking :)
-        norm --     when implemented will plot in a normed coordinate systeme
-    """
-    
-    # plt.rcParams.update({'figure.dpi': 180})
-    plt.rcParams.update({'font.size': 9})                       # default font.size: 10.0
-    plt.rcParams.update({'font.weight': 'light'})   
-    plt.rcParams.update({'text.color': cl_text})   
-
-    plt.rcParams.update({'figure.facecolor': cl_background})         
-    plt.rcParams.update({'axes.facecolor': cl_background})      
-    plt.rcParams.update({'axes.edgecolor': cl_labelGrid})       # axes spines color        
-    plt.rcParams.update({'xtick.color': cl_labelGrid})   
-    plt.rcParams.update({'ytick.color': cl_labelGrid})   
-    plt.rcParams.update({'axes.labelcolor':  cl_labelGrid})  
-    plt.rcParams.update({'axes.spines.left': True})   
-    plt.rcParams.update({'axes.spines.bottom': True})   
-    plt.rcParams.update({'axes.spines.top': True})   
-    plt.rcParams.update({'axes.spines.right': True})   
-    plt.rcParams.update({'lines.linewidth': 1.0})               # line width in points
-
-    plt.rcParams.update({'axes.grid': False})                    # display grid or not    
-    plt.rcParams.update({'grid.linewidth': 0.8})                # in points         
-    plt.rcParams.update({'grid.color': cl_labelGrid})           
-    plt.rcParams.update({'grid.alpha': 0.2})                    # transparency, between 0.0 and 1.0  
-
-
-    def __init__ (self, axes, modelFn, norm = False, onPick=None, show=False, showMarker=True):
-
-        self.ax : plt.Axes = axes
-        self._modelFn = modelFn             # we get a bounded method to the model e.g. Wing 
-
-        self._norm = norm                   # plot in normed coordinates
-        self._show = show                   # should self be plotted? 
-        self.showMarker = showMarker
-        self._myPlots = []                  # plots (line artists) made up to now 
-    
-        if onPick:
-            self._pickActive = True
-            self._pickCallback = onPick
-        else:
-            self._pickActive = False
-            self._pickCallback = None
-
-        self._curLineLabel = None
-
-        self.userTip  = self._defaultUserTip ()
-
-
-    # ------- public ----------------------
-
-    @property
-    def model (self): 
-        """access main data object e.g. wing"""
-        return self._modelFn()
-
-    @property
-    def show (self): return self._show
-
-    def set_show (self, aBool):
-        """ suser switch to diaable ploting the data
-        """
-        if (self._show != aBool):               # only when changed do something
-            if not aBool:                       # was showed and switched off
-                self._deleteMyPlots()           # remove current plot elements
-                self.ax.figure.canvas.draw_idle()
-            self._show = aBool
-            if aBool:
-                self.plot(figureUpdate=True)    # enforce redraw
-
-
-    def plot (self, figureUpdate=False):
-        """the artist will plot its data - redraw canvas only if FigureUpdate=True!
-        """
-        if self.show:                           # view is switched on by user? 
-            self._deleteMyPlots()                   # remove current plot elements
-            self._plot()                        # repaint everything 
-            self._showUserTip ()
-            if figureUpdate:                    
-                self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
-
-
-    def refresh(self, figureUpdate=False):
-        self.plot (figureUpdate = figureUpdate)
-
-    @property
-    def norm (self): return self._norm
-    """ plot with normed coordinates 0..1"""
-
-    @property
-    def abs (self): return not self._norm
-    """ plot with absolute coordinates - the opposite of norm """
-
-    def set_norm (self, aBool):
-        if (self._norm != aBool):               # only when changed do something
-            self._norm = aBool
-            self._deleteMyPlots()               # first delete current plots
-            self.ax.relim()                     # make sure all the data fits
-            self.ax.autoscale()                 # auto-scale on 
-            self.plot(figureUpdate=True)        # enforce redraw
-
-    def set_abs (self, aBool):
-        self.set_norm (not aBool)
-
-    # --------------  private -------------
-
-    def _plot (self):
-        # do plot - overwritten in sublass
-        pass
-
-    def _deleteMyPlots(self):
-
-        for p in self._myPlots:
-            if isinstance (p, list):
-                for l in p:                     # ax.plot returns a list of plot items(lines)
-                    try:
-                        l.remove()
-                    except:
-                        print (" -!- ups - artist %s not found", l)
-            else:
-                try:
-                    p.remove()
-                except:
-                    print (" -!- ups - artist %snot found", p)
-        self._myPlots = []
-
-
-    def _add(self, aPlot):
-        self._myPlots.append(aPlot)
-
-    def _makeLinePickable (self, aLine): 
-
-        try: 
-            aLine[0].set_picker (True)
-            aLine[0].set_pickradius(5)
-        except: 
-            pass
-
-
-    def _on_pick (self, event):
-        # callback of matplt - having matplt 'event' as argument
-        try: 
-            myLabel = event.artist.get_label()
-        except: 
-            pass # print ("- Pick event couldn't be handled ", event.artist, "callback: ", self._pickCallback)
-
-        # now callback parent with myLabel as argument
-        if self._pickCallback:
-            self._pickCallback(myLabel)
-        # default remove of user tip 
-        if self.userTip:
-            self.userTip = ''
-            self.plot()
-
-
-
-    def _showUserTip (self):
-
-        if self.userTip: 
-            p = self.ax.text(0.5, 0.06, self.userTip , color=cl_userHint, 
-                            horizontalalignment='center', transform=self.ax.transAxes)
-            self._add(p)
- 
-    def _defaultUserTip (self):
-        # default user tip - overwritten in subclass"
-        return None
-
-
 # -------- concrete sub classes ------------------------
 
 
-class Grid_Artist (Base_Artist):
+class Grid_Artist (Artist):
     """shows the grid in the axis
     """
     # plot over loaded because different handling with grid
@@ -225,7 +40,7 @@ class Grid_Artist (Base_Artist):
         self.ax.figure.canvas.draw_idle()
 
 
-class CurrentSection_Artist (Base_Artist):
+class CurrentSection_Artist (Artist):
     """Plot a Marker Symbol at the current (selected) wing sections.
     May plot in real coordinates and normed
 
@@ -288,7 +103,7 @@ class CurrentSection_Artist (Base_Artist):
 
 
 
-class Planform_Artist (Base_Artist):
+class Planform_Artist (Artist):
     """Plot the outline of the wing planform.
     """
 
@@ -347,7 +162,7 @@ class Planform_Artist (Base_Artist):
        
 
 
-class ChordLines_Artist (Base_Artist):
+class ChordLines_Artist (Artist):
     """Plot the chordlines t/2 t/4 3t/4 of the wing planform and chord distribution.
     """
     @property
@@ -560,7 +375,7 @@ class PaneledPlanform_Artist (Planform_Artist):
         self._add (p)   
 
 
-class Chord_Artist (Base_Artist):
+class Chord_Artist (Artist):
     """Plot the chord distribution of a planform.
     """
     color = cl_planform     
@@ -593,7 +408,7 @@ class RefChord_DXF_Artist (Chord_Artist):
         return self.model.refPlanform_DXF.norm_chord_line ()
 
 
-class Sections_Artist (Base_Artist):
+class Sections_Artist (Artist):
     """Plot the wing sections as a vertical line. Add markers and text etc.
     May plot in real coordinates and normed
 
@@ -717,7 +532,7 @@ class Sections_Artist (Base_Artist):
 
 #-----------------------------------------------
 
-class Flap_Artist (Base_Artist):
+class Flap_Artist (Artist):
     """Plot the flaps as a filley polygon. Add markers and text etc.
        May plot in real coordinates 
     """
@@ -726,19 +541,16 @@ class Flap_Artist (Base_Artist):
     def flaps (self): 
         return self.wing().getFlaps()
 
+
     def _plot (self): 
         """ do plot of wing sections in the prepared axes   
         """
-        from cycler import cycler                
         n = len(self.flaps())                   # Number of colors
         if n < 2: n= 2
-        # https://matplotlib.org/stable/gallery/color/colormap_reference.html
-        new_colors = [plt.get_cmap('summer')(1. * i / (n-1) ) for i in range(n)]
-        color_cycler = cycler('color',new_colors)  
-        self.ax.set_prop_cycle(color_cycler)
+         # create cycled colors 
+        self._set_colorcycle (n, colormap='summer')                # no of cycle colors - extra color for each airfoil
 
         flap : Flap
-
         for flap in self.flaps():   
 
             p = self.ax.plot(flap.y, flap.x, label="Flap group %d" %flap.flapGroup, color = cl_planform, linewidth=0.5)
@@ -751,6 +563,7 @@ class Flap_Artist (Base_Artist):
             self._plot_markers (flap, color)
 
         # self.ax.legend()
+
         
     def  _plot_markers (self, flap : Flap, color): 
 
@@ -774,7 +587,7 @@ class Flap_Artist (Base_Artist):
 
 
 
-class Airfoil_Artist (Base_Artist):
+class Airfoil_Artist (Artist):
     """Plot the airfoils of the wing sections 
     May plot in real coordinates and normed
 
@@ -814,9 +627,6 @@ class Airfoil_Artist (Base_Artist):
     def _plot (self): 
         """ do plot of wing sections in the prepared axes   
         """
-        from cycler import cycler  
-
-        # create cycled colors 
         
         n = 0                                       # Number of colors
         for section in self.wing.wingSections:
@@ -824,10 +634,8 @@ class Airfoil_Artist (Base_Artist):
             if (airfoil.isLoaded) and not (not self._strak and airfoil.isStrakAirfoil): n += 1
         if not n: return 
 
-        # https://matplotlib.org/stable/gallery/color/colormap_reference.html
-        new_colors = plt.get_cmap('Set2')(np.linspace(0, 1, n))
-        color_cycler = cycler('color', new_colors)  
-        self.ax.set_prop_cycle(color_cycler)
+         # create cycled colors 
+        self._set_colorcycle (n)                # no of cycle colors - extra color for each airfoil
 
         # plot title
         if self._norm: 
@@ -884,8 +692,8 @@ class Airfoil_Artist (Base_Artist):
         airfoil = section.airfoil 
         text = "'"+ section.airfoilNick() + "' - " + section.airfoilName() + "  @" + section.name() + \
                "\n" + \
-               "\nThickness  %.2f%%  at  %.2f%%" % (airfoil.maxThickness[0]*100, airfoil.maxThickness[1]*100) +\
-               "\nCamber     %.2f%%  at  %.2f%%" % (airfoil.maxCamber[0]*100, airfoil.maxCamber[1]*100) 
+               "\nThickness  %.2f%%  at  %.2f%%" % (airfoil.maxThickness, airfoil.maxThicknessX) +\
+               "\nCamber     %.2f%%  at  %.2f%%" % (airfoil.maxCamber   , airfoil.maxCamberX   ) 
 
         y = np.amin(y) * 0.3
         x = np.amax(x) * 0.8
@@ -914,7 +722,7 @@ class Airfoil_Artist (Base_Artist):
         self._add(p) 
 
 
-class AirfoilName_Artist (Base_Artist):
+class AirfoilName_Artist (Artist):
     """shows the airfoil name in planform view """
 
     @property   
@@ -927,20 +735,17 @@ class AirfoilName_Artist (Base_Artist):
     def _plot (self): 
         """ do plot of wing sections in the prepared axes   
         """
-        from cycler import cycler  
+        if self.norm: return                    # normalized view not supported 
+
+         # create cycled colors 
+        n= len(self.wing.wingSections)
+        self._set_colorcycle (n)                # no of cycle colors - extra color for each airfoil
 
         section : WingSection
-
-        # https://matplotlib.org/stable/gallery/color/colormap_reference.html
-        n= len(self.wing.wingSections)
-        new_colors = plt.get_cmap('Set2')(np.linspace(0, 1, n))
-        color_cycler = cycler('color', new_colors)  
-        self.ax.set_prop_cycle(color_cycler)
-
-        if self.norm: return                    # normalized view not supported 
         for section in self.wingSections:
             y, le_to_te = section.line()
             self.plot_markers (y, le_to_te, section)
+            
 
     def plot_markers (self, y, le_to_te, section: WingSection): 
         # print airfoil name and nickname below the planform 

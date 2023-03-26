@@ -32,16 +32,23 @@
 
 """
 import os
+import sys
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
 
 from tkinter import filedialog, Frame
 import customtkinter as ctk
+
+# let python find the other modules in modules relativ to path of self  
+sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
+
 from modules.common_utils       import * 
 from modules.wing_model         import Planform, Planform_Elliptical, Planform_Elliptical_StraightTE, \
                                        Planform_DXF, Planform_Trapezoidal                          
 from modules.widgets            import * 
-from modules.wing_artist        import *
+from modules.wing_artists       import *
 
 
 #------------------------------------------------
@@ -72,8 +79,9 @@ def fireEvent(eventType):
     if ctk_root: ctk_root.event_generate (eventType) 
 
 
-#------------------------------------------------
-
+#-------------------------------------------------------------------------------
+# Edit Frames    
+#-------------------------------------------------------------------------------
 
 class Edit(ctk.CTkFrame):
     """ 
@@ -648,7 +656,7 @@ class Edit_WingSection(Edit_Abstract):
                                                 lim='limits_yPos', dec=1, spin=True, step=2, unit=unit,
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
         self.add(Field_Widget  (self,1,3, lab="Position rel.", obj=self.wingSection, get='norm_yPos', set='set_norm_yPos',
-                                                lim=(0.0,1.0), dec=2, spin=True, step=0.01, unit='%',
+                                                lim='limits_norm_yPos', dec=2, spin=True, step=0.01, unit='%',
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
 
         self.add(Field_Widget  (self,2,0, lab="Chord", obj=self.wingSection, get='chord', set='set_chord',
@@ -706,7 +714,9 @@ class Edit_WingSection(Edit_Abstract):
         return not self.wingSection().airfoil_canBeRemoved()
 
 
-#--------------- Diagramm Plots --------------------------
+#-------------------------------------------------------------------------------
+# Diagrams   
+#-------------------------------------------------------------------------------
 
 class Diagrams(ctk.CTkTabview):
     """ 
@@ -1347,12 +1357,10 @@ class Diagram_Airfoils (Diagram_Abstract):
         fireEvent (DIAGRAMM_SECTION_SELECTED)
 
 
-
-
-
 #-------------------------------------------------------------------------------
 # Dialogs for smaller tasks   
 #-------------------------------------------------------------------------------
+
 
 class Dialog_Abstract (ctk.CTkToplevel):
     """ 
@@ -1373,7 +1381,6 @@ class Dialog_Abstract (ctk.CTkToplevel):
         # the attribute for return ok
         self.return_OK = False
 
-        # self.deiconify()
         xPos, yPos = self.centerPosition()
         self.geometry("%sx%s+%s+%s" %(self.width, self.height, xPos, yPos))
 
@@ -1426,7 +1433,6 @@ class Dialog_Abstract (ctk.CTkToplevel):
 
 
 #-------------------------------------------
-
 
 class Dialog_Load_DXF (Dialog_Abstract):
     """ 
@@ -1537,7 +1543,6 @@ class Dialog_Load_DXF (Dialog_Abstract):
 
 
 #-------------------------------------------
-
 
 class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
     """ 
