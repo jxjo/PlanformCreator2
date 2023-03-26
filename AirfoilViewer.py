@@ -45,7 +45,7 @@ from modules.airfoil_artists    import *
 #------------------------------------------------
 
 AppName    = "Airfoil Viewer"
-AppVersion = "0.1"
+AppVersion = "0.6"
 
 #------------------------------------------------
 
