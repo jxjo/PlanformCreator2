@@ -11,7 +11,7 @@ import numpy as np
 # from common_utils import * 
 from scipy.interpolate import splprep, splrep, splev
 from scipy.optimize import fmin, brentq
-from pycubicspline import Spline
+from pycubicspline import Spline 
 
 
 def _cosinus_distribution (xfacStart=0, xfacEnd=1, nPoints=100):
@@ -70,8 +70,8 @@ class SplineOfAirfoil:
         self._tck, self._u = splprep([x, y], s=s, k=k)
 
         # leading edge 
-        self.iLe = np.argmin (x)            # index of LE in x,y and u 
-        self.uLe = self._u [self.iLe]             # u value at LE 
+        self.iLe = np.argmin (x)                # index of LE in x,y and u 
+        self.uLe = self._u [self.iLe]           # u value at LE 
 
         # for i in range(len(x)):
         #     print (i, x[i], y[i], self._u[i])
@@ -97,8 +97,21 @@ class SplineOfAirfoil:
     def curvature (self): 
         " return the curvature at knots 0..npoints"
 
-        dx, dy   = splev(self._u, self._tck, der=1)
-        ddx, ddy = splev(self._u, self._tck, der=2)
+        # dx, dy   = splev(self._u, self._tck, der=1)
+        # ddx, ddy = splev(self._u, self._tck, der=2)
+
+        # deriv2 = dx * ddy - dy * ddx
+
+        # # get curvature from derivative 2
+        # n = dx**2 + dy**2
+        # curv = deriv2 / n**(3./2.)
+        return self.curvatureFn (self._u) 
+
+    def curvatureFn (self,u): 
+        " return the curvature at u"
+
+        dx, dy   = splev(u, self._tck, der=1)
+        ddx, ddy = splev(u, self._tck, der=2)
 
         deriv2 = dx * ddy - dy * ddx
 
@@ -106,7 +119,6 @@ class SplineOfAirfoil:
         n = dx**2 + dy**2
         curv = deriv2 / n**(3./2.)
         return curv 
-
 
     def thickness_camber (self): 
         """returns thickness and camber distribution.

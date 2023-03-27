@@ -115,11 +115,26 @@ class Airfoil:
     def isNormalized (self):
         
         if self._x is None: return False
-        if self._x[0] != 1.0 or self._x[-1] != 1.0: return False
-        if self._y[0] != - self._y[-1]: return False
-        ile = np.argmin (self._x)
-        if self._x[ile] != 0.0 or self._y[ile] != 0.0: return False
+
+        xteUp, yteUp, xteLow, yteLow = self.te_fromPoints
+        if xteUp != 1.0 or xteLow != 1.0: return False
+        if yteUp != - yteLow: return False
+
+        xle, yle = self.le_fromPoints 
+        if xle != 0.0 or yle != 0.0: return False
+
         return True
+    
+    @property
+    def le_fromPoints (self): 
+        """ returns leading edge x,y of point coordinate data """
+        ile = np.argmin (self._x)
+        return self._x[ile], self._y[ile]
+
+    @property
+    def te_fromPoints (self): 
+        """ returns trailing edge upper and lower x,y of point coordinate data """
+        return self._x[0], self._y[0], self._x[-1], self._y[-1], 
     
     @property
     def maxThickness (self): 
@@ -259,8 +274,11 @@ class Airfoil:
         for i, line in enumerate(file_lines):
             if (i > 0): 
                 splitline = line.strip().split(" ",1)
-                x.append (float(splitline[0].strip()))
-                y.append (float(splitline[1].strip()))
+                if len(splitline) == 1:                     # couldn't split line - try tab as separator
+                    splitline = line.strip().split("\t",1)
+                if len(splitline) >= 2:                     
+                    x.append (float(splitline[0].strip()))
+                    y.append (float(splitline[1].strip()))
         self._x = np.asarray (x)
         self._y = np.asarray (y)
 
