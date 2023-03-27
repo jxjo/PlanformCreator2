@@ -45,7 +45,7 @@ from modules.airfoil_artists    import *
 #------------------------------------------------
 
 AppName    = "Airfoil Viewer"
-AppVersion = "0.6"
+AppVersion = "0.6.1"
 
 #------------------------------------------------
 
@@ -123,23 +123,28 @@ class Edit_Airfoil_Data(Edit_Abstract):
         Blank_Widget (self, r,c, width=10)    
         self.add (Header_Widget (self,r,c,   columnspan= 2, lab=self.name, width=80))
         self.add (Field_Widget  (self,r,c+2, columnspan= 4 ,lab=None, obj=self.airfoil, get='name', set='set_name',
-                                 lab_width=1, event=AIRFOIL_CHANGED, width=140))
+                                 lab_width=1, event=AIRFOIL_CHANGED, width=150))
 
         c += 1                                  # left blank colum to inset the fields 
         r += 1
-        self.add (Field_Widget  (self,r,c,   lab="Max. thickness", obj=self.airfoil, 
-                                 get='maxThickness', set='', unit="%", dec=2, disable= True))
-        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=40, obj=self.airfoil, 
-                                 get='maxThicknessX', set='', unit="%", dec=2, disable= True))
+        self.add (Field_Widget  (self,r,c,   lab="Thickness", obj=self.airfoil, 
+                                 get='maxThickness', set='', 
+                                 spin=True, width=90, unit="%", dec=2, disable= True))
+        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=30, obj=self.airfoil, 
+                                 get='maxThicknessX', set='', 
+                                 spin=True, width=90, unit="%", dec=2, disable= True))
         r += 1
-        self.add (Field_Widget  (self,r,c,   lab="Max. Camber", obj=self.airfoil, 
-                                 get='maxCamber', unit="%", set='', dec=2, disable= True))
-        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=40, obj=self.airfoil, 
-                                 get='maxCamberX', set='', unit="%", dec=2, disable= True))
+        self.add (Field_Widget  (self,r,c,   lab="Camber", obj=self.airfoil, 
+                                 get='maxCamber', set='', 
+                                 spin=True, width=90, unit="%", dec=2, disable= True))
+        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=30, obj=self.airfoil, 
+                                 get='maxCamberX', set='', 
+                                 spin=True, width=90, unit="%", dec=2, disable= True))
 
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="TE gap", obj=self.airfoil, 
-                                 get='teGapPercent', unit="%", set='', dec=2, disable= True))
+                                 get='teGapPercent', set='', 
+                                 spin=True, width=90, unit="%", dec=2, disable= True))
 
         r += 1
         Blank_Widget (self, r,c, height=10)    
@@ -163,20 +168,30 @@ class Edit_Curvature(Edit_Abstract):
 
         c += 1                                  # left blank column to inset the fields 
         r += 1
-        self.add (Field_Widget  (self,r,c,   lab="Upper side", get=lambda: len(self.airfoil().upper.reversals()),
-                                 width=60, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r+1,c,   lab="Lower side", get=lambda: len(self.airfoil().lower.reversals()), 
-                                width=60, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r+2,c,   lab="with threshold", val=0.0, # get=lambda: len(self.airfoil().lower.reversals()), 
-                                width=60, set='', dec=1, disable= True))
+        self.add (Field_Widget  (self,r,c,   lab="Upper side", get=lambda: len(self.airfoil().upper.curvature.reversals()),
+                                 width=80, set='', dec=0, disable= True))
+        self.add (Field_Widget  (self,r+1,c, lab="Lower side", get=lambda: len(self.airfoil().lower.curvature.reversals()), 
+                                 width=80, set='', dec=0, disable= True))
+        self.add (Field_Widget  (self,r+2,c,   lab="with threshold", get=lambda: self.airfoil().upper.curvature.threshold, 
+                                 set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
+                                 lim=(0,1), dec=1, spin=True, step=0.1, width=80))
 
         c += 3                                  # left blank column to inset the fields 
-        self.add (Field_Widget  (self,r,c,   get=lambda: len(self.airfoil().upper.spikes()),
-                                 width=60, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r+1,c, get=lambda: len(self.airfoil().lower.spikes()), 
-                                width=60, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r+2,c, val=0.0, # get=lambda: len(self.airfoil().lower.reversals()), 
-                                width=60, set='', dec=1, disable= True))
+        self.add (Field_Widget  (self,r,c,   get=lambda: len(self.airfoil().upper.deriv3.reversals()),
+                                 width=80, set='', dec=0, disable= True))
+        self.add (Field_Widget  (self,r+1,c, get=lambda: len(self.airfoil().lower.deriv3.reversals()), 
+                                 width=80, set='', dec=0, disable= True))
+        self.add (Field_Widget  (self,r+2,c, get=lambda: self.airfoil().upper.deriv3.threshold, 
+                                 set=self._set_deriv3_threshold, event=AIRFOIL_CHANGED, 
+                                 lim=(0,10), dec=1, spin=True, step=0.25, width=80))
+
+    def _set_curvature_threshold (self, aVal):
+        self.airfoil().upper.curvature.set_threshold(aVal)
+        self.airfoil().lower.curvature.set_threshold(aVal)
+
+    def _set_deriv3_threshold (self, aVal):
+        self.airfoil().upper.deriv3.set_threshold(aVal)
+        self.airfoil().lower.deriv3.set_threshold(aVal)
 
 
 class Edit_Panels(Edit_Abstract):

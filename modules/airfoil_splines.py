@@ -189,9 +189,13 @@ class LineOfAirfoil:
             self._x = np.asarray(x).round(10)
             self._y = np.asarray(y).round(10)
 
+        self._curvature = None                  # curvature of self 
+        self._deriv3    = None                  # 3rd derivative of self 
         self._name = name 
         self._cosinus = cosinus
         self._tck = splrep(x, y, k=3)           # scipy splrep spline definition  
+        self._threshold = 0.001                 # threshold for reversal dectection 
+
 
     @property
     def x (self):
@@ -240,71 +244,81 @@ class LineOfAirfoil:
     @property
     def deriv3 (self): 
         """ return derivate 3 of spline at x - starting at x=0.05 because of oscillations """
-        # ensure a smooth leading edge - otherwise derivative tends to oscillate at LE 
-        if self._cosinus: 
-            x = self._x
-        else:                                   
-            x = self.default_cosinus  
 
-        # re-spline deriv1 to get a smoother deriv 3
-        tck = splrep(x, self.deriv1.y, k=3)  
+        if self._deriv3 is None: 
+            # ensure a smooth leading edge - otherwise derivative tends to oscillate at LE 
+            if self._cosinus: 
+                x = self._x
+            else:                                   
+                x = self.default_cosinus  
 
-        # now get deriv 2 of the splined deriv 1          
-        y_deriv3 = splev(x, tck, der=2).round(10)
+            # re-spline deriv1 to get a smoother deriv 3
+            tck = splrep(x, self.deriv1.y, k=3)  
 
-        # the deriv3 at nose can be extremely oscillated - cut nose 
-        iStart = (np.abs(x - 0.05)).argmin()
+            # now get deriv 2 of the splined deriv 1          
+            y_deriv3 = splev(x, tck, der=2).round(10)
 
-        return LineOfAirfoil (x[iStart:], y_deriv3[iStart:], name='3rd derivate')
+            # the deriv3 at nose can be extremely oscillated - cut nose 
+            iStart = (np.abs(x - 0.05)).argmin()
+            self._deriv3 = LineOfAirfoil (x[iStart:], y_deriv3[iStart:], name='3rd derivate')
+
+        return self._deriv3
     
     
     @property
     def curvature (self): 
-        " return the curvature at knots at x"
+        " return the curvature at knots of x"
 
-        yd1 = self.deriv1.y
-        x   = self.deriv1.x
-        yd2 = self.deriv2.y
+        if self._curvature is None: 
+            yd1 = self.deriv1.y
+            x   = self.deriv1.x
+            yd2 = self.deriv2.y
 
-        curv = yd2 / (1 + yd1**2) ** 1.5
-        
-        return LineOfAirfoil (x, curv, name='Curvature') 
+            curv = yd2 / (1 + yd1**2) ** 1.5
+            self._curvature = LineOfAirfoil (x, curv, name='Curvature') 
+        return self._curvature
+
+    @property
+    def threshold (self):   return self._threshold 
+    def set_threshold (self, aVal): 
+        self._threshold =aVal 
 
 
-    def reversals (self): 
+    def reversals (self, iStart= 1, iEnd=None):
         """ 
         returns a list of reversals (change of curvature sign equals curvature = 0 )
         A reversal is a tuple (x,y) indicating the reversal on self. 
         """
-        curv = self.curvature 
+        # algorithm from Xoptfoil where a change of sign of y[i] is detected 
+        x = self.x
+        y = self.y
+        npt = len (y)
 
-        roots = []
-        for i in range(len(curv.x)-1):
-            if (curv.y[i] * curv.y[i+1]) < 0.0:
-                # interpolate the exact x position of the root (curvature = 0)
-                x0 = brentq(lambda y: curv.y_interpol(y), curv.x[i] , curv.x[i+1])
-                # get the y-value 
-                y  = self.y_interpol (x0)
-                roots.append((round(x0,10),round(y,10)))
-        return roots
+        iStart = max (iStart, 1)
+        if iEnd is None:    iEnd = npt
+        else:               iEnd = min (iEnd, npt)  
 
-
-    def spikes (self): 
-        """ 
-        returns a list of spikes (change of deriv3 sign equals curvature = 0 )
-        A spike is a tuple (x,y) indicating the spike on self. 
-        """
-        curv = self.deriv3 
-
-        roots = []
-        for i in range(len(curv.x)-1):
-            if (curv.y[i] * curv.y[i+1]) < 0.0:
-                # interpolate the exact x position of the root (curvature = 0)
-                x0 = brentq(lambda y: curv.y_interpol(y), curv.x[i] , curv.x[i+1])
-                # get the y-value 
-                y  = self.y_interpol (x0)
-                roots.append((round(x0,10),round(y,10)))
-        return roots
+        reversals = []
+        yold    = y[iStart]
+        for i in range (npt):
+            if abs(y[i]) >= self.threshold:                  # outside threshold range
+                if (y[i] * yold < 0.0):                 # yes - changed + - 
+                    if i >= iStart and i <= iEnd: 
+                        yrev = self.y_interpol (x[i])
+                        reversals.append((round(x[i],10),round(yrev,10))) 
+                yold = y[i]
+        return reversals 
+    
+        # Exact algorithm with Scipy brentq - but this one doesn't use an threshold 
+        # roots = []
+        # for i in range(len(curv.x)-1):
+        #     if (curv.y[i] * curv.y[i+1]) < 0.0:
+        #         # interpolate the exact x position of the root (curvature = 0)
+        #         x0 = brentq(lambda y: curv.y_interpol(y), curv.x[i] , curv.x[i+1])
+        #         # get the y-value 
+        #         y  = self.y_interpol (x0)
+        #         roots.append((round(x0,10),round(y,10)))
+        # return roots
 
 
     def maximum (self): 
