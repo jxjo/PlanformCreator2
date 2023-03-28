@@ -120,6 +120,14 @@ class SplineOfAirfoil:
         curv = deriv2 / n**(3./2.)
         return curv 
 
+    def xyFn (self,u): 
+        " return x,y at spline arc u"
+        return  splev(u, self._tck, der=0)
+
+    def xFn (self,u): 
+        " return x at spline arc u"
+        return  splev(u, self._tck, der=0)[0]
+
     def thickness_camber (self): 
         """returns thickness and camber distribution.
         
