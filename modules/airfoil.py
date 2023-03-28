@@ -137,6 +137,16 @@ class Airfoil:
         return self._x[0], self._y[0], self._x[-1], self._y[-1], 
     
     @property
+    def nPanels_upper (self): 
+        """ returns number of panels upper side """
+        return int(np.argmin (self._x))
+
+    @property
+    def nPanels_lower (self): 
+        """ returns number of panels lower side """
+        return len (self._x) - int(np.argmin (self._x)) - 1
+
+    @property
     def maxThickness (self): 
         """ returns max thickness in %"""
         tx, tmax = self.thickness.maximum() 

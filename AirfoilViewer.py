@@ -127,29 +127,39 @@ class Edit_Airfoil_Data(Edit_Abstract):
 
         c += 1                                  # left blank colum to inset the fields 
         r += 1
-        self.add (Field_Widget  (self,r,c,   lab="Thickness", obj=self.airfoil, 
-                                 get='maxThickness', set='', 
-                                 spin=True, width=90, unit="%", dec=2, disable= True))
-        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=30, obj=self.airfoil, 
-                                 get='maxThicknessX', set='', 
-                                 spin=True, width=90, unit="%", dec=2, disable= True))
-        r += 1
-        self.add (Field_Widget  (self,r,c,   lab="Camber", obj=self.airfoil, 
-                                 get='maxCamber', set='', 
-                                 spin=True, width=90, unit="%", dec=2, disable= True))
-        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=30, obj=self.airfoil, 
-                                 get='maxCamberX', set='', 
-                                 spin=True, width=90, unit="%", dec=2, disable= True))
 
-        r += 1
-        self.add (Field_Widget  (self,r,c,   lab="TE gap", obj=self.airfoil, 
-                                 get='teGapPercent', set='', 
-                                 spin=True, width=90, unit="%", dec=2, disable= True))
+        if self.airfoil().isNormalized:
+            self.add (Field_Widget  (self,r,c,   lab="Thickness", obj=self.airfoil, 
+                                    get='maxThickness', set='', 
+                                    spin=True, width=90, unit="%", dec=2, disable= True))
+            self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=30, obj=self.airfoil, 
+                                    get='maxThicknessX', set='', 
+                                    spin=True, width=90, unit="%", dec=2, disable= True))
+            r += 1
+            self.add (Field_Widget  (self,r,c,   lab="Camber", obj=self.airfoil, 
+                                    get='maxCamber', set='', 
+                                    spin=True, width=90, unit="%", dec=2, disable= True))
+            self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=30, obj=self.airfoil, 
+                                    get='maxCamberX', set='', 
+                                    spin=True, width=90, unit="%", dec=2, disable= True))
 
-        r += 1
-        Blank_Widget (self, r,c, height=10)    
+            r += 1
+            self.add (Field_Widget  (self,r,c,   lab="TE gap", obj=self.airfoil, 
+                                    get='teGapPercent', set='', 
+                                    spin=True, width=90, unit="%", dec=2, disable= True))
 
+            r += 1
+            Blank_Widget (self, r,c, height=10)
 
+        else: 
+
+            r += 1
+            Blank_Widget (self, r,c, height=10)
+            r += 1
+            self.add(Label_Widget  (self,r, c, 
+                     lab= "Airfoil isn't normlized.\n\n" +\
+                          "Therefore geometry parameters like\n" + \
+                          "thickness or camber can't be evaluated"))
 
 class Edit_Curvature(Edit_Abstract):
     """ 
@@ -162,28 +172,44 @@ class Edit_Curvature(Edit_Abstract):
 
         r, c = 0, 0 
         Blank_Widget (self, r,c, width=10)    
-        self.add (Header_Widget (self,r,c,   lab=self.name, columnspan= 2))
-        self.add (Label_Widget  (self,r,c+2, padx=0, lab='Reversals', columnspan= 2))
-        self.add (Label_Widget  (self,r,c+4, padx=0, lab='Spikes', columnspan= 2))
 
-        c += 1                                  # left blank column to inset the fields 
-        r += 1
-        self.add (Field_Widget  (self,r,c,   lab="Upper side", get=lambda: len(self.airfoil().upper.curvature.reversals()),
-                                 width=80, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r+1,c, lab="Lower side", get=lambda: len(self.airfoil().lower.curvature.reversals()), 
-                                 width=80, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r+2,c,   lab="with threshold", get=lambda: self.airfoil().upper.curvature.threshold, 
-                                 set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
-                                 lim=(0,1), dec=1, spin=True, step=0.1, width=80))
+        if self.airfoil().isNormalized:
 
-        c += 3                                  # left blank column to inset the fields 
-        self.add (Field_Widget  (self,r,c,   get=lambda: len(self.airfoil().upper.deriv3.reversals()),
-                                 width=80, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r+1,c, get=lambda: len(self.airfoil().lower.deriv3.reversals()), 
-                                 width=80, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r+2,c, get=lambda: self.airfoil().upper.deriv3.threshold, 
-                                 set=self._set_deriv3_threshold, event=AIRFOIL_CHANGED, 
-                                 lim=(0,10), dec=1, spin=True, step=0.25, width=80))
+            self.add (Header_Widget (self,r,c,   lab=self.name, columnspan= 2))
+            self.add (Label_Widget  (self,r,c+2, padx=0, lab='Reversals', columnspan= 2))
+            self.add (Label_Widget  (self,r,c+4, padx=0, lab='Spikes', columnspan= 2))
+
+            c += 1                                  # left blank column to inset the fields 
+            r += 1
+            self.add (Field_Widget  (self,r,c,   lab="Upper side", get=lambda: len(self.airfoil().upper.curvature.reversals()),
+                                    width=80, set='', dec=0, disable= True))
+            self.add (Field_Widget  (self,r+1,c, lab="Lower side", get=lambda: len(self.airfoil().lower.curvature.reversals()), 
+                                    width=80, set='', dec=0, disable= True))
+            self.add (Field_Widget  (self,r+2,c,   lab="with threshold", get=lambda: self.airfoil().upper.curvature.threshold, 
+                                    set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
+                                    lim=(0,1), dec=1, spin=True, step=0.1, width=80))
+
+            c += 3                                  # left blank column to inset the fields 
+            self.add (Field_Widget  (self,r,c,   get=lambda: len(self.airfoil().upper.deriv3.reversals()),
+                                    width=80, set='', dec=0, disable= True))
+            self.add (Field_Widget  (self,r+1,c, get=lambda: len(self.airfoil().lower.deriv3.reversals()), 
+                                    width=80, set='', dec=0, disable= True))
+            self.add (Field_Widget  (self,r+2,c, get=lambda: self.airfoil().upper.deriv3.threshold, 
+                                    set=self._set_deriv3_threshold, event=AIRFOIL_CHANGED, 
+                                    lim=(0,10), dec=1, spin=True, step=0.25, width=80))
+
+        else: 
+
+            self.add (Header_Widget (self,r,c,   lab=self.name, columnspan= 2))
+            r += 1
+            c += 1
+            Blank_Widget (self, r,c, height=10)
+            r += 1
+            self.add(Label_Widget  (self,r, c, 
+                     lab= "Airfoil isn't normlized.\n\n" +\
+                          "Therefore curvature based on splines \n" + \
+                          "can't be evaluated"))
+
 
     def _set_curvature_threshold (self, aVal):
         self.airfoil().upper.curvature.set_threshold(aVal)
@@ -205,23 +231,43 @@ class Edit_Panels(Edit_Abstract):
 
         r, c = 0, 0 
         Blank_Widget (self, r,c, width=10)    
-        self.add (Header_Widget (self,r,c,   lab=self.name, columnspan= 2))
-        self.add (Label_Widget  (self,r,c+2, padx=0, lab='No panels', columnspan= 2))
-        self.add (Label_Widget  (self,r,c+4, padx=0, lab='Panel angle', columnspan= 2))
+        self.add (Header_Widget (self,r,c,   lab=self.name, columnspan= 3))
+        self.add (Label_Widget  (self,r,c+2, width= 70, padx=0, lab='Panels', columnspan= 2))
+        self.add (Label_Widget  (self,r,c+4, width= 70, padx=0, lab='Max angle', columnspan= 2))
+        self.add (Label_Widget  (self,r,c+6, width= 70, padx=0, lab='TE coord', columnspan= 2))
 
-        c += 1                                  # left blank column to inset the fields 
-        r += 1
-        self.add (Field_Widget  (self,r,c,   lab="Upper side", get=lambda: len(self.airfoil().upper.x - 1),
-                                 width=60, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r+1,c,   lab="Lower side", get=lambda: len(self.airfoil().lower.x - 1), 
-                                width=60, set='', dec=0, disable= True))
+        c = 1                                  # left blank column to inset the fields 
+        r = 1
+        self.add (Field_Widget  (self,r,c,   lab="Upper side", get=lambda: self.airfoil().nPanels_upper,
+                                 width=50,   lab_width=60, dec=0))
+        self.add (Field_Widget  (self,r+1,c, lab="Lower side", get=lambda: self.airfoil().nPanels_lower, 
+                                 width=50,   lab_width=60, dec=0))
+        self.add (Field_Widget  (self,r+2,c, lab="LE coord", get=lambda: self.le_asString(),
+                                 width=100,  lab_width=60, columnspan=3))
 
-        c += 3                                  # left blank column to inset the fields 
+        c += 3                                 
         self.add (Field_Widget  (self,r,c,   val='tbd', # get=lambda: len(self.airfoil().upper.x - 1),
-                                 width=60, set='', dec=0, disable= True))
+                                 width=50,   lab_width=0, dec=0))
         self.add (Field_Widget  (self,r+1,c, val='tbd', # get=lambda: len(self.airfoil().lower.x - 1), 
-                                width=60, set='', dec=2, disable= True))
+                                 width=50,   lab_width=0, dec=2))
 
+        c += 3                                 
+        self.add (Field_Widget  (self,r,c,   get=lambda: self.te_upper_asString(),
+                                 width=100,  lab_width=0))
+        self.add (Field_Widget  (self,r+1,c, get=lambda: self.te_upper_asString(), 
+                                 width=100,  lab_width=0))
+
+    def te_upper_asString (self): 
+        x,y,_,_ = self.airfoil().te_fromPoints
+        return "%.4f, %.4f" % (x,y)
+    
+    def te_lower_asString (self): 
+        _,_,x,y = self.airfoil().te_fromPoints
+        return "%.4f, %.4f" % (x,y)
+    
+    def le_asString (self): 
+        x,y = self.airfoil().le_fromPoints
+        return "%.4f, %.4f" % (x,y)
 
 #-------------------------------------------------------------------------------
 # Diagrams   
@@ -390,12 +436,17 @@ class Diagram_Airfoil (Diagram_Abstract):
         """ setup axes, axis, artists for this plot type """
 
         super().setup_artists()
+
         # airfoil is list to prepare for future multiple airfoils to view 
+        # don't show if not normalized - has to be adapted to multiple airfoils 
         
         self.airfoilArtist  = Airfoil_Artist        (self.ax1,     [self._airfoilFn], show=True)
-        self.camberArtist   = Airfoil_Camber_Artist (self.ax1,     [self._airfoilFn], show=False)
-        self.curvArtist     = Airfoil_Curv_Artist   (self.ax2,     [self._airfoilFn], show=True)
-        self.deriv3Artist   = Airfoil_Deriv3_Artist (self.ax2Twin, [self._airfoilFn], show=False)
+        self.camberArtist   = Airfoil_Camber_Artist (self.ax1,     [self._airfoilFn], 
+                                                     show=False and self.airfoil.isNormalized)
+        self.curvArtist     = Airfoil_Curv_Artist   (self.ax2,     [self._airfoilFn], 
+                                                     show=True  and self.airfoil.isNormalized)
+        self.deriv3Artist   = Airfoil_Deriv3_Artist (self.ax2Twin, [self._airfoilFn], 
+                                                     show=False and self.airfoil.isNormalized)
 
 
     def setup_Switches(self, row=0, col=0):
@@ -403,12 +454,23 @@ class Diagram_Airfoil (Diagram_Abstract):
 
         row, col = super().setup_Switches(row, col)
 
+        if self.airfoil.isNormalized: 
+            self._set_upper (True) 
+            self._set_lower (True) 
+            disableNotNormalized = False
+        else:
+            self._set_upper (False) 
+            self._set_lower (False) 
+            disableNotNormalized = True
+
+        disableNotNormalized = not self.airfoil.isNormalized
+
         row += 1
         Switch_Widget (self.view_frame,row,col, padx=10, lab='Points',
                        get=lambda: self.airfoilArtist.points, set=self._set_points)
 
         row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Camber',
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Camber', disable= disableNotNormalized,
                        get=lambda: self.camberArtist.show, set=self.camberArtist.set_show)
 
         row += 1
@@ -416,17 +478,17 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.view_frame.grid_rowconfigure(row, weight=2)
 
         row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Upper side', 
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Upper side', disable= disableNotNormalized,
                        get=lambda: self.curvArtist.upper, set=self._set_upper)
         row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Lower side', 
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Lower side',disable= disableNotNormalized, 
                        get=lambda: self.curvArtist.lower, set=self._set_lower)
 
         row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Curvature', 
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Curvature', disable= disableNotNormalized,
                        get=lambda: self.curvArtist.show, set=self.curvArtist.set_show)
         row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='3rd derivative', 
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='3rd derivative', disable= disableNotNormalized,
                        get=lambda: self.deriv3Artist.show, set=self.deriv3Artist.set_show)
 
         row += 1
@@ -469,19 +531,12 @@ class Diagram_Airfoil (Diagram_Abstract):
 
     def refresh(self): 
         # overloaded
-        if self._active:
-            self.airfoilArtist.refresh ()  
-            self.camberArtist.refresh ()  
-            self.deriv3Artist.refresh ()  
-            self.curvArtist.refresh ()  
+        self.airfoilArtist.refresh ()  
+        self.camberArtist.refresh ()  
+        self.deriv3Artist.refresh ()  
+        self.curvArtist.refresh ()  
 
-            self.figure.canvas.draw_idle()    # draw ony if Windows is idle!
-
-
-
-
-
-
+        self.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
 
 
@@ -633,7 +688,8 @@ if __name__ == "__main__":
             sys.exit(1)
     else: 
         NoteMsg ("No airfoil file as argument. Showing example airfoil...")
-        myFile = ".\\examples\\vjx.glide\\JX-GP-055.dat"        # test / demo 
+        # myFile = ".\\examples\\vjx.glide\\JX-GP-055.dat"        # test / demo 
+        myFile = ".\\modules\\test_airfoils\\MH32.dat"        # test / demo 
 
     myApp = App(myFile)
     myApp.mainloop()

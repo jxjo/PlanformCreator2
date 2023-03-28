@@ -25,15 +25,279 @@ def_height          = 25                          # base height in px
 def_width           = 105                         # base width in px for entry fields
 def_lab_width       = 95                          # ... for labels of enty fields
 
+class AccessPath():
+    """
+    Work in Progress! - Base class of an access path
+
+    Returns:
+            _description_
+     """
+    def __init__ (self, get=None, set=None, dataType = None):
+
+        if not callable (get):
+            self._fixedVal = get
+            self._getter = None
+        else: 
+            self._fixedVal = None
+            self.getter = get
+        self._setter = set
+
+        # get data type of access path 
+        if not dataType is None: 
+            self._dataType = dataType
+        else: 
+            if not self._fixedVal is None:  checkVal = self._fixedVal                  # a input val overwrites the setter altwernative
+            else:                           checkVal = self._eval () 
+            if checkVal is None: checkVal = ""
+
+            if isinstance (checkVal, bool):                       # supported data types
+                self._dataType = bool
+            elif isinstance  (checkVal, float):    
+                self._dataType = float
+            elif isinstance (checkVal, int):
+                self._dataType = int
+            elif isinstance (checkVal, str):
+                self._dataType = str
+            else:
+                raise ValueError ("This type is not supported in Widgets: ", checkVal)
 
 
-#-------------------------------------------------------------------------------
-# Pretty Messagebox   
-#-------------------------------------------------------------------------------
+    def eval (self):
+        return self._eval()
+
+
+    def eval_set (self, aVal):
+        self._eval_set(aVal)
+
+    def isMethod(self): 
+        return (self._valFixed is None) and (not self.getter is None)
+
+    def _eval (self):
+        
+        if self._fixedVal is None:  
+            if callable (self._getter): 
+                return self._getter()
+            else: 
+                raise ValueError ("getter is not a bound method: %s" %self._getter)
+        else: 
+            return self._fixedVal 
+
+    def _eval_set (self, aVal):
+        
+        if callable (self._setter): 
+            self._setter(aVal)
+        else: 
+            raise ValueError ("getter is not a bound method: %s" %self._getter)
+
+
+
+
+
+
+class Base_Widget2():
+    #
+    # Work in Progress - new Implementation
+    #
+    """Base class of all compound widget 
+
+    Arguments:
+        parent --   parent frame self should belong to (CTkFrame) 
+        row --      row in grid of parent :)
+        col --      column in grid of parent :)
+
+    Keyword Arguments:
+        val --      value to show - overwrites a setter path :)
+        lab --      label of an entry field, or text on button, header :)
+        obj --      object getter and setter belong to :) 
+        get --      either string path or callable method to get the value to show :)
+        set --      either string path or callable method to invoke after a value is entered by user  :)
+        disable --  either string path or callable method to disbale/enable widget  :)
+        event --    tkinter virtual event like '<<MY_ALARM>>' :)
+        lim  --     upper and lower numerical limit values for entry fields  :)
+        dec --      decimals in numeric entry fields :)
+        unit --     unit of entry fields like 'mm' :)
+        step --     step size for spin button  :)
+        options --  Option_Widget: list of string values or access path being options to select 
+
+    """
+  
+    ctk_root : ctk.CTk = None             # holds eventhandler - has to be set in the very beginnging"
+
+    def __init__(self, parent: ctk.CTkFrame, row:int, column:int, 
+                 val = None, lab:str=None, obj=None, 
+                 get =None, set =None, disable = False, 
+                 event: str= None,
+                 lim:tuple=None, dec: int = 1, unit : str = None, 
+                 spin: bool = False, step: float = 0.1,
+                 options: list = None,
+                 width:int=None, height:int=None):
+
+        self.parent = parent
+        self.row    = row
+        self.column = column
+
+        self._decimals = dec
+        if not self._decimals is None: 
+            dataType = float
+        else:
+            dataType = None
+
+        if val is None: 
+            self._ap_value = AccessPath (get=val, set=set, dataType=dataType)
+        else:
+            self._ap_value = AccessPath (get=get, set=set, dataType=dataType)
+
+        self._ap_disable = AccessPath (get=disable, dataType=bool)
+        self._ap_label   = AccessPath (get=lab)
+        self._ap_options = AccessPath (get=options, dataType=list)
+        self._ap_limits  = AccessPath (get=lim, dataType=tuple)
+        self.unit     = unit
+
+        if not spin is None: self.spinner  = spin
+        self.step     = step
+
+        self.event    = event
+
+        self.width    = width
+        self.height   = height
+        if not self.width:  self.width  = def_width
+        if not self.height: self.height = def_height
+
+        self.whileSetting = False                       # avoid circular actions with refresh()
+
+        self.mainCTk  = None                        # in a compound widget this is the important one
+        self.subCTk   = None                        # the small add/sub buttons
+        self.addCTk   = None   
+        self.labelCtk = None 
+
+    def refresh (self):
+        """refesh self by re-reading the 'getter' path 
+        """
+        if not self.whileSetting:               # avoid circular actions with refresh()
+            # only access path with method makes sense to refesh 
+            if self._ap_value.isMethod:   self.set_CTkControl ()
+            if self._ap_label.isMethod:   self.set_CTkControl_label ()
+            if self._ap_disable.isMethod: self.set_CTkControl_state ()
+
+    def set_value(self):
+        """write the current value of the widget to object via getter path
+        """
+        self.whileSetting = True                # ??? avoid circular actions with refresh()
+        self._ap_value.eval_set (self.val)
+        self.whileSetting = False
+
+
+    #---  from / to CTkControl - inside the widget 
+
+    def set_CTkControl (self):
+        """sets val into the final CTk control 
+        """
+        newVal  = self._ap_value.eval() 
+        dataType = self._ap_value.dataType
+        limits = self._ap_limits.eval()
+        decimals = self._decimals 
+
+        self.val_asString = self.str_basedOnVal (newVal, dataType, limits, decimals)
+        # to overwrite by sub class for CTk specific setting
+        self._set_CTkControl       (self.mainCTk, self.val_asString)
+
+
+    def _set_CTkControl (self, widgetCTk, newValStr: str):
+        """sets val into the final CTk control 
+        """
+        # to overwrite by sub class 
+        pass
+
+    def set_CTkControl_label (self):
+        """sets the label text into the final CTk control 
+        """
+        # to overwrite by sub class for CTk specific setting
+        self._set_CTkControl_label       (self.mainCTk, self._ap_label.eval())
+
+    def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
+        """sets val into the final CTk control 
+        """
+        # to overwrite by sub class which supports labels
+        pass
+
+    def set_CTkControl_state (self):
+        """sets disable bool into the final CTk control 
+        """
+        self._set_CTkControl_state (self.mainCTk, self._ap_disable.eval())
+
+
+    def _set_CTkControl_state (self, widgetCTk, disable: bool):
+        """sets the disabled / normal state in CTk control 
+        """
+        curCTk_state = widgetCTk.cget("state")
+        if disable: 
+            if curCTk_state == "normal":
+                widgetCTk.configure (state ="disabled" )         # "normal" (standard) or "disabled" (not clickable, darker color)
+        else: 
+            if curCTk_state == "disabled":
+                widgetCTk.configure (state ="normal" )           # "normal" (standard) or "disabled" (not clickable, darker color)
+
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+    def CTk_callback (self, dummy=None):
+        """will be called by CTk control when user hit a button or pressed enter 
+        """
+        # now get it from CTK 
+        newStr = self._getFrom_CTkControl()
+
+        if newStr is None:                                      # this was a button
+            setAndFire = True
+            self.val = None
+        else: 
+            newVal = self.val_basedOnStr (self.val, self.valType, newStr, self.limits)
+            if (newVal != self.val):                            # defensive to set in model ...
+                self.val  = newVal                              # store new value
+                setAndFire = True
+            else:
+                setAndFire = False
+
+        if setAndFire:
+            if not self.setter is None: self.set_value()        # write val back to object
+            if not self.event  is None: self.fireEvent()
+        
+        # update entry field if there was a re-formatting e.g. digits
+        self.set_CTkControl()
+
+
+
+    def str_basedOnVal (self, val, valType, limits, decimals):
+        """converts val to a string for ctk entry based on type of val 
+        """
+        if   val is None:
+            s = "" 
+        elif valType == bool:
+            if val: s = "1" 
+            else:   s = "0"
+        elif valType == str:  
+            s = val
+        elif valType == int:
+            if limits: 
+                minVal, maxVal = limits
+                val2 = max (int(minVal), int(val))
+                val  = min (int(maxVal), val2)
+            s = str(val)
+        elif valType == float:
+            if limits: 
+                minVal, maxVal = limits
+                val2 = max (float(minVal), float(val))
+                val  = min (float(maxVal), val2)
+            s = "%0.*f" %(decimals,val)
+        else:
+            s = '???'
+        return s
+
+
 
 class Messagebox(ctk.CTkToplevel):
     """ Message in different styles - inspired vom CTKMessagebox"""
 
+    
     def __init__(self, master, 
                  width: int = 400,
                  height: int = 200,
@@ -48,6 +312,8 @@ class Messagebox(ctk.CTkToplevel):
                  icon: str = "info",             #  "check", "cancel", "info", "question", "warning"
                  font: tuple = None):
         
+        import sys
+    
         super().__init__(master)
 
         self.master_window = master
@@ -139,6 +405,8 @@ class Messagebox(ctk.CTkToplevel):
                                                     command=lambda: self.button_event(self.option_text_3))
             self.button_3.grid(row=0, column=3, sticky="e", padx=(10,0), pady=10)
         
+
+            
     def get(self):
         self.master.wait_window(self)
         return self.event
@@ -150,9 +418,6 @@ class Messagebox(ctk.CTkToplevel):
 
 
 
-#-------------------------------------------------------------------------------
-# Widgets  
-#-------------------------------------------------------------------------------
 
 class Base_Widget():
     """Base class of all compound widget 
@@ -180,12 +445,9 @@ class Base_Widget():
   
     ctk_root : ctk.CTk = None             # holds eventhandler - has to be set in the very beginnging"
 
-    def __init__(self, parent: ctk.CTkFrame, 
-                 row:int, column:int, 
-                 val = None, 
-                 lab:str=None, 
-                 obj=None, get =None, set =None, 
-                 disable = False, 
+    def __init__(self, parent: ctk.CTkFrame, row:int, column:int, 
+                 val = None, lab:str=None, obj=None, 
+                 get =None, set =None, disable = False, 
                  event: str= None,
                  lim:tuple=None, dec = None, unit : str = None, 
                  spin: bool = False, step: float = 0.1,
@@ -214,10 +476,8 @@ class Base_Widget():
         else:
            raise ValueError ("This type is not supported in Widgets", self.val)
  
-        if self.setter is None:                 # no setter? disable field 
-            self.disGetter = None
-            self.disabled = True
-        elif (isinstance(disable, bool)):       # disable is either bool or access path
+
+        if (isinstance(disable, bool)):
             self.disGetter = None
             self.disabled = disable
         else: 
@@ -666,7 +926,6 @@ class Field_Widget(Base_Widget):
 
         column = self.column
         if columnspan is None:  columnspan = 1
-        
         if (self.label):  
             if lab_width:
                 width = lab_width
@@ -685,10 +944,10 @@ class Field_Widget(Base_Widget):
             entry_width = self.width - 2 * button_width - 2
         else: 
             entry_frame = self.parent
-            entry_width = self.width
+            entry_width  = self.width
 
         self.mainCTk = ctk.CTkEntry (entry_frame, width=entry_width, height=self.height, border_width=1,
-                                     justify='right', fg_color=cl_edit)
+                                   justify='right', fg_color=cl_edit)
 
         if self.spinner:
             self.subCTk = ctk.CTkButton(entry_frame, text="-", command=self.sub_button_callback,
@@ -1011,6 +1270,8 @@ class TestApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
+
+
         ctk.set_appearance_mode("Dark")    
         # ctk.set_default_color_theme("blue") 
 
@@ -1041,6 +1302,22 @@ class TestApp(ctk.CTk):
         print (a)
         a = self.localBoolOn()
 
+        ap = AccessPath (self, get=lambda: mo1.aString)
+        print ("1:   ", ap.eval())
+
+        ap = AccessPath (self, get=mo1.aString_no_property)
+        print ("2:   ", ap.eval())
+
+        ap = AccessPath (self, get=mo1.aString_no_property, val="hoho")
+        print ("3:   ", ap.eval())
+
+        ap = AccessPath (self, get=lambda: mo.aString, set=mo.set_aString)
+        print ("4:   ", ap.eval())
+        ap.eval_set ('hihi')
+        print ("5:   ", ap.eval(), "mo: ", mo.aString)
+
+
+        return
         a = mo.aString
         a = lambda: self.localBoolOn()
         a = a()
