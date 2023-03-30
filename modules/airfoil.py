@@ -7,8 +7,9 @@
 """
 import os
 import numpy as np
+import math
 from common_utils import * 
-from airfoil_splines import LineOfAirfoil
+from airfoil_line_spline import LineOfAirfoil, panel_angles
 
 
 class Airfoil:
@@ -38,6 +39,8 @@ class Airfoil:
         self._y       = None
         self._upper   = None                    # upper surface line object 
         self._lower   = None                    # lower surface line object 
+        self._camber  = None                    # camber line object 
+        self._thickness = None                  # thickness line object 
 
 
         if (pathFileName is not None): 
@@ -50,7 +53,7 @@ class Airfoil:
                 self.name = "-- ? --"
             else:
                 self.pathFileName = pathFileName
-                self.name = os.path.splitext(os.path.basename(self.pathFileName))[0]
+                self.name = os.path.splitext(os.path.basename(self.pathFileName))[0]  # load will get the real name
         elif (not name):
             self.name = "-- ? --"
 
@@ -126,10 +129,30 @@ class Airfoil:
         return True
     
     @property
+    def le_i (self) -> int: 
+        """ the index of leading edge in x coordinate array"""
+        return int(np.argmin (self._x))
+
+    @property
     def le_fromPoints (self): 
         """ returns leading edge x,y of point coordinate data """
         ile = np.argmin (self._x)
         return self._x[ile], self._y[ile]
+    
+    @property 
+    def le_panelAngle (self): 
+        """returns the upper and lower angle of the 2 panels at leading edge - should be less 90"""
+
+        # panang1 = atan((zt(2)-zt(1))/(xt(2)-xt(1))) *                &
+        #           180.d0/acos(-1.d0)
+        # panang2 = atan((zb(1)-zb(2))/(xb(2)-xb(1))) *                &
+        #           180.d0/acos(-1.d0)
+        # maxpanang = max(panang2,panang1)
+        ile = self.le_i
+        angleUp = math.atan ((self.y[ile-1] - self.y[ile])/(self.x[ile-1] - self.x[ile])) * 180.0 / math.acos(-1)
+        angleLo = math.atan ((self.y[ile] - self.y[ile+1])/(self.x[ile+1] - self.x[ile])) * 180.0 / math.acos(-1)
+
+        return angleUp, angleLo 
 
     @property
     def te_fromPoints (self): 
@@ -139,12 +162,18 @@ class Airfoil:
     @property
     def nPanels_upper (self): 
         """ returns number of panels upper side """
-        return int(np.argmin (self._x))
+        return self.le_i
 
     @property
     def nPanels_lower (self): 
         """ returns number of panels lower side """
-        return len (self._x) - int(np.argmin (self._x)) - 1
+        return len (self._x) - self.le_i - 1
+    
+    @property
+    def minPanelAngle (self): 
+        """ returns the max angle between two panels - something between 160-180° """
+
+        return np.min(panel_angles(self.x,self.y))        
 
     @property
     def maxThickness (self): 
@@ -200,8 +229,10 @@ class Airfoil:
     def camber(self) -> 'LineOfAirfoil': 
         """returns the camber line object - where x 0..1  with cosinus distribution"""
         if self.isLoaded:
-            return LineOfAirfoil (self.upper.x, (self.upper.y + self.lower.y_interpol(self.upper.x))/2, 
-                                  cosinus=True, name='Camber')
+            if self._camber is None: 
+                self._camber = LineOfAirfoil (self.upper.x, (self.upper.y + self.lower.y_interpol(self.upper.x))/2, 
+                                              cosinus=False, name='Camber')
+            return self._camber
         else: 
             raise ValueError ("Airfoil '%s' not loaded" % self.name)
 
@@ -209,8 +240,10 @@ class Airfoil:
     def thickness(self) -> 'LineOfAirfoil': 
         """returns the thickness distribution line object - where x 0..1 with cosinus distribution"""
         if self.isLoaded:
-            return LineOfAirfoil (self.upper.x, (self.upper.y - self.lower.y_interpol(self.upper.x)), 
-                                  cosinus=True, name='Thickness')
+            if self._thickness is None: 
+                self._thickness = LineOfAirfoil (self.upper.x, (self.upper.y - self.lower.y_interpol(self.upper.x)), 
+                                                 cosinus=True, name='Thickness')
+            return self._thickness
         else: 
             raise ValueError ("Airfoil '%s' not loaded" % self.name)
 
@@ -289,6 +322,8 @@ class Airfoil:
                 if len(splitline) >= 2:                     
                     x.append (float(splitline[0].strip()))
                     y.append (float(splitline[1].strip()))
+            else: 
+                self.name = line.strip()
         self._x = np.asarray (x)
         self._y = np.asarray (y)
 
@@ -355,7 +390,7 @@ class Airfoil:
 
         gap = y[0] - y[-1]
         dgap = newGap - gap 
-        ile = np.argmin (x)
+        ile = self.le_i
 
         # go over each point, changing the y-thickness appropriately
         for i in range(len(x)):
@@ -409,10 +444,10 @@ class Airfoil:
     def _splitUpperLower (self):
         """ split self._x,y into upper and lower coordinates """
 
-        if not self.isNormalized:
-            raise ValueError ("Airfoil '" + self.name + "' isn't normalized. Cannot split.")
+        if not self.isLoaded:
+            raise ValueError ("Airfoil '" + self.name + "' isn't loaded. Cannot split.")
         
-        iLe = np.argmin (self._x) 
+        iLe = self.le_i
 
         # upper - extract coordinates - reverse it - now running from 0..1
         self._upper = LineOfAirfoil(np.flip (self._x [0: iLe + 1]), np.flip (self._y [0: iLe + 1]), name='upper')

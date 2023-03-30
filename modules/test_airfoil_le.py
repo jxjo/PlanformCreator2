@@ -3,7 +3,7 @@
 
 from airfoil import Airfoil 
 import numpy as np
-from airfoil_splines import SplineOfAirfoil, _cosinus_distribution
+from airfoil_line_spline import SplineOfAirfoil, _cosinus_distribution
 
 
 def le_max_curvature():

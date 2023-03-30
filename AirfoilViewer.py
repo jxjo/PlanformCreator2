@@ -120,46 +120,46 @@ class Edit_Airfoil_Data(Edit_Abstract):
     def init (self):
 
         r, c = 0, 0 
-        Blank_Widget (self, r,c, width=10)    
-        self.add (Header_Widget (self,r,c,   columnspan= 2, lab=self.name, width=80))
-        self.add (Field_Widget  (self,r,c+2, columnspan= 4 ,lab=None, obj=self.airfoil, get='name', set='set_name',
-                                 lab_width=1, event=AIRFOIL_CHANGED, width=150))
+        self.add (Header_Widget (self,r,c,   width= 70, columnspan= 2, lab=self.name))
+        self.add (Field_Widget  (self,r,c+2, columnspan= 8 ,lab=None, obj=self.airfoil, get='name', set='set_name',
+                                 lab_width=1, event=AIRFOIL_CHANGED, width=255, justify='left'))
 
-        c += 1                                  # left blank colum to inset the fields 
         r += 1
+        Blank_Widget (self, r,0)    
+        c += 1                                  # left blank colum to inset the fields 
+        self.add (Field_Widget  (self,r,c,   lab="Thickness", obj=self.airfoil, 
+                                get='maxThickness', set='', 
+                                spin=True, width=95, lab_width=70, unit="%", dec=2, disable= True))
+        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
+                                get='maxThicknessX', set='', 
+                                spin=True, width=95, unit="%", dec=2, disable= True))
+        r += 1
+        self.add (Field_Widget  (self,r,c,   lab="Camber", obj=self.airfoil, 
+                                get='maxCamber', set='', 
+                                spin=True, width=95, lab_width=70, unit="%", dec=2, disable= True))
+        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
+                                get='maxCamberX', set='', 
+                                spin=True, width=95, unit="%", dec=2, disable= True))
 
-        if self.airfoil().isNormalized:
-            self.add (Field_Widget  (self,r,c,   lab="Thickness", obj=self.airfoil, 
-                                    get='maxThickness', set='', 
-                                    spin=True, width=90, unit="%", dec=2, disable= True))
-            self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=30, obj=self.airfoil, 
-                                    get='maxThicknessX', set='', 
-                                    spin=True, width=90, unit="%", dec=2, disable= True))
-            r += 1
-            self.add (Field_Widget  (self,r,c,   lab="Camber", obj=self.airfoil, 
-                                    get='maxCamber', set='', 
-                                    spin=True, width=90, unit="%", dec=2, disable= True))
-            self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=30, obj=self.airfoil, 
-                                    get='maxCamberX', set='', 
-                                    spin=True, width=90, unit="%", dec=2, disable= True))
+        r += 1
+        self.add (Field_Widget  (self,r,c,   lab="TE gap", obj=self.airfoil, 
+                                get='teGapPercent', set='', 
+                                spin=True, width=95, lab_width=70, unit="%", dec=2, disable= True))
+        r += 1
+        Blank_Widget (self, r,c)
 
-            r += 1
-            self.add (Field_Widget  (self,r,c,   lab="TE gap", obj=self.airfoil, 
-                                    get='teGapPercent', set='', 
-                                    spin=True, width=90, unit="%", dec=2, disable= True))
-
-            r += 1
-            Blank_Widget (self, r,c, height=10)
-
+        r += 1
+        self.add(Label_Widget  (self,r, c, columnspan=9, padx= 5, text_style = 'Warning',
+                                lab= lambda: self.messageText()))
+ 
+    def messageText (self): 
+        if  self.airfoil().maxThickness != self.airfoil().maxThickness:     # test for nan value 
+            text = "The Airfoil has erronous coordinates. Try to repanel."
         else: 
+            text = ''
+        return text 
 
-            r += 1
-            Blank_Widget (self, r,c, height=10)
-            r += 1
-            self.add(Label_Widget  (self,r, c, 
-                     lab= "Airfoil isn't normlized.\n\n" +\
-                          "Therefore geometry parameters like\n" + \
-                          "thickness or camber can't be evaluated"))
+
 
 class Edit_Curvature(Edit_Abstract):
     """ 
@@ -167,57 +167,63 @@ class Edit_Curvature(Edit_Abstract):
     """
     name = "Curvature"
 
-    def init (self):
+    def __init__(self, master, airfoilFn, *args, **kwargs):
 
+        self._curvature_threshold = 0.1
+        self._deriv3_threshold    = 0.4
 
-        r, c = 0, 0 
-        Blank_Widget (self, r,c, width=10)    
+        super().__init__(master, airfoilFn, *args, **kwargs)
 
-        if self.airfoil().isNormalized:
-
-            self.add (Header_Widget (self,r,c,   lab=self.name, columnspan= 2))
-            self.add (Label_Widget  (self,r,c+2, padx=0, lab='Reversals', columnspan= 2))
-            self.add (Label_Widget  (self,r,c+4, padx=0, lab='Spikes', columnspan= 2))
-
-            c += 1                                  # left blank column to inset the fields 
-            r += 1
-            self.add (Field_Widget  (self,r,c,   lab="Upper side", get=lambda: len(self.airfoil().upper.curvature.reversals()),
-                                    width=80, set='', dec=0, disable= True))
-            self.add (Field_Widget  (self,r+1,c, lab="Lower side", get=lambda: len(self.airfoil().lower.curvature.reversals()), 
-                                    width=80, set='', dec=0, disable= True))
-            self.add (Field_Widget  (self,r+2,c,   lab="with threshold", get=lambda: self.airfoil().upper.curvature.threshold, 
-                                    set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
-                                    lim=(0,1), dec=1, spin=True, step=0.1, width=80))
-
-            c += 3                                  # left blank column to inset the fields 
-            self.add (Field_Widget  (self,r,c,   get=lambda: len(self.airfoil().upper.deriv3.reversals()),
-                                    width=80, set='', dec=0, disable= True))
-            self.add (Field_Widget  (self,r+1,c, get=lambda: len(self.airfoil().lower.deriv3.reversals()), 
-                                    width=80, set='', dec=0, disable= True))
-            self.add (Field_Widget  (self,r+2,c, get=lambda: self.airfoil().upper.deriv3.threshold, 
-                                    set=self._set_deriv3_threshold, event=AIRFOIL_CHANGED, 
-                                    lim=(0,10), dec=1, spin=True, step=0.25, width=80))
-
-        else: 
-
-            self.add (Header_Widget (self,r,c,   lab=self.name, columnspan= 2))
-            r += 1
-            c += 1
-            Blank_Widget (self, r,c, height=10)
-            r += 1
-            self.add(Label_Widget  (self,r, c, 
-                     lab= "Airfoil isn't normlized.\n\n" +\
-                          "Therefore curvature based on splines \n" + \
-                          "can't be evaluated"))
-
-
+    @property
+    def curvature_threshold (self): 
+        return self._curvature_threshold
     def _set_curvature_threshold (self, aVal):
+        self._curvature_threshold = aVal
         self.airfoil().upper.curvature.set_threshold(aVal)
         self.airfoil().lower.curvature.set_threshold(aVal)
-
+    
+    @property
+    def deriv3_threshold (self): 
+        return self._deriv3_threshold
     def _set_deriv3_threshold (self, aVal):
+        self._deriv3_threshold    = aVal
         self.airfoil().upper.deriv3.set_threshold(aVal)
         self.airfoil().lower.deriv3.set_threshold(aVal)
+
+
+    def init (self):
+
+        r, c = 0, 0 
+        self.add (Header_Widget (self,r,c,   width=90, lab=self.name, columnspan= 2))
+        self.add (Label_Widget  (self,r,c+2, padx=0, width=70, lab='Reversals', columnspan= 2))
+        self.add (Label_Widget  (self,r,c+4, padx=0, width=70, lab='Spikes', columnspan= 2))
+
+        r = 1
+        Blank_Widget (self, r,0)                # left blank column to inset the fields 
+        c = 1                                  
+        self.add (Field_Widget  (self,r,c,   lab="Upper side", get=lambda: len(self.airfoil().upper.curvature.reversals()),
+                                width=60, lab_width=80, set='', dec=0, disable= True))
+        self.add (Field_Widget  (self,r,c+3,   get=lambda: len(self.airfoil().upper.deriv3.reversals()),
+                                width=60,               set='', dec=0, disable= True))
+        r += 1
+        self.add (Field_Widget  (self,r,c, lab="Lower side", get=lambda: len(self.airfoil().lower.curvature.reversals()), 
+                                width=60, lab_width=80, set='', dec=0, disable= True))
+        self.add (Field_Widget  (self,r,c+3, get=lambda: len(self.airfoil().lower.deriv3.reversals()), 
+                                width=60,               set='', dec=0, disable= True))
+        r += 1
+        self.add (Field_Widget  (self,r,c,   lab="... threshold", get=lambda: self.curvature_threshold, 
+                                set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
+                                width=60, lab_width=80, lim=(0,1), dec=1, spin=False, step=0.1))
+        self.add (Field_Widget  (self,r,c+3, get=lambda: self.deriv3_threshold, 
+                                set=self._set_deriv3_threshold, event=AIRFOIL_CHANGED, 
+                                width=60,               lim=(0,10), dec=1, spin=False, step=0.2))
+
+    def refresh(self): 
+        #overloaded to set threshold in airfoils for reversal calculation 
+        self._set_curvature_threshold (self.curvature_threshold)
+        self._set_deriv3_threshold (self.deriv3_threshold)
+        super().refresh()
+
 
 
 class Edit_Panels(Edit_Abstract):
@@ -228,46 +234,109 @@ class Edit_Panels(Edit_Abstract):
 
     def init (self):
 
+        r, c = 0, 0 
+        self.add (Header_Widget (self,r,c,   width= 70, lab=self.name, columnspan= 2))
+        self.add (Field_Widget  (self,r,c+2, get=lambda: len(self.airfoil().x) -1,
+                                 width=50,   lab_width=0, dec=0))
+
+        r = 1
+        Blank_Widget (self, r,c)    
+        c = 1                                  # left blank column to inset the fields 
+        # self.add (Field_Widget  (self,r,c,   lab="No points", get=lambda: len(self.airfoil().x),
+        #                          width=50,   lab_width=80, dec=0))
+        # self.add (Field_Widget  (self,r,c+3, lab="= Panels", get=lambda: len(self.airfoil().x) -1,
+        #                          width=50,   lab_width=60, dec=0))
+
+        r += 1
+        self.add (Field_Widget  (self,r,c,   lab="LE at point", get=lambda: self.airfoil().le_i, 
+                                 width=50,   lab_width=80, dec=0))
+        self.add (Field_Widget  (self,r,c+3, lab="Angle up", get=lambda: self.airfoil().le_panelAngle[0], 
+                                 width=50,   lab_width=60, unit="°", dec=0))
+        self.add (Field_Widget  (self,r+1,c+3, lab="Angle down", get=lambda: self.airfoil().le_panelAngle[1], 
+                                 width=50,   lab_width=60, unit="°", dec=0))
+
+        r += 2
+        self.add (Field_Widget  (self,r,c,   lab="Min angle", get=lambda: self.airfoil().minPanelAngle, 
+                                 width=50,   lab_width=80, unit="°", dec=0))
+        r += 1
+        Blank_Widget (self, r,c)
+        r += 1
+        self.add(Label_Widget  (self,r, c, columnspan=9, padx= 5, text_style = 'Warning',
+                                lab= lambda: self.messageText()))
+
+    def messageText (self): 
+        if False:
+            text = "Airfoil isn't normlized. Parameters can be inaccurate."
+        else: 
+            text = ''
+        return text 
+
+
+
+class Edit_Coordinates(Edit_Abstract):
+    """ 
+    Frame to edit main data of the airfoil like thickness. This is just the header
+    """
+    name = "Coordinates"
+
+    def init (self):
 
         r, c = 0, 0 
-        Blank_Widget (self, r,c, width=10)    
-        self.add (Header_Widget (self,r,c,   lab=self.name, columnspan= 3))
-        self.add (Label_Widget  (self,r,c+2, width= 70, padx=0, lab='Panels', columnspan= 2))
-        self.add (Label_Widget  (self,r,c+4, width= 70, padx=0, lab='Max angle', columnspan= 2))
-        self.add (Label_Widget  (self,r,c+6, width= 70, padx=0, lab='TE coord', columnspan= 2))
+        self.add (Header_Widget (self,r,c,   width=95, lab=self.name, columnspan= 2))
+        self.add (Label_Widget  (self,r,c+2, padx=0, lab='     x', width=30))
+        self.add (Label_Widget  (self,r,c+4, padx=0, lab='     y', width=30))
 
-        c = 1                                  # left blank column to inset the fields 
+
         r = 1
-        self.add (Field_Widget  (self,r,c,   lab="Upper side", get=lambda: self.airfoil().nPanels_upper,
-                                 width=50,   lab_width=60, dec=0))
-        self.add (Field_Widget  (self,r+1,c, lab="Lower side", get=lambda: self.airfoil().nPanels_lower, 
-                                 width=50,   lab_width=60, dec=0))
-        self.add (Field_Widget  (self,r+2,c, lab="LE coord", get=lambda: self.le_asString(),
-                                 width=100,  lab_width=60, columnspan=3))
+        Blank_Widget (self, r,0)    
+        c = 1                                  # left blank column to inset the fields 
+        self.add (Field_Widget  (self,r,c,   lab="Leading edge", get=lambda: self.airfoil().le_fromPoints[0],
+                                 width=80,   lab_width=90, dec=7, text_style = self.le_x_style))
+        self.add (Field_Widget  (self,r,c+3,                     get=lambda: self.airfoil().le_fromPoints[1],
+                                 width=80,                 dec=7, text_style = self.le_y_style))
+        r += 1
+        self.add (Field_Widget  (self,r,c,   lab="Trailing edge", get=lambda: self.airfoil().te_fromPoints[0],
+                                 width=80,   lab_width=90, dec=7, text_style = self.te_xu_style))
+        self.add (Field_Widget  (self,r,c+3,                      get=lambda: self.airfoil().te_fromPoints[1],
+                                 width=80,                 dec=7, text_style = self.te_yu_style))
+ 
+        r += 1
+        self.add (Field_Widget  (self,r,c,   lab=" " ,            get=lambda: self.airfoil().te_fromPoints[2],
+                                 width=80,   lab_width=90, dec=7, text_style = self.te_xl_style))
+        self.add (Field_Widget  (self,r,c+3,                      get=lambda: self.airfoil().te_fromPoints[3],
+                                 width=80,                 dec=7, text_style = self.te_yl_style))
 
-        c += 3                                 
-        self.add (Field_Widget  (self,r,c,   val='tbd', # get=lambda: len(self.airfoil().upper.x - 1),
-                                 width=50,   lab_width=0, dec=0))
-        self.add (Field_Widget  (self,r+1,c, val='tbd', # get=lambda: len(self.airfoil().lower.x - 1), 
-                                 width=50,   lab_width=0, dec=2))
+        r += 1
+        Blank_Widget (self, r,c)
+        r += 1
+        self.add(Label_Widget  (self,r, c, columnspan=9, padx= 5, text_style = 'Warning',
+                                lab= lambda: self.messageText()))
 
-        c += 3                                 
-        self.add (Field_Widget  (self,r,c,   get=lambda: self.te_upper_asString(),
-                                 width=100,  lab_width=0))
-        self.add (Field_Widget  (self,r+1,c, get=lambda: self.te_upper_asString(), 
-                                 width=100,  lab_width=0))
+    def messageText (self): 
+        if not self.airfoil().isNormalized:
+            text = "Airfoil isn't normlized."
+        else: 
+            text = ''
+        return text 
+            
+    def le_x_style (self): 
+        if self.airfoil().le_fromPoints[0] != 0.0 : return 'Warning'
 
-    def te_upper_asString (self): 
-        x,y,_,_ = self.airfoil().te_fromPoints
-        return "%.4f, %.4f" % (x,y)
-    
-    def te_lower_asString (self): 
-        _,_,x,y = self.airfoil().te_fromPoints
-        return "%.4f, %.4f" % (x,y)
-    
-    def le_asString (self): 
-        x,y = self.airfoil().le_fromPoints
-        return "%.4f, %.4f" % (x,y)
+    def le_y_style (self): 
+        if self.airfoil().le_fromPoints[1] != 0.0 : return 'Warning'
+
+    def te_xu_style (self): 
+        if self.airfoil().te_fromPoints[0] != 1.0 : return 'Warning'
+
+    def te_yu_style (self): 
+        if self.airfoil().te_fromPoints[1] <  0.0 : return 'Warning'
+
+    def te_xl_style (self): 
+        if self.airfoil().te_fromPoints[2] != 1.0 : return 'Warning'
+
+    def te_yl_style (self): 
+        if self.airfoil().te_fromPoints[3] != - self.airfoil().te_fromPoints[1] : return 'Warning'
+
 
 #-------------------------------------------------------------------------------
 # Diagrams   
@@ -366,10 +435,7 @@ class Diagram_Abstract(ctk.CTkFrame):
 
     def setup_Switches(self, row=0, col=0):
         """ define on/off switches ffor this plot type"""
-        # grid on / off is always available 
-        # row += 1 
-        # Blank_Widget  (self.view_frame,row, 0, height=5)
-        # self.view_frame.grid_rowconfigure (row, weight=1)
+
         row = 0 
         Header_Widget (self.view_frame,row,col, lab='View', width=80)
 
@@ -420,7 +486,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         # self.ax2.set_ylabel('curvature', color=self.cl_text)
         self.ax2.tick_params (labelsize='small')
         self.ax2.set_xlim([-0.05,1.05])
-        self.ax2.set_ylim([ 1.0,  -1.0])
+        self.ax2.set_ylim([ 2, -2.0])
         self.ax2.set_aspect('auto', 'datalim')
         self.ax2.grid (axis='x')
         self.ax2.axhline(0, color=self.cl_labelGrid, linewidth=0.5)
@@ -428,7 +494,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.ax2Twin = self.ax2.twinx()
         # self.ax2Twin.set_ylabel('3rd derivative', color=self.cl_text)
         self.ax2Twin.tick_params (labelsize='small')
-        self.ax2Twin.set_ylim([ -10,  10])
+        self.ax2Twin.set_ylim([ -20,  20])
         # mirrorax2 = ax2.get_shared_x_axes().get_siblings(ax2)[0]
 
 
@@ -438,15 +504,11 @@ class Diagram_Airfoil (Diagram_Abstract):
         super().setup_artists()
 
         # airfoil is list to prepare for future multiple airfoils to view 
-        # don't show if not normalized - has to be adapted to multiple airfoils 
         
         self.airfoilArtist  = Airfoil_Artist        (self.ax1,     [self._airfoilFn], show=True)
-        self.camberArtist   = Airfoil_Camber_Artist (self.ax1,     [self._airfoilFn], 
-                                                     show=False and self.airfoil.isNormalized)
-        self.curvArtist     = Airfoil_Curv_Artist   (self.ax2,     [self._airfoilFn], 
-                                                     show=True  and self.airfoil.isNormalized)
-        self.deriv3Artist   = Airfoil_Deriv3_Artist (self.ax2Twin, [self._airfoilFn], 
-                                                     show=False and self.airfoil.isNormalized)
+        self.camberArtist   = Airfoil_Camber_Artist (self.ax1,     [self._airfoilFn], show=False)
+        self.curvArtist     = Airfoil_Curv_Artist   (self.ax2,     [self._airfoilFn], show=True)
+        self.deriv3Artist   = Airfoil_Deriv3_Artist (self.ax2Twin, [self._airfoilFn], show=False)
 
 
     def setup_Switches(self, row=0, col=0):
@@ -454,14 +516,8 @@ class Diagram_Airfoil (Diagram_Abstract):
 
         row, col = super().setup_Switches(row, col)
 
-        if self.airfoil.isNormalized: 
-            self._set_upper (True) 
-            self._set_lower (True) 
-            disableNotNormalized = False
-        else:
-            self._set_upper (False) 
-            self._set_lower (False) 
-            disableNotNormalized = True
+        self._set_upper (True) 
+        self._set_lower (True) 
 
         disableNotNormalized = not self.airfoil.isNormalized
 
@@ -470,7 +526,7 @@ class Diagram_Airfoil (Diagram_Abstract):
                        get=lambda: self.airfoilArtist.points, set=self._set_points)
 
         row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Camber', disable= disableNotNormalized,
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Camber', 
                        get=lambda: self.camberArtist.show, set=self.camberArtist.set_show)
 
         row += 1
@@ -478,17 +534,17 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.view_frame.grid_rowconfigure(row, weight=2)
 
         row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Upper side', disable= disableNotNormalized,
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Upper side', 
                        get=lambda: self.curvArtist.upper, set=self._set_upper)
         row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Lower side',disable= disableNotNormalized, 
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Lower side',
                        get=lambda: self.curvArtist.lower, set=self._set_lower)
 
         row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Curvature', disable= disableNotNormalized,
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Curvature', 
                        get=lambda: self.curvArtist.show, set=self.curvArtist.set_show)
         row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='3rd derivative', disable= disableNotNormalized,
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='3rd derivative', 
                        get=lambda: self.deriv3Artist.show, set=self.deriv3Artist.set_show)
 
         row += 1
@@ -552,9 +608,31 @@ class Edit_File_Menu(Edit_Abstract):
         self.grid_columnconfigure   (0, weight=1)
         self.add (Header_Widget (self,0,0, lab=self.name, width=80))
 
-        Button_Widget (self,2,0, lab='Open',        width=100, pady=4, sticky = '', set=self.myApp.open)
-        # Button_Widget (self,3,0, lab='Save',        width=100, pady=4, sticky = '', set=self.myApp.save)
-        Button_Widget (self,4,0, lab='Save As...',  disable=True, width=100, pady=4, sticky = '', set=self.myApp.saveAs)
+        # file selection with buttons - takes 2 rows
+        self.add(Option_Widget (self,1,0, get=self.curAirfoilFileName, set=self.set_curAirfoilFileName,
+                                          options=self.airfoilFileNames,
+                                          spin=True, spinPos='below', width=100, padx=10, pady=4, sticky = 'ew',))
+        self.add(Button_Widget (self,3,0, lab='Open',        width=100, pady=4, sticky = 'ew', set=self.myApp.open))
+        self.add(Button_Widget (self,4,0, lab='Save As...',  disable=True, width=100, pady=4, sticky = 'ew', set=self.myApp.saveAs))
+
+    def airfoilFileNames (self): 
+
+        fileNames = []
+        for aFileName in self.myApp.airfoilFiles:
+            fileNames.append(os.path.basename(aFileName))
+        return fileNames
+    
+    def curAirfoilFileName (self): 
+
+        return os.path.basename(self.myApp.curAirfoilFile)  
+
+    def set_curAirfoilFileName (self, newFileName): 
+        
+        for aPathFileName in myApp.airfoilFiles:
+            if newFileName == os.path.basename(aPathFileName):
+                self.myApp.loadNewAirfoil (aPathFileName)
+                self.refresh()
+                break
 
 
 
@@ -566,26 +644,30 @@ class App(ctk.CTk):
 
     name = AppName  
 
-    def __init__(self, airfoilFile):
+    def __init__(self, airfoilFiles):
         super().__init__(fg_color= cl_background)
 
         global ctk_root                                 # being event handler
 
         # create the 'wing' model 
-        self.paramFile = '' 
-        if not airfoilFile:
-            self.set_curAirfoil (Root_Example())
+        self.airfoilFiles =[]
+        self.curAirfoilFile = None
+
+        if not airfoilFiles:
+            self.loadNewAirfoil ("", airfoil=Root_Example() )
         else: 
-            airfoil = Airfoil(pathFileName=airfoilFile)
-            airfoil.load()
-            self.set_curAirfoil (airfoil)
+            if not type(airfoilFiles) == list: 
+                self.airfoilFiles.append (airfoilFiles)
+            else:
+                self.airfoilFiles = airfoilFiles
+            self.loadNewAirfoil (self.airfoilFiles[0])
 
         self.title (AppName + "  v" + str(AppVersion) + "  [" + self.curAirfoil().name + "]")
         # intercept app close by user  
         self.protocol("WM_DELETE_WINDOW", self.onExit)
 
         # configure customtkinter
-        self.geometry("1400x700")
+        self.geometry("1500x750")
         self.appearance_mode = "Dark"                   
         ctk.set_appearance_mode(self.appearance_mode)   # Modes: "System" (standard), "Dark", "Light"
         ctk.set_default_color_theme("blue")             # Themes: "blue" (standard), "green", "dark-blue"
@@ -615,10 +697,14 @@ class App(ctk.CTk):
         edit_frame.grid_columnconfigure   (3, weight=1)
 
         edit_Airfoil_frame    = Edit_Airfoil_Data   (edit_frame, self.curAirfoil)
-        edit_Airfoil_frame.grid   (row=0, column=1, pady=5, padx=5, sticky="news")
+        edit_Airfoil_frame.grid   (row=0, column=0, pady=5, padx=5, sticky="news")
+
+        edit_Curvature_frame  = Edit_Coordinates (edit_frame, self.curAirfoil)
+        edit_Curvature_frame.grid (row=0, column=1, pady=5, padx=5, sticky="news")
 
         edit_Curvature_frame  = Edit_Panels (edit_frame, self.curAirfoil)
         edit_Curvature_frame.grid (row=0, column=2, pady=5, padx=5, sticky="news")
+
 
         edit_Curvature_frame  = Edit_Curvature (edit_frame, self.curAirfoil)
         edit_Curvature_frame.grid (row=0, column=3, pady=5, padx=5, sticky="news")
@@ -643,12 +729,13 @@ class App(ctk.CTk):
         """ open a new wing definition json and load it"""
 
         filetypes  = [('Airfoil files', '*.dat')]
-        newPathFilename = filedialog.askopenfilename(
-                    title='Select airfoil',
+        newPathFilenames = filedialog.askopenfilenames(
+                    title='Select one or more airfoils',
                     initialdir=os.getcwd(),
                     filetypes=filetypes)
-        if newPathFilename:                       # user pressed open
-            self.loadNewAirfoil (newPathFilename)
+        if newPathFilenames:                       # user pressed open
+            self.airfoilFiles = newPathFilenames
+            self.loadNewAirfoil (self.airfoilFiles[0])
 
     def save (self):
         """  """
@@ -657,18 +744,25 @@ class App(ctk.CTk):
     def saveAs (self):
         """  """
 
-    def loadNewAirfoil(self, pathFilename):
+
+    def loadNewAirfoil(self, pathFilename, airfoil= None):
         """loads and sets a new wing model returns - updates title """
 
-        airfoil = Airfoil(pathFileName=pathFilename)
+        if airfoil is None: 
+            airfoil = Airfoil(pathFileName=pathFilename)
         airfoil.load()
         self.set_curAirfoil (airfoil)
+        self.curAirfoilFile = airfoil.pathFileName
 
         self.title (AppName + "  v" + str(AppVersion) + "  [" + airfoil.name + "]")
 
 
     def onExit(self): 
         """ interception of user closing the app - check for changes made"""
+        global ctk_root
+
+        ctk_root = None
+        Base_Widget.ctk_root = None
         self.destroy()
 
 #--------------------------------
@@ -682,15 +776,18 @@ if __name__ == "__main__":
     parser.add_argument("airfoil", nargs='*', help="Airfoil .dat file to show")
     args = parser.parse_args()
     if args.airfoil: 
-        myFile = args.airfoil[0]
-        if not os.path.isfile (myFile):
-            ErrorMsg ("Airfoil file '%s' doesn't exist" %myFile )
+        airfoil_files = args.airfoil[0]
+        if not os.path.isfile (airfoil_files):
+            ErrorMsg ("Airfoil file '%s' doesn't exist" %airfoil_files )
             sys.exit(1)
     else: 
         NoteMsg ("No airfoil file as argument. Showing example airfoil...")
-        # myFile = ".\\examples\\vjx.glide\\JX-GP-055.dat"        # test / demo 
-        myFile = ".\\modules\\test_airfoils\\MH32.dat"        # test / demo 
+        airfoil_files = ".\\examples\\vjx.glide\\JX-GP-055.dat"        # test / demo 
+        # myFile = ".\\modules\\test_airfoils\\MH32.dat"        # test / demo 
 
-    myApp = App(myFile)
+    # airfoil_dir =".\\modules\\test_airfoils"
+    # airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
+
+    myApp = App(airfoil_files)
     myApp.mainloop()
  

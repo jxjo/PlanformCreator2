@@ -24,6 +24,9 @@ class Example_Airfoil (Airfoil):
         self._y       = None
         self._upper   = None                    # upper surface line object 
         self._lower   = None                    # lower surface line object 
+        self._camber  = None                    # camber line object 
+        self._thickness = None                  # thickness line object 
+
 
         self.pathFileName = None
         self.load ()

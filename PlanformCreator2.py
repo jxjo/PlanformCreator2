@@ -246,7 +246,7 @@ class Edit_Wing(Edit_Abstract):
                
         self.add (Header_Widget (self,0,0, lab=self.name, width=80))
         self.add (Field_Widget  (self,0,1, lab=None, obj=self.wing, get='name', set='set_name',
-                                 lab_width=1, event=WING_CHANGED, width=140))
+                                 lab_width=1, event=WING_CHANGED, width=140, justify='left'))
 
 
         self.dataFrame = Edit_Wing_Data (self, self._wingFn, fg_color='transparent')
@@ -324,7 +324,7 @@ class Edit_Wing_PlanformType(Edit_Abstract):
                                 event=PLANFORM_CHANGED))
 
         self.add(Label_Widget  (self,1, 0, lab= self.shortDescription))
-        self.add(Blank_Widget  (self,2, 0, height = 10))
+        self.add(Blank_Widget  (self,2, 0))
 
         # set inital planform to edit 
         self.set_planform_frame (self.wing().planformType)
@@ -500,9 +500,9 @@ class Edit_Planform_DXF (Edit_Abstract):
         self.add(Button_Widget (self,1,2, lab='Select',         width=90,   set= self.open_dxf_file ))
 
 
-        Blank_Widget (self,3,0,  height= 5)
+        Blank_Widget (self,3,0)
         self.add(Label_Widget  (self,4,0, lab=lambda: self.planform().infoText ))
-        Blank_Widget (self,5,0,  height= 10)
+        Blank_Widget (self,5,0)
 
     def dxf_filename(self): 
         return self.planform().dxf_filename()
@@ -673,7 +673,7 @@ class Edit_WingSection(Edit_Abstract):
                                                 disable=True, width=85))
 
 
-        Blank_Widget (self,4,0, width=20, height = 10) 
+        Blank_Widget (self,4,0) 
         self.add(Field_Widget  (self,5,0, lab="Airfoil", obj=self.wingSection, get='airfoilName', set='',
                                                 disable=True, event=SECTION_CHANGED))
         
@@ -860,10 +860,6 @@ class Diagram_Abstract(ctk.CTkFrame):
 
     def setup_Switches(self, row=0, col=0):
         """ define on/off switches ffor this plot type"""
-        # grid on / off is always available 
-        # row += 1 
-        # Blank_Widget  (self.view_frame,row, 0, height=5)
-        # self.view_frame.grid_rowconfigure (row, weight=1)
 
         col += 1 
         Switch_Widget (self.view_frame,row,col, padx=10, lab='Grid', 
@@ -1467,7 +1463,7 @@ class Dialog_Load_DXF (Dialog_Abstract):
         r +=1  
         Label_Widget  (frame,r,0, lab= lambda: shortDescription)
         r +=1  
-        Blank_Widget  (frame,r,0, height = 10)
+        Blank_Widget  (frame,r,0)
 
         r +=1  
         self.add(Field_Widget  (frame,r,0, lab='  DXF file', columnspan=2, width= 220, get= self.tmpPlanform.dxf_filename))
@@ -1476,7 +1472,7 @@ class Dialog_Load_DXF (Dialog_Abstract):
                                 disable=self.remove_dxf_disable ))
 
         r +=1  
-        Blank_Widget (frame,r,0,  height= 15)
+        Blank_Widget (frame,r,0)
         r +=1  
         self.add(Label_Widget (frame,r,0, lab=lambda: self.tmpPlanform.infoText, columnspan=2, sticky = "ew" ))
 
@@ -1489,7 +1485,7 @@ class Dialog_Load_DXF (Dialog_Abstract):
         self.planformArtist.refresh(figureUpdate=True)
 
         r +=1  
-        Blank_Widget (frame,r,0, height= 10)
+        Blank_Widget (frame,r,0)
         frame.grid_rowconfigure (r, weight=1)
 
         r +=1  
@@ -1498,7 +1494,7 @@ class Dialog_Load_DXF (Dialog_Abstract):
         self.add(Button_Widget (frame,r,3, lab='Cancel',set=self.cancel, width= 100))
 
         r +=1  
-        Blank_Widget  (frame,r     ,3, height= 10)
+        Blank_Widget  (frame,r,3)
 
         self.diagram_frame.setActive(True)
 
@@ -1596,7 +1592,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         hint = self.check_y_deviation() 
         if hint: 
             self.add (Label_Widget  (self.input_frame,r,c+2, lab=hint, sticky="w", 
-                                     columnspan=8, text_color='hint'))
+                                     columnspan=8, text_style='hint'))
 
         # entry fields 
         r +=1  
@@ -1750,7 +1746,7 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         hint = self.hint_onlyPolylines () 
         if hint: 
             self.add (Label_Widget  (self.header_frame,r,c+1, lab=hint, sticky="w", 
-                                     columnspan=8, text_color='hint'))
+                                     columnspan=8, text_style='hint'))
         self.header_frame.grid_columnconfigure (c+2, weight=1)
 
         # entry fields 
@@ -1763,7 +1759,7 @@ class Dialog_Export_Dxf (Dialog_Abstract):
                                 set=self.select_file ))
 
         r += 1 
-        Blank_Widget           (self.input_frame,r,c, width=50, height = 15) 
+        Blank_Widget           (self.input_frame,r,c, width=50) 
 
         r += 1 
         self.add(Switch_Widget (self.input_frame,r,c+1, lab='Include airfoils in DXF', 

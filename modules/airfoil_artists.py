@@ -192,7 +192,7 @@ class Airfoil_Curv_Artist (Airfoil_Line_Artist):
 
         airfoil: Airfoil
         for airfoil in self.airfoils:
-            if (airfoil.isLoaded and airfoil.isNormalized):
+            if (airfoil.isLoaded):
                 color = self._nextColor()
                 if self._upper: 
                     line = airfoil.upper.curvature 
@@ -231,7 +231,7 @@ class Airfoil_Deriv3_Artist (Airfoil_Line_Artist):
 
         airfoil: Airfoil
         for airfoil in self.airfoils:
-            if (airfoil.isLoaded and airfoil.isNormalized):
+            if (airfoil.isLoaded):
                 color = self._nextColor()
                 if self._upper: 
                     line = airfoil.upper.deriv3 
@@ -275,7 +275,7 @@ class Airfoil_Camber_Artist (Airfoil_Line_Artist):
 
         airfoil: Airfoil
         for airfoil in self.airfoils:
-            if (airfoil.isLoaded and airfoil.isNormalized):
+            if (airfoil.isLoaded ):
                     line = airfoil.camber
                     legend = ("%s" % (line.name))  
                     color = self._nextColor()

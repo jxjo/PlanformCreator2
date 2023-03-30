@@ -6,13 +6,59 @@
     Airfoil and operations on it 
 
 """
-
+import math
 import numpy as np
 # from common_utils import * 
 from scipy.interpolate import splprep, splrep, splev
 from scipy.optimize import fmin, brentq
 from pycubicspline import Spline 
 
+def panel_angles (x,y):
+    """returns an array of panel angles of polyline x,y - between 160 - 180
+    angle[0] and [-1] default to 180° 
+    """
+
+    # Xfoil - CANG 
+
+    # C---- go over each point, calculating corner angle
+    #       IF(IPRINT.EQ.2) WRITE(*,1050)
+    #       DO 30 I=2, N-1
+    #         DX1 = X(I) - X(I-1)
+    #         DY1 = Y(I) - Y(I-1)
+    #         DX2 = X(I) - X(I+1)
+    #         DY2 = Y(I) - Y(I+1)
+    # C
+    # C------ allow for doubled points
+    #         IF(DX1.EQ.0.0 .AND. DY1.EQ.0.0) THEN
+    #          DX1 = X(I) - X(I-2)
+    #          DY1 = Y(I) - Y(I-2)
+    #         ENDIF
+    #         IF(DX2.EQ.0.0 .AND. DY2.EQ.0.0) THEN
+    #          DX2 = X(I) - X(I+2)
+    #          DY2 = Y(I) - Y(I+2)
+    #         ENDIF
+    # C
+    #         CROSSP = (DX2*DY1 - DY2*DX1)
+    #      &         / SQRT((DX1**2 + DY1**2) * (DX2**2 + DY2**2))
+    #         ANGL = ASIN(CROSSP)*(180.0/3.1415926)
+    #         IF(IPRINT.EQ.2) WRITE(*,1100) I, X(I), Y(I), ANGL
+    #         IF(ABS(ANGL) .GT. ABS(AMAX)) THEN
+    #          AMAX = ANGL
+    #          IMAX = I
+    #         ENDIF
+    #    30 CONTINUE
+
+    angles = np.zeros (len(x))
+    for i in range(len(x)):
+        if i > 0 and i < (len(x)-2):
+            dx1 = x[i] - x[i-1] 
+            dy1 = y[i] - y[i-1] 
+            dx2 = x[i] - x[i+1] 
+            dy2 = y[i] - y[i+1] 
+            crossp = (dx2 * dy1 - dy2 * dx1) / math.sqrt ((dx1**2 + dy1**2) * (dx2**2 + dy2**2))
+            angles[i] = math.asin(crossp)
+    angles = 180.0 - angles * (180/np.pi)
+    return angles 
 
 def _cosinus_distribution (xfacStart=0, xfacEnd=1, nPoints=100):
     """ 
@@ -197,7 +243,7 @@ class LineOfAirfoil:
     Uses 1D interpolation to get intermediate points
     """
 
-    default_cosinus = _cosinus_distribution (0.1, 0.8, 80)
+    default_cosinus = _cosinus_distribution (0.1, 0.8, 30)
 
     def __init__ (self, x,y, cosinus=False, name=None):
 
@@ -237,7 +283,8 @@ class LineOfAirfoil:
         if self._cosinus: 
             x = self._x
         else:                                   
-            x = self.default_cosinus            
+            # x = self.default_cosinus            
+            x = self._x           
         y_deriv1 = splev(x, self._tck, der=1).round(10)
 
         return LineOfAirfoil (x, y_deriv1, name='1st derivate')
@@ -256,7 +303,8 @@ class LineOfAirfoil:
         if self._cosinus: 
             x = self._x
         else:                                   
-            x = self.default_cosinus            
+            # x = self.default_cosinus            
+            x = self._x           
         y_deriv2 = splev(x, self._tck, der=2).round(10)
 
         return LineOfAirfoil (x, y_deriv2, name='2nd derivate')
@@ -270,7 +318,8 @@ class LineOfAirfoil:
             if self._cosinus: 
                 x = self._x
             else:                                   
-                x = self.default_cosinus  
+                # x = self.default_cosinus            
+                x = self._x           
 
             # re-spline deriv1 to get a smoother deriv 3
             tck = splrep(x, self.deriv1.y, k=3)  
@@ -439,13 +488,15 @@ def cubicSplineTest ():
     import matplotlib.pyplot as plt
     from airfoil_examples import Root_Example, Tip_Example
     
-    air = Tip_Example()
+    air = Root_Example()
 
     y = air.y
     x = air.x
 
+    print ("LE angle upper, lower: ", air.le_panelAngle)
+    print ("Min panel angle      : ", air.minPanelAngle)
+
     spl = SplineOfAirfoil (x,y) 
-    x_upper, t, c = spl.thickness_camber()
 
     print ("Thickness: ", spl.get_maxThickness())
     print ("Camber:    ", spl.get_maxCamber())
@@ -464,13 +515,14 @@ def cubicSplineTest ():
     ax2.grid(True)
     ax3.grid(True)
 
-    ax1.plot(x, y, '-', label='x y')
-    ax1.plot(x_upper, t, '-.', label='thickness')
-    ax1.plot(x_upper, c, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='camber 2D')
-    ax1.plot(air.camber.x, air.camber.y, '-', label='camber 1D')
+    ax1.plot(x, y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='x y')
+    # ax1.plot(x_upper, t, '-.', label='thickness')
+    # ax1.plot(x_upper, c, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='camber 2D')
+    # ax1.plot(air.camber.x, air.camber.y, '-', label='camber 1D')
 
     # ax2.set_ylim([ -20,  20])
     ax2.plot (x,spl.angle, marker='o', lw=1, fillstyle='none', markersize=4, label='Angle')
+    ax2.plot (x,panel_angles(x,y), marker='o', lw=1, fillstyle='none', markersize=4, label='Panel angle')
     # ax2.plot (x,spl.deriv1, label='Angle')
     ax3.plot (x,spl.curvature, label='Curvature')
 
@@ -487,6 +539,6 @@ if __name__ == "__main__":
     # loadFromFile = False
 
     # blendTest()
-    # cubicSplineTest()
-    lineTest()
+    cubicSplineTest()
+    # lineTest()
 
