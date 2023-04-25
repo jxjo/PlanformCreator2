@@ -306,7 +306,7 @@ class Base_Widget():
     def get_value(self, getter, obj, parent):
         """read the initial value from object via getter path
         """
-        if not obj and not parent: raise ValueError ("Object for getter path is missing")
+        if not obj and not parent: raise ValueError ("%s: Object for getter path is missing" % self._name)
         if not getter: 
             return None                 # could be a button
         if callable(getter):                       # getter is a method ?
@@ -511,6 +511,12 @@ class Base_Widget():
             return cl_styles [aStyle]
         else:
             return cl_styles ['Normal']
+
+    @property     
+    def _name (self): 
+        """ name for error messages etc. """
+
+        return self.__class__
 
 #-----------  real widget subclasses ----------------------------
 

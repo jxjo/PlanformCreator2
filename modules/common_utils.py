@@ -80,6 +80,8 @@ def fromDict(dict, key, default='no default', msg=True):
     if default != 'no default':
         if isinstance (default, float):
            preferedType = float
+        elif isinstance (default, bool):
+            preferedType = bool
         elif isinstance (default, int):
             preferedType = int
 
@@ -89,6 +91,8 @@ def fromDict(dict, key, default='no default', msg=True):
             value = float(value)
         elif preferedType == int:
             value = int(value)
+        elif preferedType == bool:
+            value = bool(value)
     except:
         if default == 'no default':
             value = None

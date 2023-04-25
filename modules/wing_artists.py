@@ -152,7 +152,7 @@ class Planform_Artist (Artist):
 
         area, aspectRatio = self.planform.calc_area_AR (y, leadingEdge, trailingEdge)
         text  = "Wing span %.0f mm\n" % (self.planform.halfwingspan * 2)
-        text += "Wing area %.1f dm²\n" % (area / 10000)
+        text += "Wing area %.1f dm²\n" % (area * 2 / 10000)
         text += "Aspect ratio %.1f\n" % (aspectRatio)
 
         p = self.ax.text (0.91, 0.05, text, color=cl_labelGrid, # fontsize = 'small',

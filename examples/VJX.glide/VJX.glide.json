@@ -1,31 +1,37 @@
 {
   "wingName":"VJX.glide PC",
-  "wingspan":2980.0,
-  "rootchord":269.0,
+  "wingspan":2940.0,
+  "rootchord":235.0,
   "tipchord":14.0,
   "hingeLineAngle":-0.7,
   "flapDepthRoot":28.0,
-  "flapDepthTip":27.035923,
+  "flapDepthTip":27.0,
   "rootRe":400000,
   "airfoilNickPrefix":"GP",
-  "dxfFile":"",
   "planformType":"elliptical",
   "ellipseTipBelly":0.25,
   "ellipseBellyWidth":0.5,
   "leCorrection":0.0,
-  "ellipseCorrection":0.3,
-  "ellipseShift":0.0,
+  "ellipseCorrection":0.15,
+  "ellipseShift":0.15,
   "wingSections":[
     {
       "position":0.0,
       "norm_chord":1.0,
       "flapGroup":1,
       "airfoil":{
+        "file":"JX-G-Root_t=7.9.dat"
+      }
+    },
+    {
+      "position":100.0,
+      "flapGroup":1,
+      "airfoil":{
         "file":"JX-GP-100.dat"
       }
     },
     {
-      "position":608.148434,
+      "position":599.985368,
       "flapGroup":2,
       "airfoil":{
         "name":"<strak>"
@@ -46,8 +52,8 @@
       }
     },
     {
-      "position":1490.0,
-      "norm_chord":0.052045,
+      "position":1470.0,
+      "norm_chord":0.059574,
       "flapGroup":2,
       "airfoil":{
         "file":"JX-GP-033.dat"
@@ -70,5 +76,19 @@
     "x-distribution":"cosine",
     "y-panels":10,
     "y-minWidth":5
+  },
+  "dxf":{
+    "exportDir":"dxf",
+    "useNick":true,
+    "setTeGap":true,
+    "teGap_mm":0.6,
+    "includeAirfoils":true,
+    "exportAirfoils":true
+  },
+  "airfoils":{
+    "exportDir":"airfoils",
+    "useNick":true,
+    "setTeGap":false,
+    "teGap_mm":0.5
   }
 }

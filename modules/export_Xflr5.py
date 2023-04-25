@@ -62,7 +62,7 @@ class Export_Xflr5:
 
     @property
     def fileName(self): 
-        return self.wing.name.strip() +  '_wing.flz'
+        return self.wing.name.strip() +  '_wing.xfl'
 
 
     def doIt (self): 

@@ -4,7 +4,125 @@ import numpy as np
 import ezdxf
 from ezdxf import enums
 from common_utils import *
-from wing_model import Wing, WingSection
+from wing_model import Wing, WingSection, Flap
+
+
+class Export_Dxf:
+    """ 
+
+    Handle export of the planform and airfoils to dxf 
+    Additionally export airfoils to file. 
+
+    """
+    def __init__(self, wing : Wing, myDict: dict = None):
+ 
+        self.wing       = wing
+        self.workingDir = wing.workingDir       
+        self._exportDir         = fromDict (myDict, "exportDir", "dxf", msg=False)
+        self._useNick           = fromDict (myDict, "useNick", True, msg=False)
+        self._setTeGap          = fromDict (myDict, "setTeGap", False, msg=False)
+        self._teGap_mm          = fromDict (myDict, "teGap_mm", 0.5, msg=False)
+        self._includeAirfoils   = fromDict (myDict, "includeAirfoils", True, msg=False)
+        self._exportAirfoils    = fromDict (myDict, "exportAirfoils", True, msg=False)
+
+
+    def _save (self):
+        """ returns the parameters of self in dataDict"""
+
+        myDict = {}
+        toDict (myDict, "exportDir",        self._exportDir) 
+        toDict (myDict, "useNick",          self._useNick) 
+        toDict (myDict, "setTeGap",         self._setTeGap) 
+        toDict (myDict, "teGap_mm",         self._teGap_mm) 
+        toDict (myDict, "includeAirfoils",  self._includeAirfoils) 
+        toDict (myDict, "exportAirfoils",   self._exportAirfoils) 
+
+        return myDict
+
+
+    @property
+    def exportDir(self):
+        """the directory for flz export - path is relativ to current or absolute """
+        return self._exportDir
+    
+    def set_exportDir(self, newStr): 
+        # insure a valid, relativ path 
+        self._exportDir = PathHandler (workingDir=self.workingDir).relFilePath (newStr)
+
+    @property
+    def baseAndExportDir(self):
+        """the directory for dxf export including current dir """
+        return PathHandler (workingDir=self.workingDir).fullFilePath (self.exportDir)
+
+    @property
+    def useNick(self) -> bool: return self._useNick
+    def set_useNick(self, aBool): self._useNick = aBool
+
+    @property
+    def includeAirfoils(self) -> bool: return self._includeAirfoils
+    def set_includeAirfoils(self, aBool): self._includeAirfoils = aBool
+
+
+    @property
+    def setTeGap(self) -> bool: return self._setTeGap
+    def set_setTeGap(self, aBool): self._setTeGap = aBool
+
+    @property
+    def teGap_mm(self) -> float: return self._teGap_mm
+    def set_teGap_mm(self, aVal): self._teGap_mm = aVal
+
+    @property
+    def exportAirfoils(self) -> bool: return self._exportAirfoils
+    def set_exportAirfoils(self, aBool): self._exportAirfoils = aBool
+
+    @property
+    def fileName(self): 
+        return self.wing.name.strip() +  '_wing.dxf'
+
+
+    def doIt (self): 
+        """ main entry: start the export to the file defined in self parameters.
+        Returns a message string what was done """
+
+        if self.setTeGap: 
+            teGap = self.teGap_mm
+        else: 
+            teGap = None
+
+        dxf = Dxf_Artist(self.wing)
+
+        dxf.plot_planform()
+        dxf.plot_hingeLine ()
+        dxf.plot_wingSections ()
+        dxf.plot_flapLines()
+        dxf.plot_title ()
+
+        if self.includeAirfoils:
+            self.wing.do_strak ()                    # ensure strak airfoils are uptodate 
+            dxf.plot_airfoils (teGap_mm=teGap)
+
+        targetDir = self.baseAndExportDir
+
+        if not os.path.exists(targetDir): os.makedirs(targetDir)
+        pathFileName = os.path.join (targetDir, self.fileName)
+        dxf.save (pathFileName)
+
+        # export airfoils 
+        if self.exportAirfoils:
+                airfoilList = self.wing.do_export_airfoils (targetDir, useNick=self.useNick, teGap_mm=teGap)
+        else:
+            airfoilList = []
+
+        if airfoilList: 
+            text = 'including airfoils '
+        else:
+            text = ''
+
+        InfoMsg ("DXF file " + self.fileName + " "+  text + "written to " + targetDir) 
+        message = "Wing " + text + "exported as DXF to \n\n'" + targetDir + "'"
+
+        return message
+
 
 
 class Dxf_Artist:
@@ -82,6 +200,20 @@ class Dxf_Artist:
         self._plot_line_fromArray (y, hl)
 
 
+    def plot_flapLines (self):
+
+        flaps = self.wing.getFlaps()
+
+        flap : Flap
+        for i, flap in enumerate (flaps):
+            if i < (len (flaps) - 1):                    # no flap line at tip 
+
+                y, fl = flap.lineRight                  # only one line of flap box needed
+                fl = self._line_mirror (fl)
+                # insert into dxf doc
+                self._plot_line_fromArray (y, fl)
+
+
     def plot_wingSections (self):
         # plot a little vertical marker line at wing section station above le 
         #  + airfoil nick name
@@ -124,7 +256,10 @@ class Dxf_Artist:
             if not teGap_mm is None and teGap_mm >= 0.0: 
                 teGap = teGap_mm / sec.chord
                 x, y = airfoil.with_TEGap (teGap)
-            else: 
+                if x is None: 
+                    teGap = None 
+
+            if teGap is None:  
                 x = airfoil.x
                 y = airfoil.y
 

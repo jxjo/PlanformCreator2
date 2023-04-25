@@ -9,7 +9,7 @@ import os
 import numpy as np
 import math
 from common_utils import * 
-from airfoil_line_spline import LineOfAirfoil, panel_angles
+from airfoil_line_spline import LineOfAirfoil, SplineOfAirfoil, panel_angles
 
 
 class Airfoil:
@@ -35,12 +35,12 @@ class Airfoil:
         self.name         = name if name is not None else ''
         self.sourceName = None                  # the long name out of the two blended airfoils (TSrakAirfoil)
 
-        self._x       = None
-        self._y       = None
-        self._upper   = None                    # upper surface line object 
-        self._lower   = None                    # lower surface line object 
-        self._camber  = None                    # camber line object 
-        self._thickness = None                  # thickness line object 
+        self._x             = None
+        self._y             = None
+        self._upper         = None              # upper surface line object 
+        self._lower         = None              # lower surface line object 
+        self._asNormalized  = None              # Airfoil object of self being normalized 
+        self._spline        = None              # 2D spline object 
 
 
         if (pathFileName is not None): 
@@ -127,6 +127,20 @@ class Airfoil:
         if xle != 0.0 or yle != 0.0: return False
 
         return True
+
+    @property
+    def asNormalized (self): 
+        """ returns self as an normlized airfoil """
+
+        if self.isLoaded:
+            if self._asNormalized is None: 
+                self._asNormalized = Airfoil_Normalized (self)
+            return self._asNormalized
+        else: 
+            raise ValueError ("Airfoil '%s' not loaded" % self.name)
+
+
+
     
     @property
     def le_i (self) -> int: 
@@ -139,6 +153,19 @@ class Airfoil:
         ile = np.argmin (self._x)
         return self._x[ile], self._y[ile]
     
+    @property
+    def le_splined (self): 
+        """ returns real leading edge x,y based on spline of airfoil 
+            where scalar product of tangent and te vector becoming 0   """
+        return self.spline.le  
+    
+    @property
+    def le_splined_isOk (self): 
+        """ true if the splined leading edxge is close enough to 0,0   """
+        xLe, yLe = self.le_splined
+        # x-value should be closer to 0
+        return abs(xLe) < 0.00001 and abs(yLe) < 0.0001
+    
     @property 
     def le_panelAngle (self): 
         """returns the upper and lower angle of the 2 panels at leading edge - should be less 90"""
@@ -149,8 +176,19 @@ class Airfoil:
         #           180.d0/acos(-1.d0)
         # maxpanang = max(panang2,panang1)
         ile = self.le_i
-        angleUp = math.atan ((self.y[ile-1] - self.y[ile])/(self.x[ile-1] - self.x[ile])) * 180.0 / math.acos(-1)
-        angleLo = math.atan ((self.y[ile] - self.y[ile+1])/(self.x[ile+1] - self.x[ile])) * 180.0 / math.acos(-1)
+        dx = self.x[ile-1] - self.x[ile]
+        dy = self.y[ile-1] - self.y[ile]
+        if dx > 0.0:
+            angleUp = math.atan (dy/dx) * 180.0 / math.acos(-1)
+        else: 
+            angleUp = 90 
+
+        dx = self.x[ile+1] - self.x[ile]
+        dy = self.y[ile] - self.y[ile+1]
+        if dx > 0.0:
+            angleLo = math.atan (dy/dx) * 180.0 / math.acos(-1)
+        else: 
+            angleLo = 90 
 
         return angleUp, angleLo 
 
@@ -171,38 +209,50 @@ class Airfoil:
     
     @property
     def minPanelAngle (self): 
-        """ returns the max angle between two panels - something between 160-180° """
+        """ returns the max angle between two panels - something between 160-180°
+        and the point index of the min point"""
 
-        return np.min(panel_angles(self.x,self.y))        
+        return np.min(panel_angles(self.x,self.y)),  np.argmin(panel_angles(self.x,self.y))       
 
     @property
     def maxThickness (self): 
         """ returns max thickness in %"""
-        tx, tmax = self.thickness.maximum() 
+        tmax, tx = self.spline.thickness.maximum() 
         return tmax * 100
 
     @property
     def maxThicknessX (self): 
         """ returns max thickness x-Position in %"""
-        tx, tmax = self.thickness.maximum() 
+        tmax, tx = self.spline.thickness.maximum() 
         return tx * 100
 
     @property
     def maxCamber (self): 
         """ returns max camber in %"""
-        cx, cmax = self.camber.maximum() 
+        cmax, cx = self.spline.camber.maximum() 
         return cmax * 100
 
     @property
     def maxCamberX (self): 
         """ returns max camber x-Position in %"""
-        cx, cmax = self.camber.maximum() 
+        cmax, cx = self.spline.camber.maximum() 
         return cx * 100
 
     @property
     def teGapPercent (self): 
         """ returns trailing edge gap in %"""
         return  (self.y[0] - self.y[-1]) * 100
+
+    @property 
+    def spline (self) -> SplineOfAirfoil:
+        """ spline representation  of self - to show curvature, etc. """
+
+        if self.isLoaded:
+            if self._spline is None: 
+                self._spline = SplineOfAirfoil (self.x, self.y)
+            return self._spline
+        else: 
+            raise ValueError ("Airfoil '%s' not loaded" % self.name)
 
 
     @property
@@ -225,27 +275,7 @@ class Airfoil:
         else: 
             return None
 
-    @property
-    def camber(self) -> 'LineOfAirfoil': 
-        """returns the camber line object - where x 0..1  with cosinus distribution"""
-        if self.isLoaded:
-            if self._camber is None: 
-                self._camber = LineOfAirfoil (self.upper.x, (self.upper.y + self.lower.y_interpol(self.upper.x))/2, 
-                                              cosinus=False, name='Camber')
-            return self._camber
-        else: 
-            raise ValueError ("Airfoil '%s' not loaded" % self.name)
 
-    @property
-    def thickness(self) -> 'LineOfAirfoil': 
-        """returns the thickness distribution line object - where x 0..1 with cosinus distribution"""
-        if self.isLoaded:
-            if self._thickness is None: 
-                self._thickness = LineOfAirfoil (self.upper.x, (self.upper.y - self.lower.y_interpol(self.upper.x)), 
-                                                 cosinus=True, name='Thickness')
-            return self._thickness
-        else: 
-            raise ValueError ("Airfoil '%s' not loaded" % self.name)
 
     #-----------------------------------------------------------
 
@@ -339,30 +369,49 @@ class Airfoil:
             self.name = destName
 
 
-    def copyAs (self, dir = None, destName = None):
+    def copyAs (self, dir = None, destName = None, teGap=None ):
         """
         Write a copy of self to destPath and destName (the airfoil can be renamed).
-        Self remains with its current values 
+        Self remains with its current values.
+        Optionally a new teGap may be defined for the exported airfoil  
         return: 
             newPathFileName from dir and destName 
         """        
 
+        # adjust te gap if requested
+        if teGap is not None: 
+            x, y = self.with_TEGap (teGap)
+            if x is None:                                       # error - couldn't set new teGap 
+                teGap = None 
+        if teGap is None:  
+            x = self.x
+            y = self.y 
+            teText = ''
+        else: 
+            teText = '_te=%.2f' % (teGap * 100)                 # te thickness in percent
+
+        # determine (new) airfoils name 
         if not destName:
             if self.isStrakAirfoil:
-                destName = self.sourceName              # strak: take the long name of the two airfoils
+                destName = self.sourceName                     # strak: take the long name of the two airfoils
             else:
-                destName = self.name
+                destName = self.name    
 
-        if dir and not os.path.isdir (dir):
-            os.mkdir(dir)
+        destName = destName + teText   
+
+        # create dir if not exist - build airfoil filename
+        if dir: 
+            if not os.path.isdir (dir):
+                os.mkdir(dir)
             newPathFileName = os.path.join (dir, destName) + '.dat'
         else: 
             newPathFileName = destName + '.dat'
 
+        # write header and coordinates
         with open(newPathFileName, 'w+') as file:
             file.write("%s\n" % destName)
-            for i in range (len(self.x)):
-                file.write("%.7f %.7f\n" %(self.x[i], self.y[i]))
+            for i in range (len(x)):
+                file.write("%.7f %.7f\n" %(x[i], y[i]))
             file.close()
 
         return newPathFileName
@@ -376,13 +425,13 @@ class Airfoil:
             newGap:   in y-coordinates - typically 0.01 or so 
             xblend:   the blending distance from trailing edge 0..1 - Default 0.8
         Returns: 
-            x,y:      np coordinate arrays with new Te 
+            x,y:      np coordinate arrays with new Te  (= None if couldn't set)
         """
 
         # currently le must be at 0,0 - te must be at 1,gap/2 (normalized airfoil) 
         if not self.isNormalized: 
             ErrorMsg ("Airfoil '%s' not normalized. Te gap can't be set." % self.name)
-            return self.x,self.y
+            return None, None
         
         x = np.copy (self.x) 
         y = np.copy (self.y) 
@@ -500,8 +549,104 @@ class Airfoil_Straked (Airfoil):
         self._upper = LineOfAirfoil(x_upper, y_upper, name='upper')
         self._lower = LineOfAirfoil(x_lower, y_lower, name='lower')
 
-        self.sourceName = airfoil1.name + ("_with_%.2f_" % blendBy) + airfoil2.name
+        self.sourceName = airfoil1.name + ("_blended_%.2f_" % blendBy) + airfoil2.name
 
+
+
+class Airfoil_Normalized (Airfoil):
+    """ Airfoil which handles the normalization """
+
+
+    def __init__ (self, sourceAirfoil: Airfoil):
+        super().__init__()
+
+        self.name = sourceAirfoil.name + "-norm" 
+        self._x : np.ndarray = sourceAirfoil._x
+        self._y : np.ndarray = sourceAirfoil._y
+
+        xLe, yLe = sourceAirfoil.le_splined 
+        print ("Le vorher ", xLe, yLe)
+        self._transform_airfoil (xLe, yLe)
+
+        self._spline = None
+        xLe, yLe = self.spline.le
+        print ("Le transf ", xLe, yLe)
+
+        self._repanel (201, le_bunch=0.995, te_bunch=0.8)
+
+        
+
+    def _transform_airfoil (self, xLe, yLe):
+        """Shift, rotate, scale airfoil so LE is at 0,0 and TE is symmetric at 1,y"""
+
+        # Translate so that the leading edge is at 0,0 
+
+        self._x = self._x - xLe
+        self._y = self._y - yLe
+
+        # Rotate the airfoil so chord is on x-axis 
+
+        angle = np.arctan2 ((self._y[0] + self._y[-1])/ 2.0, (self._x[0] + self._x[-1])/ 2.0) 
+        cosa  = np.cos (-angle) 
+        sina  = np.sin (-angle) 
+
+        for i in range (len(self._x)):
+            self._x[i] = self._x[i] * cosa - self._y[i] * sina
+            self._y[i] = self._x[i] * sina + self._y[i] * cosa
+         
+        # Scale airfoil so that it has a length of 1 
+        #  - there are mal formed airfoils with different TE on upper and lower
+        #    scale both to 1.0  
+
+        scale_upper = 1.0 / self._x[0]
+        scale_lower = 1.0 / self._x[-1]
+
+        iMinX = np.argmin (self._x) 
+        for i in range (len(self._x)):
+            if i <= iMinX:
+               self._x[i] = self._x[i] * scale_upper
+            else: 
+               self._x[i] = self._x[i] * scale_lower
+
+
+    def _repanel (self, nPoints, le_bunch, te_bunch):
+        """repanls self with an cosinus distribution 
+        
+        Args: 
+        nPoints : new number of coordinate points
+        le_bunch : 0..1  where 1 is the full cosinus bunch at leading edge - 0 no bunch 
+        te_bunch : 0..1  where 1 is the full cosinus bunch at trailing edge - 0 no bunch 
+        """
+        # from airfoil_line_spline import _cosinus_distribution
+
+        # # get exact le point (in arc) 
+        # spl = self.spline
+        # uLe = spl.uLe
+        # xLe, yLe = spl.xyFn(uLe) 
+
+
+        # # create a cosinus distribution for upper and lower side
+        # nPointsSide = int ((nPoints + 1) / 2)
+        # u_cosinus = _cosinus_distribution (nPointsSide, le_bunch, te_bunch)
+
+
+        # u_new_upper = np.abs (np.flip(u_cosinus) -1) * uLe
+        # u_new_lower = u_cosinus * (1- uLe) + uLe
+
+        # u_new = np.concatenate ((u_new_upper, u_new_lower[1:]))
+
+        # self._x, self._y = spl.xyFn (u_new)
+
+        # # round to 7 decimals - so 1.0 will be 1.0 
+        # self._x = self._x.round (7)
+        # self._y = self._y.round (7)
+
+        # # avoid numpy -0.0
+        # iLe = np.argmin (self._x)
+        # if abs(self._x[iLe]) == 0.0: self._x[iLe] = abs(self._x[iLe])
+        # if abs(self._y[iLe]) == 0.0: self._y[iLe] = abs(self._y[iLe])
+
+        self._x, self._y = self.spline._repanel (nPoints, le_bunch, te_bunch) 
 
 # Main program for testing -----------------------------------
 

@@ -55,28 +55,35 @@ def panel_angles (x,y):
             dy1 = y[i] - y[i-1] 
             dx2 = x[i] - x[i+1] 
             dy2 = y[i] - y[i+1] 
-            crossp = (dx2 * dy1 - dy2 * dx1) / math.sqrt ((dx1**2 + dy1**2) * (dx2**2 + dy2**2))
-            angles[i] = math.asin(crossp)
+            if dx1 != 0.0 and dx2 != 0.0:               # check for pathologic airfoil (blunt le) 
+                crossp = (dx2 * dy1 - dy2 * dx1) / math.sqrt ((dx1**2 + dy1**2) * (dx2**2 + dy2**2))
+                angles[i] = math.asin(crossp)
+            else: 
+                angles[i] = 0.0
     angles = 180.0 - angles * (180/np.pi)
     return angles 
 
-def _cosinus_distribution (xfacStart=0, xfacEnd=1, nPoints=100):
+def _cosinus_distribution (nPoints, le_bunch, te_bunch):
     """ 
     returns an array with cosinues distributed values 0..1
     
-    xfacStart: shift of cosinus start point - default 0 towards 1
-    xfacEnd:   shift of cosinus endpoint - default 1 towards 0 
-    npoints:    number of points to generate - default 100
+    Args: 
+    nPoints : new number of coordinate points
+    le_bunch : 0..1  where 1 is the full cosinus bunch at leading edge - 0 no bunch 
+    te_bunch : 0..1  where 1 is the full cosinus bunch at trailing edge - 0 no bunch 
     """
 
+    xfacStart = 0.5 - le_bunch * 0.5
+    xfacEnd   = 0.5 + te_bunch * 0.5 
+
     xfacStart = max(0.0, xfacStart)
-    xfacStart = min(1.0, xfacStart)
-    xfacEnd   = max(0.0, xfacEnd)
+    xfacStart = min(0.5, xfacStart)
+    xfacEnd   = max(0.5, xfacEnd)
     xfacEnd   = min(1.0, xfacEnd)
 
-    if xfacStart >= xfacEnd: raise ValueError ("Airfoil x-distribution: start > end")
+    if xfacStart >= xfacEnd: raise ValueError ("Airfoil cosinus-distribution: start > end")
 
-    beta = np.linspace(xfacStart, xfacEnd * np.pi, nPoints)
+    beta = np.linspace(xfacStart, xfacEnd , nPoints) * np.pi
     xnew = (1.0 - np.cos(beta)) * 0.5
 
     # normalize to 0..1
@@ -102,26 +109,58 @@ class SplineOfAirfoil:
     def __init__ (self, x,y):
 
 
-        # thickness and camber 
-        self._thickness = None                  # array of thickness distribution
-        self._camber    = None                  # array of camber distribution
-        self._xthick    = None                  # x values for thickness and camber
+        self._x = x   
+        self._y = y
+
+        self._thickness : LineOfAirfoil = None  # thickness distribution
+        self._camber    : LineOfAirfoil = None  # camber line
+
+        self._curvature   = None
+        self._curv_upper : LineOfAirfoil = None
+        self._curv_lower : LineOfAirfoil = None
+
+        self._deriv3       = None               # ! todo 'deriv3' is derivative of curvature ...
+        self._deriv3_upper : LineOfAirfoil = None
+        self._deriv3_lower : LineOfAirfoil = None
 
         # B-spline representation of an N-D curve.
         s = 0.0                                 # no smoothing 
-        k = 5                                   # oder of spline - cubic
+        k = 3                                   # oder of spline - cubic
         self._u    = None                       # the arc positionen around airfoil 0..1
-        self._tck  = 0                          # spline parameters - see scipy splprep 
-        self._x = x  #test
+        self._tck  = None                          # spline parameters - see scipy splprep 
         self._tck, self._u = splprep([x, y], s=s, k=k)
 
         # leading edge 
-        self.iLe = np.argmin (x)                # index of LE in x,y and u 
-        self.uLe = self._u [self.iLe]           # u value at LE 
+        self.iLe  = np.argmin (x)                # index of LE in x,y and u 
+        self._uLe = None                         # u value at LE 
 
-        # for i in range(len(x)):
-        #     print (i, x[i], y[i], self._u[i])
 
+    @property
+    def uLe (self): 
+        """ u (arc) value of the leading edge """
+        if self._uLe is None: 
+            self._uLe = self._le_find()
+        return self._uLe
+
+    @property
+    def le (self): 
+        """ returns x,y cordinates of the real (splined)  leading edge """
+        xLe, yLe = self.xyFn (self.uLe) 
+        return float(xLe), float(yLe) 
+
+    @property
+    def camber (self) -> 'LineOfAirfoil': 
+        """ return the camber line """
+        if self._camber is None: 
+            self._eval_thickness_camber()
+        return self._camber
+
+    @property
+    def thickness (self) -> 'LineOfAirfoil': 
+        """ return the thickness distribution as a line """
+        if self._thickness is None: 
+            self._eval_thickness_camber()
+        return self._thickness
 
     @property
     def deriv1 (self): 
@@ -130,8 +169,6 @@ class SplineOfAirfoil:
         #  splev returns dx/du and dy/du at knot. 
         dx, dy = splev(self._u, self._tck, der=1)
         #  derivative 1 (gradient) is dy/dx = dy/du / dx/du
-
-
         return dy/dx
 
     @property
@@ -142,16 +179,89 @@ class SplineOfAirfoil:
     @property
     def curvature (self): 
         " return the curvature at knots 0..npoints"
+        if self._curvature is None: 
+            self._curvature = self.curvatureFn (self._u) 
+        return self._curvature 
 
-        # dx, dy   = splev(self._u, self._tck, der=1)
-        # ddx, ddy = splev(self._u, self._tck, der=2)
+    @property
+    def curv_upper (self): 
+        " return SideOfAirfoil with curvature at knots 0..npoints"
+        if self._curv_upper is None: 
+            self._curv_upper = LineOfAirfoil (np.flip(self._x[: self.iLe]),
+                                              np.flip(self.curvature [: self.iLe]), 
+                                              name='Curvature upper' )
+            # set default value für reversal detection 
+            self._curv_upper.set_threshold (0.1)
+        return self._curv_upper 
 
-        # deriv2 = dx * ddy - dy * ddx
+    @property
+    def curv_lower (self): 
+        " return SideOfAirfoil with curvature at knots 0..npoints"
+        if self._curv_lower is None: 
+            self._curv_lower = LineOfAirfoil (self._x[self.iLe: ],
+                                              self.curvature [self.iLe: ], 
+                                              name='Curvature lower' )
+            # set default value für reversal detection 
+            self._curv_lower.set_threshold (0.1)
+        return self._curv_lower 
 
-        # # get curvature from derivative 2
-        # n = dx**2 + dy**2
-        # curv = deriv2 / n**(3./2.)
-        return self.curvatureFn (self._u) 
+
+    @property
+    def deriv3 (self): 
+        " return the 3rd derivative at knots 0..npoints"
+
+        # ! in dev !
+        # this is the derivative of the *curvature* not the 3rd derivative 
+        if self._deriv3 is None: 
+            # # re-spline curvature over x to get a smoother derivative of it
+            tck, u = splprep([self._x, self.curvature], s=0,k=3)    # 2D spline
+            # now get deriv 1 of the splined curvature          
+            dx, dy = splev(u, tck, der=1)
+            self._deriv3 = dy / dx
+
+        return self._deriv3
+
+
+    @property
+    def deriv3_upper (self): 
+        " return SideOfAirfoil with deriv3 at knots 0..npoints"
+        if self._deriv3_upper is None: 
+            self._deriv3_upper = LineOfAirfoil (np.flip(self._x[: self.iLe]),
+                                                np.flip(self.deriv3 [: self.iLe]), 
+                                                name='Derivative 3 upper')
+            # set default value für reversal detection 
+            self._deriv3_upper.set_threshold (0.4)
+
+        return self._deriv3_upper 
+
+
+    @property
+    def deriv3_lower (self): 
+        " return SideOfAirfoil with deriv3 at knots 0..npoints"
+        if self._deriv3_lower is None: 
+            self._deriv3_lower = LineOfAirfoil (self._x[self.iLe: ],
+                                                self.deriv3 [self.iLe: ], 
+                                                name='Derivative 3 lower' )
+            # set default value für reversal detection 
+            self._deriv3_lower.set_threshold (0.4)
+
+        return self._deriv3_lower 
+    
+
+    @property
+    def scalarProduct (self): 
+        """ return the scalar product of a vector from TE to u and the tangent at knots 0..npoints
+        Used for finding LE where this value is 0.0at u"""
+
+        dot = np.zeros (len(self._u))
+
+        for i, u in enumerate(self._u):
+            dot[i] = self.scalarProductFn (u)
+
+        return dot
+
+    #-----------
+
 
     def curvatureFn (self,u): 
         " return the curvature at u"
@@ -166,6 +276,15 @@ class SplineOfAirfoil:
         curv = deriv2 / n**(3./2.)
         return curv 
 
+    def deriv1Fn (self,u): 
+        " return dx,dy at spline arc u"
+        return  splev(u, self._tck, der=1)
+
+    def deriv3Fn (self,u): 
+        " return 3rd derivative at spline arc u"
+        dx, dy =  splev(u, self._tck, der=3)
+        return dy #/dx
+
     def xyFn (self,u): 
         " return x,y at spline arc u"
         return  splev(u, self._tck, der=0)
@@ -174,27 +293,58 @@ class SplineOfAirfoil:
         " return x at spline arc u"
         return  splev(u, self._tck, der=0)[0]
 
-    def thickness_camber (self): 
-        """returns thickness and camber distribution.
+    def scalarProductFn (self,u): 
+        """ return the scalar product of a vector from TE to u and the tangent at u
+        Used for finding LE where this value is 0.0at u"""
+
+        # exact trailing edge point 
+        xTe = (self._x[0] + self._x[-1]) / 2
+        yTe = (self._y[0] + self._y[-1]) / 2
+
+        x,y = self.xyFn(u) 
+
+        # vector 1 from te to point 
+        dxTe = x - xTe
+        dyTe = y - yTe
+        # verctor2 tangent at point 
+        dx, dy = self.deriv1Fn (u)
+
+        dot = dx * dxTe + dy * dyTe
+
+        return dot 
+
+    def _le_find (self):
+        """ returns u (arc) value of leading edge based on scalar product tangent and te vector = 0"""
+
+        # first guess for Le point 
+        iLeGuess = np.argmin (self._x) 
+        # exact determination of root  = scalar product = 0.0 
+        uLe = brentq(lambda u: self.scalarProductFn(u) , self._u[iLeGuess-1] , self._u[iLeGuess+1])
+        return uLe
+
+
+    def _eval_thickness_camber (self): 
+        """
+        evalutes thickness and camber distribution as SideOfAirfoil objects
+        with it's on x-distribution.
         
         Note: 
         
         It's an approximation as thickness is just the sum of y_upper(x) and y_lower(x)
         and camber is just the mean value y_upper(x) and y_lower(x)
-        
         """
 
         # get a new high res distribution for upper and lower 
-        # u_new_upper = np.linspace (self.uLe, 0.0, 100)
-        # u_new_lower = np.linspace (self.uLe, 1.0, 100)
-        u_new_upper = np.abs (np.flip(_cosinus_distribution (0.1, 1.2, 100)) -1) * self.uLe
-        u_new_lower = _cosinus_distribution (0.1, 1.2, 100) * (1- self.uLe) + self.uLe
+        u_cosinus = _cosinus_distribution (100, 0.97, 0.8)
 
-        x_upper, y_upper = splev (u_new_upper, self._tck, der= 0)
-        x_lower, y_lower = splev (u_new_lower, self._tck, der= 0)
+        u_new_upper = np.abs (np.flip(u_cosinus) -1) * self.uLe
+        u_new_lower = u_cosinus * (1- self.uLe) + self.uLe
 
-        x_upper = np.asarray(x_upper).round(10)
-        y_upper = np.asarray(y_upper).round(10)
+        x_upper, y_upper = splev (u_new_upper, self._tck, der= 0)   # x_upper 1..0
+        x_lower, y_lower = splev (u_new_lower, self._tck, der= 0)   
+
+        x_upper = np.flip(np.asarray(x_upper).round(10))            # x_upper 0..1
+        y_upper = np.flip(np.asarray(y_upper).round(10))
         x_lower = np.asarray(x_lower).round(10)
         y_lower = np.asarray(y_lower).round(10)
 
@@ -202,65 +352,139 @@ class SplineOfAirfoil:
         tck = splrep(x_lower, y_lower, k=3)
         y_lower = splev(x_upper, tck, der=0) 
         y_lower = np.asarray(y_lower).round(10)
-        x_lower = x_upper
 
         # thickness and camber can now easily calculated 
-        self._thickness = ((y_upper - y_lower)      ).round(10) 
-        self._camber    = ((y_upper + y_lower) / 2.0).round(10)
-        self._xthick    = x_upper 
-
-        # for i in range(len(x_upper)):
-        #     print (i, self._thickness[i], self._camber[i])
-
-        return self._xthick, self._thickness, self._camber 
+        self._thickness = LineOfAirfoil (x_upper,
+                                         ((y_upper - y_lower)      ).round(10), 
+                                         name='Thickness distribution')
+        self._camber    = LineOfAirfoil (x_upper,
+                                         ((y_upper + y_lower) / 2.0).round(10), 
+                                         name='Camber line')
+        return 
 
  
-    def get_maxThickness (self): 
+    def maxThickness (self): 
         """returns max. thickness (normed) and its position along x"""
-        if self._thickness is None: self.thickness_camber()
+        if self._thickness is None: 
+            self._eval_thickness_camber()
+        return self._thickness.maximum()
 
-        # todo interpolate t_max on spline 
-        tmax   = np.max(self._thickness)
-        tmax_x = self._xthick[np.argmax (self._thickness)]
-        return tmax, tmax_x
 
-    def get_maxCamber (self): 
+    def maxCamber (self): 
         """returns max. camber (normed) and its position along x"""
-
-        if self._camber is None: self.thickness_camber()
-
-        # todo interpolate c_max on spline 
-        cmax   = np.max(self._camber)
-        cmax_x = self._xthick[np.argmax (self._camber)]
-        return cmax, cmax_x
+        if self._camber is None: 
+            self._eval_thickness_camber()
+        return self._camber.maximum()
 
 
+    def _repanel (self, nPoints, le_bunch, te_bunch):
+        """repanls self with an cosinus distribution 
+        
+        Args: 
+        nPoints : new number of coordinate points
+        le_bunch : 0..1  where 1 is the full cosinus bunch at leading edge - 0 no bunch 
+        te_bunch : 0..1  where 1 is the full cosinus bunch at trailing edge - 0 no bunch 
+        """
+
+        # get exact le point (in arc) 
+        xLe, yLe = self.xyFn(self.uLe) 
+
+        x_up = []
+        u_up = []
+        for i, u in enumerate (self._u):
+            if u < self.uLe: 
+                x_up.append (self._x[i])
+                u_up.append (u)
+            if u == self.uLe: 
+                break
+            if u > self.uLe: 
+                x_up.append (0.0)
+                u_up.append (self.uLe)
+                break
+
+        x_up = np.flip (np.asarray (x_up))
+        u_up = np.flip (np.asarray (u_up))
+        # 1D spline to have u = f(x) 
+        tck = splrep(x_up, u_up, k=3)           
+
+         # create a cosinus distribution for upper and lower side
+        nPointsSide = int ((nPoints + 1) / 2)
+        x_cosinus = _cosinus_distribution (nPointsSide, le_bunch, te_bunch)
+
+        u_cosinus = splev (x_cosinus, tck) 
+
+        # for i, x in enumerate (x_up):
+        #     print ("x_up ",i, "  ",x_up[i], u_up[i])
+
+        # for i, x in enumerate (x_cosinus):
+        #     print ("x_cos ",i, "  ", x_cosinus[i], u_cosinus[i])
+
+        u_up_cosinus = np.flip (u_cosinus)
+
+        #---- lower -----------------------------------------
+
+        x_lo = [xLe]
+        u_lo = [self.uLe]
+        for i, u in enumerate (self._u):
+            if u > (self.uLe + 0.0001): 
+            # if u > self.uLe: 
+                x_lo.append (self._x[i])
+                u_lo.append (u)
+
+        x_lo = np.asarray (x_lo)
+        u_lo = np.asarray (u_lo)
+        # 1D spline to have u = f(x) 
+        tck = splrep(x_lo, u_lo, k=3)           
+
+         # create a cosinus distribution for upper and lower side
+        nPointsSide = int ((nPoints + 1) / 2)
+        x_cosinus = _cosinus_distribution (nPointsSide, le_bunch, te_bunch)
+
+        # adept to xLe 
+        x_cosinus = x_cosinus * (1 - xLe) + xLe
+
+        u_cosinus = splev (x_cosinus, tck) 
+
+        # for i, x in enumerate (x_lo):
+        #     print ("x_lo ",i, "  ",x_lo[i], u_lo[i])
+
+        # for i, x in enumerate (x_cosinus):
+        #     print ("x_cos ",i, "  ", x_cosinus[i], u_cosinus[i])
+
+        u_lo_cosinus = u_cosinus
+
+
+        u_new = np.concatenate ((u_up_cosinus, u_lo_cosinus[1:]))
+
+        x_new, y_new = self.xyFn (u_new)
+
+        # round to 7 decimals - so 1.0 will be 1.0 
+        x_new = x_new.round (7)
+        y_new = y_new.round (7)
+
+        # avoid numpy -0.0
+        iLe = np.argmin (x_new)
+        if abs(x_new[iLe]) == 0.0: x_new[iLe] = abs(x_new[iLe])
+        if abs(y_new[iLe]) == 0.0: y_new[iLe] = abs(y_new[iLe])
+
+        return x_new, y_new
+
+# ---------------------------
 
 class LineOfAirfoil: 
     """ 
     1D line of an airfoil like upper, lower side, camber line, curvature etc...
+    with x 0..1
 
-    Uses 1D interpolation to get intermediate points
     """
 
-    default_cosinus = _cosinus_distribution (0.1, 0.8, 30)
+    def __init__ (self, x,y, name=None):
 
-    def __init__ (self, x,y, cosinus=False, name=None):
-
-        if cosinus:                             # spline new with cosinus distrivution 
-            tck = splrep(x, y, k=3)  
-            self._x = self.default_cosinus # "soft" cosinus 
-            self._y = splev(self._x, tck, der=0)
-        else: 
-            self._x = np.asarray(x).round(10)
-            self._y = np.asarray(y).round(10)
-
-        self._curvature = None                  # curvature of self 
-        self._deriv3    = None                  # 3rd derivative of self 
+        self._x         = x
+        self._y         = y
         self._name = name 
-        self._cosinus = cosinus
-        self._tck = splrep(x, y, k=3)           # scipy splrep spline definition  
         self._threshold = 0.001                 # threshold for reversal dectection 
+        self._tck = splrep(x, y, k=3)           # scipy splrep spline definition  
 
 
     @property
@@ -276,130 +500,44 @@ class LineOfAirfoil:
         return self._name
 
     @property
-    def deriv1 (self): 
-        """ return derivate 1 of spline at x"""
-
-        # ensure a smooth leading edge - otherwise derivative tends to oscillate at LE 
-        if self._cosinus: 
-            x = self._x
-        else:                                   
-            # x = self.default_cosinus            
-            x = self._x           
-        y_deriv1 = splev(x, self._tck, der=1).round(10)
-
-        return LineOfAirfoil (x, y_deriv1, name='1st derivate')
-    
-    @property
-    def angle (self): 
-        """ return the angle in degrees at knots"""
-
-        angle  = (np.arctan (self.deriv1.y) * 180 / np.pi).round(10)
-        return LineOfAirfoil (self.deriv1.x, angle, name='angle')
-
-    @property
-    def deriv2 (self): 
-        """ return derivate 2 of spline at x"""
-        # ensure a smooth leading edge - otherwise derivative tends to oscillate at LE 
-        if self._cosinus: 
-            x = self._x
-        else:                                   
-            # x = self.default_cosinus            
-            x = self._x           
-        y_deriv2 = splev(x, self._tck, der=2).round(10)
-
-        return LineOfAirfoil (x, y_deriv2, name='2nd derivate')
-
-    @property
-    def deriv3 (self): 
-        """ return derivate 3 of spline at x - starting at x=0.05 because of oscillations """
-
-        if self._deriv3 is None: 
-            # ensure a smooth leading edge - otherwise derivative tends to oscillate at LE 
-            if self._cosinus: 
-                x = self._x
-            else:                                   
-                # x = self.default_cosinus            
-                x = self._x           
-
-            # re-spline deriv1 to get a smoother deriv 3
-            tck = splrep(x, self.deriv1.y, k=3)  
-
-            # now get deriv 2 of the splined deriv 1          
-            y_deriv3 = splev(x, tck, der=2).round(10)
-
-            # the deriv3 at nose can be extremely oscillated - cut nose 
-            iStart = (np.abs(x - 0.05)).argmin()
-            self._deriv3 = LineOfAirfoil (x[iStart:], y_deriv3[iStart:], name='3rd derivate')
-
-        return self._deriv3
-    
-    
-    @property
-    def curvature (self): 
-        " return the curvature at knots of x"
-
-        if self._curvature is None: 
-            yd1 = self.deriv1.y
-            x   = self.deriv1.x
-            yd2 = self.deriv2.y
-
-            curv = yd2 / (1 + yd1**2) ** 1.5
-            self._curvature = LineOfAirfoil (x, curv, name='Curvature') 
-        return self._curvature
-
-    @property
     def threshold (self):   return self._threshold 
     def set_threshold (self, aVal): 
         self._threshold =aVal 
 
 
-    def reversals (self, iStart= 1, iEnd=None):
+    def reversals (self, xStart= 0.1):
         """ 
         returns a list of reversals (change of curvature sign equals curvature = 0 )
         A reversal is a tuple (x,y) indicating the reversal on self. 
+        Reversal detect starts at xStart - to exclude turbulent leading area... 
         """
         # algorithm from Xoptfoil where a change of sign of y[i] is detected 
         x = self.x
         y = self.y
-        npt = len (y)
 
-        iStart = max (iStart, 1)
-        if iEnd is None:    iEnd = npt
-        else:               iEnd = min (iEnd, npt)  
+        iToDetect = np.nonzero (x >= xStart)[0]
 
         reversals = []
-        yold    = y[iStart]
-        for i in range (npt):
-            if abs(y[i]) >= self.threshold:                  # outside threshold range
-                if (y[i] * yold < 0.0):                 # yes - changed + - 
-                    if i >= iStart and i <= iEnd: 
-                        yrev = self.y_interpol (x[i])
-                        reversals.append((round(x[i],10),round(yrev,10))) 
+        yold    = y[iToDetect[0]]
+        for i in iToDetect:
+            if abs(y[i]) >= self.threshold:                # outside threshold range
+                if (y[i] * yold < 0.0):                     # yes - changed + - 
+                    yrev = self.y_interpol (x[i])
+                    reversals.append((round(x[i],10),round(yrev,10))) 
                 yold = y[i]
         return reversals 
     
-        # Exact algorithm with Scipy brentq - but this one doesn't use an threshold 
-        # roots = []
-        # for i in range(len(curv.x)-1):
-        #     if (curv.y[i] * curv.y[i+1]) < 0.0:
-        #         # interpolate the exact x position of the root (curvature = 0)
-        #         x0 = brentq(lambda y: curv.y_interpol(y), curv.x[i] , curv.x[i+1])
-        #         # get the y-value 
-        #         y  = self.y_interpol (x0)
-        #         roots.append((round(x0,10),round(y,10)))
-        # return roots
-
 
     def maximum (self): 
         """ 
-        returns the x and y position of the maximum y value of self
+        returns the maximum y value of self and its  x position  
         """
         # scipy only allows finding minimum - so take negative abs-function  
         # use scipy to find the minimum
         xmax = fmin(lambda x : - abs(self.y_interpol (x)), 0.5, disp=False)[0]
 
         ymax = self.y_interpol (xmax)
-        return round(xmax,10), round(ymax,10)
+        return round(ymax,10), round(xmax,10) 
     
     
     def y_interpol (self,x):
@@ -422,12 +560,6 @@ def lineTest ():
 
     y = air.y
     x = air.x
-
-    # spl = SplineOfAirfoil (x,y) 
-    # x_upper, t, c = spl.thickness_camber()
-
-    # print ("Thickness: ", spl.get_maxThickness())
-    # print ("Camber:    ", spl.get_maxCamber())
 
     fig, axa = plt.subplots(3, 1, figsize=(16,8))
     fig.subplots_adjust(left=0.05, bottom=0.05, right=0.98, top=0.95, wspace=None, hspace=0.15)
@@ -487,19 +619,25 @@ def cubicSplineTest ():
 
     import matplotlib.pyplot as plt
     from airfoil_examples import Root_Example, Tip_Example
+    from airfoil import Airfoil
     
+   
+    # air = Airfoil(pathFileName="test_airfoils\\JX-GP-033.dat")
+    # air.load()
     air = Root_Example()
 
     y = air.y
     x = air.x
 
     print ("LE angle upper, lower: ", air.le_panelAngle)
-    print ("Min panel angle      : ", air.minPanelAngle)
+    print ("Min panel angle      : ", air.minPanelAngle[0],"  at: ",air.minPanelAngle[1] )
 
-    spl = SplineOfAirfoil (x,y) 
+    spl = air.spline
 
-    print ("Thickness: ", spl.get_maxThickness())
-    print ("Camber:    ", spl.get_maxCamber())
+    print ("Thickness: ", spl.maxThickness())
+    print ("Camber:    ", spl.maxCamber())
+
+    x_new, y_new = spl._repanel (200, 1, 0.8)
 
     fig, axa = plt.subplots(3, 1, figsize=(16,8))
     ax1 = axa[0]
@@ -509,22 +647,35 @@ def cubicSplineTest ():
     ax1.set_ylim([ -0.2,  0.2])
     # ax1.set_xlim([ 0.0, 1.1])
 
-    ax3.set_ylim([ -1,  1])
+    # ax3.set_ylim([ -1,  1])
 
     ax1.grid(True)
     ax2.grid(True)
     ax3.grid(True)
 
-    ax1.plot(x, y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='x y')
+    ax1.plot(x, y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label=air.name)
+    ax1.plot(x_new, y_new, '-', color = 'red', marker='o', lw=1, fillstyle='none', markersize=4, label=air.name + " repan")
+    
     # ax1.plot(x_upper, t, '-.', label='thickness')
     # ax1.plot(x_upper, c, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='camber 2D')
     # ax1.plot(air.camber.x, air.camber.y, '-', label='camber 1D')
 
-    # ax2.set_ylim([ -20,  20])
-    ax2.plot (x,spl.angle, marker='o', lw=1, fillstyle='none', markersize=4, label='Angle')
-    ax2.plot (x,panel_angles(x,y), marker='o', lw=1, fillstyle='none', markersize=4, label='Panel angle')
+    # ax2.plot (x,spl.angle, marker='o', lw=1, fillstyle='none', markersize=4, label='Angle')
+    # ax2.plot (x,panel_angles(x,y), marker='o', lw=1, fillstyle='none', markersize=4, label='Panel angle')
     # ax2.plot (x,spl.deriv1, label='Angle')
+    ax2.plot (x,spl.scalarProduct, marker='o', fillstyle='none', markersize=4, label='Scalar product')
+
+
+    ax3.set_ylim([ -10,  10])
     ax3.plot (x,spl.curvature, label='Curvature')
+    ax3.plot (spl.curv_upper.x, spl.curv_upper.y, label='Curvature upper')
+    ax3.plot (spl.curv_lower.x, - spl.curv_lower.y, label='Curvature lower')
+
+    # leading edge 
+    xLe, yLe = spl.le
+    print ("Leading edge: ", xLe, yLe)
+
+    ax1.plot (xLe, yLe, marker='o', color= 'red', markersize=5)
 
     ax1.legend()
     ax2.legend()

@@ -38,7 +38,7 @@ class Export_FLZ:
 
         myDict = {}
         toDict (myDict, "exportDir",         self._exportDir) 
-        toDict (myDict, "useNick",            self._useNick) 
+        toDict (myDict, "useNick",           self._useNick) 
         self.paneledPlanform._save (myDict)
 
         return myDict

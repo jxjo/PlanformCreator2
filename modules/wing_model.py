@@ -93,17 +93,15 @@ class Wing:
         self.refPlanform      = Planform_Pure_Elliptical (self)
 
         # will hold the class which manages Xflr5, FLZ export including its parameters
-        self._xflr5Exporter   = None 
-        self._flzExporter     = None 
+        self._exporterXflr5     = None 
+        self._exporterFlz       = None 
+        self._exporterDxf       = None 
+        self._exporterAirfoils  = None 
 
         # miscellaneous parms
         self._rootRe            = fromDict (dataDict, "rootRe", 400000, wingExists)
         self._airfoilNickPrefix = fromDict (dataDict, "airfoilNickPrefix", "JX", msg=False)
         
-        self._dxfPathFileName   = fromDict (dataDict, "dxfFile", "", msg=False)
-        self._dxfAirfoilsTeGap  = fromDict (dataDict, "dxfAirfoilsTeGap", None, msg=False)
-        self._dxfAirfoilsToo    = fromDict (dataDict, "dxfAirfoilsToo", True, msg=False)
-
         InfoMsg (str(self)  + ' created')
 
 
@@ -148,7 +146,6 @@ class Wing:
 
         toDict (dataDict, "rootRe",             self._rootRe) 
         toDict (dataDict, "airfoilNickPrefix",  self._airfoilNickPrefix) 
-        toDict (dataDict, "dxfFile",            self._dxfPathFileName) 
 
         toDict (dataDict, "planformType",       self.planform.planformType) 
         self.planform._save (dataDict)
@@ -160,8 +157,10 @@ class Wing:
 
         self.refPlanform_DXF._save (dataDict)
 
-        toDict (dataDict, "xflr5",              self.xflr5Exporter._save()) 
-        toDict (dataDict, "flz",                self.flzExporter._save()) 
+        toDict (dataDict, "xflr5",              self.exporterXflr5._save()) 
+        toDict (dataDict, "flz",                self.exporterFlz._save()) 
+        toDict (dataDict, "dxf",                self.exporterDxf._save()) 
+        toDict (dataDict, "airfoils",           self.exporterAirfoils._save()) 
 
         return dataDict
 
@@ -172,8 +171,7 @@ class Wing:
     def set_name(self, newName):  self._name = newName
 
     @property 
-    def planform (self):
-        return self._planform
+    def planform (self): return self._planform
     
     @planform.setter 
     def planform (self, newPlanform: 'Planform'): 
@@ -205,20 +203,14 @@ class Wing:
     @property
     def planformType(self): return self.planform.planformType
     def set_planformType(self, newPlanformType):
-        """
-        set planformType - will create a new planform object for this wing
-        """
+        """ set planformType - will create a new planform object for this wing  """
         if (self.planformType != newPlanformType):
-
             self.planform =  Planform.having (newPlanformType, self, self.dataDict)
-
 
     @property
     def wingspan(self): return self._wingspan
     def set_wingspan(self, newSpan):
-        """
-        set wingspan - update sections having fixed positions
-        """
+        """ set wingspan - update sections having fixed positions """
         if (newSpan > 10.0):
             oldSpan = self._wingspan
             self._wingspan = newSpan
@@ -227,12 +219,9 @@ class Wing:
                 section.adjustToWing (oldSpan)
 
     @property
-    def rootchord(self): 
-        return self._rootchord
+    def rootchord(self): return self._rootchord
     def set_rootchord(self, newChord):
-        """
-        set rootchord - update first section with new chord  
-        """
+        """ set rootchord - update first section with new chord  """
         if (newChord > 10.0):
             self._rootchord = newChord
             self.rootSection.adjustToWing()
@@ -240,8 +229,7 @@ class Wing:
     @property
     def tipchord(self): return self._tipchord
     def set_tipchord(self, newChord):
-        """ set tipchord - update tip (last) section with new chord  
-        """
+        """ set tipchord - update tip (last) section with new chord  """
         if (newChord > 1.0):
             self._tipchord = newChord
             self.tipSection.adjustToWing()
@@ -250,19 +238,17 @@ class Wing:
     def hingeAngle(self): return self._hingeAngle
     def set_hingeAngle(self, newAngle): self._hingeAngle = newAngle
 
-
     @property
     def flapDepthRoot(self): return self._flapDepthRoot
     def set_flapDepthRoot(self, newDepth): self._flapDepthRoot = newDepth
-
 
     @property
     def flapDepthTip(self): return self._flapDepthTip
     def set_flapDepthTip(self, newDepth): self._flapDepthTip = newDepth
     
-
     @property
     def rootSection (self)   -> 'WingSection':  return self.wingSections[0]
+
     @property
     def tipSection (self)    -> 'WingSection':  return self.wingSections[-1]
 
@@ -277,50 +263,54 @@ class Wing:
     def airfoilNickPrefix(self): return self._airfoilNickPrefix
     def set_airfoilNickPrefix(self, newStr): self._airfoilNickPrefix = newStr
 
-    @property
-    def dxfPathFileName(self):
-        if self._dxfPathFileName:
-            return self._dxfPathFileName
-        else: 
-            return self.name + ".dxf"
-    def set_dxfPathFileName(self, newPathFilename):
-        """ store newPathFilename as relative path to current working dir """
-        self._dxfPathFileName =  self.pathHandler.relFilePath (newPathFilename)
 
     @property
-    def dxfAirfoilsTeGap (self): return self._dxfAirfoilsTeGap
-    def set_dxfAirfoilsTeGap (self, aVal): self._dxfAirfoilsTeGap = aVal 
-
-    @property
-    def dxfAirfoilsToo (self): return self._dxfAirfoilsToo
-    def set_dxfAirfoilsToo (self, aVal): self._dxfAirfoilsToo = bool(aVal) 
-
-    @property
-    def xflr5Exporter (self): 
+    def exporterXflr5 (self): 
         """ returns class managing Xflr5 export """
         from export_Xflr5       import Export_Xflr5         # here - otherwise circular errors
 
-        if self._xflr5Exporter is None: 
-            # init class for Xlfr5 export with parameters in sub dict xlfr5 
+        if self._exporterXflr5 is None:                     # init exporter with parameters in sub dictionary
             xflr5Dict           = fromDict (self.dataDict, "xlfr5", "", msg=False)
-            self._xflr5Exporter = Export_Xflr5(self, xflr5Dict) 
-        return self._xflr5Exporter     
+            self._exporterXflr5 = Export_Xflr5(self, xflr5Dict) 
+        return self._exporterXflr5     
+
 
     @property
-    def flzExporter (self): 
-        """ returns class managing FLZ export """
-        from export_FLZ  import Export_FLZ         # here - otherwise circular errors
+    def exporterDxf (self): 
+        """ returns class managing Dxf export """
+        from export_Dxf       import Export_Dxf         # here - otherwise circular errors
 
-        if self._flzExporter is None: 
-            # init class for Xlfr5 export with parameters in sub dict xlfr5 
-            flzDict           = fromDict (self.dataDict, "xlfr5", "", msg=False)
-            self._flzExporter = Export_FLZ(self, flzDict) 
-        return self._flzExporter     
+        if self._exporterDxf is None:                   # init exporter with parameters in sub dictionary       
+            dxfDict           = fromDict (self.dataDict, "dxf", "", msg=False)
+            self._exporterDxf = Export_Dxf(self, dxfDict) 
+        return self._exporterDxf     
+
+
+    @property
+    def exporterFlz (self): 
+        """ returns class managing FLZ export """
+        from export_FLZ  import Export_FLZ              # here - otherwise circular errors
+
+        if self._exporterFlz is None:                   # init exporter with parameters in sub dictionary
+            flzDict           = fromDict (self.dataDict, "flz", "", msg=False)
+            self._exporterFlz = Export_FLZ(self, flzDict) 
+        return self._exporterFlz     
+
+
+    @property
+    def exporterAirfoils (self): 
+        """ returns class managing export of airfoils"""
+        if self._exporterAirfoils is None:              # init exporter with parameters in sub dictionary
+            airfoilsDict      = fromDict (self.dataDict, "airfoils", "", msg=False)
+            self._exporterAirfoils = Export_Airfoils(self, airfoilsDict) 
+        return self._exporterAirfoils     
+
 
     @property
     def workingDir(self): 
         """returns the current working directory which is the dir of the paramter file"""
         return self.pathHandler.workingDir
+
 
     # ---Methods --------------------- 
 
@@ -582,17 +572,18 @@ class Wing:
                 sec.airfoil.do_strak(leftSec.airfoil,  rightSec.airfoil, blendBy)
 
 
-    def do_export_airfoils (self,toDir, useNick=True): 
+    def do_export_airfoils (self,toDir, useNick=True, teGap_mm = None): 
         """
-        exports all also straked airfoils into directory 'toDir'. Optionally use airfoils Nickname
-        as new airfoil name."""
+        exports all also straked airfoils into directory 'toDir'. 
+        Optionally use airfoils Nickname as new airfoil name.
+        Optionally a te gap in mm can be set for all exported airfoils"""
         fileList  = []
         
         self.do_strak() 
 
         sec: WingSection
         for sec in self.wingSections:
-            fileList.append (sec.do_export_airfoil (toDir, useNick=useNick))
+            fileList.append (sec.do_export_airfoil (toDir, useNick=useNick, teGap_mm = teGap_mm))
         return fileList
 
 
@@ -615,32 +606,6 @@ class Wing:
 
         return flapList
     
-
-    def export_toDxf (self):
-        """exports self to a dxf file specified in the dxf parameters
-          - returns a text string of exported artefacts """
-
-        from export_Dxf import Dxf_Artist
-
-        dxf = Dxf_Artist(self)
-
-        dxf.plot_planform()
-        dxf.plot_hingeLine ()
-        dxf.plot_wingSections ()
-        dxf.plot_title ()
-
-        if self.dxfAirfoilsToo:
-            self.do_strak ()                    # ensure strak airfoils are uptodate 
-            dxf.plot_airfoils (teGap_mm=self.dxfAirfoilsTeGap)
-
-        # dxfPathFileName was saved before relativ to working Dir 
-        pathFileName = self.pathHandler.fullFilePath (self.dxfPathFileName)
-        dxf.save (pathFileName)
-
-        InfoMsg ("DXF file '%s' written to '%s' " % (self.dxfPathFileName, self.pathHandler.workingDir) ) 
-        message = "Wing exported as DXF to \n\n'" + pathFileName + "'"
-        return message
-
 
 
 
@@ -773,7 +738,7 @@ class Planform:
 
     def _norm_y_points (self):
         """ array of y points along the spann for the different lines  """
-        return np.sin(np.linspace(0.0, 1.0, num=30) * np.pi/2)
+        return np.sin(np.linspace(0.0, 1.0, num=50) * np.pi/2)
 
     def hingeLine (self):
         """ Returns the hinge line based on defined hinge line angle 
@@ -1662,7 +1627,7 @@ class Planform_DXF(Planform):
                 self._dxfPathFilename = self.wing.pathHandler.relFilePath(loadPathFile)
         else: 
             # clear self
-            self._dxfPathFilename  = None
+            self._dxfPathFilename   = None
             self.le_norm_dxf        = None   
             self.te_norm_dxf        = None   
             self.hingeLine_norm_dxf = None   
@@ -2313,9 +2278,10 @@ class WingSection:
         self.airfoil.load()
 
 
-    def do_export_airfoil (self,toDir, useNick=True): 
-        """ exports airfoil into directory 'toDir'. Optionally use airfoils Nickname
-        as new airfoil name.
+    def do_export_airfoil (self,toDir, useNick=True, teGap_mm = None): 
+        """ exports airfoil into directory 'toDir'. 
+        Optionally use airfoils Nickname as new airfoil name.
+        Optionally define a teGap in mm for the exported airfoil 
         Returns the filename of the exported airfoil
         """
         if useNick: 
@@ -2323,7 +2289,13 @@ class WingSection:
         else: 
             newName = None
 
-        filePathName = self.airfoil.copyAs(dir=toDir, destName = newName)
+        # te gap in mm? if yes scale it to normed ... do it
+        if not teGap_mm is None and teGap_mm >= 0.0: 
+            teGap = teGap_mm / self.chord
+        else: 
+            teGap = None 
+
+        filePathName = self.airfoil.copyAs(dir=toDir, destName = newName, teGap = teGap)
 
         return os.path.basename(filePathName) 
         
@@ -2415,6 +2387,84 @@ class Flap:
         self.lineLeft   = myWing.planform.flapLineAt  (sectionLeft.yPos)
         self.lineRight  = myWing.planform.flapLineAt  (sectionRight.yPos)
          
+
+#-------------------------------------------------------------------------------
+# Export airfoils of all wing sections    
+#-------------------------------------------------------------------------------
+
+class Export_Airfoils:
+    """ 
+    Handle export of the current airfoils of wing to a subdirectory
+    """
+    def __init__(self, wing : Wing, myDict: dict = None):
+ 
+        self.wing       = wing
+        self.workingDir = wing.workingDir       
+        self._exportDir         = fromDict (myDict, "exportDir", "airfoils", msg=False)
+        self._useNick           = fromDict (myDict, "useNick", True, msg=False)
+        self._setTeGap          = fromDict (myDict, "setTeGap", False, msg=False)
+        self._teGap_mm          = fromDict (myDict, "teGap_mm", 0.5, msg=False)
+
+
+    def _save (self):
+        """ returns the parameters of self in dataDict"""
+        myDict = {}
+        toDict (myDict, "exportDir",        self._exportDir) 
+        toDict (myDict, "useNick",          self._useNick) 
+        toDict (myDict, "setTeGap",         self._setTeGap) 
+        toDict (myDict, "teGap_mm",         self._teGap_mm) 
+        return myDict
+
+
+    @property
+    def exportDir(self):
+        """the directory for flz export - path is relativ to current or absolute """
+        return self._exportDir
+    
+    def set_exportDir(self, newStr): 
+        # insure a valid, relativ path 
+        self._exportDir = PathHandler (workingDir=self.workingDir).relFilePath (newStr)
+
+    @property
+    def baseAndExportDir(self):
+        """the directory for airfoil export including current dir """
+        return PathHandler (workingDir=self.workingDir).fullFilePath (self.exportDir)
+
+    @property
+    def useNick(self) -> bool: return self._useNick
+    def set_useNick(self, aBool): self._useNick = aBool
+
+    @property
+    def setTeGap(self) -> bool: return self._setTeGap
+    def set_setTeGap(self, aBool): self._setTeGap = aBool
+
+    @property
+    def teGap_mm(self) -> float: return self._teGap_mm
+    def set_teGap_mm(self, aVal): self._teGap_mm = aVal
+
+
+    def doIt (self): 
+        """ main entry: start the export to the file defined in self parameters.
+        Returns a message string what was done """
+
+        if self.setTeGap: 
+            teGap = self.teGap_mm
+        else: 
+            teGap = None
+
+        targetDir = self.baseAndExportDir
+
+        airfoilList = self.wing.do_export_airfoils (targetDir, useNick=self.useNick, teGap_mm=teGap)      
+
+        InfoMsg ("Airfoils written to " + targetDir) 
+        message = "Airfoils: \n\n" + \
+                  ',  '.join(airfoilList)  + \
+                  "\n\n exported to \n\n" + \
+                  "'" +  targetDir + "'"      
+        return message
+
+
+
 
 #-------------------------------------------------------------------------------
 

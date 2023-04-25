@@ -1555,10 +1555,10 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         self.wing : Wing = wingFn()
 
         if Xflr5:
-            self.exporter = self.wing.xflr5Exporter
+            self.exporter = self.wing.exporterXflr5
             self.mode = "Xflr5"
         elif Flz:
-            self.exporter = self.wing.flzExporter
+            self.exporter = self.wing.exporterFlz
             self.mode = "FLZ_vortex"
         else:
             return  
@@ -1717,21 +1717,22 @@ class Dialog_Export_Dxf (Dialog_Abstract):
     Export wing / planform as dxf to file  
 
     """
-    width  = 640
-    height = 300
+    width  = 650
+    height = 320
     titleText  = "Export DXF"
 
     def __init__(self, master, *args, wingFn = None,  **kwargs):
         super().__init__(master, *args, height=self.height/2, **kwargs)
 
         self.wing : Wing = wingFn()
+        self.exporter = self.wing.exporterDxf
 
         # main grid 3 x 1  (header + edit + buttons) 
         self.header_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         self.header_frame.grid(row=0, column=0, sticky="we")
 
         self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
-        self.input_frame.grid(row=1, column=0, sticky="nwes", padx=10, pady=40)
+        self.input_frame.grid(row=1, column=0, sticky="nwes", padx=10, pady=20)
 
         self.button_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         self.button_frame.grid(row=2, column=0, sticky="wes", pady=10)
@@ -1752,11 +1753,10 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         # entry fields 
         r = 0 
         c = 0 
-        self.add(Field_Widget  (self.input_frame,r,c, lab="DXF file ", width=180,
-                                lab_width=100, 
-                                obj=self.wing, get='dxfPathFileName', disable=True))
-        self.add(Button_Widget (self.input_frame,r,c+3, lab='Select', width=60, sticky='w', 
-                                set=self.select_file ))
+        self.add(Field_Widget  (self.input_frame,r,c, lab="Dxf directory", obj=self.exporter, get='baseAndExportDir', set='',
+                                width=180, disable=True))
+        self.add(Button_Widget (self.input_frame,r,c+2, lab='Select', width=60, sticky='w', set=self.select_dir ))
+
 
         r += 1 
         Blank_Widget           (self.input_frame,r,c, width=50) 
@@ -1764,11 +1764,26 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         r += 1 
         self.add(Switch_Widget (self.input_frame,r,c+1, lab='Include airfoils in DXF', 
                                 columnspan=2, padx=0, 
-                                obj=self.wing, get='dxfAirfoilsToo', set='set_dxfAirfoilsToo'))      
+                                obj=self.exporter, get='includeAirfoils', set='set_includeAirfoils'))      
        
-        self.add (Field_Widget (self.input_frame,r,c+3, lab="TE thickness", width=90,
-                                 obj=self.wing, get='dxfAirfoilsTeGap', set='set_dxfAirfoilsTeGap',
-                                 lim=(0,2), dec=1, spin=True, step=0.1, unit='mm'))
+        r += 1 
+        self.add(Switch_Widget (self.input_frame,r,c+1, lab='Use airfoils nick name ', 
+                                columnspan=2, padx=0, 
+                                obj=self.exporter, get='useNick', set='set_useNick'))      
+        r += 1 
+        self.add(Switch_Widget (self.input_frame,r,c+1, lab='Export airfoils into directory', 
+                                columnspan=2, padx=0, 
+                                obj=self.exporter, get='exportAirfoils', set='set_exportAirfoils'))      
+       
+        r += 1 
+        self.add(Switch_Widget (self.input_frame,r,c+1, lab='Set a common airfoil TE thickness of', 
+                                columnspan=2, padx=0, 
+                                obj=self.exporter, get='setTeGap', set='set_setTeGap'))      
+
+        self.teWidget = Field_Widget (self.input_frame,r,c+3, lab="", lab_width= 30, width=90,
+                                 obj=self.exporter, get='teGap_mm', set='set_teGap_mm',
+                                 lim=(0,2), dec=1, spin=True, step=0.1, unit='mm')
+        self.add(self.teWidget) 
 
 
         self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok, primary=True, width=100))
@@ -1777,17 +1792,14 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         self.button_frame.grid_columnconfigure (3, weight=1)
 
 
-    def select_file(self):
-        " open dialog for file selection"
+    def select_dir(self):
+        " open dialog for directory selection"
 
-        newFile = filedialog.asksaveasfilename(
-                    title='Select directory for DXF export',
-                    filetypes  = [('dxf files', '*.dxf')],
-                    initialdir=self.wing.workingDir,
-                    initialfile=self.wing.dxfPathFileName, defaultextension=".dxf")
-        if newFile:
-            # store only relativ path 
-            self.wing.set_dxfPathFileName (newFile)
+        newDir = filedialog.askdirectory(
+                    title='Select directory for export',
+                    initialdir=self.exporter.baseAndExportDir)
+        if newDir:
+            self.exporter.set_exportDir (newDir)
             super().refresh()
 
 
@@ -1798,13 +1810,9 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         else: 
             nLines = len(self.wing.planform._norm_y_points ())
             hint = "Note: Leading and trailing edge will be approximated by %d straight lines.\n" % nLines + \
-                   "Therefore the dxf contour shouldn't be used for final CAD design - use splines."
+                   "Therefore the dxf contour shouldn't be used for final CAD design - use splines.\n" + \
+                   "Also the airfoils in dxf are drawn as polylines. Use 'Import .dat' in CAD for pefect quality"
         return hint
-
-
-    def refresh(self, dummy):
-        self.panelArtist.refresh(figureUpdate=True)
-        super().refresh()
 
     def cancel(self): 
         # changed bindings
@@ -1812,11 +1820,117 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         super().cancel()
 
     def ok(self): 
+
+        # update model if user pressed directly ok after typing teGap 
+        self.teWidget.CTk_callback()
+
+        # do the export 
+        message = self.exporter.doIt()
+        msg = Messagebox (self, title=self.titleText, message=message, icon="check", option_1="Ok")
+        msg.get()                               # wait until pressed ok
+
         # release changed bindings
         ctk_root.unbind(PANELS_CHANGED)
         super().ok()
 
 
+
+class Dialog_Export_Airfoils (Dialog_Abstract):
+    """ 
+    Export wing / planform as dxf to file  
+
+    """
+    width  = 600
+    height = 280
+    titleText  = "Export Airfoils"
+
+    def __init__(self, master, *args, wingFn = None,  **kwargs):
+        super().__init__(master, *args, height=self.height/2, **kwargs)
+
+        self.wing : Wing = wingFn()
+        self.exporter = self.wing.exporterAirfoils
+
+        # main grid 3 x 1  (header + edit + buttons) 
+        self.header_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
+        self.header_frame.grid(row=0, column=0, sticky="we")
+
+        self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
+        self.input_frame.grid(row=1, column=0, sticky="nwes", padx=10, pady=20)
+
+        self.button_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
+        self.button_frame.grid(row=2, column=0, sticky="wes", pady=15)
+
+        self.edit_frame.grid_columnconfigure (0, weight=1)
+        self.edit_frame.grid_rowconfigure    (1, weight=1)
+
+        # header with hints 
+        r = 0 
+        c = 0 
+        Header_Widget (self.header_frame,r,c, lab="Airfoil export", width=110, pady=(7,10))
+        hint =  "A common trailing edge thickness in mm can be set \n" + \
+                "which will modify the airfoils based on their chord in the wing."
+        self.add (Label_Widget  (self.header_frame,r,c+1, lab=hint, sticky="w", 
+                                    columnspan=8, text_style='hint'))
+        self.header_frame.grid_columnconfigure (c+2, weight=1)
+
+        # entry fields 
+        r = 0 
+        c = 0 
+        self.add(Field_Widget  (self.input_frame,r,c, lab="Airfoils directory", obj=self.exporter, get='baseAndExportDir', set='',
+                                lab_width=105, width=180, disable=True))
+        self.add(Button_Widget (self.input_frame,r,c+2, lab='Select', width=60, sticky='w', set=self.select_dir ))
+
+        r += 1 
+        Blank_Widget           (self.input_frame,r,c, width=50) 
+              
+        r += 1 
+        self.add(Switch_Widget (self.input_frame,r,c+1, lab='Use airfoils nick name ', 
+                                columnspan=2, padx=0, 
+                                obj=self.exporter, get='useNick', set='set_useNick'))      
+        r += 1 
+        self.add(Switch_Widget (self.input_frame,r,c+1, lab='Set a common airfoil TE thickness of', 
+                                columnspan=2, padx=0, 
+                                obj=self.exporter, get='setTeGap', set='set_setTeGap'))      
+        self.teWidget = Field_Widget (self.input_frame,r,c+3, lab="", lab_width= 30, width=90,
+                                 obj=self.exporter, get='teGap_mm', set='set_teGap_mm',
+                                 lim=(0,2), dec=1, spin=True, step=0.1, unit='mm')
+        self.add(self.teWidget) 
+
+
+        self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok, primary=True, width=100))
+        self.add(Button_Widget (self.button_frame,0,2, lab='Cancel', set=self.cancel, width=100))
+        self.button_frame.grid_columnconfigure (0, weight=1)
+        self.button_frame.grid_columnconfigure (3, weight=1)
+
+
+    def select_dir(self):
+        " open dialog for directory selection"
+
+        newDir = filedialog.askdirectory(
+                    title='Select directory for export',
+                    initialdir=self.exporter.baseAndExportDir)
+        if newDir:
+            self.exporter.set_exportDir (newDir)
+            super().refresh()
+
+    def cancel(self): 
+        # changed bindings
+        ctk_root.unbind(PANELS_CHANGED)
+        super().cancel()
+
+    def ok(self): 
+
+        # update model if user pressed directly ok after typing teGap 
+        self.teWidget.CTk_callback()
+
+        # do the export 
+        message = self.exporter.doIt()
+        msg = Messagebox (self, title=self.titleText, message=message, icon="check", option_1="Ok")
+        msg.get()                               # wait until pressed ok
+
+        # release changed bindings
+        ctk_root.unbind(PANELS_CHANGED)
+        super().ok()
 
 
 
@@ -1850,15 +1964,14 @@ class Edit_File_Menu(Edit_Abstract):
         self.option_import.refresh()
         if aType == "Dxf as reference":  self.myApp.load_reference_dxf() 
 
-    def exportChoices (self):       return ["to Xflr5","to FLZ_vortex", "to DXF", "(Airfoils)"]
+    def exportChoices (self):       return ["to Xflr5","to FLZ_vortex", "to DXF", "Airfoils"]
     def exportDisplayValue (self):  return "Export..."
     def set_exportType (self, aType):
         self.option_export.refresh()
         if aType == "to Xflr5":         self.myApp.export_xflr5 ()
         if aType == "to FLZ_vortex":    self.myApp.export_flz ()
         if aType == "to DXF":           self.myApp.export_dxf ()
-        if aType == "to FLZ_vortex":  pass
-        if aType == "Airfoils":  pass
+        if aType == "Airfoils":         self.myApp.export_airfoils ()
 
 
 
@@ -2011,24 +2124,22 @@ class App(ctk.CTk):
 
     def export_xflr5 (self): 
         """ export wing to xflr5"""
-        self.wait_window (Dialog_Export_Xflr5_Flz (self, self.wing, Xflr5=True, workingDir=self.workingDir))
+        self.wait_window (Dialog_Export_Xflr5_Flz (self, self.wing, Xflr5=True))
 
 
     def export_flz (self): 
         """ export wing to xflr5"""
-        self.wait_window (Dialog_Export_Xflr5_Flz (self, self.wing, Flz=True, workingDir=self.workingDir))
+        self.wait_window (Dialog_Export_Xflr5_Flz (self, self.wing, Flz=True))
 
 
     def export_dxf (self):
         """export wing to dxf"""
+        self.wait_window (Dialog_Export_Dxf (self, wingFn = self.wing))
 
-        export_dialog = Dialog_Export_Dxf (self, wingFn = self.wing, workingDir = self.workingDir) 
-        self.wait_window (export_dialog)
 
-        if export_dialog.return_OK:
-
-            message = self.wing().export_toDxf () 
-            Messagebox (self, title="DXF export", message=message, icon="check", option_1="Ok")
+    def export_airfoils (self):
+        """export airfoils of wing"""
+        self.wait_window (Dialog_Export_Airfoils (self, wingFn = self.wing))
 
 
     def load_reference_dxf (self): 
