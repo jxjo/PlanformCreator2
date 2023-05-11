@@ -9,7 +9,66 @@ import os
 import numpy as np
 import math
 from common_utils import * 
-from airfoil_line_spline import LineOfAirfoil, SplineOfAirfoil, panel_angles
+from airfoil_splined import SideOfAirfoil, SplineOfAirfoil
+
+
+#------------ Util functions -----------------------------------
+
+
+def panel_angles (x,y):
+    """returns an array of panel angles of polyline x,y - between 160 - 180
+    angle[0] and [-1] default to 180° 
+    """
+
+    # Xfoil - CANG 
+
+    # C---- go over each point, calculating corner angle
+    #       IF(IPRINT.EQ.2) WRITE(*,1050)
+    #       DO 30 I=2, N-1
+    #         DX1 = X(I) - X(I-1)
+    #         DY1 = Y(I) - Y(I-1)
+    #         DX2 = X(I) - X(I+1)
+    #         DY2 = Y(I) - Y(I+1)
+    # C
+    # C------ allow for doubled points
+    #         IF(DX1.EQ.0.0 .AND. DY1.EQ.0.0) THEN
+    #          DX1 = X(I) - X(I-2)
+    #          DY1 = Y(I) - Y(I-2)
+    #         ENDIF
+    #         IF(DX2.EQ.0.0 .AND. DY2.EQ.0.0) THEN
+    #          DX2 = X(I) - X(I+2)
+    #          DY2 = Y(I) - Y(I+2)
+    #         ENDIF
+    # C
+    #         CROSSP = (DX2*DY1 - DY2*DX1)
+    #      &         / SQRT((DX1**2 + DY1**2) * (DX2**2 + DY2**2))
+    #         ANGL = ASIN(CROSSP)*(180.0/3.1415926)
+    #         IF(IPRINT.EQ.2) WRITE(*,1100) I, X(I), Y(I), ANGL
+    #         IF(ABS(ANGL) .GT. ABS(AMAX)) THEN
+    #          AMAX = ANGL
+    #          IMAX = I
+    #         ENDIF
+    #    30 CONTINUE
+
+    angles = np.zeros (len(x))
+    for i in range(len(x)):
+        if i > 0 and i < (len(x)-2):
+            dx1 = x[i] - x[i-1] 
+            dy1 = y[i] - y[i-1] 
+            dx2 = x[i] - x[i+1] 
+            dy2 = y[i] - y[i+1] 
+            if dx1 != 0.0 and dx2 != 0.0:               # check for pathologic airfoil (blunt le) 
+                crossp = (dx2 * dy1 - dy2 * dx1) / math.sqrt ((dx1**2 + dy1**2) * (dx2**2 + dy2**2))
+                angles[i] = math.asin(crossp)
+            else: 
+                angles[i] = 0.0
+    angles = 180.0 - angles * (180/np.pi)
+    return angles 
+
+
+
+
+#------------ Airfoil class -----------------------------------
 
 
 class Airfoil:
@@ -18,8 +77,9 @@ class Airfoil:
     Airfoil object to handle a airfoil direct related things  
 
     """
-    isStrakAirfoil  = False
-    isExample       = False                      # vs. Example_Airfoil 
+    isStrakAirfoil      = False
+    isSplineAirfoil     = False
+    isExample           = False                      # vs. Example_Airfoil 
 
     def __init__(self, pathFileName = None, name = None, workingDir= None):
         """
@@ -39,7 +99,8 @@ class Airfoil:
         self._y             = None
         self._upper         = None              # upper surface line object 
         self._lower         = None              # lower surface line object 
-        self._asNormalized  = None              # Airfoil object of self being normalized 
+        self.isModified     = False
+
         self._spline        = None              # 2D spline object 
 
 
@@ -85,9 +146,20 @@ class Airfoil:
 
     @property
     def x (self): return self._x
-        
+    def set_x (self, anArr): 
+        self._x     = anArr
+        self._upper = None              # upper surface line object 
+        self._lower = None              # lower surface line object 
+        self.isModified = True
+  
     @property
     def y (self): return self._y
+    def set_y (self, anArr): 
+        self._y     = anArr
+        self._upper = None              # upper surface line object 
+        self._lower = None              # lower surface line object 
+        self.isModified = True
+
 
     @property
     def x_rebuild (self):
@@ -123,24 +195,10 @@ class Airfoil:
         if xteUp != 1.0 or xteLow != 1.0: return False
         if yteUp != - yteLow: return False
 
-        xle, yle = self.le_fromPoints 
+        xle, yle = self.le 
         if xle != 0.0 or yle != 0.0: return False
 
         return True
-
-    @property
-    def asNormalized (self): 
-        """ returns self as an normlized airfoil """
-
-        if self.isLoaded:
-            if self._asNormalized is None: 
-                self._asNormalized = Airfoil_Normalized (self)
-            return self._asNormalized
-        else: 
-            raise ValueError ("Airfoil '%s' not loaded" % self.name)
-
-
-
     
     @property
     def le_i (self) -> int: 
@@ -148,27 +206,35 @@ class Airfoil:
         return int(np.argmin (self._x))
 
     @property
-    def le_fromPoints (self): 
+    def le (self): 
         """ returns leading edge x,y of point coordinate data """
         ile = np.argmin (self._x)
         return self._x[ile], self._y[ile]
+
+
+    @property
+    def te_fromPoints (self): 
+        """ returns trailing edge upper and lower x,y of point coordinate data """
+        return self._x[0], self._y[0], self._x[-1], self._y[-1], 
     
     @property
-    def le_splined (self): 
-        """ returns real leading edge x,y based on spline of airfoil 
-            where scalar product of tangent and te vector becoming 0   """
-        return self.spline.le  
-    
+    def nPanels (self): 
+        """ returns number of panels """
+        return len (self._x)  - 1
+
     @property
-    def le_splined_isOk (self): 
-        """ true if the splined leading edxge is close enough to 0,0   """
-        xLe, yLe = self.le_splined
-        # x-value should be closer to 0
-        return abs(xLe) < 0.00001 and abs(yLe) < 0.0001
-    
+    def nPanels_upper (self): 
+        """ returns number of panels upper side """
+        return self.le_i
+
+    @property
+    def nPanels_lower (self): 
+        """ returns number of panels lower side """
+        return len (self._x) - self.le_i - 1
+
     @property 
-    def le_panelAngle (self): 
-        """returns the upper and lower angle of the 2 panels at leading edge - should be less 90"""
+    def panelAngle_le (self): 
+        """returns the panel angle of the 2 panels at leading edge - should be less 170"""
 
         # panang1 = atan((zt(2)-zt(1))/(xt(2)-xt(1))) *                &
         #           180.d0/acos(-1.d0)
@@ -190,29 +256,24 @@ class Airfoil:
         else: 
             angleLo = 90 
 
-        return angleUp, angleLo 
+        if angleUp < 90.0 and angleLo < 90.0: 
+            angle = angleUp + angleLo           # total angle 
+        else: 
+            angle = 180.0                       # pathologic case with vertical le panel
+        return angle 
 
     @property
-    def te_fromPoints (self): 
-        """ returns trailing edge upper and lower x,y of point coordinate data """
-        return self._x[0], self._y[0], self._x[-1], self._y[-1], 
-    
-    @property
-    def nPanels_upper (self): 
-        """ returns number of panels upper side """
-        return self.le_i
-
-    @property
-    def nPanels_lower (self): 
-        """ returns number of panels lower side """
-        return len (self._x) - self.le_i - 1
-    
-    @property
-    def minPanelAngle (self): 
-        """ returns the max angle between two panels - something between 160-180°
+    def panelAngle_min (self): 
+        """ returns the min angle between two panels - something between 160-180° - 
         and the point index of the min point"""
-
         return np.min(panel_angles(self.x,self.y)),  np.argmin(panel_angles(self.x,self.y))       
+
+
+    @property
+    def teGapPercent (self): 
+        """ returns trailing edge gap in %"""
+        return  (self.y[0] - self.y[-1]) * 100
+
 
     @property
     def maxThickness (self): 
@@ -238,25 +299,17 @@ class Airfoil:
         cmax, cx = self.spline.camber.maximum() 
         return cx * 100
 
-    @property
-    def teGapPercent (self): 
-        """ returns trailing edge gap in %"""
-        return  (self.y[0] - self.y[-1]) * 100
-
     @property 
     def spline (self) -> SplineOfAirfoil:
         """ spline representation  of self - to show curvature, etc. """
 
-        if self.isLoaded:
-            if self._spline is None: 
-                self._spline = SplineOfAirfoil (self.x, self.y)
-            return self._spline
-        else: 
-            raise ValueError ("Airfoil '%s' not loaded" % self.name)
+        if self._spline is None: 
+            self._spline = SplineOfAirfoil (self.x, self.y)
+        return self._spline
 
 
     @property
-    def upper(self) -> 'LineOfAirfoil': 
+    def upper(self) -> SideOfAirfoil: 
         """returns the upper surface as a line object - where x 0..1"""
         if self.isLoaded:
             if self._upper is None: 
@@ -266,7 +319,7 @@ class Airfoil:
             return None
             
     @property
-    def lower(self) -> 'LineOfAirfoil': 
+    def lower(self) -> SideOfAirfoil: 
         """returns the lower surface as a line object - where x 0..1"""
         if self.isLoaded:
             if self._lower is None: 
@@ -275,9 +328,15 @@ class Airfoil:
         else: 
             return None
 
-
-
     #-----------------------------------------------------------
+
+    def asNormalized (self): 
+        """ returns self as a normalized airfoil """
+        if self.isLoaded:
+            return Airfoil_Normalized (self)
+        else: 
+            raise ValueError ("Airfoil '%s' not loaded" % self.name)
+
 
     def set_name (self, newName):
         """
@@ -367,6 +426,7 @@ class Airfoil:
         self.pathFileName =  newPathFileName
         if destName: 
             self.name = destName
+        self.isModified     = False
 
 
     def copyAs (self, dir = None, destName = None, teGap=None ):
@@ -499,9 +559,9 @@ class Airfoil:
         iLe = self.le_i
 
         # upper - extract coordinates - reverse it - now running from 0..1
-        self._upper = LineOfAirfoil(np.flip (self._x [0: iLe + 1]), np.flip (self._y [0: iLe + 1]), name='upper')
+        self._upper = SideOfAirfoil(np.flip (self._x [0: iLe + 1]), np.flip (self._y [0: iLe + 1]), name='upper')
         # lower - extract coordinates 
-        self._lower = LineOfAirfoil(self._x[iLe:], self._y[iLe:], name='lower')
+        self._lower = SideOfAirfoil(self._x[iLe:], self._y[iLe:], name='lower')
 
 
 
@@ -546,8 +606,8 @@ class Airfoil_Straked (Airfoil):
         self._x = np.concatenate ((np.flip(x_upper), x_lower[1:]))
         self._y = np.concatenate ((np.flip(y_upper), y_lower[1:]))
 
-        self._upper = LineOfAirfoil(x_upper, y_upper, name='upper')
-        self._lower = LineOfAirfoil(x_lower, y_lower, name='lower')
+        self._upper = SideOfAirfoil(x_upper, y_upper, name='upper')
+        self._lower = SideOfAirfoil(x_lower, y_lower, name='lower')
 
         self.sourceName = airfoil1.name + ("_blended_%.2f_" % blendBy) + airfoil2.name
 
@@ -561,19 +621,13 @@ class Airfoil_Normalized (Airfoil):
         super().__init__()
 
         self.name = sourceAirfoil.name + "-norm" 
+        self.pathFileName = sourceAirfoil.pathFileName
+
         self._x : np.ndarray = sourceAirfoil._x
         self._y : np.ndarray = sourceAirfoil._y
 
-        xLe, yLe = sourceAirfoil.le_splined 
-        print ("Le vorher ", xLe, yLe)
+        xLe, yLe = sourceAirfoil.le 
         self._transform_airfoil (xLe, yLe)
-
-        self._spline = None
-        xLe, yLe = self.spline.le
-        print ("Le transf ", xLe, yLe)
-
-        self._repanel (201, le_bunch=0.995, te_bunch=0.8)
-
         
 
     def _transform_airfoil (self, xLe, yLe):
@@ -608,45 +662,94 @@ class Airfoil_Normalized (Airfoil):
             else: 
                self._x[i] = self._x[i] * scale_lower
 
+        self.isModified = True
 
-    def _repanel (self, nPoints, le_bunch, te_bunch):
-        """repanls self with an cosinus distribution 
-        
-        Args: 
-        nPoints : new number of coordinate points
-        le_bunch : 0..1  where 1 is the full cosinus bunch at leading edge - 0 no bunch 
-        te_bunch : 0..1  where 1 is the full cosinus bunch at trailing edge - 0 no bunch 
+
+#------------ Airfoil with Spline functions -----------------------------------
+
+
+class Airfoil_Splined (Airfoil):
+    """ Splined Airfoi - based on an original airfoil  """
+
+    isSplineAirfoil   = True
+
+    def __init__ (self, sourceAirfoil: Airfoil, nPanels= 200):
+        super().__init__()
+
+        self.name = sourceAirfoil.name + "-repan" 
+        self.pathFileName = sourceAirfoil.pathFileName
+        self._x = sourceAirfoil.x               # initial coordinates
+        self._y = sourceAirfoil.y
+
+
+        self._nPanels  = nPanels
+        self._le_bunch = 0.84
+        self._te_bunch = 0.7
+
+
+    @property
+    def isLoaded (self): return True 
+
+    @property
+    def nPoints (self): return self.nPanels + 1
+
+    @property
+    def nPanels (self): return self._nPanels
+    def set_nPanels (self, newVal): 
+        newVal = int (newVal / 2) * 2           # must be even 
+        newVal = max (50,  newVal)
+        newVal = min (500, newVal) 
+        self._nPanels = int (newVal)
+        self.repanel()
+
+    @property
+    def le_bunch (self): return self._le_bunch
+    def set_le_bunch (self, newVal): 
+        self._le_bunch = newVal
+        self.repanel()
+
+    @property
+    def te_bunch (self): return self._te_bunch
+    def set_te_bunch (self, newVal): 
+        self._te_bunch = newVal
+        self.repanel()
+
+    @property
+    def le_splined (self): 
+        """ returns real leading edge x,y based on spline of airfoil 
+            where scalar product of tangent and te vector becoming 0   """
+        return self.spline.le  
+    
+    @property
+    def le_i (self) -> int: 
+        """ overloaded - the index of leading edge in x coordinate array"""
+        return int(np.argmin (self._x))
+
+    @property
+    def le_splined_isOk (self): 
+        """ true if the splined leading edge is close enough to 0,0   """
+        xLe, yLe = self.le_splined
+        # x-value should be closer to 0
+        return abs(xLe) < 0.00001 and abs(yLe) < 0.0001
+
+
+    def repanel (self): 
         """
-        # from airfoil_line_spline import _cosinus_distribution
+        Repanel self with the current values of nPoints, le_ and te_bunch.
+        The spline of self remains in it's original state """
 
-        # # get exact le point (in arc) 
-        # spl = self.spline
-        # uLe = spl.uLe
-        # xLe, yLe = spl.xyFn(uLe) 
+        # new, equal distribution for upper and lower 
+        x, y = self.spline.get_repaneled (self.nPanels, self.le_bunch, self.te_bunch)
+
+        self.set_x (x) 
+        self.set_y (y) 
+
+    def apply_repanel (self):
+        """the repaneled x,y will become the new source of truth - the spline will be reinitialized"""
+
+        self._spline = None
 
 
-        # # create a cosinus distribution for upper and lower side
-        # nPointsSide = int ((nPoints + 1) / 2)
-        # u_cosinus = _cosinus_distribution (nPointsSide, le_bunch, te_bunch)
-
-
-        # u_new_upper = np.abs (np.flip(u_cosinus) -1) * uLe
-        # u_new_lower = u_cosinus * (1- uLe) + uLe
-
-        # u_new = np.concatenate ((u_new_upper, u_new_lower[1:]))
-
-        # self._x, self._y = spl.xyFn (u_new)
-
-        # # round to 7 decimals - so 1.0 will be 1.0 
-        # self._x = self._x.round (7)
-        # self._y = self._y.round (7)
-
-        # # avoid numpy -0.0
-        # iLe = np.argmin (self._x)
-        # if abs(self._x[iLe]) == 0.0: self._x[iLe] = abs(self._x[iLe])
-        # if abs(self._y[iLe]) == 0.0: self._y[iLe] = abs(self._y[iLe])
-
-        self._x, self._y = self.spline._repanel (nPoints, le_bunch, te_bunch) 
 
 # Main program for testing -----------------------------------
 

@@ -1377,7 +1377,7 @@ class Dialog_Abstract (ctk.CTkToplevel):
         # the attribute for return ok
         self.return_OK = False
 
-        xPos, yPos = self.centerPosition()
+        xPos, yPos = self.centerPosition(self.width, self.height)
         self.geometry("%sx%s+%s+%s" %(self.width, self.height, xPos, yPos))
 
         self.title (self.titleText)
@@ -1413,18 +1413,16 @@ class Dialog_Abstract (ctk.CTkToplevel):
         for widget in self.widgets:
             if isinstance(widget, Base_Widget): widget.refresh()
 
-    def centerPosition(self):
+    def centerPosition(self, width=None, height=None):
         """ get center of a tkinter window
         """
         self.update_idletasks()
-        width  = self.winfo_width()
-        height = self.winfo_height()
-        frm_width = self.winfo_rootx() - self.winfo_x()
-        win_width = width + 2 * frm_width
-        titlebar_height = self.winfo_rooty() - self.winfo_y()
-        win_height = height + titlebar_height + frm_width
-        x = self.winfo_screenwidth() // 2 - win_width // 2
-        y = self.winfo_screenheight() // 2 - int (win_height / 1.7)
+
+        if width is None:  width  = self.winfo_width()
+        if height is None: height = self.winfo_height()
+
+        x = self.winfo_screenwidth() // 2 - width // 2
+        y = self.winfo_screenheight() // 2 - int (height / 1.7)
         return x, y
 
 

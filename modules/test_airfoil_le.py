@@ -3,7 +3,7 @@
 
 from airfoil import Airfoil 
 import numpy as np
-from airfoil_line_spline import SplineOfAirfoil, _cosinus_distribution
+from airfoil_splined import SplineOfAirfoil, _cosinus_distribution
 
 
 def le_max_curvature():
@@ -32,7 +32,7 @@ def le_max_curvature():
         # print (printName, "\t cmax: %.2f" % maxCurv, "\t", airfoil.le_fromPoints, "\t", airfoil.te_fromPoints)
         print (printName)
         print ("\t", "umax     : %.4f   curv: %.2f" % (umaxCurve, maxCurv)) 
-        print ("\t", "uLe      : %.4f   curv: %.2f" % (spl.uLe, spl.curvatureFn (spl.uLe)), "   %.6f  %.6f" %airfoil.le_fromPoints)
+        print ("\t", "uLe      : %.4f   curv: %.2f" % (spl.uLe, spl.curvatureFn (spl.uLe)), "   %.6f  %.6f" %airfoil.le)
 
         result  = fmin(lambda u : - abs(spl.curvatureFn (u)), spl.uLe, ftol=0.1, disp=False, full_output=True)
         umax = result[0][0]
@@ -91,7 +91,7 @@ def le_min_x():
         printName = airfoil.name.ljust(30)
     
         spl = SplineOfAirfoil (airfoil.x, airfoil.y)
-        xLe, yLe = airfoil.le_fromPoints
+        xLe, yLe = airfoil.le
         print (printName)
         print ("\t", "Le     x y   %.6f  %.6f" %(xLe, yLe))
 

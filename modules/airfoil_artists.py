@@ -13,11 +13,14 @@ from common_utils import *
 from airfoil import* 
 
 cl_planform         = 'whitesmoke'
+cl_spline           = 'deeppink'
+cl_helperLine       = 'orange'
 ls_curvature        = '-'
 ls_deriv3           = '--'
 ls_camber           = '--'
 ms_points           = dict(marker='o', fillstyle='none'    , markersize=4)   # marker style for points
-ms_le               = dict(marker='o'                      , markersize=6)   # marker style for leading edge
+ms_points_vline     = dict(marker='|', fillstyle='none'    , markersize=4)   # marker style for points
+ms_le               = dict(marker='o'                      , markersize=7)   # marker style for leading edge
 ms_warning          = dict(marker='o', color='orange'      , markersize=6)   # marker style for wrong points
 ms_leReal           = dict(marker='o', color='limegreen'   , markersize=6)   # marker style for real leading edge
 
@@ -54,12 +57,6 @@ class Airfoil_Artist (Artist):
     def points(self): return self._points
     def set_points (self, aBool): self._points = aBool 
 
-    @property
-    def _marker_style (self):
-        """ the marker style to show points"""
-        if self._points: return ms_points
-        else:            return dict()
-
 
     def _defaultUserTip (self):
         # overwritten in subclass"
@@ -86,24 +83,34 @@ class Airfoil_Artist (Artist):
         self._set_colorcycle (10, colormap="Paired")          # no of cycle colors - extra color for each airfoil
 
         # now plot each single airfoil
-        airfoilList = self.airfoils
-        airfoilList.append (self.airfoils[0].asNormalized)
         airfoil: Airfoil
-        for airfoil in airfoilList:
+
+        for airfoil in self.airfoils:
             if (airfoil.isLoaded):
 
-                legend = ("%s" % (airfoil.name))  
+                # line style 
+                if airfoil.isSplineAirfoil:
+                    color = cl_spline
+                else:
+                    color = self._nextColor()
 
-                x = airfoil.x
-                y = airfoil.y
+                # the marker style to show points
+                if self._points and airfoil.isSplineAirfoil:
+                    _marker_style = ms_points_vline
+                    linewidth=0.5
+                elif self._points:
+                    _marker_style = ms_points
+                    linewidth=0.5
+                    # p = self.ax.plot (airfoil.le, color= color, **ms_le)
+                    # self._add(p)
+                else:  
+                    _marker_style = dict()
+                    linewidth=1.0
 
-                color = self._nextColor()
-                linewidth=1.0
-
-                p = self.ax.plot (x, y, '-', color = color, label=legend, linewidth= linewidth, **self._marker_style)
+                # plot airfoil 
+                p = self.ax.plot (airfoil.x, airfoil.y, '-', color = color, label="%s" % (airfoil.name), 
+                                  linewidth= linewidth, **_marker_style)
                 self._add(p)
-
-                self._plot_marker (airfoil, color)
 
                 self._nextColor()                       # in colorycle are pairs 
 
@@ -118,16 +125,6 @@ class Airfoil_Artist (Artist):
         self._add(p)
         p.get_frame().set_linewidth(0.0)
 
-
-
-    def _plot_marker (self, airfoil : Airfoil, color):
-        # annotate airfoil with ... 
-
-        # highlight leading edge based on coordinates and real (based on spline) 
-        if self._points:
-            xLe, yLe = airfoil.le_fromPoints 
-            p = self.ax.plot (xLe, yLe, color= color, **ms_le)
-            self._add(p)
 
 
 
@@ -222,10 +219,9 @@ class Curvature_Artist (Airfoil_Line_Artist):
             self._add(p)
 
 
-    def _plot_marker (self, line : LineOfAirfoil, color, upper=True):
+    def _plot_marker (self, line : SideOfAirfoil, color, upper=True):
         # annotate reversals of curvature  ... 
 
-        print (line.threshold)
         reversals = line.reversals()
         if reversals:
             for i, point in enumerate(reversals): 
@@ -261,9 +257,8 @@ class Le_Artist (Artist):
         if self._points: return ms_points
         else:            return dict()
 
-
     @property
-    def airfoil (self): 
+    def airfoils (self): 
         return self.model
     
     def _plot (self): 
@@ -273,51 +268,90 @@ class Le_Artist (Artist):
         # create cycled colors 
         self._set_colorcycle (10, colormap="Paired")          # no of cycle colors - extra color for each airfoil
 
-        x = self.airfoil.x
-        y = self.airfoil.y
+        airfoil : Airfoil
 
-        color = self._nextColor()
-        linewidth=1.0
+        for airfoil in self.airfoils:
+            if (airfoil.isLoaded):
 
-        p = self.ax.plot (x, y, '-', color = color, linewidth= linewidth, **self._marker_style)
+                legend = ("%s" % (airfoil.name))  
+
+                if airfoil.isSplineAirfoil:
+                    color = cl_spline
+                else:
+                    color = self._nextColor()
+
+                linewidth=0.5
+                self._plot_le (airfoil.le, color)
+                self._plot_le_angle (airfoil)
+                self._plot_le_coordinates (airfoil)
+
+                p = self.ax.plot (airfoil.x, airfoil.y, '-', color = color, label=legend, 
+                                  linewidth= linewidth, **self._marker_style)
+                self._add(p)
+
+                self._nextColor()                       # in colorycle are pairs 
+
+
+    def _plot_le (self, le, color):
+
+        # highlight leading edge based on coordinates
+        if self.points:
+            p = self.ax.plot (le[0], le[1], color=color, **ms_le)
+            self._add(p)
+
+
+    def _plot_le_angle (self, airfoil: Airfoil):
+
+        yLim1, yLim2 = self.ax.get_ylim()
+
+        xLe, yLe = airfoil.le
+        iLe = np.nonzero(airfoil.x == xLe)[0][0]
+ 
+        # plot two lines from LE to upper and lower neighbour points 
+        xLe_before = airfoil.x [iLe-1]
+        yLe_before = airfoil.y [iLe-1]
+
+        # length of lines about 3/4 of axes height
+        dy_line = (yLim2 - yLim1)/ 3 
+
+        dx = xLe_before - xLe
+        dy = yLe_before - yLe
+        x = [xLe, xLe_before + dy_line * dx/dy]
+        y = [yLe, yLe_before + dy_line]
+        p = self.ax.plot (x,y, color = cl_helperLine, lw=0.7)
         self._add(p)
 
-        self._plot_marker (self.airfoil, color)
+        # plot angle text 
+        text = "%.1f °" % (airfoil.panelAngle_le)
+
+        p = self.ax.annotate(text, (x[1], y[1]), 
+                             xytext=(-15, 5), textcoords='offset points', color = cl_helperLine)
+        self._add (p)   
+
+        # lower line
+        xLe_after = airfoil.x [iLe+1]
+        yLe_after = airfoil.y [iLe+1]
+        dx = xLe_after - xLe
+        dy = yLe_after - yLe
+        x = [xLe, xLe_after - dy_line * dx/dy]
+        y = [yLe, yLe_after - dy_line]
+        p = self.ax.plot (x,y, color = cl_helperLine, lw=0.7)
+        self._add(p)
 
 
-    def _plot_marker (self, airfoil : Airfoil, color):
-        # annotate airfoil with ... 
 
-        # highlight leading edge based on coordinates and real (based on spline) 
-        if self._points:
+    def _plot_le_coordinates (self, airfoil: Airfoil):
 
-            # leading edge 
-            xLe, yLe = airfoil.le_splined 
-            p = self.ax.plot (xLe, yLe, **ms_leReal)
-            self._add(p)
+        xLe, yLe = airfoil.le
+        if airfoil.isSplineAirfoil:
+            text = "New "
+        else:
+            text = ""
 
-            xLe, yLe = airfoil.le_fromPoints 
-            if xLe == 0.0 and yLe ==0.0:
-                p = self.ax.plot (xLe, yLe, color=color, **ms_le)
-            else: 
-                p = self.ax.plot (xLe, yLe,              **ms_warning)
-            self._add(p)
-
-            #trailing edge
-            xTe = airfoil.x[0]
-            yTe = airfoil.y[0]
-            if xTe == 1.0 :
-                p = self.ax.plot (xTe, yTe, color=color, **ms_le)
-            else: 
-                p = self.ax.plot (xTe, yTe,              **ms_warning)
-            self._add(p)
-            xTe = airfoil.x[-1]
-            yTe = airfoil.y[-1]
-            if xTe == 1.0 and yTe == -airfoil.y[0] :
-                p = self.ax.plot (xTe, yTe, color=color, **ms_le)
-            else: 
-                p = self.ax.plot (xTe, yTe,              **ms_warning)
-            self._add(p)
+        text = text + "LE at %.7f, %.7f" % (xLe, yLe)
+        p = self.ax.annotate(text, (xLe, yLe), 
+                             xytext=(20, -4), textcoords='offset points', color = cl_helperLine)
+        self._add (p)   
 
 
 

@@ -28,8 +28,6 @@ cl_button_secondary = ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"] # 
 fs_header           = 18                          # font size header 
 def_height          = 25                          # base height in px
 def_width           = 105                         # base width in px for entry fields
-def_lab_width       = 95                          # ... for labels of enty fields
-
 
 
 #-------------------------------------------------------------------------------
@@ -299,6 +297,9 @@ class Base_Widget():
         if self.disGetter:
             self.disabled   = self.get_value (self.disGetter, self.obj, self.parent)  
             self.set_CTkControl_state ()                    # disable / enable
+        if self.spinner: 
+            self.set_CTkControl_state ()                    # spin buttons active / inactive?  
+
 
               
     #---  from / to outside - owner or object of the widget 
@@ -542,10 +543,11 @@ class Header_Widget(Base_Widget):
         Header_Widget (self, 0,0, lab='Header from val') :)
         Header_Widget (self, 0,2, lab=self.localString) :)
     """
-    def __init__(self, *args, columnspan = 1, pady=None, **kwargs):
+    def __init__(self, *args, columnspan = 1, pady=None, sticky = None, **kwargs):
         super().__init__(*args, **kwargs)
             
-        if pady is None: pady = (10,15)
+        if sticky is None: sticky = "w"
+        if pady   is None: pady = (10,15)
 
         self.mainCTk = ctk.CTkLabel (self.parent, width=self.width, text=self.label, anchor= "w", font= ("", fs_header))
         self.mainCTk.grid(row=self.row, column=self.column,  columnspan= columnspan, pady=pady, padx=(10,0), sticky="w")
@@ -572,6 +574,7 @@ class Label_Widget(Base_Widget):
         self.mainCTk.grid(row=self.row, column=self.column,  columnspan=columnspan, padx=padx, sticky=sticky)
 
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
+        widgetCTk.configure (text_color=self._text_color())
         widgetCTk.configure (text=newLabelStr)
 
 
@@ -583,10 +586,11 @@ class Button_Widget(Base_Widget):
         val or obj+getter -- val string to show or access path with obj and getter          :)
         set -- access path setter when button is pressed             :)
     """
-    def __init__(self, *args, sticky= None, pady= None, columnspan = 1, primary=False, **kwargs):
+    def __init__(self, *args, sticky= None, pady= None, padx=None, columnspan = 1, primary=False, **kwargs):
         super().__init__(*args, **kwargs)
 
         if sticky is None: sticky = 'w'
+        if padx   is None: padx = 10
         if pady   is None: pady = 0
         if primary: 
             self.fg_color = cl_button_primary
@@ -595,7 +599,7 @@ class Button_Widget(Base_Widget):
 
         self.mainCTk = ctk.CTkButton(self.parent, text=self.label, height=self.height, width=self.width, 
                                      command=self.CTk_callback)
-        self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=(10,10), pady=pady, sticky=sticky)
+        self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky=sticky)
      
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
 
@@ -713,7 +717,7 @@ class Field_Widget(Base_Widget):
             if lab_width:
                 width = lab_width
             else:
-                width= def_lab_width
+                width= 95
             label_ctk = ctk.CTkLabel (self.parent, width= width, text=self.label,  
                                       justify='left', anchor='w')
             label_ctk.grid (row=self.row, column=column, padx=(5, 5), pady=1, sticky='w')
@@ -766,7 +770,7 @@ class Field_Widget(Base_Widget):
 
     def _set_CTkControl (self,  widgetCTk, newValStr: str):
 
-        # ctk special - if field is disabed, not update is made
+        # ctk special - if field is disabed, no update is made
         #  --> enable, set, disable 
         if self.disabled: self._set_CTkControl_state (widgetCTk, False)
         widgetCTk.delete(0, "end")
