@@ -3,18 +3,124 @@
 
 """
 
-    Class Airfoil with Spline functions and operations on it 
+    Spline functions and operations on it 
 
-    This is in a sperate module which should be imported only if advanced 
-    airfoil functions are needed as this module imports heavy SciPy! 
 
 """
-import math
 import numpy as np
-from scipy.interpolate import splprep, splrep, splev
-from scipy.optimize import fmin, brentq
-from pycubicspline import Spline 
+from scipy.interpolate import splprep, splev
+from pycubicspline import Spline, Spline2D
+
+# from test_nelder-mead  import *
+
 # from airfoil import Airfoil, panel_angles 
+
+
+# ---------------------------------------------------------------------------
+# (c) https://github.com/fchollet/nelder-mead 
+# 
+# Pure Python/Numpy implementation of the Nelder-Mead optimization algorithm
+# to determine the minimum of a fuction - replaces fmin and brentq from scipy
+
+def nelder_mead(f, x_start,
+                step=0.2, no_improve_thr=10e-8,
+                no_improv_break=10, max_iter=50,
+                alpha=1., gamma=2., rho=-0.5, sigma=0.5):
+    '''
+        @param f (function): function to optimize, must return a scalar score
+            and operate over a numpy array of the same dimensions as x_start
+        @param x_start (numpy array): initial position
+        @param step (float): look-around radius in initial step
+        @no_improv_thr,  no_improv_break (float, int): break after no_improv_break iterations with
+            an improvement lower than no_improv_thr
+        @max_iter (int): always break after this number of iterations.
+            Set it to 0 to loop indefinitely.
+        @alpha, gamma, rho, sigma (floats): parameters of the algorithm
+            (see Wikipedia page for reference)
+
+        return: tuple (best parameter array, best score)
+    '''
+    import copy
+
+    # init
+    dim = len(x_start)
+    prev_best = f(x_start)
+    no_improv = 0
+    res = [[x_start, prev_best]]
+
+    for i in range(dim):
+        x = copy.copy(x_start)
+        x[i] = x[i] + step
+        score = f(x)
+        res.append([x, score])
+
+    # simplex iter
+    iters = 0
+    while 1:
+        # order
+        res.sort(key=lambda x: x[1])
+        best = res[0][1]
+
+        # break after max_iter
+        if max_iter and iters >= max_iter:
+            return res[0]
+        iters += 1
+
+        # break after no_improv_break iterations with no improvement
+        # print ('...best so far:', best)
+
+        if best < prev_best - no_improve_thr:
+            no_improv = 0
+            prev_best = best
+        else:
+            no_improv += 1
+
+        if no_improv >= no_improv_break:
+            return res[0]
+
+        # centroid
+        x0 = [0.] * dim
+        for tup in res[:-1]:
+            for i, c in enumerate(tup[0]):
+                x0[i] += c / (len(res)-1)
+
+        # reflection
+        xr = x0 + alpha*(x0 - res[-1][0])
+        rscore = f(xr)
+        if res[0][1] <= rscore < res[-2][1]:
+            del res[-1]
+            res.append([xr, rscore])
+            continue
+
+        # expansion
+        if rscore < res[0][1]:
+            xe = x0 + gamma*(x0 - res[-1][0])
+            escore = f(xe)
+            if escore < rscore:
+                del res[-1]
+                res.append([xe, escore])
+                continue
+            else:
+                del res[-1]
+                res.append([xr, rscore])
+                continue
+
+        # contraction
+        xc = x0 + rho*(x0 - res[-1][0])
+        cscore = f(xc)
+        if cscore < res[-1][1]:
+            del res[-1]
+            res.append([xc, cscore])
+            continue
+
+        # reduction
+        x1 = res[0][0]
+        nres = []
+        for tup in res:
+            redx = x1 + sigma*(tup[0] - x1)
+            score = f(redx)
+            nres.append([redx, score])
+        res = nres
 
 
 #------------ Util functions -----------------------------------
@@ -88,6 +194,9 @@ class SplineOfAirfoil:
         self._u    = None                       # the arc positionen around airfoil 0..1
         self._tck  = None                          # spline parameters - see scipy splprep 
         self._tck, self._u = splprep([x, y], s=s, k=k)
+
+        # test 
+        self._spline = Spline2D (x,y) 
 
         # leading edge 
         self.iLe  = np.argmin (x)                # index of LE in x,y and u 
@@ -234,6 +343,16 @@ class SplineOfAirfoil:
         " return the curvature at u"
 
         dx, dy   = splev(u, self._tck, der=1)
+        #test 
+        if not u is float: 
+            for i, ui in enumerate(u): 
+                dx2 = self._spline.sx.calc_d(self._spline.s[i])
+                dy2 = self._spline.sy.calc_d(self._spline.s[i])
+
+                derv  = dy[i]/dx[i]
+                derv2 = dy2/dx2
+                print ("i=",i,"   derv=", derv, "   derv2=",derv2, "   delta=", derv-derv2)
+
         ddx, ddy = splev(u, self._tck, der=2)
 
         deriv2 = dx * ddy - dy * ddx
@@ -241,6 +360,13 @@ class SplineOfAirfoil:
         # get curvature from derivative 2
         n = dx**2 + dy**2
         curv = deriv2 / n**(3./2.)
+
+        #test 
+        # if not u is float: 
+        #    for i, ui in enumerate(u): 
+        #        curv2 = self._spline.calc_curvature(self._spline.s[i])
+        #        print ("i=",i,"   curv=", curv[i], "   curv2=",curv2)
+
         return curv 
 
     def deriv1Fn (self,u): 
@@ -285,8 +411,12 @@ class SplineOfAirfoil:
 
         # first guess for Le point 
         iLeGuess = np.argmin (self._x) 
+
         # exact determination of root  = scalar product = 0.0 
-        uLe = brentq(lambda u: self.scalarProductFn(u) , self._u[iLeGuess-1] , self._u[iLeGuess+1])
+        # to get the root the abs of scalar product is taken to use nelder_meat to find minimum
+        uLe = nelder_mead(lambda u: abs(self.scalarProductFn(u)), 
+                           np.array([self._u[iLeGuess-1]]), step=0.05)[0][0]
+
         return uLe
 
 
@@ -316,8 +446,9 @@ class SplineOfAirfoil:
         y_lower = np.asarray(y_lower).round(10)
 
         # take x-distrib of upper and interpolate y_lower with these values
-        tck = splrep(x_lower, y_lower, k=3)
-        y_lower = splev(x_upper, tck, der=0) 
+        spline1D = Spline(x_lower, y_lower)
+
+        y_lower =  [spline1D.calc (xi) for xi in x_upper] 
         y_lower = np.asarray(y_lower).round(10)
 
         # thickness and camber can now easily calculated 
@@ -379,7 +510,9 @@ class SideOfAirfoil:
         self._y         = y
         self._name = name 
         self._threshold = 0.001                 # threshold for reversal dectection 
-        self._tck = splrep(x, y, k=3)           # scipy splrep spline definition  
+        
+        # replaced self._tck = splrep(x, y, k=3)           # scipy splrep spline definition  
+        self._spline = Spline (x,y)             # 1D Spline to get max values of line
 
 
     @property
@@ -426,9 +559,8 @@ class SideOfAirfoil:
         """ 
         returns the maximum y value of self and its  x position  
         """
-        # scipy only allows finding minimum - so take negative abs-function  
-        # use scipy to find the minimum
-        xmax = fmin(lambda x : - abs(self.y_interpol (x)), 0.5, disp=False)[0]
+        # nelder_mead finds the minimum - so take negative abs-function to get maximum
+        xmax = nelder_mead(lambda x : - abs(self.y_interpol (x)), np.array([0.3]))[0][0]
 
         ymax = self.y_interpol (xmax)
         return round(ymax,10), round(xmax,10) 
@@ -437,8 +569,12 @@ class SideOfAirfoil:
     def y_interpol (self,x):
         """ returns interpolated y values based on new x-distribution"""
                 
-        a = splev(x, self._tck, der=0, ext=3)
-        return a.round(10)
+        a = self._spline.calc (x)
+
+        if not a is None: 
+            a = a.round(10)
+
+        return a
 
 
 

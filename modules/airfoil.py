@@ -299,6 +299,11 @@ class Airfoil:
         cmax, cx = self.spline.camber.maximum() 
         return cx * 100
 
+    @property
+    def camber (self) -> 'SideOfAirfoil': 
+        """ return the camber line """
+        return self.spline.camber
+
     @property 
     def spline (self) -> SplineOfAirfoil:
         """ spline representation  of self - to show curvature, etc. """

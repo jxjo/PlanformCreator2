@@ -15,7 +15,7 @@ class Spline:
     Cubic Spline class
     """
 
-    def __init__(self, x, y):
+    def __init2__(self, x, y):
         self.b, self.c, self.d, self.w = [], [], [], []
 
         self.x = x
@@ -26,8 +26,8 @@ class Spline:
 
         # calc coefficient c
         self.a = [iy for iy in y]
-
-        # calc coefficient c
+ 
+         # calc coefficient c
         A = self.__calc_A(h)
         B = self.__calc_B(h)
         self.c = np.linalg.solve(A, B)
@@ -38,19 +38,71 @@ class Spline:
             tb = (self.a[i + 1] - self.a[i]) / h[i] - h[i] * \
                  (self.c[i + 1] + 2.0 * self.c[i]) / 3.0
             self.b.append(tb)
+    
+    def __init__(self, x, y=None):
+            """
+            Construct cubic spline coefficients with natural boundary condition S''(a) = 0 and S''(b) = 0
+            to approximate on appropriate interval(s).
+            Ex: for x in [x(i-1), x(i)], spline S_i(x) = a_i + b_ix + c_ix^2 + d_ix^3
+            Args:
+                x (1D array): x,y interpolation point
+                y (1D array): x,y interpolation point
+            Returns:
+                1D array: a, b, c, d are the spline coefficients: a + bx +cx^2 +dx^3
+            """
+
+            self.x = x
+            self.y = y
+
+            n = len(x)
+            a = np.zeros(n)
+            if y is None:
+                for i in range(n):
+                    a[i] = self.func(x[i])
+            else:
+                a = y
+            h, alpha, mu, l, z, c, b, d = np.zeros((8, n))
+            for i in range(n-1):
+                h[i] = x[i+1] - x[i]
+            for i in range(1, n-1):
+                alpha[i] = (3/h[i]) * (a[i+1] - a[i]) - (3/h[i-1]) * (a[i] - a[i-1])
+            l[0] = 1
+            mu[0] = 0
+            z[0] = 0
+            for i in range(1, n-1):
+                l[i] = 2*(x[i+1] - x[i-1]) - h[i-1] * mu[i-1]
+                mu[i] = h[i] / l[i]
+                z[i] = (alpha[i] - h[i-1] * z[i-1]) / l[i]
+            l[n-1] = 1
+            z[n-1] = 0
+            c[n-1] = 0
+            for j in range(n-2, -1, -1):
+                c[j] = z[j] - mu[j] * c[j+1]
+                b[j] = ((a[j+1] - a[j]) / h[j]) - (h[j] * (c[j+1] + 2*c[j])/3)
+                d[j] = (c[j+1] - c[j]) / (3*h[j])
+            self.a = a[:n]
+            self.b = b[:n]
+            self.c = c[:n]
+            self.d = d[:n]
+            
 
     def calc(self, t):
         """
         Calc position
 
-        if t is outside of the input x, return None
+        jx mod: if t is outside of the input x, return boundary value
+                # if t is outside of the input x, return None
 
         """
 
         if t < self.x[0]:
-            return None
+            # jx mod - make it more robust towards strange airfoils 
+            # return None
+            return self.y[0]
         elif t > self.x[-1]:
-            return None
+            # jx mod - make it more robust towards strange airfoils 
+            # return None
+            return self.y[-1]
         elif t == self.x[-1]:
             return self.y[-1]
 
@@ -199,7 +251,8 @@ def calc_2d_spline_interpolation(x, y, num=100):
         - s     : Path length from start point
     """
     sp = Spline2D(x, y)
-    s = np.linspace(0, sp.s[-1], num+1)[:-1]
+    # s = np.linspace(0, sp.s[-1], num+1)[:-1]
+    s = np.linspace(0, sp.s[-1] * 0.999, num)
 
     r_x, r_y, r_yaw, r_k = [], [], [], []
     for i_s in s:
@@ -218,10 +271,10 @@ def calc_2d_spline_interpolation(x, y, num=100):
 def test_spline2d():
     print("Spline 2D test")
     import matplotlib.pyplot as plt
-    input_x = [-2.5, 0.0, 2.5, 5.0, 7.5, 3.0, -1.0]
-    input_y = [0.7, -6, 5, 6.5, 0.0, 5.0, -2.0]
+    input_x = [-2.5, 0.0, 2.5, 5.0, 6.5, 3.0, -1.0]
+    input_y = [0.7, -0.1, 5, 6.5, 4.0, 5.0, -2.0]
 
-    x, y, yaw, k, travel = calc_2d_spline_interpolation(input_x, input_y, num=200)
+    x, y, yaw, k, travel = calc_2d_spline_interpolation(input_x, input_y, num=30)
 
     plt.subplots(1)
     plt.plot(input_x, input_y, "xb", label="input")
@@ -268,5 +321,5 @@ def test_spline():
 
 
 if __name__ == '__main__':
-    test_spline()
-    # test_spline2d()
+    # test_spline()
+    test_spline2d()
