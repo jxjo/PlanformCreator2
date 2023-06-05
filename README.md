@@ -13,7 +13,7 @@ An app to design a wing focusing on model sailplanes
   * Xflr5
   * FLZ_vortex
   * dxf file  - for use in CAD
-* View airfoil details and edit itsproperties (tbd) 
+* View airfoil and edit its properties 
 
 
 Inspired and partially based on the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine) - Thanks Matthias!  
@@ -26,11 +26,16 @@ Inspired and partially based on the 'Planform Creator' being part of [The Strak 
 ![PC2](images/Screenshot_Xflr5-Export.png "Screenshot of Xflr5 Export")
 
 
-### Airfoil Viewer
+## Airfoil Editor
 
-The `AirfoilViewer` shows more detailed information of an airfoil esspecially aspects of its geometry (Functions for modifying the geomtry will be implemented).
+The `AirfoilEditor` shows more detailed information of an airfoil like thickness and camber distribution or curvature of the surface. 
 
-![PC2](images/AirfoilViewer.png "Screenshot of the Airfoil Viewer ")
+![PC2](images/AirfoilEditor.png "Screenshot of the AirfoilEditor ")
+
+
+Operations like repaneling, normalizing and changing geometry parameters make extensive use of splines to achieve high precision results. 
+
+![PC2](images/AirfoilEditor_Repanel.png "Screenshot of Repaneling within AirfoilEditor")
 
 ###  Install
 
