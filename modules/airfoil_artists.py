@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env pythonupper
 # -*- coding: utf-8 -*-
 
 """  
@@ -13,16 +13,17 @@ from common_utils import *
 from airfoil import* 
 
 cl_planform         = 'whitesmoke'
-cl_spline           = 'deeppink'
+cl_editing          = 'deeppink'
 cl_helperLine       = 'orange'
 ls_curvature        = '-'
-ls_deriv3           = '--'
 ls_camber           = '--'
+ls_thickness        = ':'
 ms_points           = dict(marker='o', fillstyle='none'    , markersize=4)   # marker style for points
 ms_points_vline     = dict(marker='|', fillstyle='none'    , markersize=4)   # marker style for points
 ms_le               = dict(marker='o'                      , markersize=7)   # marker style for leading edge
 ms_warning          = dict(marker='o', color='orange'      , markersize=6)   # marker style for wrong points
 ms_leReal           = dict(marker='o', color='limegreen'   , markersize=6)   # marker style for real leading edge
+ms_point            = dict(marker='+'                      , markersize=8)   # marker style for just a point
 
 
 
@@ -89,13 +90,13 @@ class Airfoil_Artist (Artist):
             if (airfoil.isLoaded):
 
                 # line style 
-                if airfoil.isSplineAirfoil:
-                    color = cl_spline
+                if airfoil.isEdited:
+                    color = cl_editing
                 else:
                     color = self._nextColor()
 
                 # the marker style to show points
-                if self._points and airfoil.isSplineAirfoil:
+                if self._points and airfoil.isEdited:
                     _marker_style = ms_points_vline
                     linewidth=0.5
                 elif self._points:
@@ -190,27 +191,21 @@ class Curvature_Artist (Airfoil_Line_Artist):
         for airfoil in airfoilList:
             if (airfoil.isLoaded):
                 color = self._nextColor()
+                linewidth=0.8
+
                 if self.upper: 
                     line = airfoil.spline.curv_upper 
-                    legend = ("%s" % ("Upper " + line.name))  
-                    linewidth=0.8
-
-                    p = self.ax.plot (line.x, -line.y, ls_curvature, color = color, label=legend, 
+                    p = self.ax.plot (line.x, -line.y, ls_curvature, color = color, label=line.name, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
-
                     self._plot_marker (line, color, upper=True)
 
                 color = self._nextColor()
                 if self.lower: 
                     line = airfoil.spline.curv_lower 
-                    legend = ("%s" % ("Lower " + line.name))  
-                    linewidth=0.8
-
-                    p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=legend, 
+                    p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=line.name, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
-
                     self._plot_marker (line, color, upper=False)
 
         if self.upper or self.lower:
@@ -275,8 +270,8 @@ class Le_Artist (Artist):
 
                 legend = ("%s" % (airfoil.name))  
 
-                if airfoil.isSplineAirfoil:
-                    color = cl_spline
+                if airfoil.isEdited:
+                    color = cl_editing
                 else:
                     color = self._nextColor()
 
@@ -343,7 +338,7 @@ class Le_Artist (Artist):
     def _plot_le_coordinates (self, airfoil: Airfoil):
 
         xLe, yLe = airfoil.le
-        if airfoil.isSplineAirfoil:
+        if airfoil.isEdited:
             text = "New "
         else:
             text = ""
@@ -355,62 +350,7 @@ class Le_Artist (Artist):
 
 
 
-class Airfoil_Deriv3_Artist (Airfoil_Line_Artist):
-    """Plot derivative 3 line (top or bottom) of an airfoil
-    """  
-    def _plot (self): 
-
-        # create cycled colors 
-        n = len(self.airfoils)                                      
-        if not n: return 
-        self._set_colorcycle (10 , colormap="Paired")         
-
-        airfoil: Airfoil
-        for airfoil in self.airfoils:
-            if (airfoil.isLoaded):
-                color = self._nextColor()
-                linewidth=0.8
-
-                liney = airfoil.spline.deriv3
-                legend = ("%s" % ("deriv3 " ))  
-                p = self.ax.plot (airfoil.x, liney, ls_deriv3, color = 'red', label=legend, 
-                                    linewidth= linewidth, **self._marker_style)
-                self._add(p)
-
-
-                # liney = airfoil.spline.deriv3_b
-                # legend = ("%s" % ("deriv3_b " ))  
-                # p = self.ax.plot (airfoil.x, liney, ls_deriv3, color = 'green', label=legend, 
-                #                     linewidth= linewidth, **self._marker_style)
-                # self._add(p)
-
-
-
-                if self.upper: 
-                    line = airfoil.spline.deriv3_upper
-                    legend = ("%s" % ("Upper " + line.name))  
-
-                    p = self.ax.plot (line.x, - line.y, ls_deriv3, color = color, label=legend, 
-                                      linewidth= linewidth, **self._marker_style)
-                    self._add(p)
-
-                color = self._nextColor()
-                if self.lower: 
-                    line = airfoil.spline.deriv3_lower 
-                    legend = ("%s" % ("Lower " + line.name))  
-
-                    p = self.ax.plot (line.x, line.y, ls_deriv3, color = color, label=legend, 
-                                      linewidth= linewidth, **self._marker_style)
-                    self._add(p)
-
-        if self.upper or self.lower:
-            p = self.ax.legend(labelcolor=cl_labelGrid, loc='lower right', bbox_to_anchor=(0.995,0.02))
-            # p.get_frame().set_edgecolor(cl_labelGrid)
-            p.get_frame().set_linewidth(0.0)
-            self._add(p)
-
-
-class Airfoil_Camber_Artist (Airfoil_Line_Artist):
+class Thickness_Artist (Airfoil_Line_Artist):
     """Plot camber line of an airfoil
     """
     @property
@@ -427,13 +367,48 @@ class Airfoil_Camber_Artist (Airfoil_Line_Artist):
         airfoil: Airfoil
         for airfoil in self.airfoils:
             if (airfoil.isLoaded ):
-                    line = airfoil.camber
-                    legend = ("%s" % (line.name))  
-                    color = self._nextColor()
+                    
+                    if airfoil.isEdited:
+                        color = cl_editing
+                    else:
+                        color = self._nextColor()
                     linewidth=0.8
 
-                    p = self.ax.plot (line.x, line.y, ls_camber, color = color, label=legend, linewidth= linewidth)
+                    # plot camber line
+                    p = self.ax.plot (airfoil.camber.x, airfoil.camber.y, ls_camber, color = color, 
+                                      linewidth= linewidth, **self._marker_style, label="%s" % (airfoil.camber.name))
                     self._add(p)
 
+                    # plot thickness distribution line
+                    p = self.ax.plot (airfoil.thickness.x, airfoil.thickness.y, ls_thickness, color = color, 
+                                      linewidth= linewidth, **self._marker_style, label="%s" % (airfoil.thickness.name))
+                    self._add(p)
                     self._nextColor()                       # in colorycle are pairs 
+
+                    self._plot_max_val(airfoil.maxThicknessX, airfoil.maxThickness, airfoil.isModified, color)
+                    self._plot_max_val(airfoil.maxCamberX,    airfoil.maxCamber,    airfoil.isModified, color)
+
+        # show legend 
+        p = self.ax.legend(labelcolor=cl_labelGrid,)
+        p.get_frame().set_linewidth(0.0)
+        self._add(p)
+
+
+    def _plot_max_val (self, x, y, isNew, color):
+
+        x, y = x /100 , y / 100
+        if isNew:
+            text = "New "
+            color = cl_helperLine
+        else:
+            text = ""
+            color = color
+        p = self.ax.plot (x, y, color=color, **ms_point)
+        self._add(p)
+
+        if isNew:
+            p = self.ax.annotate(text + "%.2f%% at %.2f%%" % (y * 100, x *100), (x, y), 
+                                xytext=(3, 3), textcoords='offset points', color = cl_helperLine)
+            self._add (p)   
+
 

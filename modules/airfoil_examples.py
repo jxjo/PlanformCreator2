@@ -17,12 +17,9 @@ class Example_Airfoil (Airfoil):
     isExample = True
 
     def __init__(self):
-        # super().__init__()
-        """Abstract superclass for exmaple airfoils
+        super().__init__()
+        """Abstract superclass for example airfoils
         """
-        self._x       = None
-        self._y       = None
-        self._spline  = None                    # upper surface line object 
 
         self.pathFileName = None
         self.load ()
@@ -41,8 +38,8 @@ class Example_Airfoil (Airfoil):
         file_lines = self._getCoordinates ()
         self._loadLines (file_lines)
 
-        # tmp ? 
-        self.pathFileName = self.name + '.dat'
+        # class name to identify example airfoil from code  
+        self.pathFileName = self.__class__.__name__
 
 
 class Root_Example (Example_Airfoil):

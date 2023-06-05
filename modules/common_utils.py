@@ -34,7 +34,7 @@ def ErrorMsg(message):
     my_print(colored('\nError: ', 'red') + message)
 
 def WarningMsg(message):
-    my_print(colored('\nWarning: ', 'yellow') + message+ '\n')
+    my_print(colored('Warning: ', 'yellow') + message)
 
 def NoteMsg(message):
     my_print(colored('Note: ', 'cyan') + message)

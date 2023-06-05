@@ -30,7 +30,7 @@ from pathlib import Path
 # let python find the other modules in the dir of self  
 sys.path.append(Path(__file__).parent)
 from common_utils       import *
-from airfoil            import Airfoil, Airfoil_Straked
+from airfoil            import Airfoil
 from airfoil_examples   import Root_Example, Tip_Example
 
 
@@ -1964,7 +1964,8 @@ class WingSection:
             elif self.isTip:
                 airfoil = Tip_Example()
             else:
-                airfoil = Airfoil_Straked()
+                airfoil = Airfoil(name="<strak>")
+                airfoil.set_isStrakAirfoil (True)
 
         self.airfoil = airfoil 
 

@@ -300,8 +300,15 @@ class Base_Widget():
         if self.spinner: 
             self.set_CTkControl_state ()                    # spin buttons active / inactive?  
 
+    def force_set (self):
+        """ write back the current value of the widgets via setter.
+        Can be used to ensure the current value is handled without "Return" being pressed  
+        """
 
-              
+        self.CTk_callback ()
+        self.set_value()
+
+
     #---  from / to outside - owner or object of the widget 
  
     def get_value(self, getter, obj, parent):
@@ -328,7 +335,7 @@ class Base_Widget():
 
 
     def set_value(self):
-        """write the current value of the widget to object via getter path
+        """write the current value of the widget to object via setter path
         """
         if not self.obj and not self.parent: raise ValueError ("Object for setter path is missing")
         if not self.setter: raise ValueError ("Getter path is missing")
@@ -626,9 +633,14 @@ class Button_Widget(Base_Widget):
             widgetCTk.configure (fg_color =self.fg_color )
 
 
-
     def refresh(self):
+        """ overloaded """
+        if self._styleGetter :                  #  new text style for button? 
+            self.set_CTkControl_state ()
+
         return super().refresh()
+    
+
 
 class Switch_Widget(Base_Widget):
     """CTKSwitch - uses one column in the grid
@@ -809,7 +821,6 @@ class Field_Widget(Base_Widget):
         curCTk_state = widgetCTk.cget("state")
         if disable: 
             if curCTk_state == "normal":
-                pass
                 widgetCTk.configure (state ="disabled" )         # "normal" (standard) or "disabled" (not clickable, darker color)
                 widgetCTk.configure (text_color = self._text_color('Disabled'))
         else: 
@@ -915,8 +926,10 @@ class Option_Widget(Base_Widget):
             newIndex = values.index (curVal) 
             if newIndex < (len(self.options) -1) :
                 newIndex += 1
-        except: newIndex = 0
-        self._set_CTkControl (self.mainCTk, str(self.options[newIndex]))
+            self._set_CTkControl (self.mainCTk, str(self.options[newIndex]))
+        except: 
+            pass
+
         self.set_CTkControl_state ()
         self.CTk_callback ('dummyEvent')
 
@@ -925,10 +938,11 @@ class Option_Widget(Base_Widget):
         values = self.options
         try:    
             newIndex = values.index (curVal) 
-            if newIndex > 0:
-                newIndex -= 1
-        except: newIndex = 0
-        self._set_CTkControl (self.mainCTk, str(self.options[newIndex]))
+            if newIndex > 0: newIndex -= 1
+            self._set_CTkControl (self.mainCTk, str(self.options[newIndex]))
+        except: 
+            pass
+
         self.set_CTkControl_state ()
         self.CTk_callback ('dummyEvent')
 
@@ -944,7 +958,9 @@ class Option_Widget(Base_Widget):
                 curIndex = self.options.index (self._getFrom_CTkControl ()) 
                 nextDisabled = nextDisabled or (curIndex >= (len(self.options) -1))
                 prevDisabled = prevDisabled or (curIndex == 0)
-            except: pass
+            except: 
+                prevDisabled = True
+                nextDisabled = True
 
             self._set_CTkControl_state (self.prevCTk, prevDisabled)
             self._set_CTkControl_state (self.nextCTk, nextDisabled)

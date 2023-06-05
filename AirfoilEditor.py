@@ -44,8 +44,8 @@ from modules.airfoil_artists    import *
 
 #------------------------------------------------
 
-AppName    = "Airfoil Viewer"
-AppVersion = "0.6.1"
+AppName    = "Airfoil Editor"
+AppVersion = "0.7.0"
 
 #------------------------------------------------
 
@@ -55,7 +55,6 @@ cl_background               = '#101010'                     # background color i
 
 AIRFOIL_NEW                 = "<<AIRFOIL_NEW>>"                #tk event types
 AIRFOIL_CHANGED             = "<<AIRFOIL_CHANGED>>"
-AIRFOIL_REPANELED           = "<<AIRFOIL_REPANELED>>"
 
 ctk_root : ctk.CTk = None                                   # root event handler
 
@@ -122,45 +121,38 @@ class Edit_Airfoil_Data(Edit_Abstract):
 
         r, c = 0, 0 
         self.add (Header_Widget (self,r,c,   width= 70, columnspan= 2, lab=self.name))
-        self.add (Field_Widget  (self,r,c+2, columnspan= 8 ,lab=None, obj=self.airfoil, get='name', set='set_name',
-                                 lab_width=1, event=AIRFOIL_CHANGED, width=255, justify='left'))
+        self.add (Button_Widget  (self,r,c+3, lab='Modify geometry', width=110, padx= (30,0), columnspan=4, sticky='w', 
+                                set=self.modify_airfoil ))
 
         r += 1
         Blank_Widget (self, r,0)    
         c += 1                                  # left blank colum to inset the fields 
+        self.add (Field_Widget  (self,r,c, columnspan= 8 ,lab='Name', obj=self.airfoil, get='name',
+                                 width=190, lab_width=80, justify='left'))
+        r += 1
         self.add (Field_Widget  (self,r,c,   lab="Thickness", obj=self.airfoil, 
-                                get='maxThickness', set='', 
-                                spin=True, width=95, lab_width=70, unit="%", dec=2, disable= True))
-        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
-                                get='maxThicknessX', set='', 
-                                spin=True, width=95, unit="%", dec=2, disable= True))
+                                get='maxThickness', width=50, lab_width=80, unit="%", dec=2))
+        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=40, obj=self.airfoil, 
+                                get='maxThicknessX', width=50, unit="%", dec=2))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="Camber", obj=self.airfoil, 
-                                get='maxCamber', set='', 
-                                spin=True, width=95, lab_width=70, unit="%", dec=2, disable= True))
-        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
-                                get='maxCamberX', set='', 
-                                spin=True, width=95, unit="%", dec=2, disable= True))
-
+                                get='maxCamber', width=50, lab_width=80, unit="%", dec=2))
+        self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=40, obj=self.airfoil, 
+                                get='maxCamberX', width=50, unit="%", dec=2))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="TE gap", obj=self.airfoil, 
-                                get='teGapPercent', set='', 
-                                spin=True, width=95, lab_width=70, unit="%", dec=2, disable= True))
-        r += 1
-        Blank_Widget (self, r,c)
-
-        r += 1
-        self.add(Label_Widget  (self,r, c, columnspan=9, padx= 5, text_style = 'Warning',
-                                lab= lambda: self.messageText()))
+                                get='teGap', width=50, lab_width=80, unit="%", dec=2))
  
-    def messageText (self): 
-        text = []
-        if  self.airfoil().maxThickness != self.airfoil().maxThickness:     # test for nan value 
-            text.append("The airfoil has erronous coordinates - can't spline.")
-        
-        text = '\n'.join(text)
-        return text 
 
+    def modify_airfoil (self): 
+        """ Open thickness and camber dialog - if 'OK' the modified airfoil will be inserted to the list 
+        of airfoils and set to current """
+
+        dialog = Dialog_Thickness (self, self._airfoilFn )
+        self.wait_window (dialog)
+
+        if dialog.return_OK: 
+            self.myApp.add_toAirfoilFiles (dialog.return_newAirfoilPathFileName)
 
 
 class Edit_Curvature(Edit_Abstract):
@@ -172,7 +164,6 @@ class Edit_Curvature(Edit_Abstract):
     def __init__(self, master, airfoilFn, *args, **kwargs):
 
         self._curvature_threshold = None
-        self._deriv3_threshold    = None
 
         super().__init__(master, airfoilFn, *args, **kwargs)
 
@@ -183,57 +174,35 @@ class Edit_Curvature(Edit_Abstract):
         self._curvature_threshold = aVal
         self.airfoil().spline.curv_upper.set_threshold(aVal)
         self.airfoil().spline.curv_lower.set_threshold(aVal)
-        # fireEvent (AIRFOIL_CHANGED)
     
-    @property
-    def deriv3_threshold (self): 
-        return self._deriv3_threshold
-    def _set_deriv3_threshold (self, aVal):
-        self._deriv3_threshold    = aVal
-        self.airfoil().spline.deriv3_upper.set_threshold(aVal)
-        self.airfoil().spline.deriv3_lower.set_threshold(aVal)
-        # fireEvent (AIRFOIL_CHANGED)
-
 
     def init (self):
 
         self._curvature_threshold = self.airfoil().spline.curv_upper.threshold
-        self._deriv3_threshold    = self.airfoil().spline.deriv3_upper.threshold
 
         r, c = 0, 0 
         self.add (Header_Widget (self,r,c,   width=90, lab=self.name, columnspan= 2))
-        self.add (Label_Widget  (self,r,c+2, padx=0, width=70, lab='Reversals', columnspan= 2))
-        self.add (Label_Widget  (self,r,c+4, padx=0, width=70, lab='Spikes', columnspan= 2))
-
         c += 6
         self.add(Button_Widget  (self,r,c, lab='Smooth', width=80, padx= 0, columnspan=2, sticky='w', 
-                                 set=self.smooth_airfoil ))
-
+                                 disable=True, set=self.smooth_airfoil ))
 
         r = 1
         Blank_Widget (self, r,0)                # left blank column to inset the fields 
         c = 1                                  
-        self.add (Field_Widget  (self,r,c,   lab="Upper side", get=lambda: len(self.airfoil().spline.curv_upper.reversals()),
-                                width=60, lab_width=80, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r,c+3,   get=lambda: len(self.airfoil().spline.deriv3_upper.reversals()),
-                                width=60,               set='', dec=0, disable= True))
+        self.add (Field_Widget  (self,r,c,   lab="Reversals Upper", get=lambda: len(self.airfoil().spline.curv_upper.reversals()),
+                                width=60, lab_width=90, set='', dec=0, disable= True))
         r += 1
-        self.add (Field_Widget  (self,r,c, lab="Lower side", get=lambda: len(self.airfoil().spline.curv_lower.reversals()), 
-                                width=60, lab_width=80, set='', dec=0, disable= True))
-        self.add (Field_Widget  (self,r,c+3, get=lambda: len(self.airfoil().spline.deriv3_lower.reversals()), 
-                                width=60,               set='', dec=0, disable= True))
+        self.add (Field_Widget  (self,r,c, lab="Reversals lower", get=lambda: len(self.airfoil().spline.curv_lower.reversals()), 
+                                width=60, lab_width=90, set='', dec=0, disable= True))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="... threshold", get=lambda: self.curvature_threshold, 
                                 set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
                                 width=60, lab_width=80, lim=(0,1), dec=1, spin=False, step=0.1))
-        self.add (Field_Widget  (self,r,c+3, get=lambda: self.deriv3_threshold, 
-                                set=self._set_deriv3_threshold, event=AIRFOIL_CHANGED, 
-                                width=60,               lim=(0,10), dec=1, spin=False, step=0.2))
+
 
     def refresh(self): 
         #overloaded to set threshold in airfoils for reversal calculation 
         self._set_curvature_threshold (self.curvature_threshold)
-        self._set_deriv3_threshold (self.deriv3_threshold)
         super().refresh()
 
     def smooth_airfoil (self): 
@@ -258,28 +227,27 @@ class Edit_Panels(Edit_Abstract):
 
         r, c = 0, 0 
         self.add (Header_Widget (self,r,c, width= 70, lab=self.name, columnspan= 2))
-        c += 2
-        self.add (Field_Widget  (self,r,c, get=lambda: len(self.airfoil().x) -1,
-                                 width=50, lab_width=0, dec=0, text_style=lambda: self.style('no')))
-        c += 2
-        self.add(Button_Widget  (self,r,c, lab='Repanel', width=80, padx= 0, columnspan=2, sticky='w', 
-                                 set=self.repanel_airfoil ))
+        self.add (Button_Widget  (self,r,c+3, lab='Repanel', width=80, padx= (10,0), columnspan=2, sticky='w', 
+                                 set=self.repanel_airfoil, text_style=lambda: self.style_repanel() ))
 
         r += 1
         Blank_Widget (self, r,0)    
         c = 1                                  # left blank column to inset the fields 
+        self.add (Field_Widget  (self,r,c,   lab="No of panels", get=lambda: self.airfoil().nPanels,
+                                 width=50, lab_width=0, dec=0, text_style=lambda: self.style('no')))
+        r += 1
         self.add (Field_Widget  (self,r,c,   lab="Angle at LE", get=lambda: self.airfoil().panelAngle_le, 
                                  width=50,   lab_width=80, unit="°", dec=0, text_style=lambda: self.style('le_angle')))
         self.add(Label_Widget   (self,r,c+3, columnspan=2, padx= 0,  
-                                 lab= lambda: "at index %d" % self.airfoil().le_i))
+                                 lab= lambda: "at index %d" % self.airfoil().iLe))
 
-        r += 2
+        r += 1
         self.add (Field_Widget  (self,r,c,   lab="Angle min", get=lambda: self.airfoil().panelAngle_min[0], 
                                  width=50,   lab_width=80, unit="°", dec=0, text_style=lambda: self.style('min_angle')))
         self.add(Label_Widget   (self,r,c+3, columnspan=2, padx= 0,  
                                  lab= lambda: "at index %d" % self.airfoil().panelAngle_min[1]))
         r += 1
-        Blank_Widget (self, r,c, height=42)
+        Blank_Widget (self, r,c)
         r += 1
         self.add(Label_Widget   (self,r, c, columnspan=9, padx= 5, text_style = 'Warning',
                                  lab= lambda: self.messageText()))
@@ -300,8 +268,6 @@ class Edit_Panels(Edit_Abstract):
             text.append("- Leading edge has 2 points")
         if airfoil.nPanels < 160 or airfoil.nPanels > 260: 
             text.append("- No of panels should be > 160 and < 260")
-        if not text == []:
-            text.append("\nRepanel airfoil")
         
         text = '\n'.join(text)
         return text 
@@ -318,6 +284,10 @@ class Edit_Panels(Edit_Abstract):
         elif panel =="no":
             if airfoil.nPanels < 160 or airfoil.nPanels > 260 : return 'Warning'
 
+    def style_repanel (self): 
+        """ text style of the repanel button"""
+        if len(self.messageText()) > 0: 
+            return 'Warning'
 
     def repanel_airfoil (self): 
         """ Open repanel dialog - if 'OK' the new repaneled airfoil will be insert to the list 
@@ -343,10 +313,7 @@ class Edit_Coordinates(Edit_Abstract):
         self.add (Header_Widget (self,r,c,   width=95, lab=self.name, columnspan= 2))
         c += 3
         self.add(Button_Widget  (self,r,c, lab='Normalize', width=80, padx= (10,0), columnspan=2, sticky='w', 
-                                 set=self.normalize_airfoil ))
-
-        # self.add (Label_Widget  (self,r,c+2, padx=0, lab='     x', width=30))
-        # self.add (Label_Widget  (self,r,c+4, padx=0, lab='     y', width=30))
+                                 set=self.normalize_airfoil, text_style=lambda: self.style_normalize() ))
 
         r = 1
         Blank_Widget (self, r,0)    
@@ -366,12 +333,6 @@ class Edit_Coordinates(Edit_Abstract):
                                  width=80, lab_width=90, dec=7, text_style=lambda: self.style('te_x')))
         self.add (Field_Widget  (self,r,c+3,                      get=lambda: self.airfoil().te_fromPoints[3],
                                  width=80,               dec=7, text_style=lambda: self.style('te_y')))
-
-        # r += 1
-        # self.add (Field_Widget  (self,r,c,   lab="LE splined", get=lambda: self.airfoil().le[0],
-        #                          width=80,   lab_width=90, dec=7, text_style = self.le_splined_style))
-        # self.add (Field_Widget  (self,r,c+3,                     get=lambda: self.airfoil().le[1],
-        #                          width=80,                 dec=7, text_style = self.le_splined_style))
 
         r += 1
         Blank_Widget (self, r,c)
@@ -398,15 +359,13 @@ class Edit_Coordinates(Edit_Abstract):
             text.append("- Leading edge is not at 0,0")
         if airfoil.te_fromPoints[0] != 1.0 or airfoil.te_fromPoints[2] != 1.0 : 
            text.append("- Trailing edge is not at 1")
-        if not text == []:
-            text.append("\nNormalize airfoil")
         
         text = '\n'.join(text)
         return text 
     
 
     def style (self, coord): 
-
+        """ text style of entry fields"""
         airfoil = self.airfoil()
 
         if   coord =="le_x":
@@ -420,6 +379,13 @@ class Edit_Coordinates(Edit_Abstract):
             if airfoil.te_fromPoints[3] != - airfoil.te_fromPoints[1] : return 'Warning'
 
 
+    def style_normalize (self): 
+        """ text style of the normalize button"""
+        if len(self.messageText()) > 0: 
+            return 'Warning'
+
+
+
 #-------------------------------------------------------------------------------
 # Diagrams   
 #-------------------------------------------------------------------------------
@@ -427,7 +393,7 @@ class Edit_Coordinates(Edit_Abstract):
 
 class Diagram_Abstract(ctk.CTkFrame):
     """ 
-    Abstract super class of the specific plot frames like "Plot_Planform"
+    Abstract super class of the specific plot frames like "Diagram_Airfoil"
     """
     name        = "This is the plot super class"
     defaultTip  = "Use switches ...."
@@ -481,7 +447,7 @@ class Diagram_Abstract(ctk.CTkFrame):
             Label_Widget (self.view_frame, row, 0, lab='Pan and zoom')
             row +=1
             self.toolbar = Plot_Toolbar(self.canvas, self.view_frame)
-            self.toolbar.grid (row=row+2, column=0, columnspan= 2, sticky='ew', padx=10, pady=(0,10))
+            self.toolbar.grid (row=row+2, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,10))
 
         # react on changes of model
         self.setChangeBindings ()
@@ -520,7 +486,7 @@ class Diagram_Abstract(ctk.CTkFrame):
         """ define on/off switches ffor this plot type"""
 
         row = 0 
-        Header_Widget (self.view_frame,row,col, lab='View', width=80)
+        Header_Widget (self.view_frame,row,0, columnspan=2, lab='View')
 
         row += 1 
         Switch_Widget (self.view_frame,row,col, padx=10, lab='Grid', 
@@ -543,7 +509,7 @@ class Diagram_Abstract(ctk.CTkFrame):
 
 class Diagram_Airfoil (Diagram_Abstract):
     """ 
-    plots the airfoils of all wing sections
+    plots the airfoil and curvature  of all wing sections
     """
     name = "Airfoils"
 
@@ -562,21 +528,13 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.ax1.set_xlim([-0.05,1.05])
         self.ax1.axis('equal')
 
-
         # curvature
-        # self.ax2.set_ylabel('curvature', color=self.cl_text)
         self.ax2.tick_params (labelsize='small')
         self.ax2.set_xlim([-0.05,1.05])
         self.ax2.set_ylim([ 5, -5.0])
         self.ax2.set_aspect('auto', 'datalim')
         self.ax2.grid (axis='x')
         self.ax2.axhline(0, color=self.cl_labelGrid, linewidth=0.5)
-
-        self.ax2Twin = self.ax2.twinx()
-        # self.ax2Twin.set_ylabel('3rd derivative', color=self.cl_text)
-        self.ax2Twin.tick_params (labelsize='small')
-        self.ax2Twin.set_ylim([ -100,  100])
-        # mirrorax2 = ax2.get_shared_x_axes().get_siblings(ax2)[0]
 
 
     def setup_artists(self):
@@ -587,10 +545,9 @@ class Diagram_Airfoil (Diagram_Abstract):
         # airfoil is list to prepare for future multiple airfoils to view 
         
         self.airfoilArtist   = Airfoil_Artist        (self.ax1,     [self._airfoilFn], show=True)
-        self.camberArtist    = Airfoil_Camber_Artist (self.ax1,     [self._airfoilFn], show=False)
+        self.camberArtist    = Thickness_Artist (self.ax1,     [self._airfoilFn], show=False)
         # self.curvArtist      = Airfoil_Curv_Artist   (self.ax2,     [self._airfoilFn], show=True)
         self.curvatureArtist = Curvature_Artist      (self.ax2,     [self._airfoilFn], show=True)
-        self.deriv3Artist    = Airfoil_Deriv3_Artist (self.ax2Twin, [self._airfoilFn], show=False)
 
 
     def setup_Switches(self, row=0, col=0):
@@ -600,8 +557,6 @@ class Diagram_Airfoil (Diagram_Abstract):
 
         self._set_upper (True) 
         self._set_lower (True) 
-
-        disableNotNormalized = not self.airfoil.isNormalized
 
         row += 1
         Switch_Widget (self.view_frame,row,col, padx=10, lab='Points',
@@ -616,18 +571,15 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.view_frame.grid_rowconfigure(row, weight=2)
 
         row += 1
+        Switch_Widget (self.view_frame,row,col, padx=10, lab='Curvature', disable= True,
+                       get=lambda: self.curvatureArtist.show, set=self.curvatureArtist.set_show)
+        row += 1
         Switch_Widget (self.view_frame,row,col, padx=10, lab='Upper side', 
                        get=lambda: self.curvatureArtist.upper, set=self._set_upper)
         row += 1
         Switch_Widget (self.view_frame,row,col, padx=10, lab='Lower side',
                        get=lambda: self.curvatureArtist.lower, set=self._set_lower)
 
-        row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Curvature', 
-                       get=lambda: self.curvatureArtist.show, set=self.curvatureArtist.set_show)
-        row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='3rd derivative', 
-                       get=lambda: self.deriv3Artist.show, set=self.deriv3Artist.set_show)
 
         row += 1
         Blank_Widget (self.view_frame,row,col)
@@ -641,17 +593,14 @@ class Diagram_Airfoil (Diagram_Abstract):
     def _set_points (self, aBool):
         self.airfoilArtist.set_points(aBool)
         self.curvatureArtist.set_points(aBool)
-        self.deriv3Artist.set_points(aBool)
         self.refresh()
 
     def _set_upper (self, aBool):
         self.curvatureArtist.set_upper(aBool)
-        self.deriv3Artist.set_upper(aBool)
         self.refresh()
 
     def _set_lower (self, aBool):
         self.curvatureArtist.set_lower(aBool) 
-        self.deriv3Artist.set_lower(aBool)
         self.refresh()
 
     # -------- event handler
@@ -671,7 +620,6 @@ class Diagram_Airfoil (Diagram_Abstract):
         # overloaded
         self.airfoilArtist.refresh ()  
         self.camberArtist.refresh ()  
-        self.deriv3Artist.refresh ()  
         self.curvatureArtist.refresh ()  
 
         self.figure.canvas.draw_idle()    # draw ony if Windows is idle!
@@ -743,6 +691,65 @@ class Diagram_LeTe_Mini (Diagram_Abstract):
         self.ax1.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
 
+class Diagram_Thickness_Mini (Diagram_Abstract):
+    """ 
+    plots the airfoil to change thickness and camber in mini format
+    """
+    name = "Thickness and Camber"
+
+    def create_axes (self):
+        """ setup 3 axes for airfoil, thickness and camber """
+
+        from matplotlib.gridspec import GridSpec
+
+        gs = GridSpec(2, 1)
+        self.ax1 = self.figure.add_subplot(gs[:-1, :])          # top, full   - airfoil
+        self.ax2 = self.figure.add_subplot(gs[ -1, :])          # lower, full - thickness
+
+        self.figure.subplots_adjust(left=0.02, bottom=0.08, right=0.98, top=0.97, wspace=0.07, hspace=0.15)
+
+    def setup_axes(self):
+        """ setup axes, axis, artiss for this plot type """
+
+        # airfoil contour 
+        self.ax1.tick_params (labelbottom=True, labelleft=False, labelsize='small')
+        self.ax1.axis('equal')
+        self.ax1.autoscale(enable=True, axis='both')
+        # self.ax1.set_ylim([-0.02,0.02])
+        # self.ax1.set_xlim([-0.001,0.005])
+        # self.ax1.set_xlim([0.96,1.001])
+        self.ax1.grid ()
+
+        # thickness line
+        self.ax2.tick_params (labelbottom=True, labelleft=False, labelsize='small')
+        self.ax2.axis('equal')
+        self.ax2.autoscale(enable=True, axis='both')
+        # self.ax2.set_ylim([0,0.01])
+        # self.ax2.set_xlim([-0.001,0.02])
+        # self.ax2.set_xlim([0.96,1.001])
+        self.ax2.grid ()
+
+
+    def setup_artists(self):
+        """ artists are not set automatically - set from outside """
+        pass
+
+    def setup_Switches(self, row=0, col=0):
+        """ no switches"""
+        return row, col
+
+    # -------- event handler
+
+    # refresh handled in App 
+
+    # -------- refresh my Artists which are on 'show mode' 
+
+    def refresh(self): 
+        # overloaded
+
+        self.ax1.figure.canvas.draw_idle()    # draw ony if Windows is idle!
+
+
 
 class Edit_File_Menu(Edit_Abstract):
     """ 
@@ -759,9 +766,11 @@ class Edit_File_Menu(Edit_Abstract):
         # file selection with buttons - takes 2 rows
         self.add(Option_Widget (self,1,0, get=self.curAirfoilFileName, set=self.set_curAirfoilFileName,
                                           options=self.airfoilFileNames,
-                                          spin=True, spinPos='below', width=100, padx=10, pady=4, sticky = 'ew',))
+                                          spin=True, spinPos='below', width=150, padx=10, pady=4, sticky = 'ew',))
         self.add(Button_Widget (self,3,0, lab='Open',        width=100, pady=4, sticky = 'ew', set=self.myApp.open))
         self.add(Button_Widget (self,4,0, lab='Save As...',  disable=True, width=100, pady=4, sticky = 'ew', set=self.myApp.saveAs))
+
+        Blank_Widget (self,5,0,  height= 40)
 
     def airfoilFileNames (self): 
 
@@ -856,46 +865,168 @@ class Dialog_Abstract (ctk.CTkToplevel):
         return x, y
 
 
-
-#-------------------------------------------
-
-class Dialog_Repanel (Dialog_Abstract):
+class Dialog_Airfoil_Abstract (Dialog_Abstract):
     """ 
-    Dialog to repanel airfoil  
+    Superclass for modal dialog to modify airfoil properties  
+    having 
+
+        header_frame    - which is empty 
+        diagramm_frame  - ! which is not initialized !
+        input_frame     - which is empty 
+        button_frame    - with default buttons SaveAs, Ok, Cancel 
+
     """
+    def __init__(self, master, airfoilFn, workingDir=None, nameExt='-mod', *args, **kwargs):
+        super().__init__(master, *args, **kwargs)
 
-    width  = 1450
-    height = 700
+        self.airfoilOrg : Airfoil = airfoilFn()
+        self.airfoilOrg._spline = None              # ensure a new, clean spline (leSpline) 
 
-    def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, *args, height=self.height/2, **kwargs)
+        self.airfoil  = Airfoil.asCopy (self.airfoilOrg, nameExt=nameExt) 
 
-        self.airfoil : Airfoil = airfoilFn()
-        self.airfoilSplined  = Airfoil_Splined (self.airfoil) 
-        self.airfoilSplined.repanel()               # using default values 
-
-        self.title ("Repanel airfoil  [" + self.airfoil.name + "]")
+        # input field will fire this event when data is changed
+        self.change_event = AIRFOIL_CHANGED
 
         self.return_newAirfoilPathFileName = None   # return value for parent
 
-        self.showRepaneled = True 
-
-
-        # main grid 4 x 1  (preview + edit + buttons) 
+        # main grid 4 x 1  (header , diagram, inputs, default-buttons ) 
         self.header_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         self.header_frame.grid(row=0, column=0, sticky="nwe", padx=0, pady=(10,10))
 
-        self.diagram_frame = Diagram_LeTe_Mini (self.edit_frame, self.airfoilListFn, size=(8,4.8))
+        # dummy for diagram
+        self.diagram_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent") 
         self.diagram_frame.grid(row=1, column=0, sticky="nwe")
 
         self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         self.input_frame.grid(row=2, column=0, sticky="nwe", padx=40, pady=10)
 
         self.button_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
-        self.button_frame.grid(row=3, column=0, sticky="wes", pady=10)
+        self.button_frame.grid(row=3, column=0, sticky="wes", padx=40, pady=20)
 
         self.edit_frame.grid_columnconfigure (0, weight=1)
         self.edit_frame.grid_rowconfigure    (3, weight=1)
+
+
+        # new airfoil name and default buttons commonly defined  
+        r,c = 0,0  
+        self.nameWidget = Field_Widget  (self.button_frame,r,c, lab="New Airfoil name", 
+                                 obj=self.airfoil, get='name', set='set_name',
+                                 lab_width=130, width=220, justify='left')
+        c += 3
+        Label_Widget (self.button_frame,r,c+8, text_style='Warning',
+                                lab= lambda: self._save_warning(), width= 110)
+        c += 2
+        Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, primary=True, width=100)
+        c += 1 
+        Button_Widget (self.button_frame,r,c, lab='Ok', set=self.ok, primary=True, width=100)
+        c += 1 
+        Button_Widget (self.button_frame,r,c, lab='Cancel', set=self.cancel, width=100)
+        self.button_frame.grid_columnconfigure (9, weight=1)
+
+        # changed bindings
+        ctk_root.bind(self.change_event, self.refresh, add='+')
+
+
+    def _save_warning (self): 
+        if self.airfoil.isModified: 
+            return "Airfoil not saved"
+        else: 
+            return ""
+
+
+    def save(self): 
+        """ save modified airfoil to file """
+        
+        # ensure user entry in name field is set to airfoil
+        self.nameWidget.force_set() 
+
+        filetypes  = [('Airfoil files', '*.dat')]
+        initialDir, airfoilFileName = os.path.split(self.airfoilOrg.pathFileName)
+        newPathFilename = filedialog.asksaveasfilename(title='Save airfoil',
+                                     initialdir=initialDir, filetypes=filetypes,
+                                     initialfile=self.airfoil.name,
+                                     defaultextension = '.dat')
+        if newPathFilename: 
+
+            airfoilPath, airfoilFileName = os.path.split(newPathFilename)
+            # maybe user changed name when saving to file? 
+            airfoilName = os.path.splitext(airfoilFileName)[0]
+
+            self.airfoil.apply_repanel ()
+
+            try: 
+                self.airfoil.saveAs (airfoilPath, airfoilName)
+            except: 
+                message = "Airfoil name not valid.\n\nAirfoil could not be saved"
+                msg = Messagebox (self, title="Save", message=message, icon="cancel", option_1="Ok")
+                msg.get()                # wait until pressed ok
+
+            self.refresh('')
+
+
+    def cancel(self): 
+        # changed bindings
+        ctk_root.unbind(self.change_event)
+        super().cancel()
+
+
+    def ok(self): 
+        """ saves modified airfoil and returns to parent with filename of the new, modified airfoil"""
+
+        exitDialog = True 
+
+        # ensure user entry in name field is set to airfoil
+        self.nameWidget.force_set() 
+
+        # save in directory of original airfoil with new name  
+        if self.airfoil.isModified: 
+            airfoilDir = os.path.split(self.airfoilOrg.pathFileName)[0]
+            if airfoilDir == '': 
+                airfoilDirMSG = 'Current directory'
+            else:
+                airfoilDirMSG = airfoilDir
+
+            try: 
+                self.airfoil.saveAs (dir = airfoilDir)
+                message = "Airfoil '%s'\n\nsaved to\n\n%s" % (self.airfoil.name, airfoilDirMSG )
+                msg = Messagebox (self, title="Save", message=message, icon="check", option_1="Ok")
+            except: 
+                message = "Airfoil name not valid.\n\nAirfoil could not be saved"
+                msg = Messagebox (self, title="Save", message=message, icon="cancel", option_1="Ok")
+                exitDialog = False
+            msg.get()                # wait until pressed ok
+
+        if exitDialog:
+            # return value for parent
+            self.return_newAirfoilPathFileName = self.airfoil.pathFileName
+
+            # release changed bindings and close
+            ctk_root.unbind(self.change_event)
+            super().ok()
+
+
+#-------------------------------------------
+
+class Dialog_Repanel (Dialog_Airfoil_Abstract):
+    """ 
+    Dialog to repanel airfoil  
+    """
+
+    width  = 1450
+    height = 650
+
+    def __init__(self, master, airfoilFn, *args, **kwargs):
+        super().__init__(master, airfoilFn, *args, nameExt='-repan', height=self.height/2, **kwargs)
+
+        # start with a repaneld airfoil  using default values 
+        self.airfoil.repanel()               
+
+        self.title ("Repanel airfoil  [" + self.airfoil.name + "]")
+        self.showRepaneled = True 
+
+        # set specific diagram frame for this dialog 
+        self.diagram_frame = Diagram_LeTe_Mini (self.edit_frame, self.airfoilListFn, size=(7.0,4.0))
+        self.diagram_frame.grid(row=1, column=0, sticky="nwe")
 
         # artists for preview in diagram_frame
         self.airfoilArtist  = Airfoil_Artist (self.diagram_frame.ax2, self.airfoilListFn, show=True)
@@ -930,64 +1061,45 @@ class Dialog_Repanel (Dialog_Abstract):
         c = 0 
         self.add (Field_Widget (self.input_frame,r,c, lab="Leading edge bunch", lab_width=130, 
                                 width=100, 
-                                obj=self.airfoilSplined, get='le_bunch', set='set_le_bunch',
-                                event=AIRFOIL_REPANELED, lim=(0,1), dec=2, spin=True, step=0.02))
+                                obj=self.airfoil, get='le_bunch', set='set_le_bunch',
+                                event=self.change_event, lim=(0,1), dec=2, spin=True, step=0.02))
         self.add (Label_Widget (self.input_frame,r,c+3, text_style=self.le_bunch_message_style,
                                 lab= lambda: self.le_bunch_message(), columnspan = 1, width= 250))
 
         self.add (Field_Widget (self.input_frame,r,c+4, lab="Trailing edge bunch", lab_width=130, 
                                 width=100,
-                                obj=self.airfoilSplined, get='te_bunch', set='set_te_bunch',
-                                event=AIRFOIL_REPANELED, lim=(0,1), dec=2, spin=True, step=0.02))
+                                obj=self.airfoil, get='te_bunch', set='set_te_bunch',
+                                event=self.change_event, lim=(0,1), dec=2, spin=True, step=0.02))
 
         r +=1 
         Blank_Widget (self.input_frame,r,c,  height= 10)
         r +=1 
         self.add (Field_Widget (self.input_frame,r,c  , lab="No of panels", width=100,
-                                obj=self.airfoilSplined, get='nPanels', set='set_nPanels',
-                                event=AIRFOIL_REPANELED, lim=(50,500), dec=0, spin=True, step=10))
+                                obj=self.airfoil, get='nPanelsNew', set='set_nPanelsNew',
+                                event=self.change_event, lim=(50,500), dec=0, spin=True, step=10))
         self.add (Label_Widget (self.input_frame,r,c+3  , columnspan = 1, 
-                                lab= lambda: "equals %d points" % self.airfoilSplined.nPoints))
-
-        self.add (Field_Widget  (self.input_frame,r,c+4, columnspan= 3 ,lab="New Airfoil name", 
-                                 obj=self.airfoilSplined, get='name', set='set_name',
-                                 width=255, justify='left'))
-        self.add (Label_Widget (self.input_frame,r,c+8, text_style='Warning',
-                                lab= lambda: self.save_warning(), columnspan = 1, width= 110))
-
+                                lab= lambda: "equals %d points" % self.airfoil.nPoints))
 
         self.input_frame.grid_columnconfigure (8, weight=2)
 
-        # buttons on extra frame 
-        r = 0 
-        c = 1 
-        self.add(Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, primary=True, width=100))
-        c += 1 
-        self.add(Button_Widget (self.button_frame,r,c, lab='Ok', set=self.ok, primary=True, width=100))
-        c += 1 
-        self.add(Button_Widget (self.button_frame,r,c, lab='Cancel', set=self.cancel, width=100))
-        self.button_frame.grid_columnconfigure (0, weight=1)
-        self.button_frame.grid_columnconfigure (5, weight=1)
-
-        # changed bindings
-        ctk_root.bind(AIRFOIL_REPANELED, self.refresh, add='+')
+        # buttons are defined in super class 
 
     # ---- 
 
     def airfoilListFn (self):
         if self.showRepaneled: 
-            return [self.airfoilSplined]
+            return [self.airfoil]
         else: 
             return [self.airfoil]
-    
+
+
     def set_showRepaneled (self, aBool):
         self.showRepaneled = aBool
         self.refresh ('') 
 
+
     def le_bunch_message (self): 
-
-        angle = self.airfoilSplined.panelAngle_le
-
+        angle = self.airfoil.panelAngle_le
         if angle > 170.0: 
             text = "Angle at LE is too blunt. Decrease bunch" 
         elif angle < 155.0: 
@@ -998,35 +1110,11 @@ class Dialog_Repanel (Dialog_Abstract):
             
 
     def le_bunch_message_style (self): 
-
-        angle = self.airfoilSplined.panelAngle_le
+        angle = self.airfoil.panelAngle_le
         if angle > 170.0 or angle < 155.0: 
             return 'Warning'
         else: 
             return 'Disabled'
-        
-    def save_warning (self): 
-
-        if self.airfoilSplined.isModified: 
-            return "Airfoil not saved"
-        else: 
-            return ""
-
-    def save(self): 
-        """ save repaneled airfoil to file """
-        filetypes  = [('Airfoil files', '*.dat')]
-        initialDir, airfoilFileName = os.path.split(self.airfoilSplined.pathFileName)
-        newPathFilename = filedialog.asksaveasfilename(title='Save airfoil',
-                                     initialdir=initialDir, filetypes=filetypes,
-                                     initialfile=self.airfoilSplined.name,
-                                     defaultextension = '.dat')
-        if newPathFilename: 
-            airfoilPath, airfoilFileName = os.path.split(newPathFilename)
-            # maybe user changed name when saving to file? 
-            airfoilName = os.path.splitext(airfoilFileName)[0]
-            self.airfoilSplined.apply_repanel ()
-            self.airfoilSplined.saveAs (airfoilPath, airfoilName)
-            self.refresh('')
 
 
     def refresh(self, dummy):
@@ -1036,208 +1124,271 @@ class Dialog_Repanel (Dialog_Abstract):
         super().refresh()
 
 
-
-    def cancel(self): 
-        # changed bindings
-        ctk_root.unbind(AIRFOIL_REPANELED)
-        super().cancel()
-
-    def ok(self): 
-
-        # save in directory of original airfoil with new name  
-        if self.airfoilSplined.isModified: 
-            airfoilDir = os.path.split(self.airfoilSplined.pathFileName)[0]
-            self.airfoilSplined.saveAs (dir = airfoilDir)
-
-            message = "Airfoil '%s'\n\nsaved to\n\n%s" % (self.airfoilSplined.name, airfoilDir )
-            msg = Messagebox (self, title="Save", message=message, icon="check", option_1="Ok")
-            msg.get()  
-                                         # wait until pressed ok
-
-        # return value for parent
-        self.return_newAirfoilPathFileName = self.airfoilSplined.pathFileName
-
-        # release changed bindings and close
-        ctk_root.unbind(AIRFOIL_REPANELED)
-        super().ok()
+#-------------------------------------------
 
 
-
-class Dialog_Normalize (Dialog_Abstract):
+class Dialog_Normalize (Dialog_Airfoil_Abstract):
     """ 
     Dialog to normalize airfoil
     """
 
-    width  = 700
-    height = 350
+    width  = 840
+    height = 370
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, *args, height=self.height/2, **kwargs)
+        super().__init__(master, airfoilFn, *args, nameExt='-norm', height=self.height/2, **kwargs)
 
-        self.airfoil : Airfoil = airfoilFn()
-        self.airfoilNorm : Airfoil_Normalized = self.airfoil.asNormalized()
+        # start with a normalized airfoil 
+        self.airfoil.normalize(highPrec = True)
 
         self.title ("Noramlize airfoil  [" + self.airfoil.name + "]")
 
-        self.return_newAirfoilPathFileName = None   # return value for parent
-
-
-        # main grid 4 x 1  (preview + edit + buttons) 
-        self.header_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
-        self.header_frame.grid(row=0, column=0, sticky="nwe", padx=0, pady=(10,10))
-
-        self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
-        self.input_frame.grid(row=1, column=0, sticky="nwe", padx=40, pady=10)
-
-        self.button_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
-        self.button_frame.grid(row=2, column=0, sticky="wes", pady=(30,10))
-
-        self.edit_frame.grid_columnconfigure (0, weight=1)
-        self.edit_frame.grid_rowconfigure    (3, weight=1)
+        self.diagram_frame.grid_remove()                # not neeeded here
 
         # Header 
         c = 0 
         r = 0 
         Header_Widget (self.header_frame,r,c, pady=0, lab= "Normalize Airfoil", sticky = 'nw', width=100)
         
-        Label_Widget  (self.header_frame,r, c+1, padx= 20, sticky = 'nw', columnspan=1,
-                        lab= "For normalizing the airfoil is shifted, rotated and scaled\n" + \
-                        "so LE will be at 0,0 and TE is symmetric at 1,y.")
+        Label_Widget  (self.header_frame,r, c+1, padx= 20, sticky = 'nw', columnspan = 1, 
+                        lab= "The airfoil is shifted, rotated and scaled\n" + \
+                             "so LE will be at 0,0 and TE is symmetric at 1,y.")
+        Label_Widget  (self.header_frame,r, c+2, padx= 10, sticky = 'nw', columnspan = 1,
+                        lab= "Within an iteration the leading edge of the spline should\n" + \
+                             "get close to 0,0 (to numerical issues mostly not exactly).")
 
-        self.header_frame.grid_columnconfigure (2, weight=1)
+        self.header_frame.grid_columnconfigure (3, weight=1)
 
-        # fields normalized
-        r = 0 
-        c = 0 
+        # fields 
+        r,c = 0,0 
+        Blank_Widget (self.input_frame, r,c, height=20)
+        r += 1
         self.add (Label_Widget (self.input_frame,r,c+1, padx=0, lab="Normalized x", columnspan = 2))
         self.add (Label_Widget (self.input_frame,r,c+3, padx=0, lab="y"))
 
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab="Leading edge", get=lambda: self.airfoilNorm.le[0],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab="Leading edge", get=lambda: self.airfoil.le[0],
+                                 width=80, lab_width=130, dec=7))
+        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoil.le[1],
                                  width=80, dec=7))
-        self.add (Field_Widget  (self.input_frame,r,c+3,                     get=lambda: self.airfoilNorm.le[1],
-                                 width=80,                 dec=7))
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab="Trailing edge", get=lambda: self.airfoilNorm.te_fromPoints[0],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ... of spline", get=lambda: self.airfoil.spline.leSpline[0],
+                                 width=80, lab_width=130, dec=7))
+        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoil.spline.leSpline[1],
                                  width=80, dec=7))
-        self.add (Field_Widget  (self.input_frame,r,c+3,                      get=lambda: self.airfoilNorm.te_fromPoints[1],
-                                 width=80,                 dec=7))
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab=" " ,            get=lambda: self.airfoilNorm.te_fromPoints[2],
+        Blank_Widget (self.input_frame, r,c, height=15)
+        r += 1
+        self.add (Field_Widget  (self.input_frame,r,c,   lab="Trailing edge", get=lambda: self.airfoil.te_fromPoints[0],
                                  width=80, dec=7))
-        self.add (Field_Widget  (self.input_frame,r,c+3,                      get=lambda: self.airfoilNorm.te_fromPoints[3],
-                                 width=80,                 dec=7))
+        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoil.te_fromPoints[1],
+                                 width=80, dec=7))
+        r += 1
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" " , get=lambda: self.airfoil.te_fromPoints[2],
+                                 width=80, dec=7))
+        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoil.te_fromPoints[3],
+                                 width=80, dec=7))
 
-
-        # fields original 
-        r = 0 
+        # fields original airfoil
+        r = 1 
         c = 5 
         self.add (Label_Widget (self.input_frame,r,c+1, padx=0, lab="Original x", columnspan = 2))
         self.add (Label_Widget (self.input_frame,r,c+3, padx=0, lab="y"))
 
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoil.le[0],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoilOrg.le[0],
                                  width=80,   lab_width=60, dec=7, text_style=lambda: self.style('le_x')))
-        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoil.le[1],
+        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoilOrg.le[1],
                                  width=80, dec=7,                 text_style=lambda: self.style('le_y')))
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoil.te_fromPoints[0],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoilOrg.spline.leSpline[0],
+                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.style('leSpline_x')))
+        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoilOrg.spline.leSpline[1],
+                                 width=80, dec=7,                 text_style=lambda: self.style('leSpline_y')))
+
+        r += 2
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoilOrg.te_fromPoints[0],
                                  width=80,   lab_width=60, dec=7, text_style=lambda: self.style('te_x')))
-        self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.airfoil.te_fromPoints[1],
+        self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.airfoilOrg.te_fromPoints[1],
                                  width=80,                 dec=7, text_style=lambda: self.style('te_y')))
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoil.te_fromPoints[2],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoilOrg.te_fromPoints[2],
                                  width=80,   lab_width=60, dec=7, text_style=lambda: self.style('te_x')))
-        self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.airfoil.te_fromPoints[3],
+        self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.airfoilOrg.te_fromPoints[3],
                                  width=80,                 dec=7, text_style=lambda: self.style('te_y')))
 
-
-        c = 0 
-        r +=1 
-        Blank_Widget (self.input_frame,r,c,  height= 40)
-        r +=1 
-        self.add (Field_Widget  (self.input_frame,r,c, columnspan= 6 ,lab="New airfoil name", 
-                                 obj=self.airfoilNorm, get='name', set='set_name',
-                                 width=255, justify='left'))
-        self.add (Label_Widget (self.input_frame,r,c+6, text_style='Warning',
-                                lab= lambda: self.save_warning(), columnspan = 2, width= 110))
-
         self.input_frame.grid_columnconfigure (9, weight=2)
+        self.input_frame.grid_rowconfigure (0, weight=1)
 
-        # buttons on extra frame 
-        r = 0 
-        c = 1 
-        self.add(Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, primary=True, width=100))
-        c += 1 
-        self.add(Button_Widget (self.button_frame,r,c, lab='Ok', set=self.ok, primary=True, width=100))
-        c += 1 
-        self.add(Button_Widget (self.button_frame,r,c, lab='Cancel', set=self.cancel, width=100))
-        self.button_frame.grid_columnconfigure (0, weight=1)
-        self.button_frame.grid_columnconfigure (5, weight=1)
-
-        # changed bindings
-        ctk_root.bind(AIRFOIL_REPANELED, self.refresh, add='+')
-
-    # ---- 
         
     def style (self, coord): 
-
         if   coord =="le_x":
-            if self.airfoil.le[0] != 0.0 : return 'Warning'
+            if self.airfoilOrg.le[0] != 0.0 : return 'Warning'
         elif coord =="le_y":
-            if self.airfoil.le[1] != 0.0 : return 'Warning'
+            if self.airfoilOrg.le[1] != 0.0 : return 'Warning'
+        elif coord =="leSpline_x":
+            if not self.airfoilOrg.spline.isLe_closeTo_leSpline : return 'Warning'
+        elif coord =="leSpline_y":
+            if not self.airfoilOrg.spline.isLe_closeTo_leSpline : return 'Warning'
         elif coord =="te_x":
-            if self.airfoil.te_fromPoints[0] != 1.0 or \
-               self.airfoil.te_fromPoints[2] != 1.0 : return 'Warning'
+            if self.airfoilOrg.te_fromPoints[0] != 1.0 or \
+               self.airfoilOrg.te_fromPoints[2] != 1.0 : return 'Warning'
         elif coord =="te_y":
-            if self.airfoil.te_fromPoints[3] != - self.airfoil.te_fromPoints[1] : return 'Warning'
+            if self.airfoilOrg.te_fromPoints[3] != - self.airfoil.te_fromPoints[1] : return 'Warning'
 
-    def save_warning (self): 
 
-        if self.airfoilNorm.isModified: 
-            return "Airfoil not saved"
+#-------------------------------------------
+
+
+class Dialog_Thickness (Dialog_Airfoil_Abstract):
+    """ 
+    Dialog to change thickness, camber or TE gap of airfoil  
+    """
+
+    width  = 1250
+    height = 800
+
+    def __init__(self, master, airfoilFn, *args, **kwargs):
+        super().__init__(master, airfoilFn, *args, nameExt='-mod', height=self.height/2, **kwargs)
+
+        self.airfoil.set_isEdited (True)            # will indicate airfoil when plotted 
+
+        # the airfoil must be / will be normalized for geometry modifications
+        if not self.airfoil.isNormalized: 
+            self.airfoil.normalize (highPrec=True)  # will normalize also spline LE to 0,0
+            wasNormalized = True
+        else:
+            wasNormalized = False
+
+        self.title ("Modify airfoil  [" + self.airfoil.name + "]")
+
+        self.showOriginal = True 
+        self._chord = 200.0                         # sample chord length for showing airfoil parms
+
+        # set specific diagram frame for this dialog 
+        self.diagram_frame = Diagram_Thickness_Mini (self.edit_frame, self.airfoilListFn, size=(7.0,5))
+        self.diagram_frame.grid(row=1, column=0, sticky="nwe")
+
+        # artists for preview in diagram_frame
+        self.airfoilArtist = Airfoil_Artist (self.diagram_frame.ax1, self.airfoilListFn, show=True)
+        self.airfoilArtist.refresh(figureUpdate=True)
+
+        self.thickArtist   = Thickness_Artist (self.diagram_frame.ax2, self.airfoilListFn, show=True)
+        self.thickArtist.refresh(figureUpdate=True)
+
+
+        # Header 
+        c = 0 
+        r = 0 
+        Header_Widget (self.header_frame,r,c, pady=0, lab= "Modify geometry", sticky = 'nw', width=100)
+        
+        Switch_Widget (self.header_frame,r,c+1, padx=(30,30), lab='Show original airfoil',
+                       get=lambda: self.showOriginal, set=self.set_showOriginal)
+
+        Label_Widget  (self.header_frame,r, c+2, padx= 20, sticky = 'nw', columnspan=1,
+                        lab= "For geometry modifications a spline is created with the existing points.\n" + \
+                             "Thickness and camber distribution is precisely evaluated based on the spline.")
+        Label_Widget  (self.header_frame,r, c+3, padx= 20,  sticky = 'nw', columnspan=1,
+                        lab= "If thickness or camber is modified, the airfoil will be\n" + \
+                             "repaneled and normalized to ensure exact results.")
+
+        self.header_frame.grid_columnconfigure (4, weight=1)
+
+        # input fields normalized  airfoil 
+
+        r = 0 
+        c = 0 
+        if wasNormalized: 
+            Label_Widget (self.input_frame,r,c, padx=5, lab= "Normalized, modified airfoil", columnspan = 3,
+                          text_style="Warning")
+        else:
+            Label_Widget (self.input_frame,r,c, padx=5, lab= "New, modified airfoil", columnspan = 2)
+
+        r += 1
+        Blank_Widget (self.input_frame, r,10, height=5)
+        r += 1
+        self.add (Field_Widget  (self.input_frame,r,c,   lab="Thickness", obj=self.airfoil, 
+                                get='maxThickness', set='set_maxThickness', step=0.1, 
+                                spin=True, width=95, lab_width=70, unit="%", dec=2,
+                                event=self.change_event))
+        self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
+                                get='maxThicknessX', set='set_maxThicknessX', step=0.5, 
+                                spin=True, width=95, unit="%", dec=2,
+                                event=self.change_event))
+        r += 1
+        self.add (Field_Widget  (self.input_frame,r,c,   lab="Camber", obj=self.airfoil, 
+                                get='maxCamber', set='set_maxCamber', disable= 'isSymmetric',  
+                                spin=True, width=95, lab_width=70, unit="%", dec=2, step=0.1,
+                                event=self.change_event))
+        self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
+                                get='maxCamberX', set='set_maxCamberX', disable= 'isSymmetric',  
+                                spin=True, width=95, unit="%", dec=2, step=0.5,
+                                event=self.change_event))
+        r += 1
+        self.add (Field_Widget  (self.input_frame,r,c,   lab="TE gap", obj=self.airfoil, 
+                                get='teGap', set='set_teGap', step=0.1,
+                                spin=True, width=95, lab_width=70, unit="%", dec=2,
+                                event=self.change_event))
+
+        # fields for chord length xy mm 
+
+        r = 0 
+        c = 8 
+        Label_Widget  (self.input_frame,r,c , padx=5, lab= "... with a chord length of", columnspan = 3)
+        self.add (Field_Widget  (self.input_frame,r,c+4, obj=self, get='chord', set='set_chord', 
+                                width=50, unit="mm", dec=0))
+        r += 1
+        Blank_Widget (self.input_frame, r,10, height=5)
+        r += 1
+
+        self.add (Field_Widget  (self.input_frame,r,c,   lab="Thickness", 
+                                get=lambda: self.airfoil.maxThickness * self.chord / 100,  
+                                width=50, lab_width=70, unit="mm", dec=1, disable= True))
+        self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20,  
+                                get=lambda: self.airfoil.maxThicknessX * self.chord / 100, 
+                                width=50, unit="mm", dec=1, disable= True))
+        r += 1
+        self.add (Field_Widget  (self.input_frame,r,c,   lab="Camber",  
+                                get=lambda: self.airfoil.maxCamber * self.chord / 100, 
+                                width=50, lab_width=70, unit="mm", dec=1, disable= True))
+        self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
+                                get=lambda: self.airfoil.maxCamberX * self.chord / 100, 
+                                width=50, unit="mm", dec=1, disable= True))
+
+        r += 1
+        self.add (Field_Widget  (self.input_frame,r,c,   lab="TE gap",  
+                                get=lambda: self.airfoil.teGap * self.chord / 100,  
+                                width=50, lab_width=70, unit="mm", dec=2, disable= True))
+
+        self.input_frame.grid_columnconfigure (7,  weight=1)
+        self.input_frame.grid_columnconfigure (14, weight=2)
+
+        # ---- buttons in super class
+
+    @property                               
+    def chord (self):                            # sample chord length 
+        return self._chord
+    def set_chord (self, aVal): 
+        if aVal > 0: self._chord= aVal
+        super().refresh()
+
+
+    def airfoilListFn (self):
+        if self.showOriginal: 
+            return [self.airfoilOrg, self.airfoil]
         else: 
-            return ""
-
-    def save(self): 
-        """ save normalized airfoil to file """
-        filetypes  = [('Airfoil files', '*.dat')]
-        initialDir, airfoilFileName = os.path.split(self.airfoilNorm.pathFileName)
-        newPathFilename = filedialog.asksaveasfilename(title='Save airfoil',
-                                     initialdir=initialDir, filetypes=filetypes,
-                                     initialfile=self.airfoilNorm.name,
-                                     defaultextension = '.dat')
-        if newPathFilename: 
-            airfoilPath, airfoilFileName = os.path.split(newPathFilename)
-            # maybe user changed name when saving to file? 
-            airfoilName = os.path.splitext(airfoilFileName)[0]
-            self.airfoilNorm.saveAs (airfoilPath, airfoilName)
-            self.refresh('')
+            return [self.airfoil]
 
 
-    def cancel(self): 
-        # changed bindings
-        ctk_root.unbind(AIRFOIL_REPANELED)
-        super().cancel()
+    def set_showOriginal (self, aBool):
+        self.showOriginal = aBool
+        self.refresh ('') 
+                    
 
-
-    def ok(self): 
-
-        # save in directory of original airfoil with new name  
-        if self.airfoilNorm.isModified: 
-            airfoilDir = os.path.split(self.airfoilNorm.pathFileName)[0]
-            self.airfoilNorm.saveAs (dir = airfoilDir)
-
-            message = "Airfoil '%s'\n\nsaved to\n\n%s" % (self.airfoilNorm.name, airfoilDir )
-            msg = Messagebox (self, title="Save", message=message, icon="check", option_1="Ok")
-            msg.get()                       # wait until pressed ok
-                                         
-        # return value for parent
-        self.return_newAirfoilPathFileName = self.airfoilNorm.pathFileName
-
-        # release changed bindings and close
-        ctk_root.unbind(AIRFOIL_REPANELED)
-        super().ok()
+    def refresh(self, dummy):
+        self.thickArtist.refresh(figureUpdate=True)
+        self.airfoilArtist.refresh(figureUpdate=True)
+        super().refresh()
 
 
 
@@ -1259,13 +1410,13 @@ class App(ctk.CTk):
         self.curAirfoilFile = None
 
         if not airfoilFiles:
-            self.loadNewAirfoil ("", airfoil=Root_Example() )
+            self.airfoilFiles.append ("Root_Example")
         else: 
             if not type(airfoilFiles) == list: 
                 self.airfoilFiles.append (airfoilFiles)
             else:
                 self.airfoilFiles = airfoilFiles
-            self.loadNewAirfoil (self.airfoilFiles[0])
+        self.loadNewAirfoil (self.airfoilFiles[0])
 
         self.title (AppName + "  v" + str(AppVersion) + "  [" + self.curAirfoil().name + "]")
         # intercept app close by user  
@@ -1285,12 +1436,12 @@ class App(ctk.CTk):
         # create main frames        
         switches_frame = ctk.CTkFrame     (self, height=350)
         diagram_frame  = Diagram_Airfoil  (self, self.curAirfoil, fg_color= cl_background, view_frame=switches_frame)
-        edit_frame     = ctk.CTkFrame     (self, height=200)
+        edit_frame     = ctk.CTkFrame     (self, height=350)
         file_frame     = Edit_File_Menu   (self, self.curAirfoil)
 
         # maingrid 2 x 2 - diagram on top, file and edit on bottom
-        self.grid_rowconfigure   (0, weight=0)
-        self.grid_rowconfigure   (1, weight=1)
+        self.grid_rowconfigure   (0, weight=2)
+        self.grid_rowconfigure   (1, weight=0)
         self.grid_columnconfigure(1, weight=1)
         switches_frame.grid  (row=0, column=0, pady=(0,5), padx=(5,3), ipady=5,sticky="news")
         diagram_frame.grid   (row=0, column=1, pady=0, padx=0, sticky="news")
@@ -1302,16 +1453,16 @@ class App(ctk.CTk):
         edit_frame.grid_columnconfigure   (3, weight=1)
 
         edit_Airfoil_frame    = Edit_Airfoil_Data   (edit_frame, self.curAirfoil)
-        edit_Airfoil_frame.grid   (row=0, column=0, pady=5, padx=5, sticky="news")
+        edit_Airfoil_frame.grid   (row=0, column=0, pady=5, padx=5, ipadx=10, sticky="news")
 
         edit_Curvature_frame  = Edit_Panels (edit_frame, self.curAirfoil)
-        edit_Curvature_frame.grid (row=0, column=1, pady=5, padx=5, sticky="news")
+        edit_Curvature_frame.grid (row=0, column=1, pady=5, padx=5, ipadx=10, sticky="news")
 
         edit_Curvature_frame  = Edit_Coordinates (edit_frame, self.curAirfoil)
-        edit_Curvature_frame.grid (row=0, column=2, pady=5, padx=5, sticky="news")
+        edit_Curvature_frame.grid (row=0, column=2, pady=5, padx=5, ipadx=10, sticky="news")
 
         edit_Curvature_frame  = Edit_Curvature (edit_frame, self.curAirfoil)
-        edit_Curvature_frame.grid (row=0, column=3, pady=5, padx=5, sticky="news")
+        edit_Curvature_frame.grid (row=0, column=3, pady=5, padx=5, ipadx=10, sticky="news")
 
 
     def curAirfoil (self) -> Airfoil:
@@ -1331,8 +1482,9 @@ class App(ctk.CTk):
 
         try: 
             curIndex = self.airfoilFiles.index (self.curAirfoil().pathFileName)
+            
             if not aPathFileName in self.airfoilFiles: 
-                self.airfoilFiles.insert (curIndex+1, aPathFileName)
+                self.airfoilFiles.insert (curIndex + 1, aPathFileName)
             self.loadNewAirfoil (aPathFileName)
         except: 
             ErrorMsg ("Could not add %s to airfoil list" % aPathFileName )
@@ -1349,7 +1501,7 @@ class App(ctk.CTk):
                     initialdir=os.getcwd(),
                     filetypes=filetypes)
         if newPathFilenames:                       # user pressed open
-            self.airfoilFiles = newPathFilenames
+            self.airfoilFiles = list(newPathFilenames)
             self.loadNewAirfoil (self.airfoilFiles[0])
 
     def save (self):
@@ -1364,7 +1516,10 @@ class App(ctk.CTk):
         """loads and sets a new wing model returns - updates title """
 
         if airfoil is None: 
-            airfoil = Airfoil(pathFileName=pathFilename)
+            if pathFilename == "Root_Example":
+                airfoil = Root_Example()
+            else:
+                airfoil = Airfoil(pathFileName=pathFilename)
         airfoil.load()
 
         self.curAirfoilFile = airfoil.pathFileName
@@ -1391,6 +1546,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog=AppName, description='Show and edit (tbd) an airfoil')
     parser.add_argument("airfoil", nargs='*', help="Airfoil .dat file to show")
     args = parser.parse_args()
+
     if args.airfoil: 
         airfoil_files = args.airfoil[0]
         if not os.path.isfile (airfoil_files):
@@ -1398,12 +1554,11 @@ if __name__ == "__main__":
             sys.exit(1)
     else: 
         NoteMsg ("No airfoil file as argument. Showing example airfoil...")
-        airfoil_files = ".\\examples\\vjx.glide\\JX-GP-055.dat"        # test / demo 
-        # myFile = ".\\modules\\test_airfoils\\MH32.dat"        # test / demo 
+        airfoil_files = None
+        # airfoil_dir   =".\\modules\\test_airfoils"
+        # airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
+        # airfoil_files = sorted (airfoil_files)
 
-    airfoil_dir =".\\modules\\test_airfoils"
-    airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
-    airfoil_files = sorted (airfoil_files)
     myApp = App(airfoil_files)
     myApp.mainloop()
  
