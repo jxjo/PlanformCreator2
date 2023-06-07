@@ -72,7 +72,104 @@ def panel_angles (x,y):
     angles = 180.0 - angles * (180/np.pi)
     return angles 
 
+#------------ Bisection - find Root  -----------------------------------
 
+
+def bisection(f,a,b,N, tolerance=None):
+    '''Approximate solution of f(x)=0 on interval [a,b] by bisection method.
+
+    Parameters
+    ----------
+    f : function
+        The function for which we are trying to approximate a solution f(x)=0.
+    a,b : numbers
+        The interval in which to search for a solution. The function returns
+        None if f(a)*f(b) >= 0 since a solution is not guaranteed.
+    N : (positive) integer
+        The number of iterations to implement.
+
+    Returns
+    -------
+    x_N : number
+        The midpoint of the Nth interval computed by the bisection method. The
+        initial interval [a_0,b_0] is given by [a,b]. If f(m_n) == 0 for some
+        midpoint m_n = (a_n + b_n)/2, then the function returns this solution.
+        If all signs of values f(a_n), f(b_n) and f(m_n) are the same at any
+        iteration, the bisection method fails and return None.
+    '''
+    # from https://patrickwalls.github.io/mathematicalpython/root-finding/root-finding/
+
+    if   abs(f(a)) < 10e-10 : return a, 0
+    elif abs(f(b)) < 10e-10 : return b, 0
+    elif f(a)*f(b) > 0:
+        print("Bisection method fails.", a, f(a), b, f(b))
+        return None, 0
+    a_n = a
+    b_n = b
+    for n in range(1,N+1):
+        m_n = (a_n + b_n)/2
+        if not tolerance is None and abs(a_n - b_n) < tolerance:
+            return m_n, n 
+        f_m_n = f(m_n)
+        if f(a_n)*f_m_n < 0:
+            a_n = a_n
+            b_n = m_n
+        elif f(b_n)*f_m_n < 0:
+            a_n = m_n
+            b_n = b_n
+        elif f_m_n == 0:
+            print("Found exact solution.")
+            return m_n, n
+        else:
+            print("Bisection method fails.")
+            return None
+
+    return (a_n + b_n)/2, n
+
+
+#------------ Newton iteration - find Root  -----------------------------------
+
+def newton(f,Df,x0,epsilon,max_iter):
+    '''Approximate solution of f(x)=0 by Newton's method.
+
+    Parameters
+    ----------
+    f : function
+        Function for which we are searching for a solution f(x)=0.
+    Df : function
+        Derivative of f(x).
+    x0 : number
+        Initial guess for a solution f(x)=0.
+    epsilon : number
+        Stopping criteria is abs(f(x)) < epsilon.
+    max_iter : integer
+        Maximum number of iterations of Newton's method.
+
+    Returns
+    -------
+    xn : number
+        Implement Newton's method: compute the linear approximation
+        of f(x) at xn and find x intercept by the formula
+            x = xn - f(xn)/Df(xn)
+        Continue until abs(f(xn)) < epsilon and return xn.
+        If Df(xn) == 0, return None. If the number of iterations
+        exceeds max_iter, then return None.
+    '''
+    # from https://patrickwalls.github.io/mathematicalpython/root-finding/root-finding/
+
+    xn = x0
+    for n in range(0,max_iter):
+        fxn = f(xn)
+        if abs(fxn) < epsilon:
+            print('Found solution after',n,'iterations.')
+            return xn
+        Dfxn = Df(xn)
+        if Dfxn == 0:
+            print('Zero derivative. No solution found.')
+            return None
+        xn = xn - fxn/Dfxn
+    print('Exceeded maximum iterations. No solution found.')
+    return None
 
 # ---------------------------------------------------------------------------
 # (c) https://github.com/fchollet/nelder-mead 
@@ -81,7 +178,7 @@ def panel_angles (x,y):
 # to determine the minimum of a fuction - replaces fmin and brentq from scipy
 
 def nelder_mead_1D (f, x_start,
-                step=0.2, no_improve_thr=10e-10,                # for scalar product - org: no_improve_thr=10e-8,
+                step=0.1, no_improve_thr=10e-10,                # for scalar product - org: no_improve_thr=10e-8,
                 no_improv_break=12, max_iter=50,
                 bounds = None,                                  # extension 
                 alpha=1., gamma=2., rho=-0.5, sigma=0.5):
@@ -143,11 +240,11 @@ def nelder_mead_1D (f, x_start,
         # break after no_improv_break iterations with no improvement
         # print ('...best so far:', best)
 
-        if best < prev_best - no_improve_thr:
+        if abs(best - prev_best) < no_improve_thr:
+            no_improv += 1
+        else:
             no_improv = 0
             prev_best = best
-        else:
-            no_improv += 1
 
         if no_improv >= no_improv_break:
             return res[0][0], res[0][1], iters
@@ -199,18 +296,46 @@ def nelder_mead_1D (f, x_start,
 
 #--- wrapper functions for nelder_mead minimum------
 
+def nelder_mead_wrap  (fn, xStart,
+                no_improve_thr=10e-10,               
+                no_improv_break=12, max_iter=50,
+                bounds = None): 
+    
+    xmin, score, niters =  nelder_mead_1D(fn, xStart, 
+                                          no_improve_thr=no_improve_thr, 
+                                          no_improv_break=no_improv_break, max_iter=max_iter,  
+                                          bounds=bounds)    
+    # workaround of bug in melder-mead
+    # seems to be a float issue as it happens at rounded decimals like 0.61 or 0.8
+    # retry with a new xStart-Value solves ... most of the time.
+    
+    if niters < max_iter and score > no_improve_thr:
+        if not bounds is None: 
+            xStart = (xStart + bounds[0]) / 2.01
+        else: 
+            xStart = xStart *  1.012
+        # print ("nelder_mead bug:   ", xmin, score, niters)
+        xmin, score, niters =  nelder_mead_1D(fn, xStart, 
+                                            no_improve_thr=no_improve_thr, 
+                                            no_improv_break=no_improv_break, max_iter=max_iter,  
+                                            bounds=bounds)    
+        # print ("nelder_mead retry: ", xmin, score, niters)
+        if niters < max_iter and score > no_improve_thr:
+            raise ValueError ("nelder-mead: Minimum not found for xStart = %.4f" % xStart)
+
+    return xmin
+
+
 def findMin (fn, xStart, bounds=None, no_improve_thr=10e-10): 
-    xmin, score, niters =  nelder_mead_1D(fn, xStart, step=0.1, bounds=bounds, no_improve_thr=no_improve_thr)    
-    # print (xmin, score, niters)
+    xmin =  nelder_mead_wrap (fn, xStart, bounds=bounds, no_improve_thr=no_improve_thr)    
     return xmin 
 
 def findMax (fn, xStart, bounds=None): 
-    xmax, score, niters =  nelder_mead_1D(lambda x: - (fn(x)), xStart, step=0.05, bounds=bounds)    
+    xmax =  nelder_mead_wrap(lambda x: - (fn(x)), xStart, bounds=bounds)    
     return xmax 
 
 def findRoot (fn, xStart, bounds=None): 
-    xRoot, score, niters =  nelder_mead_1D(lambda x: abs(fn(x)), xStart, no_improve_thr=10e-12, step=0.05, bounds=bounds)    
-    # print (xRoot, score, niters)
+    xRoot =  nelder_mead_wrap(lambda x: abs(fn(x)), xStart, no_improve_thr=10e-12,  bounds=bounds)    
     return xRoot 
 
 

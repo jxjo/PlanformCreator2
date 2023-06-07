@@ -243,7 +243,7 @@ class SplineOfAirfoil:
                 # print ("LE after 1st repan: ", self.le, self.leSpline, self.isLe_closeTo_leSpline, self.uLe)
                 self._repanelDefault (tryHarder=True) 
                 if not self.isLe_closeTo_leSpline:
-                    # print ("LE after 2nd repan: ", self.le, self.leSpline, self.isLe_closeTo_leSpline, self.uLe)
+                    print ("LE after 2nd repan: ", self.le, self.leSpline, self.isLe_closeTo_leSpline, self.uLe)
                     raise ValueError ("Leading edge couldn't be iterated") 
 
         # Translate so that the leading edge is at 0,0 
@@ -342,7 +342,7 @@ class SplineOfAirfoil:
 
         iLeGuess = np.argmin (self._x)          # first guess for Le point 
         # exact determination of root  = scalar product = 0.0 
-        uLe = findRoot (self.scalarProductFn, self.spline.u[iLeGuess-1] ) 
+        uLe = findRoot (self.scalarProductFn, self.spline.u[iLeGuess-1] , bounds=(0.3, 0.7)) 
 
         return uLe
 
@@ -451,7 +451,7 @@ class SplineOfAirfoil:
 
         if tryHarder:                           # generate more panels with higer LE bunch
             nPanels = 200                       # ... no experiments 
-            le_bunch = 0.88 # 0.93
+            le_bunch = 0.90 # 0.93
             te_bunch = 0.7
         else: 
             if len(self._x) < 120:              # ensure a min number of panels for strange (old) airfoils
@@ -488,7 +488,8 @@ class SplineOfAirfoil:
             uGuess = 0.75          
         elif side == "upper":
             uStart = self.spline.u[0] 
-            uEnd   = self.spline.u[iLe-1]   
+            # uEnd   = self.spline.u[iLe-1]   
+            uEnd   = self.spline.u[iLe]   
             uGuess = 0.25         
         else:
             raise ValueError ("'%s' not supported" % side)
@@ -497,7 +498,9 @@ class SplineOfAirfoil:
         for i, xi in enumerate (xIn): 
 
             # find matching u to x-value 
-            ux[i] = findMin (lambda u: abs(self.spline.evalx(u) - xi), uGuess, bounds=(uStart, uEnd), no_improve_thr= 10e-7) 
+            #   no_improve_thr= 10e-6 is sufficient to get average 10e-10  tolerance
+            ux[i] = findMin (lambda u: abs(self.spline.evalx(u) - xi), uGuess, bounds=(uStart, uEnd), 
+                             no_improve_thr= 10e-6) 
             uGuess = ux[i]
 
         # get y coordinate from u          
@@ -700,6 +703,7 @@ class SideOfAirfoil:
         newX[-1] = self.x[-1]
 
         # build a temp spline with the new x and the current y values 
+        # 2D spline is needed to avoid oscillations at LE for thickness distribution with high curvature
 
         tmpSpl = Spline2D (newX, self._y) 
 
@@ -708,15 +712,17 @@ class SideOfAirfoil:
         newY = np.zeros(len(self.y))
         newY[0]  = self.y[0]
         newY[-1] = self.y[-1]
+
         for i in range (1, len(self.x)- 1):
 
-            # find the arc position u for the desired x-value
-            ui = findMin (lambda u: abs(tmpSpl.evalx(u) - self.x[i]), 0.5, bounds=(0.0, 1))
-            # get new y value at this position 
-            newY[i] = tmpSpl.evaly(ui)
-            if (tmpSpl.evalx(ui) - self.x[i]) > 0.000001: 
+            # find the arc position u for the desired x-value 
+            ui = findMin (lambda u: abs(tmpSpl.evalx(u) - self.x[i]), 0.41, bounds=(0.0, 1), no_improve_thr=10e-9)
+
+            if (tmpSpl.evalx(ui) - self.x[i]) > 0.0000001: 
                 raise ValueError ("Spline - moveMax: Couldn't find corresponding x at %d" %i + 
                                   " delta x: %.7f" % ((tmpSpl.evalx(ui) - self.x[i])))
+            # get new y value at this position 
+            newY[i] = tmpSpl.evaly(ui)
             
         self._y = newY
 

@@ -839,10 +839,14 @@ class Dialog_Abstract (ctk.CTkToplevel):
     def ok (self):
         # to over load and do ok actions
         self.return_OK = True
+        self.editFrame = None                                
+        self.widgets = []                                   # ensure no widgets bound anymore 
         self.destroy()
 
     def cancel (self): 
         # to over load and do cancel actions
+        self.editFrame = None                                
+        self.widgets = []                                   # ensure no widgets bound anymore 
         self.destroy()
 
     def add (self, aWidget): 
@@ -1090,7 +1094,7 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
         if self.showRepaneled: 
             return [self.airfoil]
         else: 
-            return [self.airfoil]
+            return [self.airfoilOrg]
 
 
     def set_showRepaneled (self, aBool):
@@ -1262,7 +1266,7 @@ class Dialog_Thickness (Dialog_Airfoil_Abstract):
 
         self.title ("Modify airfoil  [" + self.airfoil.name + "]")
 
-        self.showOriginal = True 
+        self.showModified = True 
         self._chord = 200.0                         # sample chord length for showing airfoil parms
 
         # set specific diagram frame for this dialog 
@@ -1282,8 +1286,8 @@ class Dialog_Thickness (Dialog_Airfoil_Abstract):
         r = 0 
         Header_Widget (self.header_frame,r,c, pady=0, lab= "Modify geometry", sticky = 'nw', width=100)
         
-        Switch_Widget (self.header_frame,r,c+1, padx=(30,30), lab='Show original airfoil',
-                       get=lambda: self.showOriginal, set=self.set_showOriginal)
+        Switch_Widget (self.header_frame,r,c+1, padx=(30,30), lab='Show modified airfoil',
+                       get=lambda: self.showModified, set=self.set_showModified)
 
         Label_Widget  (self.header_frame,r, c+2, padx= 20, sticky = 'nw', columnspan=1,
                         lab= "For geometry modifications a spline is created with the existing points.\n" + \
@@ -1374,14 +1378,14 @@ class Dialog_Thickness (Dialog_Airfoil_Abstract):
 
 
     def airfoilListFn (self):
-        if self.showOriginal: 
+        if self.showModified: 
             return [self.airfoilOrg, self.airfoil]
         else: 
-            return [self.airfoil]
+            return [self.airfoilOrg]
 
 
-    def set_showOriginal (self, aBool):
-        self.showOriginal = aBool
+    def set_showModified (self, aBool):
+        self.showModified = aBool
         self.refresh ('') 
                     
 
