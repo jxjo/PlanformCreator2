@@ -181,8 +181,6 @@ class Base_Widget():
 
     """
   
-    ctk_root : ctk.CTk = None             # holds eventhandler - has to be set in the very beginnging"
-
     def __init__(self, parent: ctk.CTkFrame, 
                  row:int, column:int, 
                  val = None, 
@@ -196,7 +194,9 @@ class Base_Widget():
                  width:int=None, height:int=None,
                  text_style=None):
 
-        self.parent = parent
+        self.parent   = parent
+        self.ctk_root = parent.winfo_toplevel()
+
         self.row    = row
         self.column = column
 
@@ -1091,7 +1091,6 @@ class TestApp(ctk.CTk):
         self.title("Test App for widgets")
         self.geometry("900x500")
 
-        Base_Widget.ctk_root = self
         self.event_add('<<TEST_EVENT>>','None')
 
         #self.grid_rowconfigure   (1, weight=1)

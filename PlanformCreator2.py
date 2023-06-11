@@ -72,11 +72,11 @@ DIAGRAMM_SECTION_SELECTED   = "<<DIAGRAMM_SECTION_SELECTED>>"
 AIRFOIL_CHANGED             = "<<AIRFOIL_CHANGED>>"
 PANELS_CHANGED              = "<<PANELS_CHANGED>>"
 
-ctk_root : ctk.CTk = None                                   # root event handler
 
-def fireEvent(eventType): 
-    # print ("- fire event from root", eventType)
-    if ctk_root: ctk_root.event_generate (eventType) 
+def fireEvent(ctk_root : ctk.CTkToplevel, eventType): 
+    """ fire event for the current ctk_root toplevel widget """
+    if not ctk_root is None: 
+        ctk_root.event_generate (eventType) 
 
 
 #-------------------------------------------------------------------------------
@@ -96,6 +96,9 @@ class Edit(ctk.CTkFrame):
 
         self.myApp   = master
         self._wingFn = wingFn
+
+        # root for change events (widgets will have the same toplevel as root)
+        self.ctk_root = self.winfo_toplevel()
 
         self.curSection = self.wing.wingSections[0]
 
@@ -117,14 +120,14 @@ class Edit(ctk.CTkFrame):
 
         # major bindings for change management
 
-        ctk_root.bind(WING_NEW,                 self.new_wing, add='+')
-        ctk_root.bind(WING_CHANGED,             self.changed_wing, add='+')
-        ctk_root.bind(CHORD_CHANGED,            self.changed_chord, add='+')
-        ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
-        ctk_root.bind(SECTION_CHANGED,          self.changed_section, add='+')
+        self.ctk_root.bind(WING_NEW,                 self.new_wing, add='+')
+        self.ctk_root.bind(WING_CHANGED,             self.changed_wing, add='+')
+        self.ctk_root.bind(CHORD_CHANGED,            self.changed_chord, add='+')
+        self.ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
+        self.ctk_root.bind(SECTION_CHANGED,          self.changed_section, add='+')
 
         # bindings from plot diagrams 
-        ctk_root.bind(DIAGRAMM_SECTION_SELECTED,self.sectionSelected_in_diagram, add='+')
+        self.ctk_root.bind(DIAGRAMM_SECTION_SELECTED,self.sectionSelected_in_diagram, add='+')
 
     # ------ properties ------
 
@@ -195,6 +198,10 @@ class Edit_Abstract (ctk.CTkFrame):
 
         self._wingFn = wingFn               # the function to the wing (indirect because of new wing could be set)
         self.widgets = []
+
+        # root for change events (widgets will have the same toplevel as root)
+        self.ctk_root = self.winfo_toplevel()
+
         self.init()
     
     def wing(self) -> Wing:
@@ -391,7 +398,7 @@ class Edit_Wing_PlanformType(Edit_Abstract):
         if dxf_Path:  
             self.wing().planform =  Planform_DXF( self.wing(), dxf_Path= dxf_Path, ref = False, workingkDir = self.workingDir)
             handled = True
-            fireEvent (WING_CHANGED)                   # update hinge, flaps
+            fireEvent (self.ctk_root, WING_CHANGED)                   # update hinge, flaps
         else: 
             handled = False
 
@@ -456,7 +463,7 @@ class Edit_Planform_Trapezoid (Edit_Abstract):
     def adaptSections (self):
         # changes chord of sections to best fit to reference (elliptical) 
         self.planform().adjust_planform_to_reference()
-        fireEvent (PLANFORM_CHANGED)
+        fireEvent (self.ctk_root, PLANFORM_CHANGED)
 
 
 #-------------------------------------------
@@ -522,7 +529,7 @@ class Edit_Planform_DXF (Edit_Abstract):
                 self.wing().planform.assignToWing()             # take over hinge, flap
 
                 self.refresh()
-                fireEvent (WING_CHANGED)
+                fireEvent (self.ctk_root, WING_CHANGED)
 
 
 
@@ -569,7 +576,7 @@ class Edit_WingSection_Master(Edit_Abstract):
             # remind the neighbour before this section 
             leftSec, rightSec = self.wing().getNeighbourSectionsOf (self.curSection)
             self.wing().deleteSection (self.curSection)
-            fireEvent (SECTION_CHANGED)         # update diagram
+            fireEvent (self.ctk_root, SECTION_CHANGED)         # update diagram
             # delete done - set option list to old neighbour 
             self.set_curSection(leftSec.name())
 
@@ -581,7 +588,7 @@ class Edit_WingSection_Master(Edit_Abstract):
         """ add a section after current Section""" 
         if not self.addDisabled():
             newSection = self.wing().createSectionAfter (self.curSection)
-            fireEvent (SECTION_CHANGED)         # update diagram
+            fireEvent (self.ctk_root, SECTION_CHANGED)         # update diagram
             self.set_curSection(newSection.name())
 
     def addDisabled (self):
@@ -608,7 +615,7 @@ class Edit_WingSection_Master(Edit_Abstract):
         # inform diagram 
         self.myApp.set_curWingSectionName(aName)
         if not inEvent:                         # avoid event ping pong
-            fireEvent (CURRENT_SECTION_CHANGED)    
+            fireEvent (self.ctk_root, CURRENT_SECTION_CHANGED)    
 
 
     def get_SectionFromName (self, aName) -> WingSection:
@@ -674,11 +681,13 @@ class Edit_WingSection(Edit_Abstract):
 
 
         Blank_Widget (self,4,0) 
-        self.add(Field_Widget  (self,5,0, lab="Airfoil", obj=self.wingSection, get='airfoilName', set='',
-                                                disable=True, event=SECTION_CHANGED))
+        self.add(Field_Widget  (self,5,0, lab="Airfoil", width=110, obj=self.wingSection, 
+                                get='airfoilName', set='', disable=True, event=SECTION_CHANGED))
         
-        self.add(Button_Widget (self,5,2, lab='Select', width=60, columnspan=2, sticky='w', set=self.select_airfoil ))
-        self.add(Button_Widget (self,5,2, lab='Remove', width=60, columnspan=2, sticky='e', set=self.remove_airfoil, 
+        self.add(Button_Widget (self,5,2, lab='Select', width=60, columnspan=2, sticky='w',  set=self.select_airfoil ))
+        self.add(Button_Widget (self,5,2, lab='Edit',   width=60, columnspan=2, sticky='e',   set=self.edit_airfoil,
+                                disable=self.edit_airfoil_disable ))
+        self.add(Button_Widget (self,5,4, lab='Remove', width=60, columnspan=3, sticky='w',  set=self.remove_airfoil, 
                                 disable=self.remove_airfoil_disable ))
 
         Blank_Widget (self,6,0, width=20, height = 10) 
@@ -701,14 +710,37 @@ class Edit_WingSection(Edit_Abstract):
         if newPathFilename: 
             self.wingSection().set_airfoilWithPathFileName(newPathFilename)
             self.refresh()
-            fireEvent (AIRFOIL_CHANGED)
+            fireEvent (self.ctk_root, AIRFOIL_CHANGED)
+
+    def edit_airfoil(self):
+        """ edit airfoil with AirfoilEditor - a new, modified airfoil may be returned"""
+
+        from AirfoilEditor import AirfoilEditor
+
+        relPathFileName = self.wingSection().airfoil.pathFileName
+        ph = PathHandler (workingDir=self.workingDir)
+        absPathFileName = ph.fullFilePath (relPathFileName)
+
+        dialog = AirfoilEditor (absPathFileName, parentApp=self.myApp)
+        self.wait_window (dialog.main)
+    
+        if dialog.return_OK:
+            relPathFileName = ph.relFilePath(dialog.return_newAirfoilPathFileName)
+            self.wingSection().set_airfoilWithPathFileName(relPathFileName)
+            self.refresh()
+            fireEvent (self.ctk_root, AIRFOIL_CHANGED)
+
+
+    def edit_airfoil_disable (self):
+        return not self.wingSection().airfoil_canBeEdited()
+
 
     def remove_airfoil(self):
 
         if self.wingSection().airfoil_canBeRemoved():
             self.wingSection().set_airfoilWithPathFileName(None)
             self.refresh()
-            fireEvent (AIRFOIL_CHANGED)
+            fireEvent (self.ctk_root, AIRFOIL_CHANGED)
         
     def remove_airfoil_disable (self):
         return not self.wingSection().airfoil_canBeRemoved()
@@ -796,6 +828,9 @@ class Diagram_Abstract(ctk.CTkFrame):
 
         self.view_frame : Frame = view_frame
         self._wingFn = wingFn
+
+        # root for change events (widgets will have the same toplevel as root)
+        self.ctk_root = self.winfo_toplevel()
 
         self.configure(fg_color= cl_background)
 
@@ -968,13 +1003,13 @@ class Diagram_Planform (Diagram_Abstract):
 
     def setChangeBindings (self):
         # overloaded
-        ctk_root.bind(WING_NEW,                 self.wing_new, add='+')
-        ctk_root.bind(WING_CHANGED,             self.changed_wing, add='+')
-        ctk_root.bind(CHORD_CHANGED,            self.changed_chord, add='+')
-        ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
-        ctk_root.bind(SECTION_CHANGED,          self.changed_sections, add='+')
-        ctk_root.bind(AIRFOIL_CHANGED,          self.changed_airfoil, add='+')
-        ctk_root.bind(CURRENT_SECTION_CHANGED,  self.changed_currentSection, add='+')
+        self.ctk_root.bind(WING_NEW,                 self.wing_new, add='+')
+        self.ctk_root.bind(WING_CHANGED,             self.changed_wing, add='+')
+        self.ctk_root.bind(CHORD_CHANGED,            self.changed_chord, add='+')
+        self.ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
+        self.ctk_root.bind(SECTION_CHANGED,          self.changed_sections, add='+')
+        self.ctk_root.bind(AIRFOIL_CHANGED,          self.changed_airfoil, add='+')
+        self.ctk_root.bind(CURRENT_SECTION_CHANGED,  self.changed_currentSection, add='+')
 
     def wing_new (self, dummy): 
         """ Eventhandler for new wing """
@@ -1060,7 +1095,7 @@ class Diagram_Planform (Diagram_Abstract):
         # callback method - the user pciked a wing section in the plot
         myApp : App = self.winfo_toplevel()
         myApp.set_curWingSectionName(aSectionLabel)
-        fireEvent (DIAGRAMM_SECTION_SELECTED)
+        fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
         self.curSectionArtist.set_current (aSectionLabel, figureUpdate=True)  
 
 
@@ -1167,11 +1202,11 @@ class Diagram_ChordDistribution (Diagram_Abstract):
 
     def setChangeBindings (self):
         # overloaded
-        ctk_root.bind(WING_NEW,                 self.wing_new, add='+')
-        ctk_root.bind(CHORD_CHANGED,            self.changed_chord, add='+')
-        ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
-        ctk_root.bind(SECTION_CHANGED,          self.changed_sections, add='+')
-        ctk_root.bind(CURRENT_SECTION_CHANGED,  self.changed_currentSection, add='+')
+        self.ctk_root.bind(WING_NEW,                 self.wing_new, add='+')
+        self.ctk_root.bind(CHORD_CHANGED,            self.changed_chord, add='+')
+        self.ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
+        self.ctk_root.bind(SECTION_CHANGED,          self.changed_sections, add='+')
+        self.ctk_root.bind(CURRENT_SECTION_CHANGED,  self.changed_currentSection, add='+')
 
     def wing_new (self, dummy): 
         """ Eventhandler for new wing """
@@ -1236,7 +1271,7 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         # call method - the user pciked a wing section in the plot
         myApp : App = self.winfo_toplevel()
         myApp.set_curWingSectionName(aSectionLabel)
-        fireEvent (DIAGRAMM_SECTION_SELECTED)
+        fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
         self.curSectionArtist.set_current (aSectionLabel, figureUpdate=True)  
 
 
@@ -1298,15 +1333,15 @@ class Diagram_Airfoils (Diagram_Abstract):
 
     def setChangeBindings (self):
         # overloaded
-        ctk_root.bind(WING_NEW,                 self.wing_new, add='+')
-        ctk_root.bind(AIRFOIL_CHANGED,          self.changed_airfoil, add='+')
+        self.ctk_root.bind(WING_NEW,                 self.wing_new, add='+')
+        self.ctk_root.bind(AIRFOIL_CHANGED,          self.changed_airfoil, add='+')
         # these could change chord of wingsection (abs size of airfoil) or strak airfoil
-        ctk_root.bind(WING_CHANGED,             self.changed_airfoil, add='+')
-        ctk_root.bind(CHORD_CHANGED,            self.changed_airfoil, add='+')
-        ctk_root.bind(PLANFORM_CHANGED,         self.changed_airfoil, add='+')
-        ctk_root.bind(SECTION_CHANGED,          self.changed_airfoil, add='+')
+        self.ctk_root.bind(WING_CHANGED,             self.changed_airfoil, add='+')
+        self.ctk_root.bind(CHORD_CHANGED,            self.changed_airfoil, add='+')
+        self.ctk_root.bind(PLANFORM_CHANGED,         self.changed_airfoil, add='+')
+        self.ctk_root.bind(SECTION_CHANGED,          self.changed_airfoil, add='+')
 
-        ctk_root.bind(CURRENT_SECTION_CHANGED,  self.changed_currentSection, add='+')
+        self.ctk_root.bind(CURRENT_SECTION_CHANGED,  self.changed_currentSection, add='+')
 
     def wing_new (self, dummy): 
         """ Eventhandler for new wing """
@@ -1350,7 +1385,7 @@ class Diagram_Airfoils (Diagram_Abstract):
         sectionName = aAirfoilLabel.split(":")[0]
         myApp : App = self.winfo_toplevel()
         myApp.set_curWingSectionName(sectionName)
-        fireEvent (DIAGRAMM_SECTION_SELECTED)
+        fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
 
 
 #-------------------------------------------------------------------------------
@@ -1389,6 +1424,9 @@ class Dialog_Abstract (ctk.CTkToplevel):
         self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self.destroy)
 
+        # root for change events (widgets will have the same toplevel as root)
+        self.ctk_root = self.winfo_toplevel()
+
         self.edit_frame    = ctk.CTkFrame (self) 
         self.grid_rowconfigure    (0, weight=1)
         self.grid_columnconfigure (0, weight=1)
@@ -1400,10 +1438,14 @@ class Dialog_Abstract (ctk.CTkToplevel):
     def ok (self):
         # to over load and do ok actions
         self.return_OK = True
+        self.editFrame = None                                
+        self.widgets = []                                   # ensure no widgets bound anymore 
         self.destroy()
 
     def cancel (self): 
         # to over load and do cancel actions
+        self.editFrame = None                                
+        self.widgets = []                                   # ensure no widgets bound anymore 
         self.destroy()
 
     def add (self, aWidget): 
@@ -1641,7 +1683,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         self.button_frame.grid_columnconfigure (4, weight=1)
 
         # changed bindings
-        ctk_root.bind(PANELS_CHANGED, self.refresh, add='+')
+        self.ctk_root.bind(PANELS_CHANGED, self.refresh, add='+')
 
 
     def select_dir(self):
@@ -1677,7 +1719,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
 
     def cancel(self): 
         # changed bindings
-        ctk_root.unbind(PANELS_CHANGED)
+        self.ctk_root.unbind(PANELS_CHANGED)
         super().cancel()
 
     def launch_Flz(self): 
@@ -1706,7 +1748,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         msg = Messagebox (self, title=self.mode + " export", message=message, icon="check", option_1="Ok")
         msg.get()                               # wait until pressed ok
         # release changed bindings and close
-        ctk_root.unbind(PANELS_CHANGED)
+        self.ctk_root.unbind(PANELS_CHANGED)
         super().ok()
 
 
@@ -1814,7 +1856,7 @@ class Dialog_Export_Dxf (Dialog_Abstract):
 
     def cancel(self): 
         # changed bindings
-        ctk_root.unbind(PANELS_CHANGED)
+        self.ctk_root.unbind(PANELS_CHANGED)
         super().cancel()
 
     def ok(self): 
@@ -1828,7 +1870,7 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         msg.get()                               # wait until pressed ok
 
         # release changed bindings
-        ctk_root.unbind(PANELS_CHANGED)
+        self.ctk_root.unbind(PANELS_CHANGED)
         super().ok()
 
 
@@ -1913,7 +1955,7 @@ class Dialog_Export_Airfoils (Dialog_Abstract):
 
     def cancel(self): 
         # changed bindings
-        ctk_root.unbind(PANELS_CHANGED)
+        self.ctk_root.unbind(PANELS_CHANGED)
         super().cancel()
 
     def ok(self): 
@@ -1927,7 +1969,7 @@ class Dialog_Export_Airfoils (Dialog_Abstract):
         msg.get()                               # wait until pressed ok
 
         # release changed bindings
-        ctk_root.unbind(PANELS_CHANGED)
+        self.ctk_root.unbind(PANELS_CHANGED)
         super().ok()
 
 
@@ -1949,18 +1991,19 @@ class Edit_File_Menu(Edit_Abstract):
         Button_Widget (self,3,0, lab='Save',        width=100, pady=4, sticky = '', set=self.myApp.save)
         Button_Widget (self,4,0, lab='Save As...',  width=100, pady=4, sticky = '', set=self.myApp.saveAs)
 
-        self.option_import = Option_Widget (self,5,0, width = 100, padx=(10,0), pady=4, 
-                                            get=self.importDisplayValue, set = self.set_importType,
-                                            options=self.importChoices())
+        Button_Widget (self,5,0, lab='Import Dxf',  width=100, pady=4, sticky = '', set=self.myApp.load_reference_dxf)
+        # self.option_import = Option_Widget (self,5,0, width = 100, padx=(10,0), pady=4, 
+        #                                     get=self.importDisplayValue, set = self.set_importType,
+        #                                     options=self.importChoices())
         self.option_export = Option_Widget (self,6,0, width = 100, padx=(10,0), pady=4, 
                                             get=self.exportDisplayValue, set = self.set_exportType,
                                             options=self.exportChoices())
 
-    def importChoices (self):      return ["Dxf as reference", "Other things"]
-    def importDisplayValue (self): return "Import..."
-    def set_importType (self, aType):
-        self.option_import.refresh()
-        if aType == "Dxf as reference":  self.myApp.load_reference_dxf() 
+    # def importChoices (self):      return ["Dxf as reference", "Other things"]
+    # def importDisplayValue (self): return "Import..."
+    # def set_importType (self, aType):
+    #     self.option_import.refresh()
+    #     if aType == "Dxf as reference":  self.myApp.load_reference_dxf() 
 
     def exportChoices (self):       return ["to Xflr5","to FLZ_vortex", "to DXF", "Airfoils"]
     def exportDisplayValue (self):  return "Export..."
@@ -1984,7 +2027,8 @@ class App(ctk.CTk):
     def __init__(self, paramFile):
         super().__init__(fg_color= cl_background)
 
-        global ctk_root                                 # being event handler
+        # setup event root - so there will be a single root -> ctk root
+        self.ctk_root = self
 
         # create the 'wing' model 
         self.paramFile = '' 
@@ -1998,10 +2042,6 @@ class App(ctk.CTk):
         # maximize the window using state property
         # self.state('zoomed')
 
-
-        # setup event root for the widgets - so there will be a single root -> ctk root
-        ctk_root = self
-        Base_Widget.ctk_root = self
         self._curWingSectionName = None                 # Dispatcher field between Diagramm and Edit
 
         # intercept app close by user  
@@ -2032,7 +2072,7 @@ class App(ctk.CTk):
         to enable a new wing to be set """
         self._myWing = aNewWing
         # mega alarm - inform everything
-        fireEvent (WING_NEW)
+        fireEvent (self.ctk_root, WING_NEW)
 
     
     def curWingSectionName (self):
@@ -2151,10 +2191,10 @@ class App(ctk.CTk):
             new_dxf_Path = dxf_dialog.dxf_pathFilename
             if new_dxf_Path:                            # dialog returned a valid path 
                 self.wing().refPlanform_DXF.set_dxfPathFilename (new_dxf_Path) 
-                fireEvent(PLANFORM_CHANGED)
+                fireEvent(self.ctk_root, PLANFORM_CHANGED)
             else:                                       # remove dxf reference file - extra code to make it clear
                 self.wing().refPlanform_DXF.set_dxfPathFilename (None) 
-                fireEvent(PLANFORM_CHANGED)
+                fireEvent(self.ctk_root, PLANFORM_CHANGED)
 
     def onExit(self): 
         """ interception of user closing the app - check for changes made"""

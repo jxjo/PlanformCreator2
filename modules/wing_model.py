@@ -2271,6 +2271,9 @@ class WingSection:
     def airfoil_canBeRemoved (self):
         return (not self.isRootOrTip) and (not self.airfoil.isStrakAirfoil)
     
+    def airfoil_canBeEdited (self):
+        return not self.airfoil.isStrakAirfoil
+    
     def set_airfoilWithPathFileName (self, pathFileName):
         """ sets a new real Airfoil based on its path and loads it """
 

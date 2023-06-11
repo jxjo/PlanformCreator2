@@ -301,6 +301,11 @@ def nelder_mead_wrap  (fn, xStart,
                 no_improv_break=12, max_iter=50,
                 bounds = None): 
     
+    if not bounds is None:
+        if xStart < bounds[0] or xStart > bounds[1]:
+            raise ValueError ("nelder-mead: Start value %.46f outside bounds" % xStart)
+
+    
     xmin, score, niters =  nelder_mead_1D(fn, xStart, 
                                           no_improve_thr=no_improve_thr, 
                                           no_improv_break=no_improv_break, max_iter=max_iter,  
@@ -308,7 +313,7 @@ def nelder_mead_wrap  (fn, xStart,
     # workaround of bug in melder-mead
     # seems to be a float issue as it happens at rounded decimals like 0.61 or 0.8
     # retry with a new xStart-Value solves ... most of the time.
-    
+
     if niters < max_iter and score > no_improve_thr:
         if not bounds is None: 
             xStart = (xStart + bounds[0]) / 2.01
@@ -320,7 +325,7 @@ def nelder_mead_wrap  (fn, xStart,
                                             no_improv_break=no_improv_break, max_iter=max_iter,  
                                             bounds=bounds)    
         # print ("nelder_mead retry: ", xmin, score, niters)
-        if niters < max_iter and score > no_improve_thr:
+        if score > no_improve_thr:
             raise ValueError ("nelder-mead: Minimum not found for xStart = %.4f" % xStart)
 
     return xmin

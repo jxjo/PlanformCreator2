@@ -58,9 +58,9 @@ class SplineOfAirfoil:
         
         if self._x is None: return False
 
-        # TE at 1?
-        xteUp, yteUp, xteLow, yteLow = self._x[0], self._y[0], self._x[-1], self._y[-1]
-        if xteUp != 1.0 or xteLow != 1.0: return False
+        # TE at 1? - numerical issues happen at the last deicmal (numpy -> python?)  
+        xteUp, yteUp, xteLow, yteLow = self._x[0], round(self._y[0],10), self._x[-1], round(self._y[-1],10)
+        if xteUp != 1.0 or xteLow != 1.0: return False    
         if yteUp != - yteLow: return False
 
         # LE at 0,0? 
@@ -229,7 +229,6 @@ class SplineOfAirfoil:
         self._spline     = None
         self._uLe        = None                  # u value at LE 
 
-    
     def _normalize (self):
         """Shift, rotate, scale airfoil so LE is at 0,0 and TE is symmetric at 1,y"""
 
@@ -434,12 +433,12 @@ class SplineOfAirfoil:
             uStart = self.uLe                       # search boundaries 
             uEnd   = 1.0 
             if du < 0.1:  uGuess = uStart + 0.1     # estimate a first guess for the search algo 
-            else:         uGuess = uStart + du
+            else:         uGuess = uStart + du / 2
         else:                                       # will search on upper side 
             uStart = 0.0
             uEnd   = self.uLe
             if du < 0.1:  uGuess = uEnd - 0.1
-            else:         uGuess = uEnd - du
+            else:         uGuess = uEnd - du / 2
 
         uOpp = findMin (lambda x: abs(self.spline.evalx(x) - xIn), uGuess, bounds=(uStart, uEnd)) 
         return uOpp
@@ -703,28 +702,39 @@ class SideOfAirfoil:
         newX[-1] = self.x[-1]
 
         # build a temp spline with the new x and the current y values 
-        # 2D spline is needed to avoid oscillations at LE for thickness distribution with high curvature
+        # 1D spline with arccos is needed to avoid oscillations at LE for thickness distribution with high curvature
 
-        tmpSpl = Spline2D (newX, self._y) 
+        tmpSpl = Spline1D (newX, self._y, arccos=True) 
+        newY = tmpSpl.eval(self._x)
 
-        # ... to remap y values to the current x values 
+        # ensure start and end is really, really the same (numerical issues) 
+        newY[0] = self._y[0]
+        newY[-1] = self._y[-1]
+        self._y = newY         
 
-        newY = np.zeros(len(self.y))
-        newY[0]  = self.y[0]
-        newY[-1] = self.y[-1]
+        # # build a temp spline with the new x and the current y values 
+        # # 2D spline is needed to avoid oscillations at LE for thickness distribution with high curvature
 
-        for i in range (1, len(self.x)- 1):
+        # tmpSpl = Spline2D (newX, self._y) 
 
-            # find the arc position u for the desired x-value 
-            ui = findMin (lambda u: abs(tmpSpl.evalx(u) - self.x[i]), 0.41, bounds=(0.0, 1), no_improve_thr=10e-9)
+        # # ... to remap y values to the current x values 
 
-            if (tmpSpl.evalx(ui) - self.x[i]) > 0.0000001: 
-                raise ValueError ("Spline - moveMax: Couldn't find corresponding x at %d" %i + 
-                                  " delta x: %.7f" % ((tmpSpl.evalx(ui) - self.x[i])))
-            # get new y value at this position 
-            newY[i] = tmpSpl.evaly(ui)
+        # newY = np.zeros(len(self.y))
+        # newY[0]  = self.y[0]
+        # newY[-1] = self.y[-1]
+
+        # for i in range (1, len(self.x)- 1):
+
+        #     # find the arc position u for the desired x-value 
+        #     ui = findMin (lambda u: abs(tmpSpl.evalx(u) - self.x[i]), 0.41, bounds=(0.0, 1), no_improve_thr=10e-9)
+
+        #     if (tmpSpl.evalx(ui) - self.x[i]) > 0.0000001: 
+        #         raise ValueError ("Spline - moveMax: Couldn't find corresponding x at %d" %i + 
+        #                           " delta x: %.7f" % ((tmpSpl.evalx(ui) - self.x[i])))
+        #     # get new y value at this position 
+        #     newY[i] = tmpSpl.evaly(ui)
             
-        self._y = newY
+        # self._y = newY
 
 
     def yFn (self,x):
@@ -735,6 +745,80 @@ class SideOfAirfoil:
 
 
 # ------------ test functions - to activate  -----------------------------------
+
+
+def splineCompare ():
+
+    # compare different splines at LE 
+
+    import matplotlib.pyplot as plt
+    from airfoil_examples import Root_Example, Tip_Example
+    
+    thick =Root_Example().spline.thickness
+
+    spl1D     = Spline1D (thick.x, thick.y)
+    spl1D_arc = Spline1D (thick.x, thick.y, arccos=True)
+    spl1D_arc_nat = Spline1D (thick.x, thick.y, boundary='natural', arccos=True)
+    spl2D     = Spline2D (thick.x, thick.y)
+    
+    # complete 2D foil spline 
+    x2D = np.concatenate ((np.flip(thick.x), thick.x[1:]))
+    y2D = np.concatenate ((np.flip(thick.y), -thick.y[1:]))
+    spl2D_ref = Spline2D (x2D, y2D)
+
+    # new x 
+    xNew = cosinus_distribution (200, 0.9, 0.7)
+
+    y1DNew = spl1D.eval(xNew)
+    y1DNew_arc = spl1D_arc.eval(xNew)
+    y1DNew_arc_nat = spl1D_arc_nat.eval(xNew)
+    y2DNew = np.zeros(len(xNew))
+    y2DNew_ref = np.zeros(len(xNew))
+
+    for i, xi in enumerate (xNew):
+
+        # find the arc position u for the desired x-value 
+        ui = findMin (lambda u: abs(spl2D.evalx(u) - xi), 0.41, bounds=(0.0, 1), no_improve_thr=10e-10)
+        # get new y value at this position 
+        y2DNew[i] = spl2D.evaly(ui)
+
+        ui = findMin (lambda u: abs(spl2D_ref.evalx(u) - xi), 0.75, bounds=(0.5, 1), no_improve_thr=10e-10)
+        # get new y value at this position 
+        y2DNew_ref[i] = - spl2D_ref.evaly(ui)
+
+
+    dy1D = y1DNew - y2DNew_ref
+    dy1D_arc = y1DNew_arc - y2DNew_ref
+    dy1D_arc_nat = y1DNew_arc_nat - y2DNew_ref
+    dy2D = y2DNew - y2DNew_ref
+
+    fig, axa = plt.subplots(2, 1, figsize=(16,8))
+    fig.subplots_adjust(left=0.05, bottom=0.05, right=0.98, top=0.95, wspace=None, hspace=0.15)
+
+    ax1 = axa[0]
+    ax2 = axa[1]
+    ax1.grid(True)
+    ax1.axis('equal')
+    ax2.grid(True)
+    ax2.set_xlim([ -0.001,  0.01])
+    ax2.set_ylim([ -0.00001,  0.00001])
+
+
+    # ax1.plot(thick.x, thick.y, '-b', label='x y')
+    ax1.plot(xNew, y1DNew, 'xr', label='y1DNew')
+    ax1.plot(xNew, y1DNew_arc, 'xm', label='y1DNew arccos')
+    ax1.plot(xNew, y2DNew, 'xg', label='y2DNew')
+    ax1.plot(xNew, y2DNew_ref, 'xb', label='y2DNew ref')
+
+    ax2.plot(xNew, dy1D, '-r', label='delta y1DNew')
+    ax2.plot(xNew, dy1D_arc, '-m', label='delta y1DNew arccos')
+    # ax2.plot(xNew, dy1D_arc_nat, '-b', label='delta y1DNew arccos natural')
+    ax2.plot(xNew, dy2D, '-g', label='delta y2DNew')
+
+    ax1.legend()
+    ax2.legend()
+    plt.show()
+
 
 # def curvatureTest():
 
@@ -959,6 +1043,7 @@ if __name__ == "__main__":
 
     # ---- Test -----
 
+    splineCompare()
     # blendTest()
     # cubicSplineTest()
     # lineTest()

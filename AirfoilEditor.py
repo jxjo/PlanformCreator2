@@ -56,11 +56,11 @@ cl_background               = '#101010'                     # background color i
 AIRFOIL_NEW                 = "<<AIRFOIL_NEW>>"                #tk event types
 AIRFOIL_CHANGED             = "<<AIRFOIL_CHANGED>>"
 
-ctk_root : ctk.CTk = None                                   # root event handler
 
-def fireEvent(eventType): 
-    # print ("- fire event from root", eventType)
-    if ctk_root: ctk_root.event_generate (eventType) 
+def fireEvent(ctk_root : ctk.CTkToplevel, eventType): 
+    """ fire event for the current ctk_root toplevel widget """
+    if not ctk_root is None: 
+        ctk_root.event_generate (eventType) 
 
 
 #-------------------------------------------------------------------------------
@@ -72,14 +72,18 @@ class Edit_Abstract (ctk.CTkFrame):
     Abstract superclass for all the edit like frames
     """
 
-    def __init__(self, master, airfoilFn, *args, **kwargs):
+    def __init__(self, master, airfoilFn, *args, myApp=None, **kwargs):
         super().__init__(master, *args, **kwargs)
 
         self._airfoilFn = airfoilFn               # the function to the wing (indirect because of new wing could be set)
         self.widgets = []
+        self.myApp = myApp
 
-        ctk_root.bind(AIRFOIL_CHANGED,          self.changed_airfoil, add='+')
-        ctk_root.bind(AIRFOIL_NEW,              self.changed_airfoil, add='+')
+        # root for change events (widgets will have the same toplevel as root)
+        self.ctk_root = self.winfo_toplevel()
+
+        self.ctk_root.bind(AIRFOIL_CHANGED,          self.changed_airfoil, add='+')
+        self.ctk_root.bind(AIRFOIL_NEW,              self.changed_airfoil, add='+')
 
         self.init()
     
@@ -87,11 +91,6 @@ class Edit_Abstract (ctk.CTkFrame):
         # it's a method - not a property to exchange the wing 
         return self._airfoilFn()
     
-    @property
-    def myApp (self) -> 'App':
-        """ the App self belongs to"""
-        return self.winfo_toplevel()
-
     def init(self):
         # main method - to be overloaded by sub class
         pass
@@ -408,6 +407,9 @@ class Diagram_Abstract(ctk.CTkFrame):
         self.view_frame : Frame = view_frame
         self._airfoilFn = airfoilFn
 
+        # root for change events (widgets will have the same toplevel as root)
+        self.ctk_root = self.winfo_toplevel()
+
         self.configure(fg_color= cl_background)
 
         # big diagram grid 
@@ -607,8 +609,8 @@ class Diagram_Airfoil (Diagram_Abstract):
 
     def setChangeBindings (self):
         # overloaded
-        ctk_root.bind(AIRFOIL_CHANGED,          self.changed_airfoil, add='+')
-        ctk_root.bind(AIRFOIL_NEW,              self.changed_airfoil, add='+')
+        self.ctk_root.bind(AIRFOIL_CHANGED, self.changed_airfoil, add='+')
+        self.ctk_root.bind(AIRFOIL_NEW,     self.changed_airfoil, add='+')
 
     def changed_airfoil(self, dummy): 
         """ Eventhandler for changes of airfoil"""
@@ -761,16 +763,31 @@ class Edit_File_Menu(Edit_Abstract):
     def init (self):
 
         self.grid_columnconfigure   (0, weight=1)
-        self.add (Header_Widget (self,0,0, lab=self.name, width=80))
 
-        # file selection with buttons - takes 2 rows
-        self.add(Option_Widget (self,1,0, get=self.curAirfoilFileName, set=self.set_curAirfoilFileName,
-                                          options=self.airfoilFileNames,
-                                          spin=True, spinPos='below', width=150, padx=10, pady=4, sticky = 'ew',))
-        self.add(Button_Widget (self,3,0, lab='Open',        width=100, pady=4, sticky = 'ew', set=self.myApp.open))
-        self.add(Button_Widget (self,4,0, lab='Save As...',  disable=True, width=100, pady=4, sticky = 'ew', set=self.myApp.saveAs))
+        r,c = 0,0 
+        self.add (Header_Widget (self,r,c, lab=self.name, width=80))
 
-        Blank_Widget (self,5,0,  height= 40)
+        # if AirfoilEditor called stand alone offer combobox with input files
+        if not self.myApp.isModal:
+            r +=1 
+            self.add(Option_Widget (self,r,c, get=self.curAirfoilFileName, set=self.set_curAirfoilFileName,
+                                            options=self.airfoilFileNames,
+                                            spin=True, spinPos='below', width=150, padx=10, pady=4, sticky = 'ew',))
+            r +=2 
+            self.add(Button_Widget (self,r,c, lab='Open',        width=100, pady=4, sticky = 'ew', set=self.myApp.open))
+
+        # if called from parentApp offer "Ok and return" and "Cancel"
+        if self.myApp.isModal:
+            r +=1 
+            self.add(Button_Widget (self,r,c, lab='Ok & Return', primary=True,       
+                                    width=120, pady=4, sticky = 'ew', set=self.myApp.ok_return))
+            r +=1 
+            self.add(Button_Widget (self,r,c, lab='Cancel', width=120, pady=4, sticky = 'ew', set=self.myApp.cancel))
+            r +=1 
+            Blank_Widget (self,5,0,  height= 40)
+ 
+        r +=1 
+        Blank_Widget (self,r,c,  height= 50)
 
     def airfoilFileNames (self): 
 
@@ -785,7 +802,7 @@ class Edit_File_Menu(Edit_Abstract):
 
     def set_curAirfoilFileName (self, newFileName): 
         
-        for aPathFileName in myApp.airfoilFiles:
+        for aPathFileName in self.myApp.airfoilFiles:
             if newFileName == os.path.basename(aPathFileName):
                 self.myApp.loadNewAirfoil (aPathFileName)
                 self.refresh()
@@ -827,6 +844,9 @@ class Dialog_Abstract (ctk.CTkToplevel):
         self.focus_force() 
         self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self.destroy)
+
+        # root for change events (widgets will have the same toplevel as root)
+        self.ctk_root = self.winfo_toplevel()
 
         self.edit_frame    = ctk.CTkFrame (self) 
         self.grid_rowconfigure    (0, weight=1)
@@ -928,7 +948,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
         self.button_frame.grid_columnconfigure (9, weight=1)
 
         # changed bindings
-        ctk_root.bind(self.change_event, self.refresh, add='+')
+        self.ctk_root.bind(self.change_event, self.refresh, add='+')
 
 
     def _save_warning (self): 
@@ -970,7 +990,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
 
     def cancel(self): 
         # changed bindings
-        ctk_root.unbind(self.change_event)
+        self.ctk_root.unbind(self.change_event)
         super().cancel()
 
 
@@ -1005,7 +1025,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
             self.return_newAirfoilPathFileName = self.airfoil.pathFileName
 
             # release changed bindings and close
-            ctk_root.unbind(self.change_event)
+            self.ctk_root.unbind(self.change_event)
             super().ok()
 
 
@@ -1400,53 +1420,81 @@ class Dialog_Thickness (Dialog_Airfoil_Abstract):
 # The App   
 #-------------------------------------------------------------------------------
 
-class App(ctk.CTk):
+# class AirfoilEditor (ctk.CTkToplevel):
+class AirfoilEditor (ctk.CTk):
+    '''
+
+        The AirfoilEditor App
+
+        If parentApp is passed, the AirfoilEditor is called from eg PlanformEditor,
+        so it will be modal with a reduced File Menu 
+    '''
 
     name = AppName  
 
-    def __init__(self, airfoilFiles):
-        super().__init__(fg_color= cl_background)
+    def __init__(self, airfoilFiles, parentApp=None):
 
-        global ctk_root                                 # being event handler
+        # customize Ctk 
+        ctk.set_appearance_mode("Dark")                 # Modes: "System" (standard), "Dark", "Light"
+        ctk.set_default_color_theme("blue")             # Themes: "blue" (standard), "green", "dark-blue"
 
-        # create the 'wing' model 
+        # called from another App? Switch to modal window
+        #
+        #   self is not a subclass of ctk to support both modal and root window mode 
+
+        self.parentApp = parentApp
+        self.isModal   = not self.parentApp is None
+
+        if self.isModal: 
+            main = ctk.CTkToplevel (parentApp, fg_color= cl_background)
+            main.geometry("1450x750")
+            main.transient (parentApp)
+            main.resizable(False, False)                # width, height
+            main.focus_force() 
+            main.grab_set()
+            self.return_OK = False
+            self.return_newAirfoilPathFileName = None   # return value for parent
+        else: 
+            main = ctk.CTk(fg_color= cl_background)
+            main.geometry("1500x750")
+            main.minsize (width=1450, height=600)
+
+        self.main = main 
+        main.protocol("WM_DELETE_WINDOW", self.onExit)  # intercept app close by user 
+
+        # setup event root - so there will be a single root -> ctk root
+        self.ctk_root = main          
+
+        # check and load the passed airfoil(s)
+
         self.airfoilFiles =[]
         self.curAirfoilFile = None
 
-        if not airfoilFiles:
+        if not airfoilFiles:                            # show a demo airfoil 
             self.airfoilFiles.append ("Root_Example")
         else: 
             if not type(airfoilFiles) == list: 
-                self.airfoilFiles.append (airfoilFiles)
+                if os.path.isfile (airfoilFiles):
+                    self.airfoilFiles.append (airfoilFiles)
+                else:
+                    ErrorMsg ("'%s' does not exist. AirfoilEditor aborted." % airfoilFiles) 
+                    # self.onExit()
+                    return
             else:
                 self.airfoilFiles = airfoilFiles
         self.loadNewAirfoil (self.airfoilFiles[0])
 
-        self.title (AppName + "  v" + str(AppVersion) + "  [" + self.curAirfoil().name + "]")
-        # intercept app close by user  
-        self.protocol("WM_DELETE_WINDOW", self.onExit)
-
-        # configure customtkinter
-        self.geometry("1500x750")
-        self.appearance_mode = "Dark"                   
-        ctk.set_appearance_mode(self.appearance_mode)   # Modes: "System" (standard), "Dark", "Light"
-        ctk.set_default_color_theme("blue")             # Themes: "blue" (standard), "green", "dark-blue"
-
-        # setup event root for the widgets - so there will be a single root -> ctk root
-        ctk_root = self
-        Base_Widget.ctk_root = self
-
-
         # create main frames        
-        switches_frame = ctk.CTkFrame     (self, height=350)
-        diagram_frame  = Diagram_Airfoil  (self, self.curAirfoil, fg_color= cl_background, view_frame=switches_frame)
-        edit_frame     = ctk.CTkFrame     (self, height=350)
-        file_frame     = Edit_File_Menu   (self, self.curAirfoil)
+
+        switches_frame = ctk.CTkFrame     (main, height=350)
+        diagram_frame  = Diagram_Airfoil  (main, self.curAirfoil, fg_color= cl_background, view_frame=switches_frame)
+        edit_frame     = ctk.CTkFrame     (main, height=350)
+        file_frame     = Edit_File_Menu   (main, self.curAirfoil, myApp=self)
 
         # maingrid 2 x 2 - diagram on top, file and edit on bottom
-        self.grid_rowconfigure   (0, weight=2)
-        self.grid_rowconfigure   (1, weight=0)
-        self.grid_columnconfigure(1, weight=1)
+        main.grid_rowconfigure   (0, weight=2)
+        main.grid_rowconfigure   (1, weight=0)
+        main.grid_columnconfigure(1, weight=1)
         switches_frame.grid  (row=0, column=0, pady=(0,5), padx=(5,3), ipady=5,sticky="news")
         diagram_frame.grid   (row=0, column=1, pady=0, padx=0, sticky="news")
         file_frame.grid      (row=1, column=0, pady=(0,5), padx=(5,3), ipady=5,sticky="news")
@@ -1456,18 +1504,25 @@ class App(ctk.CTk):
         edit_frame.grid_rowconfigure      (0, weight=1)
         edit_frame.grid_columnconfigure   (3, weight=1)
 
-        edit_Airfoil_frame    = Edit_Airfoil_Data   (edit_frame, self.curAirfoil)
+        edit_Airfoil_frame    = Edit_Airfoil_Data   (edit_frame, self.curAirfoil, myApp=self)
         edit_Airfoil_frame.grid   (row=0, column=0, pady=5, padx=5, ipadx=10, sticky="news")
 
-        edit_Curvature_frame  = Edit_Panels (edit_frame, self.curAirfoil)
+        edit_Curvature_frame  = Edit_Panels (edit_frame, self.curAirfoil, myApp=self)
         edit_Curvature_frame.grid (row=0, column=1, pady=5, padx=5, ipadx=10, sticky="news")
 
-        edit_Curvature_frame  = Edit_Coordinates (edit_frame, self.curAirfoil)
+        edit_Curvature_frame  = Edit_Coordinates (edit_frame, self.curAirfoil, myApp=self)
         edit_Curvature_frame.grid (row=0, column=2, pady=5, padx=5, ipadx=10, sticky="news")
 
-        edit_Curvature_frame  = Edit_Curvature (edit_frame, self.curAirfoil)
+        edit_Curvature_frame  = Edit_Curvature (edit_frame, self.curAirfoil, myApp=self)
         edit_Curvature_frame.grid (row=0, column=3, pady=5, padx=5, ipadx=10, sticky="news")
 
+
+        # start App - run mainloop if self is not modal otherise control is at parent
+        
+        if not self.isModal: 
+            main.mainloop()       
+
+    # ------------------
 
     def curAirfoil (self) -> Airfoil:
         """ encapsulates current airfoil. Childs should acces only via this function
@@ -1479,7 +1534,7 @@ class App(ctk.CTk):
         to enable a new airfoil to be set """
         self._curAirfoil = aNew
         # mega alarm - inform everything
-        fireEvent (AIRFOIL_NEW)
+        fireEvent (self.ctk_root, AIRFOIL_NEW)
 
     def add_toAirfoilFiles (self, aPathFileName):
         """ inserts a new airfoilPathFileName to the list right after current airfoil"""
@@ -1492,6 +1547,10 @@ class App(ctk.CTk):
             self.loadNewAirfoil (aPathFileName)
         except: 
             ErrorMsg ("Could not add %s to airfoil list" % aPathFileName )
+
+    def _set_title(self):
+        """ sets window title of self """
+        self.main.title (AppName + "  v" + str(AppVersion) + "  [" + self.curAirfoil().name + "]")
 
 
     #------- file functions ----------------
@@ -1508,16 +1567,9 @@ class App(ctk.CTk):
             self.airfoilFiles = list(newPathFilenames)
             self.loadNewAirfoil (self.airfoilFiles[0])
 
-    def save (self):
-        """  """
-        pass
-
-    def saveAs (self):
-        """  """
-
 
     def loadNewAirfoil(self, pathFilename, airfoil= None):
-        """loads and sets a new wing model returns - updates title """
+        """loads and sets a new airfoil - updates title """
 
         if airfoil is None: 
             if pathFilename == "Root_Example":
@@ -1528,17 +1580,30 @@ class App(ctk.CTk):
 
         self.curAirfoilFile = airfoil.pathFileName
         self.set_curAirfoil (airfoil)
+        self._set_title()
 
-        self.title (AppName + "  v" + str(AppVersion) + "  [" + airfoil.name + "]")
+
+    def ok_return(self): 
+        """ modal mode: close and hand over current airfoil file to parent app"""
+        if self.isModal:
+            self.return_OK = True
+            self.return_newAirfoilPathFileName = self.curAirfoil().pathFileName
+            self.onExit()
+
+
+    def cancel(self): 
+        """ modal mode: close without checks"""
+        if self.isModal:
+            self.return_OK = False
+            self.onExit()
 
 
     def onExit(self): 
         """ interception of user closing the app - check for changes made"""
-        global ctk_root
+        self.ctk_root = None
+        self.main.destroy()
 
-        ctk_root = None
-        Base_Widget.ctk_root = None
-        self.destroy()
+
 
 #--------------------------------
 
@@ -1563,6 +1628,6 @@ if __name__ == "__main__":
         # airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
         # airfoil_files = sorted (airfoil_files)
 
-    myApp = App(airfoil_files)
-    myApp.mainloop()
+    myApp = AirfoilEditor (airfoil_files)
+    
  

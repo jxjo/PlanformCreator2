@@ -708,59 +708,61 @@ class Airfoil:
 # ------------ test functions - to activate  -----------------------------------
 
 
-# def test_strak(): 
+def test_strak(): 
 
-#     import matplotlib.pyplot as plt
-#     from airfoil_examples import Root_Example, Tip_Example
+    import matplotlib.pyplot as plt
+    from airfoil_examples import Root_Example, Tip_Example
 
-#     fig, axa = plt.subplots(2, 1, figsize=(16,8))
-#     ax1 = axa[0]
-#     ax2 = axa[1]
+    # fig, axa = plt.subplots(2, 1, figsize=(16,8))
+    # ax1 = axa[0]
+    # ax2 = axa[1]
 
-#     ax1.grid(True)
-#     ax1.axis("equal")
-#     ax2.set_ylim([ -10,  10])
+    # ax1.grid(True)
+    # ax1.axis("equal")
+    # ax2.set_ylim([ -10,  10])
 
     
-#     air1 = Root_Example()
-#     air2 = Tip_Example()
+    # air1 = Root_Example()
+    # air2 = Tip_Example()
 
-#     air1.set_maxThickness (12)
-#     air1.set_maxCamber (2.5)
-#     air2.set_maxThickness (5)
+    # air1.set_maxThickness (12)
+    # air1.set_maxCamber (2.5)
+    # air2.set_maxThickness (5)
     
-#     airStrak = Airfoil(name="Strak")
-#     for i, blendBy in enumerate(np.linspace (0,1, 6)): 
-#         airStrak.do_strak (air1, air2, blendBy)
-#         ax1.plot(airStrak.x, airStrak.y, label="Blend %.2f" % blendBy)
-#         print(i, airStrak.le)
-#         ax2.plot (airStrak.spline.curv_upper.x, airStrak.spline.curv_upper.y, label="Blend %.2f" % blendBy)
-#         ax2.plot (airStrak.spline.curv_lower.x, - airStrak.spline.curv_lower.y, label="Blend %.2f" % blendBy)
+    # airStrak = Airfoil(name="Strak")
+    # for i, blendBy in enumerate(np.linspace (0,1, 6)): 
+    #     airStrak.do_strak (air1, air2, blendBy)
+    #     ax1.plot(airStrak.x, airStrak.y, label="Blend %.2f" % blendBy)
+    #     print(i, airStrak.le)
+    #     ax2.plot (airStrak.spline.curv_upper.x, airStrak.spline.curv_upper.y, label="Blend %.2f" % blendBy)
+    #     ax2.plot (airStrak.spline.curv_lower.x, - airStrak.spline.curv_lower.y, label="Blend %.2f" % blendBy)
     
-#     ax1.legend()
-#     plt.show()
+    # ax1.legend()
+    # plt.show()
 
-#     #----
+    # #----
 
-#     fig, ax1 = plt.subplots(1, 1, figsize=(16,6))
-#     ax1.grid(True)
-#     ax1.axis("equal")
+    fig, ax1 = plt.subplots(1, 1, figsize=(16,6))
+    ax1.grid(True)
+    ax1.axis("equal")
 
-#     air1 = Root_Example()
-#     maxT  = air1.maxThickness
-#     maxTx = air1.maxThicknessX
-#     for i, fac in enumerate (np.linspace (0.5,1.5, 6)):
-#         air1.set_maxThickness (maxT * fac)
-#         air1.set_maxThicknessX (maxTx * fac) 
-#         ax1.plot(air1.x, air1.y, label="Fac %.2f" % fac)
-
-#     ax1.legend()
-#     plt.show()
+    air1 = Root_Example()
+    maxT  = air1.maxThickness
+    maxTx = air1.maxThicknessX
+    maxCx = air1.maxCamberX
+    for i, fac in enumerate (np.linspace (0.5,1.5, 20)):
+        # air1.set_maxThickness (maxT * fac)
+        # air1.set_maxThicknessX (maxTx * fac) 
+        air1.set_maxCamberX (maxCx * fac) 
+        ax1.plot(air1.x, air1.y, label="Fac %.2f" % fac)
+        print (i)
+    ax1.legend()
+    plt.show()
 
 
 if __name__ == "__main__":
 
 
-    # test_strak() 
+    test_strak() 
      
     pass  

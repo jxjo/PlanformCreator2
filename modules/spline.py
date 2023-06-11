@@ -87,7 +87,7 @@ class Spline1D:
     """Cubic 1D Spline"""
 
 
-    def __init__ (self, x, y, boundary="notaknot"):
+    def __init__ (self, x, y, boundary="notaknot", arccos=False):
         """
         Build cubic spline based on x,y. x must be strongly ascending.
 
@@ -122,16 +122,22 @@ class Spline1D:
             raise ValueError('Spline: Must have at least 3 points')
         if n != len(y): 
             raise ValueError('Spline: Length of x,y is different')
-        
-        h = np.diff(x,1)                        # the differences hi = xi+1 - xi  (length n-1)
+            
+        if arccos:           # test of a arccos distribution to avoid oscillation at LE          
+            self.x = np.arccos(1.0 - x) * 2.0 / np.pi     
+            self._arccos = True 
+        else:
+            self.x = x
+            self._arccos = False 
+
+        # keep for later evaluation 
+        self.y = y
+
+        # only delta x will be relevant 
+        h = np.diff(self.x,1)                        # the differences hi = xi+1 - xi  (length n-1)
         if np.amin(h) <= 0.0: 
             raise ValueError('Spline: x is not strictly increasing')
 
-
-        # keep for later evaluation 
-        self.x = x
-        self.y = y
-    
         # build the tridiagonal matrix with simple, natural boundary condition
         A, B, C = self._build_tridiagonalArrays (n, h)
 
@@ -333,6 +339,10 @@ class Spline1D:
 
         if x < self.x[0]:  x = self.x[0]
         if x > self.x[-1]: x = self.x[-1]
+
+        if self._arccos: 
+            x = np.arccos(1.0 - x) * 2.0 / np.pi                   # acos(1.d0 - x(i)) * 2.d0 / pi 
+            # copy x???        
 
         # get the index j of x in the function intervals of self 
         j = min(bisect.bisect(self.x, x)-1, len(self.x) -2)
