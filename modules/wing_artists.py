@@ -638,11 +638,9 @@ class Airfoil_Artist (Artist):
         self._set_colorcycle (n)                # no of cycle colors - extra color for each airfoil
 
         # plot title
-        if self._norm: 
-            text = "Airfoils normalized"
-        else:
+        if not self._norm: 
             text = "Airfoils in real size"
-        self._add(self.ax.text(.05,.9, text, fontsize ='large', ha='left', transform=self.ax.transAxes))
+            self._add(self.ax.text(.05,.9, text, fontsize ='large', ha='left', transform=self.ax.transAxes))
 
         section : WingSection
 

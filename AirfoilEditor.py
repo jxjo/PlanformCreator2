@@ -39,6 +39,7 @@ from modules.common_utils       import *
 from modules.airfoil            import *
 from modules.airfoil_examples   import Root_Example
 from modules.widgets            import *
+from modules.artist             import Plot_Toolbar
 from modules.airfoil_artists    import *
 
 
@@ -49,7 +50,7 @@ AppVersion = "0.7.0"
 
 #------------------------------------------------
 
-cl_background               = '#101010'                     # background color in diagrams
+cl_background               = ('#EBEBEB','#242424')                     # background color in diagrams
 
 #   change events for updating mainly plots
 
@@ -147,7 +148,7 @@ class Edit_Airfoil_Data(Edit_Abstract):
         """ Open thickness and camber dialog - if 'OK' the modified airfoil will be inserted to the list 
         of airfoils and set to current """
 
-        dialog = Dialog_Thickness (self, self._airfoilFn )
+        dialog = Dialog_Geometry (self, self._airfoilFn )
         self.wait_window (dialog)
 
         if dialog.return_OK: 
@@ -181,9 +182,9 @@ class Edit_Curvature(Edit_Abstract):
 
         r, c = 0, 0 
         self.add (Header_Widget (self,r,c,   width=90, lab=self.name, columnspan= 2))
-        c += 6
-        self.add(Button_Widget  (self,r,c, lab='Smooth', width=80, padx= 0, columnspan=2, sticky='w', 
-                                 disable=True, set=self.smooth_airfoil ))
+        # c += 6
+        # self.add(Button_Widget  (self,r,c, lab='Smooth', width=80, padx= 0, columnspan=2, sticky='w', 
+        #                          disable=True, set=self.smooth_airfoil ))
 
         r = 1
         Blank_Widget (self, r,0)                # left blank column to inset the fields 
@@ -410,12 +411,9 @@ class Diagram_Abstract(ctk.CTkFrame):
         # root for change events (widgets will have the same toplevel as root)
         self.ctk_root = self.winfo_toplevel()
 
-        self.configure(fg_color= cl_background)
-
         # big diagram grid 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
-        self.grid(row=0, column=0, sticky="news")
 
         if size: 
             self.figure : plt.Figure = plt.Figure(figsize=size)
@@ -424,10 +422,9 @@ class Diagram_Abstract(ctk.CTkFrame):
 
         # connect tk and pyplot
         self.canvas = FigureCanvasTkAgg(self.figure, self)
-        self.canvas._tkcanvas.grid_columnconfigure(0, weight=1)
-        self.canvas._tkcanvas.grid_rowconfigure   (0, weight=1)
+        # take background of dark mode for canvas
+        self.canvas._tkcanvas.configure(background= cl_background[1])
         self.canvas._tkcanvas.grid (row=0, column=0, pady=0, padx=0, sticky="news")
-        self.canvas._tkcanvas.configure(background= cl_background)
 
 
         # common axes for this diagram
@@ -438,26 +435,23 @@ class Diagram_Abstract(ctk.CTkFrame):
         self.setup_artists ()
 
         # init of switches / plots if a frame for the switches is available 
-        col = 0 
-        row = 0 
+        r,c = 0,0
         if self.view_frame: 
             self.view_frame.grid_columnconfigure(0, weight=1)   # to center switches
-            col += 1
-            row, col = self.setup_Switches (row=0, col=1)                       
+            c += 1
+            r,c = self.setup_Switches (r=0, c=1)                       
 
-            row +=2
-            Label_Widget (self.view_frame, row, 0, lab='Pan and zoom')
-            row +=1
-            self.toolbar = Plot_Toolbar(self.canvas, self.view_frame)
-            self.toolbar.grid (row=row+2, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,10))
+            r +=2
+            Label_Widget (self.view_frame, r, 0, lab='Pan and zoom')
+            r +=1
+            self.toolbar = Plot_Toolbar(self.canvas, self.view_frame, background=ctk.get_appearance_mode())
+            self.toolbar.grid (row=r+2, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,10))
 
         # react on changes of model
         self.setChangeBindings ()
 
-        # is active frame? control change events 
-        self._active            = setActive
-        # and finally show it - if "active"
-        if self._active: self.refresh()
+        # and finally show it 
+        self.refresh()
 
 
     @property
@@ -484,19 +478,19 @@ class Diagram_Abstract(ctk.CTkFrame):
         self.gridArtist.plot()          # force to show first time
 
 
-    def setup_Switches(self, row=0, col=0):
+    def setup_Switches(self, r=0, c=0):
         """ define on/off switches ffor this plot type"""
 
-        row = 0 
-        Header_Widget (self.view_frame,row,0, columnspan=2, lab='View')
+        r = 0 
+        Header_Widget (self.view_frame,r,0, columnspan=2, lab='View')
 
-        row += 1 
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Grid', 
+        r += 1 
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Grid', 
                        get=lambda: self.gridArtist.show, set=self.gridArtist.set_show)
 
         # extra col to center all the switches
-        self.view_frame.grid_columnconfigure(col+1, weight=1)
-        return row, col 
+        self.view_frame.grid_columnconfigure(c+1, weight=1)
+        return r, c 
 
     def refresh(self, dummy): 
         # overwrite in sub class
@@ -533,10 +527,16 @@ class Diagram_Airfoil (Diagram_Abstract):
         # curvature
         self.ax2.tick_params (labelsize='small')
         self.ax2.set_xlim([-0.05,1.05])
-        self.ax2.set_ylim([ 5, -5.0])
-        self.ax2.set_aspect('auto', 'datalim')
-        self.ax2.grid (axis='x')
-        self.ax2.axhline(0, color=self.cl_labelGrid, linewidth=0.5)
+
+        # suppress warning of a motplotlib bug reported: 
+        # https://github.com/matplotlib/matplotlib/issues/26118
+        import warnings
+        warnings.filterwarnings("ignore", message = "All values for SymLogScale")
+        self.ax2.set_yscale('symlog', linthresh=1)
+
+        self.ax2.set_ylim([ 1000, -1000])
+        # self.ax2.set_aspect('auto', 'datalim')
+        self.ax2.grid ()
 
 
     def setup_artists(self):
@@ -546,48 +546,48 @@ class Diagram_Airfoil (Diagram_Abstract):
 
         # airfoil is list to prepare for future multiple airfoils to view 
         
-        self.airfoilArtist   = Airfoil_Artist        (self.ax1,     [self._airfoilFn], show=True)
+        self.airfoilArtist   = Airfoil_Artist   (self.ax1,     [self._airfoilFn], show=True)
         self.camberArtist    = Thickness_Artist (self.ax1,     [self._airfoilFn], show=False)
-        # self.curvArtist      = Airfoil_Curv_Artist   (self.ax2,     [self._airfoilFn], show=True)
-        self.curvatureArtist = Curvature_Artist      (self.ax2,     [self._airfoilFn], show=True)
+        self.curvatureArtist = Curvature_Artist (self.ax2,     [self._airfoilFn], show=True)
 
 
-    def setup_Switches(self, row=0, col=0):
+    def setup_Switches(self, r=0, c=0):
         """ define on/off switches for this plot type"""
 
-        row, col = super().setup_Switches(row, col)
+        r, c = super().setup_Switches(r, c)
 
-        self._set_upper (True) 
-        self._set_lower (True) 
+        self.curvatureArtist.set_upper (True)
+        self.curvatureArtist.set_lower (True)
 
-        row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Points',
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Points',
                        get=lambda: self.airfoilArtist.points, set=self._set_points)
 
-        row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Camber', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Camber', 
                        get=lambda: self.camberArtist.show, set=self.camberArtist.set_show)
 
-        row += 1
-        Blank_Widget (self.view_frame,row,col)
-        self.view_frame.grid_rowconfigure(row, weight=2)
+        r += 1
+        Blank_Widget (self.view_frame,r,c)
+        self.view_frame.grid_rowconfigure(r, weight=1)
 
-        row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Curvature', disable= True,
-                       get=lambda: self.curvatureArtist.show, set=self.curvatureArtist.set_show)
-        row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Upper side', 
+        r += 1
+        Label_Widget  (self.view_frame, r, 0, lab='Curvature')
+        # Switch_Widget (self.view_frame,r,c, padx=10, lab='Curvature', disable= True,
+        #                get=lambda: self.curvatureArtist.show, set=self.curvatureArtist.set_show)
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Upper side', 
                        get=lambda: self.curvatureArtist.upper, set=self._set_upper)
-        row += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Lower side',
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Lower side',
                        get=lambda: self.curvatureArtist.lower, set=self._set_lower)
 
 
-        row += 1
-        Blank_Widget (self.view_frame,row,col)
-        self.view_frame.grid_rowconfigure(row, weight=1)
+        r += 1
+        Blank_Widget (self.view_frame,r,c)
+        self.view_frame.grid_rowconfigure(r, weight=1)
 
-        return row, col
+        return r, c
 
 
     # -------- switch call back 
@@ -677,9 +677,9 @@ class Diagram_LeTe_Mini (Diagram_Abstract):
         pass
 
 
-    def setup_Switches(self, row=0, col=0):
+    def setup_Switches(self, r=0, c=0):
         """ no switches"""
-        return row, col
+        return r, c
 
     # -------- event handler
 
@@ -736,9 +736,9 @@ class Diagram_Thickness_Mini (Diagram_Abstract):
         """ artists are not set automatically - set from outside """
         pass
 
-    def setup_Switches(self, row=0, col=0):
+    def setup_Switches(self, r=0, c=0):
         """ no switches"""
-        return row, col
+        return r, c
 
     # -------- event handler
 
@@ -851,7 +851,7 @@ class Dialog_Abstract (ctk.CTkToplevel):
         self.edit_frame    = ctk.CTkFrame (self) 
         self.grid_rowconfigure    (0, weight=1)
         self.grid_columnconfigure (0, weight=1)
-        self.edit_frame.grid    (row=0, column=0, pady=10, padx=10, sticky="nesw")
+        self.edit_frame.grid    (row=0, column=0, pady=5, padx=5, sticky="nesw")
 
         self.widgets = []                                   # for refresh logic  
 
@@ -925,7 +925,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
         self.input_frame.grid(row=2, column=0, sticky="nwe", padx=40, pady=10)
 
         self.button_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
-        self.button_frame.grid(row=3, column=0, sticky="wes", padx=40, pady=20)
+        self.button_frame.grid(row=3, column=0, sticky="wes", padx=40, pady=(10,20))
 
         self.edit_frame.grid_columnconfigure (0, weight=1)
         self.edit_frame.grid_rowconfigure    (3, weight=1)
@@ -940,7 +940,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
         Label_Widget (self.button_frame,r,c+8, text_style='Warning',
                                 lab= lambda: self._save_warning(), width= 110)
         c += 2
-        Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, primary=True, width=100)
+        Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, width=100)
         c += 1 
         Button_Widget (self.button_frame,r,c, lab='Ok', set=self.ok, primary=True, width=100)
         c += 1 
@@ -1036,8 +1036,8 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
     Dialog to repanel airfoil  
     """
 
-    width  = 1450
-    height = 650
+    width  = 1380
+    height = 630
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
         super().__init__(master, airfoilFn, *args, nameExt='-repan', height=self.height/2, **kwargs)
@@ -1081,8 +1081,9 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
         self.header_frame.grid_columnconfigure (4, weight=1)
 
         # input fields
-        r = 0 
-        c = 0 
+        r,c = 0,0
+        Blank_Widget (self.input_frame,r,c,  height= 10)
+        r +=1 
         self.add (Field_Widget (self.input_frame,r,c, lab="Leading edge bunch", lab_width=130, 
                                 width=100, 
                                 obj=self.airfoil, get='le_bunch', set='set_le_bunch',
@@ -1264,13 +1265,13 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
 #-------------------------------------------
 
 
-class Dialog_Thickness (Dialog_Airfoil_Abstract):
+class Dialog_Geometry (Dialog_Airfoil_Abstract):
     """ 
     Dialog to change thickness, camber or TE gap of airfoil  
     """
 
-    width  = 1250
-    height = 800
+    width  = 1170
+    height = 770
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
         super().__init__(master, airfoilFn, *args, nameExt='-mod', height=self.height/2, **kwargs)
@@ -1309,11 +1310,11 @@ class Dialog_Thickness (Dialog_Airfoil_Abstract):
         Switch_Widget (self.header_frame,r,c+1, padx=(30,30), lab='Show modified airfoil',
                        get=lambda: self.showModified, set=self.set_showModified)
 
-        Label_Widget  (self.header_frame,r, c+2, padx= 20, sticky = 'nw', columnspan=1,
+        Label_Widget  (self.header_frame,r, c+2, padx= 15, sticky = 'nw', columnspan=1,
                         lab= "For geometry modifications a spline is created with the existing points.\n" + \
-                             "Thickness and camber distribution is precisely evaluated based on the spline.")
+                             "Thickness and camber distribution is evaluated based on this spline.")
         Label_Widget  (self.header_frame,r, c+3, padx= 20,  sticky = 'nw', columnspan=1,
-                        lab= "If thickness or camber is modified, the airfoil will be\n" + \
+                        lab= "If geometry is modified, the airfoil will be\n" + \
                              "repaneled and normalized to ensure exact results.")
 
         self.header_frame.grid_columnconfigure (4, weight=1)
@@ -1434,9 +1435,6 @@ class AirfoilEditor (ctk.CTk):
 
     def __init__(self, airfoilFiles, parentApp=None):
 
-        # customize Ctk 
-        ctk.set_appearance_mode("Dark")                 # Modes: "System" (standard), "Dark", "Light"
-        ctk.set_default_color_theme("blue")             # Themes: "blue" (standard), "green", "dark-blue"
 
         # called from another App? Switch to modal window
         #
@@ -1446,7 +1444,8 @@ class AirfoilEditor (ctk.CTk):
         self.isModal   = not self.parentApp is None
 
         if self.isModal: 
-            main = ctk.CTkToplevel (parentApp, fg_color= cl_background)
+            # modal - inherit ctk mode from parent
+            main = ctk.CTkToplevel (parentApp, borderwidth=10)
             main.geometry("1450x750")
             main.transient (parentApp)
             main.resizable(False, False)                # width, height
@@ -1454,8 +1453,11 @@ class AirfoilEditor (ctk.CTk):
             main.grab_set()
             self.return_OK = False
             self.return_newAirfoilPathFileName = None   # return value for parent
+
         else: 
-            main = ctk.CTk(fg_color= cl_background)
+            # ctk.set_appearance_mode("System")           # Modes: "System" (standard), "Dark", "Light"
+            # ctk.set_default_color_theme("blue")         # Themes: "blue" (standard), "green", "dark-blue"
+            main = ctk.CTk()  
             main.geometry("1500x750")
             main.minsize (width=1450, height=600)
 
@@ -1487,34 +1489,34 @@ class AirfoilEditor (ctk.CTk):
         # create main frames        
 
         switches_frame = ctk.CTkFrame     (main, height=350)
-        diagram_frame  = Diagram_Airfoil  (main, self.curAirfoil, fg_color= cl_background, view_frame=switches_frame)
-        edit_frame     = ctk.CTkFrame     (main, height=350)
+        diagram_frame  = Diagram_Airfoil  (main, self.curAirfoil, fg_color= cl_background[1], view_frame=switches_frame)
+        edit_frame     = ctk.CTkFrame     (main, height=350, fg_color= 'transparent')
         file_frame     = Edit_File_Menu   (main, self.curAirfoil, myApp=self)
 
         # maingrid 2 x 2 - diagram on top, file and edit on bottom
         main.grid_rowconfigure   (0, weight=2)
         main.grid_rowconfigure   (1, weight=0)
         main.grid_columnconfigure(1, weight=1)
-        switches_frame.grid  (row=0, column=0, pady=(0,5), padx=(5,3), ipady=5,sticky="news")
-        diagram_frame.grid   (row=0, column=1, pady=0, padx=0, sticky="news")
-        file_frame.grid      (row=1, column=0, pady=(0,5), padx=(5,3), ipady=5,sticky="news")
-        edit_frame.grid      (row=1, column=1, pady=(0,5), padx=(2,5), sticky="nesw")
+        switches_frame.grid  (row=0, column=0, pady=(5,5), padx=(5,0), ipady=5,sticky="news")
+        diagram_frame.grid   (row=0, column=1, pady=(5,5), padx=(5,5), sticky="news")
+        file_frame.grid      (row=1, column=0, pady=(0,5), padx=(5,0), ipady=5,sticky="news")
+        edit_frame.grid      (row=1, column=1, pady=0,     padx=0,     sticky="nesw")
 
         # different sections of the edit area 1 x 3 
         edit_frame.grid_rowconfigure      (0, weight=1)
         edit_frame.grid_columnconfigure   (3, weight=1)
 
         edit_Airfoil_frame    = Edit_Airfoil_Data   (edit_frame, self.curAirfoil, myApp=self)
-        edit_Airfoil_frame.grid   (row=0, column=0, pady=5, padx=5, ipadx=10, sticky="news")
+        edit_Airfoil_frame.grid   (row=0, column=0, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
 
         edit_Curvature_frame  = Edit_Panels (edit_frame, self.curAirfoil, myApp=self)
-        edit_Curvature_frame.grid (row=0, column=1, pady=5, padx=5, ipadx=10, sticky="news")
+        edit_Curvature_frame.grid (row=0, column=1, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
 
         edit_Curvature_frame  = Edit_Coordinates (edit_frame, self.curAirfoil, myApp=self)
-        edit_Curvature_frame.grid (row=0, column=2, pady=5, padx=5, ipadx=10, sticky="news")
+        edit_Curvature_frame.grid (row=0, column=2, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
 
         edit_Curvature_frame  = Edit_Curvature (edit_frame, self.curAirfoil, myApp=self)
-        edit_Curvature_frame.grid (row=0, column=3, pady=5, padx=5, ipadx=10, sticky="news")
+        edit_Curvature_frame.grid (row=0, column=3, pady=(0,5), padx=(5,5), ipadx=10, sticky="news")
 
 
         # start App - run mainloop if self is not modal otherise control is at parent

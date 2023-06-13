@@ -14,15 +14,18 @@ from typing import Union, Callable
 
 # some additional color definitions 
 cl_styles ={
-        'Normal'    : "#DCE4EE",
-        'Disabled'  : "gray70",
-        'Error'     : "salmon", 
-        'Hint'      : "#E0A721",
-        'Warning'   : "orange"
+        'Normal'    : ("gray10","gray95"),
+        'Disabled'  : ("gray30","gray70"),
+        'Error'     : ("salmon","salmon") ,
+        'Hint'      : ("#E0A721", "#E0A721"),
+        'Warning'   : ("DarkOrange3", "orange")
         }
 
-cl_edit             = "gray35"                    # background of entry fields
-cl_spin             = "gray25"                    # background of spin buttons
+cl_entry            = ("gray95","gray35")         # background of entry fields
+cl_entry_disable    = ("gray88","gray35")         # background of diabeld entry fields
+cl_spin             = ("gray75","gray25")         # background of spin buttons
+cl_spin_text        = ("gray10","gray95")         # text color of spin buttons
+cl_spin_text_disable= ("gray40","gray70")         # text color of spin buttons
 cl_button_primary   = ctk.ThemeManager.theme["CTkButton"]["fg_color"] # default Button darker  
 cl_button_secondary = ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"] # default Button darker  
 fs_header           = 18                          # font size header 
@@ -111,7 +114,7 @@ class Messagebox(ctk.CTkToplevel):
         self.message_icon = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=None, font=self.font,
                                             fg_color="transparent", hover=False,  image=self.icon)
         self.message_text = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=self.message, font=self.font,
-                                            fg_color="transparent", hover=False,  image=None)
+                                            fg_color="transparent", text_color=cl_styles ['Normal'], hover=False,  image=None)
         self.message_text._text_label.configure(wraplength=self.width *0.8, justify="center")
         self.message_icon.grid(row=0, column=0, columnspan=1, sticky="nes")
         self.message_text.grid(row=0, column=1, columnspan=2, sticky="nwes")
@@ -626,10 +629,12 @@ class Button_Widget(Base_Widget):
         """
         # overwritten because of flicker of CTkButton
         if disable: 
-            widgetCTk.configure (text_color = self._text_color('Disabled'))
+            # for buttons always color of Dark mode
+            widgetCTk.configure (text_color = self._text_color('Disabled')[1])
             widgetCTk.configure (fg_color =cl_spin )
         else: 
-            widgetCTk.configure (text_color = self._text_color())
+            # for buttons always color of Dark mode
+            widgetCTk.configure (text_color = self._text_color()[1])
             widgetCTk.configure (fg_color =self.fg_color )
 
 
@@ -746,13 +751,15 @@ class Field_Widget(Base_Widget):
             entry_width = self.width
 
         self.mainCTk = ctk.CTkEntry (entry_frame, width=entry_width, height=self.height, border_width=1,
-                                     justify=justify, fg_color=cl_edit)
+                                     justify=justify, fg_color=cl_entry)
 
         if self.spinner:
             self.subCTk = ctk.CTkButton(entry_frame, text="-", command=self.sub_button_callback,
-                                        width=button_width, height=button_height, fg_color=cl_spin)
+                                        width=button_width, height=button_height, 
+                                        fg_color=cl_spin, text_color=cl_spin_text, text_color_disabled=cl_spin_text_disable)
             self.addCTk = ctk.CTkButton(entry_frame, text="+", command=self.add_button_callback,
-                                        width=button_width, height=button_height, fg_color=cl_spin)
+                                        width=button_width, height=button_height, 
+                                        fg_color=cl_spin, text_color=cl_spin_text, text_color_disabled=cl_spin_text_disable)
             entry_frame.grid_columnconfigure((0, 2), weight=0)   # buttons don't expand
             entry_frame.grid_columnconfigure(1, weight=0)        # entry expands
 
@@ -823,10 +830,16 @@ class Field_Widget(Base_Widget):
             if curCTk_state == "normal":
                 widgetCTk.configure (state ="disabled" )         # "normal" (standard) or "disabled" (not clickable, darker color)
                 widgetCTk.configure (text_color = self._text_color('Disabled'))
+                # also set background of entry field
+                if widgetCTk == self.mainCTk: 
+                    widgetCTk.configure (fg_color = cl_entry_disable)
         else: 
             if curCTk_state == "disabled":
                 widgetCTk.configure (state ="normal" )           # "normal" (standard) or "disabled" (not clickable, darker color)
                 widgetCTk.configure (text_color = self._text_color())
+                # also set background of entry field
+                if widgetCTk == self.mainCTk: 
+                    widgetCTk.configure (fg_color = cl_entry)
 
 
 
@@ -876,9 +889,11 @@ class Option_Widget(Base_Widget):
 
         if self.spinner:
             self.prevCTk = ctk.CTkButton(button_frame, text="prev", command=self.prev_button_callback,
-                                         width=button_width, height=button_height, fg_color=cl_spin)
+                                         width=button_width, height=button_height, 
+                                         fg_color=cl_spin, text_color=cl_spin_text, text_color_disabled=cl_spin_text_disable)
             self.nextCTk = ctk.CTkButton(button_frame, text="next", command=self.next_button_callback,
-                                         width=button_width, height=button_height, fg_color=cl_spin)
+                                         width=button_width, height=button_height, 
+                                         fg_color=cl_spin, text_color=cl_spin_text, text_color_disabled=cl_spin_text_disable)
             if spinPos == 'below':
                 self.mainCTk.grid (row=self.row,   column=self.column, padx=padx, pady=pady, sticky=sticky)
                 button_frame.grid_columnconfigure(0, weight=1)       

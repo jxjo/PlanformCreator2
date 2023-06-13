@@ -7,7 +7,7 @@ The "Artists" to plot a airfoil object on a matplotlib axes
 
 """
 import numpy as np
-from artist import * 
+from artist import Artist, cl_labelGrid
 
 from common_utils import *
 from airfoil import* 

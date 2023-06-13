@@ -21,7 +21,7 @@ cl_background       = '#101010'
 cl_labelGrid        = '#B0B0B0'
 cl_text             = '#D0D0D0'
 cl_userHint         = '#E0A721'
-cl_toolbar          = 'gray35'
+cl_toolbar          = ('gray85', 'gray35')
 
 
 class Artist():
@@ -255,12 +255,17 @@ class Plot_Toolbar(NavigationToolbar2Tk):
     
     backend_bases.NavigationToolbar2.toolitems = toolitems
 
-    def __init__ (self, canvas, view_frame):
+    def __init__ (self, canvas, view_frame, background="Dark"):
         super().__init__ (canvas, view_frame, pack_toolbar=False)
 
-        self.config(background=cl_toolbar)
+        if background == "Light":
+            backColor = cl_toolbar[0]
+        else: 
+            backColor = cl_toolbar[1]
+
+        self.config(background=backColor)
         for button in self.winfo_children():
-            button.config(background=cl_toolbar)
+            button.config(background=backColor)
 
  
     def set_message(self, s):

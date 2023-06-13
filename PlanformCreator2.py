@@ -58,7 +58,7 @@ AppVersion = "0.7.0"
 
 #------------------------------------------------
 
-cl_background               = '#101010'                     # background color in diagrams
+cl_background               = ('#EBEBEB','#242424')                     # background color in diagrams
 
 #   change events for updating mainly plots
 
@@ -114,9 +114,9 @@ class Edit(ctk.CTkFrame):
         self.grid_columnconfigure   (2, weight=0, minsize=400)
         self.grid_columnconfigure   (3, weight=1, minsize=400)
 
-        self.editWing_frame.grid          (row=0, column=1, pady=5, padx=5, sticky="news")
-        self.editPlanformType_frame.grid  (row=0, column=2, pady=5, padx=5, sticky="news")
-        self.editSectionMaster_frame.grid (row=0, column=3, pady=5, padx=5, sticky="news")
+        self.editWing_frame.grid          (row=0, column=1, pady=(0,5), padx=(5,0), sticky="news")
+        self.editPlanformType_frame.grid  (row=0, column=2, pady=(0,5), padx=(5,0), sticky="news")
+        self.editSectionMaster_frame.grid (row=0, column=3, pady=(0,5), padx=(5,5), sticky="news")
 
         # major bindings for change management
 
@@ -300,7 +300,7 @@ class Edit_Wing_Data (Edit_Abstract):
 
         # a mini frame to bring the two nick fields together
         self.nick_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.nick_frame.grid    (row=6, column=3, columnspan=3, sticky="nwes")
+        self.nick_frame.grid    (row=7, column=0, columnspan=3, sticky="nwes")
 
         self.add (Field_Widget  (self.nick_frame,0,0, lab="Airfoils nick", obj=self.wing, get='airfoilNickPrefix', set='set_airfoilNickPrefix',
                                  event=SECTION_CHANGED, width= 60))
@@ -431,13 +431,13 @@ class Edit_Planform_Elliptical(Edit_Abstract):
 
         self.add (Field_Widget  (self,0,0, lab="Tip belly",       obj=self.planform, get='ellipseTipBelly', set='set_ellipseTipBelly',
                                     event=CHORD_CHANGED, lim=(0,1), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,0,3, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
+        self.add (Field_Widget  (self,1,0, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
                                     event=CHORD_CHANGED, lim=(0,1), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,1,0, lab="Ellipse shift",   obj=self.planform,  get='ellipseShift', set='set_ellipseShift',
+        self.add (Field_Widget  (self,2,0, lab="Ellipse shift",   obj=self.planform,  get='ellipseShift', set='set_ellipseShift',
                                     event=CHORD_CHANGED, lim=(0,0.5), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,2,0, lab="Ellipse correction",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
+        self.add (Field_Widget  (self,3,0, lab="Ellipse correction",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
                                     event=CHORD_CHANGED, lim=(-1,1), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,3,0, lab="LE correction",   obj=self.planform, get='leCorrection', set='set_leCorrection',
+        self.add (Field_Widget  (self,4,0, lab="LE correction",   obj=self.planform, get='leCorrection', set='set_leCorrection',
                                     event=PLANFORM_CHANGED, lim=(-1,1), dec=2, spin=True, step=0.05))
         
 
@@ -482,9 +482,9 @@ class Edit_Planform_Elliptical_StraightTE (Edit_Abstract):
 
         self.add (Field_Widget  (self,0,0, lab="Tip belly",       obj=self.planform, get='ellipseTipBelly', set='set_ellipseTipBelly',
                                  lim=(0,1),   dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
-        self.add (Field_Widget  (self,0,3, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
+        self.add (Field_Widget  (self,1,0, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
                                  lim=(0,1),   dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
-        self.add (Field_Widget  (self,1,0, lab="Ellipse correct.",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
+        self.add (Field_Widget  (self,2,0, lab="Ellipse correct.",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
                                  lim=(-1,1),  dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
 
 
@@ -676,11 +676,9 @@ class Edit_WingSection(Edit_Abstract):
         self.add(Field_Widget  (self,3,0, lab="Reynolds", obj=self.wingSection ,get='Re', set='set_Re',
                                                 lim='limits_Re', dec=0, spin=True, step=1000,
                                                 disable='isReDisabled', event=SECTION_CHANGED))
-        self.add(Field_Widget  (self,3,3, lab="Airfoil nick", obj=self.wingSection ,get='airfoilNick', 
-                                                disable=True, width=85))
 
 
-        Blank_Widget (self,4,0) 
+        # Blank_Widget (self,4,0) 
         self.add(Field_Widget  (self,5,0, lab="Airfoil", width=110, obj=self.wingSection, 
                                 get='airfoilName', set='', disable=True, event=SECTION_CHANGED))
         
@@ -690,8 +688,10 @@ class Edit_WingSection(Edit_Abstract):
         self.add(Button_Widget (self,5,4, lab='Remove', width=60, columnspan=3, sticky='w',  set=self.remove_airfoil, 
                                 disable=self.remove_airfoil_disable ))
 
-        Blank_Widget (self,6,0, width=20, height = 10) 
-        self.add(Field_Widget  (self,7,0, lab="Flap group", obj=self.wingSection ,get='flapGroup', set='set_flapGroup',
+        self.add(Field_Widget  (self,6,0, lab="Airfoil nick", obj=self.wingSection ,get='airfoilNick', 
+                                                disable=True, width=110))
+        Blank_Widget (self,7,0, width=20, height = 10) 
+        self.add(Field_Widget  (self,8,0, lab="Flap group", obj=self.wingSection ,get='flapGroup', set='set_flapGroup',
                                                 lim=(0,9), dec=0, spin=True, step=1,
                                                 disable='isTip', event=SECTION_CHANGED))
 
@@ -755,7 +755,7 @@ class Diagrams(ctk.CTkTabview):
     Master frame for diagrams - childs are the different plot frames 
     """
     def __init__(self, master, wingFn, *args, **kwargs):
-        super().__init__(master, *args, **kwargs)
+        super().__init__(master, *args, text_color="white", **kwargs)
         """
         Args:
             :master: frame self belongs to
@@ -771,16 +771,16 @@ class Diagrams(ctk.CTkTabview):
         for plot_cls in Diagram_Abstract.__subclasses__():
             if plot_cls != Diagram_Planform_Mini: 
                 tab_frame = self.add("   " + plot_cls.name + "   ")
-                tab_frame.grid_columnconfigure(0, weight=1)
-                tab_frame.grid_rowconfigure(1, weight=1)
+                tab_frame.grid_columnconfigure(1, weight=1)
+                tab_frame.grid_rowconfigure(0, weight=1)
 
                 # switches
-                view_frame=  ctk.CTkFrame(tab_frame, fg_color="transparent")
-                view_frame.grid (row=0, column=0, padx=(5, 5), pady=5, sticky='we')
+                view_frame=  ctk.CTkFrame(tab_frame)
+                view_frame.grid (row=0, column=0, padx=(0, 5), pady=(0,0), sticky='news')
 
                 # plot area
                 plot_frame=  ctk.CTkFrame(tab_frame, fg_color="transparent")
-                plot_frame.grid (row=1, column=0, padx=(0,0), pady=0, sticky='wens')
+                plot_frame.grid (row=0, column=1, padx=(0,0), pady=0, sticky='wens')
                 plot_frame.grid_columnconfigure(0, weight=1)
                 plot_frame.grid_rowconfigure(0, weight=1)
                 
@@ -790,7 +790,7 @@ class Diagrams(ctk.CTkTabview):
 
         # set size of tab view titles
         self._segmented_button.configure(font=("", 16))
-        self.configure(fg_color=cl_background)
+        # self.configure(fg_color=cl_background)
         self.configure(command=self.newTabSelected)
         self.newTabSelected ()    
 
@@ -846,10 +846,9 @@ class Diagram_Abstract(ctk.CTkFrame):
 
         # connect tk and pyplot
         self.canvas = FigureCanvasTkAgg(self.figure, self)
-        self.canvas._tkcanvas.grid_columnconfigure(0, weight=1)
-        self.canvas._tkcanvas.grid_rowconfigure   (0, weight=1)
+        # take background of dark mode for canvas
+        self.canvas._tkcanvas.configure(background= cl_background[1])
         self.canvas._tkcanvas.grid (row=0, column=0, pady=0, padx=0, sticky="news")
-        self.canvas._tkcanvas.configure(background= cl_background)
 
         # common axes for this diagram
         self.create_axes()
@@ -860,10 +859,9 @@ class Diagram_Abstract(ctk.CTkFrame):
 
         # init of switches / plots if a frame for the switches is available 
         if self.view_frame: 
-            col = 0 
             self.view_frame.grid_columnconfigure(0, weight=1)   # to center switches
-            col += 1
-            self.setup_Switches (row=0, col=1)                       
+            self.view_frame.grid_columnconfigure(2, weight=1)   # to center switches
+            self.setup_Switches (r=0, c=1)                       
 
         # react on changes of model
         self.setChangeBindings ()
@@ -879,7 +877,7 @@ class Diagram_Abstract(ctk.CTkFrame):
     def create_axes (self):
         """ setup axes, axis for this plot type """
         self.axes : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
-        self.figure.subplots_adjust(left=0.04, bottom=0.07, right=0.98, top=0.99, wspace=None, hspace=None)
+        self.figure.subplots_adjust(left=0.04, bottom=0.07, right=0.98, top=0.98, wspace=None, hspace=None)
 
 
     def setup_axes(self):
@@ -893,16 +891,15 @@ class Diagram_Abstract(ctk.CTkFrame):
         self.gridArtist.plot()          # force to show first time
 
 
-    def setup_Switches(self, row=0, col=0):
+    def setup_Switches(self, r=0, c=0):
         """ define on/off switches ffor this plot type"""
 
-        col += 1 
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Grid', 
-                       get=lambda: self.gridArtist.show, set=self.gridArtist.set_show)
+        Header_Widget (self.view_frame,0,0, width=160, columnspan=3, lab='View')
 
-        # extra col to center all the switches
-        col += 1 
-        self.view_frame.grid_columnconfigure(col, weight=1)
+        r += 1 
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Grid', 
+                       get=lambda: self.gridArtist.show, set=self.gridArtist.set_show)
+        return r, c 
      
 
     def refresh(self, dummy): 
@@ -963,41 +960,37 @@ class Diagram_Planform (Diagram_Abstract):
         self.dxfArtist          = RefPlanform_DXF_Artist (self.axes, self._wingFn)
 
 
-    def setup_Switches (self, row = 0, col = 0 ):
+    def setup_Switches (self, r = 0, c = 0 ):
         """ define on/off switches for this plot types"""
 
+        r,c = super().setup_Switches(r,c)
+
         # the whole plot work will be done by the artists
-        # plot the real planform on top     
-        # Switch_Widget (self.view_frame,row,0, padx=10, lab='Planform', 
-        #         get=lambda: self.planformArtist.show, set=self.planformArtist.set_show)
-        row = 0 
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Chord lines', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Chord lines', 
                 get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Wing sections', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Wing sections', 
                 get=lambda: self.sectionsArtist.show, set=self.sectionsArtist.set_show)
 
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Current section', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Current section', 
                 get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Airfoil names', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Airfoil names', 
                 get=lambda: self.airfoilNameArtist.show, set=self.airfoilNameArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Flaps', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Flaps', 
                 get=lambda: self.flapArtist.show, set=self.flapArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Reference elliptical', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Ref elliptical', 
                 get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
 
         if (self.wing.refPlanform_DXF): 
-            col += 1
-            Switch_Widget (self.view_frame,row,col, padx=10, lab='Reference DXF', 
+            r += 1
+            Switch_Widget (self.view_frame,r,c, padx=10, lab='Ref DXF', 
                     get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
         
-        super().setup_Switches(row,col)
-
 
     # -------- event handler
 
@@ -1124,7 +1117,7 @@ class Diagram_Planform_Mini (Diagram_Abstract):
         """ artists are not set automatically - set from outside """
         pass
 
-    def setup_Switches (self, row = 0, col=0):
+    def setup_Switches (self, r = 0, col=0):
         """ no switches"""
         pass
 
@@ -1156,8 +1149,8 @@ class Diagram_ChordDistribution (Diagram_Abstract):
 
     def setup_axes(self):
         """ setup axes, axis, artiss for this plot type """
-        self.axes.set_ylim([ 0.0, 1.1])
-        self.axes.set_xlim([ 0.0, 1.1])
+        self.axes.set_ylim([ 0.0, 1.19])
+        self.axes.set_xlim([ 0.0, 1.06])
         self.axes.text(.95,.9, self.wing.name, fontsize ='x-large', ha='right', transform=self.axes.transAxes)
 
     def setup_artists(self):
@@ -1173,30 +1166,30 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         self.dxfArtist          = RefChord_DXF_Artist (self.axes, self._wingFn, norm=True)
 
 
-    def setup_Switches(self, row=0, col=0):
+    def setup_Switches(self, r=0, c=0):
         """ define on/off switches ffor this plot type"""
 
-        # Switch_Widget  (self.view_frame,row,0, lab='Chord distribution', 
+        r,c = super().setup_Switches(r, c)
+
+        # Switch_Widget  (self.view_frame,r,0, lab='Chord distribution', 
         #                 get=lambda: self.chordArtist.show, set=self.chordArtist.set_show)
-        row = 0 
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Chord lines', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Chord lines', 
                 get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Wing sections', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Wing sections', 
                         get=lambda: self.sectionsArtist.show, set=self.sectionsArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Current section', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Current section', 
                 get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Reference elliptical', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Ref elliptical', 
                         get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
         if (self.wing.refPlanform_DXF.isValid): 
-            col += 1
-            Switch_Widget  (self.view_frame,row,col, padx=10, lab='Reference DXF', 
+            r += 1
+            Switch_Widget  (self.view_frame,r,c, padx=10, lab='Ref DXF', 
                             get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
 
-        super().setup_Switches(row, col)
 
     # -------- event handler
 
@@ -1300,17 +1293,18 @@ class Diagram_Airfoils (Diagram_Abstract):
                                                   strak=False, onPick=self.airfoilPicked)
 
 
-    def setup_Switches(self, row=0, col=0):
+    def setup_Switches(self, r=0, c=0):
         """ define on/off switches for this plot type"""
-        row = 0 
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='In real size', 
+
+        r,c =super().setup_Switches(r, c)
+
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='In real size', 
                        get=lambda: self.airfoilArtist.abs, set=self.airfoilArtist.set_abs)
-        col += 1
-        Switch_Widget (self.view_frame,row,col, padx=10, lab='Straked airfoils', 
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Straked airfoils', 
                        get=self.show_strakedAirfoils, set=self.set_show_strakedAirfoils)
 
-        super().setup_Switches(row, col)
 
     # -------- switch call back 
 
@@ -1430,7 +1424,7 @@ class Dialog_Abstract (ctk.CTkToplevel):
         self.edit_frame    = ctk.CTkFrame (self) 
         self.grid_rowconfigure    (0, weight=1)
         self.grid_columnconfigure (0, weight=1)
-        self.edit_frame.grid    (row=0, column=0, pady=10, padx=15, sticky="nesw")
+        self.edit_frame.grid    (row=0, column=0, pady=5, padx=5, sticky="nesw")
 
         self.widgets = []                                   # for refresh logic  
 
@@ -1984,9 +1978,9 @@ class Edit_File_Menu(Edit_Abstract):
     def init (self):
 
         self.grid_columnconfigure   (0, weight=1)
-        self.add (Header_Widget (self,0,0, lab=self.name, width=80))
+        self.add (Header_Widget (self,0,0, lab=self.name, width=160))
 
-        Button_Widget (self,1,0, lab='New',         width=100, pady=4, sticky = '', set=self.myApp.new)
+        Button_Widget (self,1,0, lab='New',         width=100, padx=30, pady=4, sticky = '', set=self.myApp.new)
         Button_Widget (self,2,0, lab='Open',        width=100, pady=4, sticky = '', set=self.myApp.open)
         Button_Widget (self,3,0, lab='Save',        width=100, pady=4, sticky = '', set=self.myApp.save)
         Button_Widget (self,4,0, lab='Save As...',  width=100, pady=4, sticky = '', set=self.myApp.saveAs)
@@ -1995,7 +1989,7 @@ class Edit_File_Menu(Edit_Abstract):
         # self.option_import = Option_Widget (self,5,0, width = 100, padx=(10,0), pady=4, 
         #                                     get=self.importDisplayValue, set = self.set_importType,
         #                                     options=self.importChoices())
-        self.option_export = Option_Widget (self,6,0, width = 100, padx=(10,0), pady=4, 
+        self.option_export = Option_Widget (self,6,0, width = 100, pady=4, sticky = '',
                                             get=self.exportDisplayValue, set = self.set_exportType,
                                             options=self.exportChoices())
 
@@ -2025,7 +2019,11 @@ class App(ctk.CTk):
     name = AppName  
 
     def __init__(self, paramFile):
-        super().__init__(fg_color= cl_background)
+        super().__init__()
+
+        # customize Ctk 
+        # ctk.set_appearance_mode("System")                 # Modes: "System" (standard), "Dark", "Light"
+        # ctk.set_default_color_theme("blue")             # Themes: "blue" (standard), "green", "dark-blue"
 
         # setup event root - so there will be a single root -> ctk root
         self.ctk_root = self
@@ -2033,11 +2031,6 @@ class App(ctk.CTk):
         # create the 'wing' model 
         self.paramFile = '' 
         self.loadNewWing (paramFile)
-
-        # configure customtkinter
-        self.appearance_mode = "Dark"                   
-        ctk.set_appearance_mode(self.appearance_mode)   # Modes: "System" (standard), "Dark", "Light"
-        ctk.set_default_color_theme("blue")             # Themes: "blue" (standard), "green", "dark-blue"
 
         # maximize the window using state property
         # self.state('zoomed')
@@ -2048,18 +2041,16 @@ class App(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.onExit)
 
         # create main frames        
-        diagram_frame = Diagrams        (self, self.wing, fg_color= cl_background)
-        edit_frame    = Edit            (self, self.wing, height=500)
-        file_frame    = Edit_File_Menu  (self, self.wing)
+        diagram_frame = Diagrams        (self, self.wing, border_width=0, corner_radius=0, fg_color=cl_background ) 
+        edit_frame    = Edit            (self, self.wing, height=500, fg_color= 'transparent')
+        file_frame    = Edit_File_Menu  (self, self.wing, width=200)
 
         # maingrid 2 x 2 - diagram on top, file and edit on bottom
         self.grid_rowconfigure   (0, weight=1)
-        self.grid_rowconfigure   (1, weight=1)
         self.grid_columnconfigure(1, weight=1)
-        diagram_frame.grid (row=0, column=0, columnspan=2, pady=0, padx=0, sticky="news")
-        file_frame.grid    (row=1, column=0,               pady=(0,5), padx=(5,3), ipady=5,sticky="news")
-        edit_frame.grid    (row=1, column=1,               pady=(0,5), padx=(2,5), sticky="nesw")
-
+        diagram_frame.grid (row=0, column=0, columnspan=2, pady=(0,5), padx=5, sticky="news")
+        file_frame.grid    (row=1, column=0,               pady=(0,5), padx=(5,0), ipady=5,sticky="news")
+        edit_frame.grid    (row=1, column=1,               pady=0,     padx=0, sticky="nesw")
 
 
     def wing (self) -> Wing:

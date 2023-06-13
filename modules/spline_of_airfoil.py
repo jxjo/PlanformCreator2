@@ -747,101 +747,110 @@ class SideOfAirfoil:
 # ------------ test functions - to activate  -----------------------------------
 
 
-def splineCompare ():
+# def splineCompare ():
 
-    # compare different splines at LE 
-
-    import matplotlib.pyplot as plt
-    from airfoil_examples import Root_Example, Tip_Example
-    
-    thick =Root_Example().spline.thickness
-
-    spl1D     = Spline1D (thick.x, thick.y)
-    spl1D_arc = Spline1D (thick.x, thick.y, arccos=True)
-    spl1D_arc_nat = Spline1D (thick.x, thick.y, boundary='natural', arccos=True)
-    spl2D     = Spline2D (thick.x, thick.y)
-    
-    # complete 2D foil spline 
-    x2D = np.concatenate ((np.flip(thick.x), thick.x[1:]))
-    y2D = np.concatenate ((np.flip(thick.y), -thick.y[1:]))
-    spl2D_ref = Spline2D (x2D, y2D)
-
-    # new x 
-    xNew = cosinus_distribution (200, 0.9, 0.7)
-
-    y1DNew = spl1D.eval(xNew)
-    y1DNew_arc = spl1D_arc.eval(xNew)
-    y1DNew_arc_nat = spl1D_arc_nat.eval(xNew)
-    y2DNew = np.zeros(len(xNew))
-    y2DNew_ref = np.zeros(len(xNew))
-
-    for i, xi in enumerate (xNew):
-
-        # find the arc position u for the desired x-value 
-        ui = findMin (lambda u: abs(spl2D.evalx(u) - xi), 0.41, bounds=(0.0, 1), no_improve_thr=10e-10)
-        # get new y value at this position 
-        y2DNew[i] = spl2D.evaly(ui)
-
-        ui = findMin (lambda u: abs(spl2D_ref.evalx(u) - xi), 0.75, bounds=(0.5, 1), no_improve_thr=10e-10)
-        # get new y value at this position 
-        y2DNew_ref[i] = - spl2D_ref.evaly(ui)
-
-
-    dy1D = y1DNew - y2DNew_ref
-    dy1D_arc = y1DNew_arc - y2DNew_ref
-    dy1D_arc_nat = y1DNew_arc_nat - y2DNew_ref
-    dy2D = y2DNew - y2DNew_ref
-
-    fig, axa = plt.subplots(2, 1, figsize=(16,8))
-    fig.subplots_adjust(left=0.05, bottom=0.05, right=0.98, top=0.95, wspace=None, hspace=0.15)
-
-    ax1 = axa[0]
-    ax2 = axa[1]
-    ax1.grid(True)
-    ax1.axis('equal')
-    ax2.grid(True)
-    ax2.set_xlim([ -0.001,  0.01])
-    ax2.set_ylim([ -0.00001,  0.00001])
-
-
-    # ax1.plot(thick.x, thick.y, '-b', label='x y')
-    ax1.plot(xNew, y1DNew, 'xr', label='y1DNew')
-    ax1.plot(xNew, y1DNew_arc, 'xm', label='y1DNew arccos')
-    ax1.plot(xNew, y2DNew, 'xg', label='y2DNew')
-    ax1.plot(xNew, y2DNew_ref, 'xb', label='y2DNew ref')
-
-    ax2.plot(xNew, dy1D, '-r', label='delta y1DNew')
-    ax2.plot(xNew, dy1D_arc, '-m', label='delta y1DNew arccos')
-    # ax2.plot(xNew, dy1D_arc_nat, '-b', label='delta y1DNew arccos natural')
-    ax2.plot(xNew, dy2D, '-g', label='delta y2DNew')
-
-    ax1.legend()
-    ax2.legend()
-    plt.show()
-
-
-# def curvatureTest():
+#     # compare different splines at LE 
 
 #     import matplotlib.pyplot as plt
 #     from airfoil_examples import Root_Example, Tip_Example
     
-#     air =Tip_Example()
+#     thick =Root_Example().spline.thickness
 
-#     y = air.y
-#     x = air.x
-#     spl = Spline2D (x,y) 
-#     curv = spl.curvature (None)
+#     spl1D     = Spline1D (thick.x, thick.y)
+#     spl1D_arc = Spline1D (thick.x, thick.y, arccos=True)
+#     spl1D_arc_nat = Spline1D (thick.x, thick.y, boundary='natural', arccos=True)
+#     spl2D     = Spline2D (thick.x, thick.y)
+    
+#     # complete 2D foil spline 
+#     x2D = np.concatenate ((np.flip(thick.x), thick.x[1:]))
+#     y2D = np.concatenate ((np.flip(thick.y), -thick.y[1:]))
+#     spl2D_ref = Spline2D (x2D, y2D)
 
-#     plt.subplots(1, 1, figsize=(16,8))
-#     plt.grid(True)
-#     # plt.axis("equal")
+#     # new x 
+#     xNew = cosinus_distribution (200, 0.9, 0.7)
 
-#     plt.xlabel("u")
-#     plt.ylabel("curvature")
-#     plt.plot(spl.u, curv, "-r", label="Curvature")
-#     plt.legend()
+#     y1DNew = spl1D.eval(xNew)
+#     y1DNew_arc = spl1D_arc.eval(xNew)
+#     y1DNew_arc_nat = spl1D_arc_nat.eval(xNew)
+#     y2DNew = np.zeros(len(xNew))
+#     y2DNew_ref = np.zeros(len(xNew))
 
+#     for i, xi in enumerate (xNew):
+
+#         # find the arc position u for the desired x-value 
+#         ui = findMin (lambda u: abs(spl2D.evalx(u) - xi), 0.41, bounds=(0.0, 1), no_improve_thr=10e-10)
+#         # get new y value at this position 
+#         y2DNew[i] = spl2D.evaly(ui)
+
+#         ui = findMin (lambda u: abs(spl2D_ref.evalx(u) - xi), 0.75, bounds=(0.5, 1), no_improve_thr=10e-10)
+#         # get new y value at this position 
+#         y2DNew_ref[i] = - spl2D_ref.evaly(ui)
+
+
+#     dy1D = y1DNew - y2DNew_ref
+#     dy1D_arc = y1DNew_arc - y2DNew_ref
+#     dy1D_arc_nat = y1DNew_arc_nat - y2DNew_ref
+#     dy2D = y2DNew - y2DNew_ref
+
+#     fig, axa = plt.subplots(2, 1, figsize=(16,8))
+#     fig.subplots_adjust(left=0.05, bottom=0.05, right=0.98, top=0.95, wspace=None, hspace=0.15)
+
+#     ax1 = axa[0]
+#     ax2 = axa[1]
+#     ax1.grid(True)
+#     ax1.axis('equal')
+#     ax2.grid(True)
+#     ax2.set_xlim([ -0.001,  0.01])
+#     ax2.set_ylim([ -0.00001,  0.00001])
+
+
+#     # ax1.plot(thick.x, thick.y, '-b', label='x y')
+#     ax1.plot(xNew, y1DNew, 'xr', label='y1DNew')
+#     ax1.plot(xNew, y1DNew_arc, 'xm', label='y1DNew arccos')
+#     ax1.plot(xNew, y2DNew, 'xg', label='y2DNew')
+#     ax1.plot(xNew, y2DNew_ref, 'xb', label='y2DNew ref')
+
+#     ax2.plot(xNew, dy1D, '-r', label='delta y1DNew')
+#     ax2.plot(xNew, dy1D_arc, '-m', label='delta y1DNew arccos')
+#     # ax2.plot(xNew, dy1D_arc_nat, '-b', label='delta y1DNew arccos natural')
+#     ax2.plot(xNew, dy2D, '-g', label='delta y2DNew')
+
+#     ax1.legend()
+#     ax2.legend()
 #     plt.show()
+
+
+def curvatureTest():
+
+    import matplotlib.pyplot as plt
+    from airfoil_examples import Root_Example, Tip_Example
+    
+    air =Tip_Example()
+
+    y = air.y
+    x = air.x
+    spl = Spline2D (x,y) 
+    curv = spl.curvature (np.linspace(0,1,200))
+
+    fig, ax = plt.subplots(1, 1, figsize=(10,5))
+    ax.set_yscale('symlog', linthresh=1)
+    ax.plot(spl.u, curv, "-r", label="Curvature")
+
+    plt.show()
+
+def symlog_bug():
+
+    import matplotlib.pyplot as plt
+    import warnings
+    warnings.filterwarnings("ignore", message = "All values for SymLogScale")
+
+    ax = plt.figure().add_subplot()
+    ax.set_yscale('symlog')
+
+    x = np.linspace(-100,100,200)
+    # ax.plot(x, x)
+
+    plt.show()
 
 
 # def lineTest ():
@@ -1043,10 +1052,11 @@ if __name__ == "__main__":
 
     # ---- Test -----
 
-    splineCompare()
+    # splineCompare()
     # blendTest()
     # cubicSplineTest()
     # lineTest()
+    symlog_bug()
     # curvatureTest()
     # u_fxy_Test()
 
