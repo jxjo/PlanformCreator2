@@ -46,7 +46,7 @@ from modules.airfoil_artists    import *
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "0.7.0"
+AppVersion = "0.8.0"
 
 #------------------------------------------------
 
@@ -435,17 +435,21 @@ class Diagram_Abstract(ctk.CTkFrame):
         self.setup_artists ()
 
         # init of switches / plots if a frame for the switches is available 
-        r,c = 0,0
+        r,c = 0,1
         if self.view_frame: 
             self.view_frame.grid_columnconfigure(0, weight=1)   # to center switches
-            c += 1
-            r,c = self.setup_Switches (r=0, c=1)                       
+            self.view_frame.grid_columnconfigure(2, weight=1)
 
-            r +=2
+            r,c = self.setup_Switches (r, c)                       
+
+            r +=1
+            Blank_Widget (self.view_frame,r,c)
+            self.view_frame.grid_rowconfigure(r, weight=1)
+            r +=1
             Label_Widget (self.view_frame, r, 0, lab='Pan and zoom')
             r +=1
             self.toolbar = Plot_Toolbar(self.canvas, self.view_frame, background=ctk.get_appearance_mode())
-            self.toolbar.grid (row=r+2, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,10))
+            self.toolbar.grid (row=r, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,10))
 
         # react on changes of model
         self.setChangeBindings ()
@@ -488,8 +492,6 @@ class Diagram_Abstract(ctk.CTkFrame):
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Grid', 
                        get=lambda: self.gridArtist.show, set=self.gridArtist.set_show)
 
-        # extra col to center all the switches
-        self.view_frame.grid_columnconfigure(c+1, weight=1)
         return r, c 
 
     def refresh(self, dummy): 
@@ -534,7 +536,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         warnings.filterwarnings("ignore", message = "All values for SymLogScale")
         self.ax2.set_yscale('symlog', linthresh=1)
 
-        self.ax2.set_ylim([ 1000, -1000])
+        self.ax2.set_ylim([ -100, 1000])
         # self.ax2.set_aspect('auto', 'datalim')
         self.ax2.grid ()
 
@@ -581,11 +583,6 @@ class Diagram_Airfoil (Diagram_Abstract):
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Lower side',
                        get=lambda: self.curvatureArtist.lower, set=self._set_lower)
-
-
-        r += 1
-        Blank_Widget (self.view_frame,r,c)
-        self.view_frame.grid_rowconfigure(r, weight=1)
 
         return r, c
 
@@ -1445,7 +1442,7 @@ class AirfoilEditor (ctk.CTk):
 
         if self.isModal: 
             # modal - inherit ctk mode from parent
-            main = ctk.CTkToplevel (parentApp, borderwidth=10)
+            main = ctk.CTkToplevel (parentApp)
             main.geometry("1450x750")
             main.transient (parentApp)
             main.resizable(False, False)                # width, height

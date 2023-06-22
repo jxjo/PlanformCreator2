@@ -434,7 +434,7 @@ class Spline2D:
 
         Parameters
         ----------
-        s :   Scalar or an array of normed arc length 0..1 at which to return 
+        u :   Scalar or an array of normed arc length 0..1 at which to return 
               the value of the spline or its derivatives. 
         der : int, optional - The order of derivative of the spline to compute.
 
@@ -506,7 +506,311 @@ class Spline2D:
 
 
 
+
+#------------ Bezier -----------------------------------
+
+
+class BezierCubic: 
+    """Build a cubic Bezier curve defined by 4 points """
+
+
+    def __init__ (self, px, py):
+        """
+        Build a cubic Bezier curve defined by 4 points.
+
+        Parameters
+        ----------
+        x,y : array_like - coordinates of the 4 points 
+             
+        """
+        self._px = None                         # definition points
+        self._py = None
+
+        self._x  = None                         # cached x,y results
+        self._y  = None
+        self._u  = None                         # cached parameter u 
+
+        self.set_points(px, py)
+
+        return
+
+    def eval (self, u, der=0):
+        """
+        Evaluate self or its derivatives.
+
+        Parameters
+        ----------
+        u :   Scalar or an array of normed arc length 0..1 at which to return 
+              the value of the spline or its derivatives. 
+        der : int, optional - The order of derivative of the spline to compute.
+
+        Returns
+        -------
+        x,y : Scalar or an array representing the spline function evaluated at
+              the points in ``s``.  .  eg. x,y  or  dx,dy  or  ddx, ddy
+        """
+
+        if not np.array_equal (u, self._u): 
+            self._u = u 
+            self._x = self._eval (self._px, u, der)
+            self._y = self._eval (self._py, u, der)
+        return self._x, self._y
+    
+
+    def eval_y_on_x (self, x, fast=True):
+        """
+        Evaluate the y value based on x 
+
+        A interpolation is made to find u(x) - either linear (fast=True) or based on the curve
+
+        Parameters
+        ----------
+        x :   Scalar - x-value 
+        fast : bool, optional - only a linear interpolation of u is made .
+
+        Returns
+        -------
+        y : Scalar - y evaluated at x 
+        """
+
+        if fast and (not self._x is None) and (x >= self._x[0] and x <= self._x[-1]):
+            i = min(bisect.bisect(self._x, x)-1, len(self._x) -2)
+            # interpolate u 
+            u = ((self._u[i+1]-self._u[i])/(self._x[i+1]-self._x[i])) * (x - self._x[i]) + self._u[i]
+            # evaluate y from u 
+            return self._eval (self._py, u)
+        else: 
+            raise ValueError ("Bezier: evaluation of y from x = %f not implemented" %x)
+        
+
+    def set_points(self, px, py):
+        """ (re) sets the definition points of the Bezier curve"""
+
+        n = len(px)
+        if n != 4:
+            raise ValueError('Cubic Bezier: Must have 4 points')
+        elif n != len(py): 
+            raise ValueError('Spline: Length of x,y is different')
+
+        self._px = np.copy(px)
+        self._py = np.copy(py)
+
+        # reset already evaluated values 
+        self._x  = None
+        self._y  = None
+        self._u =  None
+
+
+    def _eval (self, pxy, u, der=0):
+        """ evaluates self at u for coordinate xory
+
+        Parameters
+        ----------
+        xy:   either x or y coordinates of the bezier definition points
+        u :   Scalar or an array of normed arc length 0..1 at which to return 
+              the value of the spline or its derivatives. 
+        der : int, optional - The order of derivative of the spline to compute.
+        """
+        if der == 0: 
+            f =   (1-u)**3       *pxy[0] + \
+                3*(1-u)**2 *u    *pxy[1] + \
+                3*(1-u)    *u**2 *pxy[2] + \
+                            u**3 *pxy[3]
+        else:
+            raise ValueError('Cubic Bezier: Derivatives currently not implemented')
+
+        return f 
+
+
+
+class BezierQuadratic: 
+    """Build a quadratic Bezier curve defined by 3 points """
+
+
+    def __init__ (self, px, py):
+        """
+        Build a quadratic Bezier curve defined by 3 points.
+
+        Parameters
+        ----------
+        x,y : array_like - coordinates of the 3 points 
+             
+        """
+        self._px = None                         # definition points
+        self._py = None
+
+        self._x  = None                         # cached x,y results
+        self._y  = None
+        self._u  = None                         # cached parameter u 
+
+        self.set_points(px, py)
+
+        return
+
+    def eval (self, u, der=0):
+        """
+        Evaluate self or its derivatives.
+
+        Parameters
+        ----------
+        u :   Scalar or an array of normed arc length 0..1 at which to return 
+              the value of the spline or its derivatives. 
+        der : int, optional - The order of derivative of the spline to compute.
+
+        Returns
+        -------
+        x,y : Scalar or an array representing the spline function evaluated at
+              the points in ``s``.  .  eg. x,y  or  dx,dy  or  ddx, ddy
+        """
+
+        if not np.array_equal (u, self._u):         #  u array in cache? 
+            x = self._eval (self._px, u, der)
+            y = self._eval (self._py, u, der)
+            if len(u) >= 50:                        # refill cache
+                self._u = u 
+                self._x = x
+                self._y = y
+        else:                                       # get cached values 
+            x = self._x
+            y = self._y 
+        return self._x, self._y
+    
+
+    def eval_y_on_x (self, x, fast=True):
+        """
+        Evaluate the y value based on x 
+
+        A interpolation is made to find u(x) - either linear (fast=True) or based on the curve
+
+        Parameters
+        ----------
+        x :   Scalar - x-value 
+        fast : bool, optional - only a linear interpolation of u is made .
+
+        Returns
+        -------
+        y : Scalar - y evaluated at x 
+        """
+
+        if fast and (not self._x is None) and (x >= self._x[0] and x <= self._x[-1]):
+            i = min(bisect.bisect(self._x, x)-1, len(self._x) -2)
+            # interpolate u 
+            u = ((self._u[i+1]-self._u[i])/(self._x[i+1]-self._x[i])) * (x - self._x[i]) + self._u[i]
+            # evaluate y from u 
+            return self._eval (self._py, u)
+        else: 
+            raise ValueError ("Bezier: evaluation of y from x = %f not implemented" %x)
+        
+
+    def set_points(self, px, py):
+        """ (re) sets the definition points of the Bezier curve"""
+
+        n = len(px)
+        if n != 3:
+            raise ValueError('Quadratic Bezier: Must have 3 points')
+        elif n != len(py): 
+            raise ValueError('Spline: Length of x,y is different')
+
+        self._px = np.copy(px)
+        self._py = np.copy(py)
+
+        # reset already evaluated values 
+        self._x  = None
+        self._y  = None
+        self._u =  None
+
+
+    def _eval (self, pxy, u, der=0):
+        """ evaluates self at u for coordinate xory
+
+        Parameters
+        ----------
+        xy:   either x or y coordinates of the bezier definition points
+        u :   Scalar or an array of normed arc length 0..1 at which to return 
+              the value of the spline or its derivatives. 
+        der : int, optional - The order of derivative of the spline to compute.
+        """
+        if der == 0: 
+            f =   (1-u)**2    *pxy[0] + \
+                2*(1-u)    *u *pxy[1] + \
+                         u**2 *pxy[2]
+        else:
+            raise ValueError('Quadratic Bezier: Derivatives currently not implemented')
+
+        return f 
+
+
 # ------------ test functions - to activate  -----------------------------------
+
+
+# def test_BezierQuadratic (): 
+    
+#     import matplotlib.pyplot as plt
+
+#     px = [  0,  0.95,  1.0]  
+#     py = [  0,  0.5,  0.0]  
+
+#     u = np.linspace( 0, 1 , 200)
+
+#     bez = BezierQuadratic (px, py)
+#     x,y = bez.eval(u)
+    
+#     plt.plot(px, py, "or", label="Points")    
+#     plt.plot(x, y, label="Bezier Quad")
+
+#     plt.plot(u, x, "b", label="x(u)")
+#     plt.plot(u, y, "g", label="y(u)")
+
+#     # try to simulate with cubic spline
+#     # unew = np.linspace( 0, 1 , 10)
+#     # px,py = bez.eval(unew)
+
+#     # spl = Spline1D (px, py, boundary='notaknot')
+#     # x = np.linspace( 0, 1 , 200)
+#     # y = spl.eval(x)
+#     # plt.plot(px, py, "og", label="Points Spline")    
+#     # plt.plot(x, y, "g", label="Cubic Spline")
+
+
+#     plt.grid(True)
+
+#     plt.legend()
+#     plt.show()
+
+
+# def test_BezierCubic (): 
+    
+#     import matplotlib.pyplot as plt
+
+#     px = [  0,  0.8,  1.0,  1.0]  
+#     py = [  1,  1.0,  0.5,  0.0]  
+
+#     u = np.linspace( 0, 1 , 200)
+
+#     bez = BezierCubic (px, py)
+#     x,y = bez.eval(u)
+    
+#     plt.plot(px, py, "or", label="Points")    
+#     plt.plot(x, y, label="Bezier")
+
+#     plt.plot(u, x, "b", label="x(u)")
+#     plt.plot(u, y, "g", label="y(u)")
+
+
+
+#     # px = [  0,  0.9,  1.0]  
+#     # py = [  0,  0.1,  0.0]  
+#     # spl = Spline1D (px, py, boundary='natural')
+#     # x = np.linspace( 0, 1 , 200)
+#     # y = spl.eval(x)
+#     # plt.plot(px, py, "og", label="Points Spline")    
+#     # plt.plot(x, y, "g", label="Spline")
+
+
+#     plt.grid(True)
+
+#     plt.legend()
+#     plt.show()
 
 
 # def test_spline1D (): 
@@ -583,6 +887,8 @@ class Spline2D:
 
 if __name__ == '__main__':
     
+    # test_BezierQuadratic ()
+    # test_BezierCubic () 
     # test_spline1D ()
     # test_spline2D ()
     pass

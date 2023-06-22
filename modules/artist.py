@@ -6,16 +6,15 @@
 The "Artists" to plot a wing object on a matplotlib axes
 
 """
+from common_utils import *
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import matplotlib.backends.backend_tkagg
+# import matplotlib.backends.backend_tkagg
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk 
+# import tkinter as tk
 
 from cycler import cycler  
-
-import numpy as np
-
-from common_utils import *
 
 cl_background       = '#101010'
 cl_labelGrid        = '#B0B0B0'
@@ -59,7 +58,8 @@ class Artist():
     plt.rcParams.update({'grid.alpha': 0.2})                    # transparency, between 0.0 and 1.0  
 
 
-    def __init__ (self, axes, modelFn, norm = False, onPick=None, show=False, showMarker=True):
+    def __init__ (self, axes, modelFn, norm = False, onPick=None, onMove=None,
+                  show=False, showMarker=True):
 
         self.ax : plt.Axes = axes
         self._modelFn = modelFn             # we get a bounded method to the model e.g. Wing 
@@ -76,6 +76,14 @@ class Artist():
             self._pickActive = False
             self._pickCallback = None
 
+        if onMove:
+            self._mouseActive = True
+            self._moveCallback = onMove
+        else:
+            self._mouseActive = False
+            self._moveCallback = None
+
+        self._dragManager = None
         self._curLineLabel = None
 
         self.userTip  = self._defaultUserTip ()
@@ -145,6 +153,13 @@ class Artist():
 
     def set_abs (self, aBool):
         self.set_norm (not aBool)
+
+
+    @property
+    def mouseActive (self): return self._mouseActive
+    def set_mouseActive (self, aBool): 
+        self._mouseActive = aBool
+        self.plot(figureUpdate=True)        # enforce redraw
 
     # --------------  private -------------
 
@@ -224,7 +239,9 @@ class Artist():
         return next(self.ax._get_lines.prop_cycler)['color']
     
 
-import tkinter as tk
+
+# ----------------------------------------------------------
+
 
 class Plot_Toolbar(NavigationToolbar2Tk):
     """Base class of all artists"""
@@ -271,3 +288,190 @@ class Plot_Toolbar(NavigationToolbar2Tk):
     def set_message(self, s):
         # suppress coordinates to show 
         pass
+
+
+# ----------------------------------------------------------
+
+
+class DragManager:
+    """ 
+    The DragManager enables moving around an matplotlib artist on its axes.
+    
+    An artist is typically a Line2D object like a line or point
+    """
+
+    def __init__(self, ax, animated_artist, bounds=None,
+                 dependant_artists = None, 
+                 callback_draw_animated = None, 
+                 callback_on_moved=None):
+        """
+        Create a DragManager for an artist 
+
+        Parameters
+        ----------
+        ax : Axes - matplotlib axes we are working on 
+        animated_artist : Artist - matplotlib artist like LIne2D
+        dependant_artists : Artists - optional other artists which are dependand on self moves
+        bounds : [(x1,x2),(y1,y2)] - bounds for movement of the artist
+        callback_draw_animated : function - optional external method to draw the artist (and do other thinsg)
+        callback_on_moved : function - call with final coordinates after movement
+             
+        """
+        self.ax = ax
+        self.canvas = ax.figure.canvas
+        self._callback_on_moved = callback_on_moved
+        self._callback_draw_animated = callback_draw_animated
+        self._dependant_artists = dependant_artists
+
+        # bounds for movements
+        self._bounds_x = bounds[0]
+        self._bounds_y = bounds[1]
+        self._bg = None
+        self._artist = animated_artist
+        self._press_xy = None
+
+        # Connect to all the events we need.
+        self.ciddraw    = self.canvas.mpl_connect('draw_event', self.on_draw)
+        self.cidpress   = self.canvas.mpl_connect('button_press_event', self.on_press)
+        self.cidrelease = self.canvas.mpl_connect('button_release_event', self.on_release)
+        self.cidmotion  = self.canvas.mpl_connect('motion_notify_event', self.on_motion)
+
+    def _draw_animated(self, duringMove=False):
+        """Draw all of the animated artists."""
+ 
+        # use user calback if provided 
+        if self._callback_draw_animated: 
+            self._callback_draw_animated(duringMove=duringMove)
+        else: 
+            self.ax.draw_artist (self._artist)
+        # print('Artist: ', self._artist, '  draw animated: ', self._artist.get_animated())
+
+
+    def on_draw(self, event):
+        """Callback to register with 'draw_event'."""
+        if event is not None:
+            if event.canvas != self.canvas: raise RuntimeError
+
+        self._draw_animated()
+        # print ("on draw ", self._artist )
+
+
+    def on_press(self, event):
+        """Check whether mouse is over us; if so, store some data."""
+        if event.inaxes != self.ax:
+            return
+        contains, attrd = self._artist.contains(event)
+        if not contains:
+            return
+        # print('Artist: ', self._artist, '  event contains', self._artist.get_xydata()[0])
+
+        # the only way to get a background image just without self.artistis to set self invisible
+        #  - watch if there could be many dragManager  -
+        self._artist.set_visible (False)
+        if self._dependant_artists:
+            for a in self._dependant_artists: a.set_visible (False)
+        self.canvas.draw()
+
+        self._bg = self.canvas.copy_from_bbox(self.ax.bbox)
+        self._press_xy = self._artist.get_xydata()[0], (event.xdata, event.ydata)
+
+        # after copy show them again 
+        self._artist.set_visible (True)
+        if self._dependant_artists:
+            for a in self._dependant_artists: a.set_visible (True)
+        self.canvas.draw()
+
+
+    def on_motion(self, event):
+        """Move the rectangle if the mouse is over us."""
+        if self._press_xy is None or event.inaxes != self.ax:
+            return
+        (x0, y0), (xpress, ypress) = self._press_xy
+        dx = event.xdata - xpress
+        dy = event.ydata - ypress
+        newx = x0 + dx
+        newy = y0 + dy
+        if self._bounds_x: 
+            newx = max (newx, self._bounds_x[0])
+            newx = min (newx, self._bounds_x[1])
+        if self._bounds_y: 
+            newy = max (newy, self._bounds_y[0])
+            newy = min (newy, self._bounds_y[1])
+        # print(f'x0={x0}, xpress={xpress}, event.xdata={event.xdata}, '
+        #       f'dx={dx}, x0+dx={x0+dx}')
+        self._artist.set_xdata([newx])
+        self._artist.set_ydata([newy])
+
+        self.canvas.restore_region(self._bg)
+        self._draw_animated (duringMove=True)
+        self.canvas.blit(self.ax.bbox)
+        self.canvas.flush_events()
+
+    def on_release(self, event):
+        """Clear button press information."""
+        if event.button != 1:
+            return
+
+        # does the released button belong to self? 
+        if self._press_xy: 
+            self._press_xy = None
+            # self._draw_animated (duringMove=False)          # update e.g. linestyle
+            self.canvas.draw()
+
+            # self._artist.set_animated(False)
+            self._bg = None 
+
+            # callback with coordinates when move is finished
+            if not self._callback_on_moved is None:
+                self._callback_on_moved() 
+
+    def disconnect(self):
+        """Disconnect all callbacks."""
+        self.canvas.mpl_disconnect(self.ciddraw)
+        self.canvas.mpl_disconnect(self.cidpress)
+        self.canvas.mpl_disconnect(self.cidrelease)
+        self.canvas.mpl_disconnect(self.cidmotion)
+
+
+
+
+# if __name__ == '__main__':
+
+#     # Test DraggableArtist 
+#     #     
+#     def on1_finished (coord): 
+#         print("Finished ", coord)
+
+#     def draw_animated():
+#         ax.draw_artist (markerArtist)
+#         x2,y2 = markerArtist.get_xydata()[0]
+#         x = [0,x2]
+#         y = [0,y2]
+#         lineArtist.set_xdata(x)
+#         lineArtist.set_ydata(y)
+#         ax.draw_artist (lineArtist)
+
+#     def draw_animated2():
+#         ax.draw_artist (markerArtist2)
+
+#     fig, ax = plt.subplots()
+
+#     ax.set_xlim((0, 6))
+#     ax.set_ylim((0, 6))
+
+
+#     (markerArtist,) =  ax.plot ([2], [2], marker='o', color="red", markersize=8, animated=True) 
+#     (lineArtist,) =  ax.plot ([0,2], [0,2],  color="red", animated=True) 
+#     dr1 = DragManager(ax, markerArtist, bounds=[(2,5.5),(1,4)], 
+#                        dependant_artists = [lineArtist], 
+#                        callback_draw_animated = draw_animated,
+#                        callback_on_moved=on1_finished)
+
+#     (markerArtist2,) =  ax.plot ([3], [3], marker='o', color="red", markersize=8, animated=True) 
+
+#     dr2 = DragManager(ax, markerArtist2, bounds=[(2,5.5),(1,4)], 
+#                        callback_draw_animated = draw_animated2,
+#                        callback_on_moved=on1_finished)
+
+
+#     plt.show()

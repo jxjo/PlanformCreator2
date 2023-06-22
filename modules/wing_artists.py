@@ -9,7 +9,8 @@ The "Artists" to plot a wing object on a matplotlib axes
 import numpy as np
 from common_utils import *
 from artist import *
-from wing_model import (Wing, Planform, WingSection, Planform_DXF, Flap, Airfoil, Planform_Paneled)
+from wing_model import (Wing, Planform, WingSection, Planform_DXF, Flap, 
+                        Planform_Bezier, Airfoil, Planform_Paneled)
 
 cl_planform         = 'whitesmoke'
 cl_quarter          = 'lightgrey'
@@ -380,16 +381,167 @@ class Chord_Artist (Artist):
     """
     color = cl_planform     
 
+    def set_mouseActive (self, aBool): 
+        # overloaded for user tip 
+        if aBool:
+            self.userTip = 'Drag tangent endpoints with mouse'
+        else: 
+            self.userTip = '' 
+        super().set_mouseActive(aBool)
+
+
+    def __init__ (self, axes, modelFn, **kwargs):
+        super().__init__ (axes, modelFn, **kwargs)
+
+        # show mouse helper / allow drag of points 
+        self.p1_marker_artist = None
+        self.p1_line_artist = None
+        self.p2_marker_artist = None
+        self.p2_line_artist = None
+        self.chord_line_artist = None 
+        self.chord_fill_artist = None 
+
+        # DragManager instances
+        self._dm1 = None
+        self._dm2 = None
+
+
+    def _deleteMyPlots(self):
+        # overloaded to remove mouse bindung of DragManager"
+    
+        if not self._dm1 is None:
+            self._dm1.disconnect()
+            self._dm1 = None 
+        if not self._dm2 is None:
+            self._dm2.disconnect()
+            self._dm1 = None 
+        super()._deleteMyPlots ()
+    
+    @property
+    def planform (self) -> Planform :
+        return self.model.planform
+    
     def chord_line (self):
         # will be overwritten by subclasses
         return self.model.planform.norm_chord_line ()    
     
     def _plot (self): 
+        
         y, chord = self.chord_line ()
-        p = self.ax.plot(y, chord, '-', label = 'Chord distribution', color=self.color)
+
+        # draw chord - if mouse is active animate=True has to be set!
+        p = self.ax.plot(y, chord, '-', label = 'Chord distribution', color=self.color, animated=self.mouseActive)
         self._add(p)
-        p = self.ax.fill_between(y, 0, chord, facecolor=self.color, alpha=0.10)
+        (self.chord_line_artist,) = p 
+
+        # p = self.ax.fill_between(y, 0, chord, facecolor=self.color, alpha=0.10, animated=True)
+        # self._add(p)
+        # (self.chord_fill_artist,) = p 
+
+        if self.mouseActive and isinstance(self.planform, Planform_Bezier): 
+
+            self.show_mouseHelper_bezier (self.model.planform)
+
+            # make p1,2 of Bezier draggable - install callback when move is finished
+            self._dm1 = DragManager (self.ax, self.p1_marker_artist, 
+                                    bounds=[(0.1, 0.95),(0.8, 1.1)], 
+                                    dependant_artists = [self.p1_line_artist], 
+                                    callback_draw_animated = self.draw_animated_p1,
+                                    callback_on_moved=self._moveCallback)
+                                    # callback_on_moved=self.on_p1_moved)
+            self._dm2 = DragManager (self.ax, self.p2_marker_artist, 
+                                    bounds=[(1, 1),(0.05, 0.95)], 
+                                    dependant_artists = [self.p2_line_artist], 
+                                    callback_draw_animated = self.draw_animated_p2,
+                                    callback_on_moved=self._moveCallback)
+
+
+    def show_mouseHelper_bezier (self, planform: Planform): 
+        """ show the helper points and lines for bezier curve definition """
+
+        # ! animated=True must be set for all artists moving around !
+
+        p = self.ax.plot (planform._py[0:2], planform._px[0:2], '--', linewidth=0.5, color= cl_userHint, animated=True) 
         self._add(p)
+        (self.p1_line_artist,) = p 
+        p = self.ax.plot (planform._py[0]+0.002, planform._px[0], marker='s', color=cl_userHint, markersize=5 )
+        self._add(p)
+        p = self.ax.plot (planform._py[1], planform._px[1], marker='o', color=cl_userHint, markersize=8, animated=True )
+        self._add(p)
+        (self.p1_marker_artist,) = p 
+
+        p = self.ax.plot (planform._py[2:], planform._px[2:], '--', linewidth=0.5, color= cl_userHint)    
+        self._add(p)
+        (self.p2_line_artist,) = p 
+        p = self.ax.plot (planform._py[3], planform._px[3], marker='s', color=cl_userHint, markersize=5 )
+        self._add(p)
+        p = self.ax.plot (planform._py[2], planform._px[2], marker='o', color=cl_userHint, markersize=8 )
+        self._add(p)
+        (self.p2_marker_artist,) = p 
+
+
+    def draw_animated_p1(self, duringMove=False): 
+        """ call back when bezier point 1 was moved"""
+
+        # draw marker and get new coordinates (when dragged) 
+        self.ax.draw_artist (self.p1_marker_artist)
+        x1,y1 = self.p1_marker_artist.get_xydata()[0]
+
+        # set new endpoint for tangent line and draw line 
+        x = self.p1_line_artist.get_xdata()
+        y = self.p1_line_artist.get_ydata()
+        x[-1] = x1
+        y[-1] = y1
+        self.p1_line_artist.set_xdata(x)
+        self.p1_line_artist.set_ydata(y)
+        self.ax.draw_artist (self.p1_line_artist)
+
+        # update planform - ! wing coordinate system
+        self.planform.set_p1x (y1)  
+        self.planform.set_p1y (x1)  
+        self.draw_animated_chord(duringMove=duringMove)  
+
+
+    def draw_animated_p2(self, duringMove=False): 
+        """ call back when bezier point 2 was moved"""
+
+        # draw marker and get new coordinates (when dragged) 
+        self.ax.draw_artist (self.p2_marker_artist)
+        x2,y2 = self.p2_marker_artist.get_xydata()[0]
+
+        # set new endpoint for tangent line and draw line 
+        x = self.p2_line_artist.get_xdata()
+        y = self.p2_line_artist.get_ydata()
+        x[0] = x2
+        y[0] = y2
+        self.p2_line_artist.set_xdata(x)
+        self.p2_line_artist.set_ydata(y)
+        self.ax.draw_artist (self.p2_line_artist)
+
+        # update planform - ! wing coordinate system
+        self.planform.set_p2x (y2)
+        self.draw_animated_chord(duringMove=duringMove)  
+
+
+    def draw_animated_chord (self, duringMove=False):
+
+        y, chord = self.chord_line ()
+
+        # because of animate=True the artist has to be provided with actual data...
+        self.chord_line_artist.set_xdata(y)
+        self.chord_line_artist.set_ydata(chord)
+        self.chord_line_artist.set_xdata(y)
+        self.chord_line_artist.set_ydata(chord)
+        if duringMove:
+            self.chord_line_artist.set_linestyle(':')
+        else:
+            self.chord_line_artist.set_linestyle('-')
+        # and plotted with special commans
+        self.ax.draw_artist (self.chord_line_artist)
+
+
+
+# ----------------------------------
 
 
 class RefChord_Artist (Chord_Artist):
@@ -450,14 +602,15 @@ class Sections_Artist (Artist):
 
             label = section.name()
 
-            p = self.ax.plot(y, le_to_te, color=color, label=label, linestyle=linestyle, 
-                             linewidth=linewidth)
-            self._add (p)              # remind plot to delete 
+            if not (section.isRootOrTip and self._norm): 
+                p = self.ax.plot(y, le_to_te, color=color, label=label, linestyle=linestyle, 
+                                linewidth=linewidth)
+                self._add (p)              # remind plot to delete 
 
-            if self._pickActive: 
-                self._makeLinePickable (p)
+                if self._pickActive: 
+                    self._makeLinePickable (p)
 
-            self.plot_markers (y, le_to_te, section)
+                self.plot_markers (y, le_to_te, section)
 
         # activate event for clicking on line 
         if self._pickActive:
@@ -538,20 +691,20 @@ class Flap_Artist (Artist):
     """
     def wing (self) -> Wing:
         return self.model
-    def flaps (self): 
-        return self.wing().getFlaps()
-
 
     def _plot (self): 
         """ do plot of wing sections in the prepared axes   
         """
-        n = len(self.flaps())                   # Number of colors
+
+        flaps = self.wing().getFlaps()
+
+        n = len(flaps)                   # Number of colors
         if n < 2: n= 2
          # create cycled colors 
         self._set_colorcycle (n, colormap='summer')                # no of cycle colors - extra color for each airfoil
 
         flap : Flap
-        for flap in self.flaps():   
+        for flap in flaps:   
 
             p = self.ax.plot(flap.y, flap.x, label="Flap group %d" %flap.flapGroup, color = cl_planform, linewidth=0.5)
             self._add(p)
@@ -569,8 +722,16 @@ class Flap_Artist (Artist):
 
         # flapDepth
         self._text_flapDepth (flap.lineLeft, flap.depthLeft)
-        if flap.lineRight [0][1] == self.wing().halfwingspan:    # plot extra depth at tip
+        if flap.lineRight [0][1] == self.wing().halfwingspan:    
+            # plot extra depth at tip
             self._text_flapDepth (flap.lineRight, flap.depthRight)
+        # if (flap.lineRight [0][1] - flap.lineLeft [0][1]) > self.wing().halfwingspan /10 :    
+        #     # plot extra depth in the middle if thre is space
+        #     line  = ((flap.lineLeft [0] + flap.lineRight[0]) / 2.0 , 
+        #              (flap.lineLeft [1] + flap.lineRight[1]) / 2.0) 
+        #     depth = (flap.depthLeft + flap.depthRight) / 2.0
+        #     self._text_flapDepth (line, depth)
+
         # flapGroup
         yBase = (flap.lineLeft [0][0] + flap.lineRight [0][1]) / 2  # middle of flap span
         xBase = (flap.lineLeft [1][0] + flap.lineRight [1][1]) / 2  # middle of flap chord
@@ -639,7 +800,7 @@ class Airfoil_Artist (Artist):
 
         # plot title
         if not self._norm: 
-            text = "Airfoils in real size"
+            text = "Airfoils in wing sections"
             self._add(self.ax.text(.05,.9, text, fontsize ='large', ha='left', transform=self.ax.transAxes))
 
         section : WingSection

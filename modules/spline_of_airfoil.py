@@ -180,8 +180,8 @@ class SplineOfAirfoil:
         " return SideOfAirfoil with curvature on the upper side"
         if self._curv_upper is None: 
             iLe  = np.argmin (self._x)                # index of LE in x,y and u 
-            self._curv_upper = SideOfAirfoil (np.flip(self._x[: iLe]),
-                                              np.flip(self.curvature [: iLe]), 
+            self._curv_upper = SideOfAirfoil (np.flip(self._x[: iLe+1]),
+                                              np.flip(self.curvature [: iLe+1]), 
                                               name='Curvature upper' )
             # set default value für reversal detection 
             self._curv_upper.set_threshold (0.1)
@@ -712,30 +712,6 @@ class SideOfAirfoil:
         newY[-1] = self._y[-1]
         self._y = newY         
 
-        # # build a temp spline with the new x and the current y values 
-        # # 2D spline is needed to avoid oscillations at LE for thickness distribution with high curvature
-
-        # tmpSpl = Spline2D (newX, self._y) 
-
-        # # ... to remap y values to the current x values 
-
-        # newY = np.zeros(len(self.y))
-        # newY[0]  = self.y[0]
-        # newY[-1] = self.y[-1]
-
-        # for i in range (1, len(self.x)- 1):
-
-        #     # find the arc position u for the desired x-value 
-        #     ui = findMin (lambda u: abs(tmpSpl.evalx(u) - self.x[i]), 0.41, bounds=(0.0, 1), no_improve_thr=10e-9)
-
-        #     if (tmpSpl.evalx(ui) - self.x[i]) > 0.0000001: 
-        #         raise ValueError ("Spline - moveMax: Couldn't find corresponding x at %d" %i + 
-        #                           " delta x: %.7f" % ((tmpSpl.evalx(ui) - self.x[i])))
-        #     # get new y value at this position 
-        #     newY[i] = tmpSpl.evaly(ui)
-            
-        # self._y = newY
-
 
     def yFn (self,x):
         """ returns interpolated y values based on new x-distribution"""
@@ -820,37 +796,39 @@ class SideOfAirfoil:
 #     plt.show()
 
 
-def curvatureTest():
+# def curvatureTest():
 
-    import matplotlib.pyplot as plt
-    from airfoil_examples import Root_Example, Tip_Example
+#     import matplotlib.pyplot as plt
+#     from airfoil_examples import Root_Example, Tip_Example
     
-    air =Tip_Example()
+#     air =Tip_Example()
 
-    y = air.y
-    x = air.x
-    spl = Spline2D (x,y) 
-    curv = spl.curvature (np.linspace(0,1,200))
+#     y = air.y
+#     x = air.x
+#     spl = Spline2D (x,y) 
+#     curv = spl.curvature (np.linspace(0,1,200))
 
-    fig, ax = plt.subplots(1, 1, figsize=(10,5))
-    ax.set_yscale('symlog', linthresh=1)
-    ax.plot(spl.u, curv, "-r", label="Curvature")
+#     fig, ax = plt.subplots(1, 1, figsize=(10,5))
+#     ax.set_yscale('symlog', linthresh=1)
+#     ax.plot(spl.u, curv, "-r", label="Curvature")
 
-    plt.show()
+#     plt.show()
 
-def symlog_bug():
 
-    import matplotlib.pyplot as plt
-    import warnings
-    warnings.filterwarnings("ignore", message = "All values for SymLogScale")
+# def symlog_bug():
 
-    ax = plt.figure().add_subplot()
-    ax.set_yscale('symlog')
+#     import warnings
+#     warnings.filterwarnings("ignore", message = "All values for SymLogScale")
 
-    x = np.linspace(-100,100,200)
-    # ax.plot(x, x)
+#     import matplotlib.pyplot as plt
+#     ax = plt.figure().add_subplot()
 
-    plt.show()
+#     if self == None
+#     ax.set_yscale('symlog')
+#     x = np.linspace(-100,100,200)
+#     ax.plot(x, x)
+
+#     plt.show()
 
 
 # def lineTest ():
@@ -1056,7 +1034,7 @@ if __name__ == "__main__":
     # blendTest()
     # cubicSplineTest()
     # lineTest()
-    symlog_bug()
+    # symlog_bug()
     # curvatureTest()
     # u_fxy_Test()
 

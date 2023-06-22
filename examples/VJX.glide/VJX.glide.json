@@ -2,18 +2,16 @@
   "wingName":"VJX.glide PC",
   "wingspan":2940.0,
   "rootchord":235.0,
-  "tipchord":14.0,
+  "tipchord":5.0,
   "hingeLineAngle":-0.7,
   "flapDepthRoot":28.0,
   "flapDepthTip":27.0,
   "rootRe":400000,
   "airfoilNickPrefix":"GP",
-  "planformType":"elliptical",
-  "ellipseTipBelly":0.25,
-  "ellipseBellyWidth":0.5,
-  "leCorrection":0.0,
-  "ellipseCorrection":0.15,
-  "ellipseShift":0.15,
+  "planformType":"Bezier",
+  "p1x":0.96,
+  "p2x":0.4,
+  "p1y":0.85,
   "wingSections":[
     {
       "position":0.0,
@@ -53,7 +51,7 @@
     },
     {
       "position":1470.0,
-      "norm_chord":0.059574,
+      "norm_chord":0.021277,
       "flapGroup":2,
       "airfoil":{
         "file":"JX-GP-033.dat"

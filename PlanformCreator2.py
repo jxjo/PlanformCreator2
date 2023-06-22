@@ -45,16 +45,17 @@ import customtkinter as ctk
 sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 
 from modules.common_utils       import * 
-from modules.wing_model         import Planform, Planform_Elliptical, Planform_Elliptical_StraightTE, \
-                                       Planform_DXF, Planform_Trapezoidal                          
+from modules.wing_model         import Planform, Planform_Elliptical, Planform_Bezier_StraightTE, \
+                                       Planform_DXF, Planform_Trapezoidal, Planform_Bezier                         
 from modules.widgets            import * 
+from modules.artist             import Plot_Toolbar
 from modules.wing_artists       import *
 
 
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "0.7.0"
+AppVersion = "0.8.0"
 
 #------------------------------------------------
 
@@ -65,6 +66,7 @@ cl_background               = ('#EBEBEB','#242424')                     # backgr
 WING_NEW                    = "<<WING_NEW>>"                #tk event types
 WING_CHANGED                = "<<WING_CHANGED>>"             
 CHORD_CHANGED               = "<<CHORD_CHANGED>>"             
+CHORD_CHANGED_BY_MOUSE      = "<<CHORD_CHANGED_BY_MOUSE>>"             
 PLANFORM_CHANGED            = "<<PLANFORM_CHANGED>>"
 SECTION_CHANGED             = "<<SECTION_CHANGED>>"
 CURRENT_SECTION_CHANGED     = "<<CURRENT_SECTION_CHANGED>>"
@@ -103,7 +105,7 @@ class Edit(ctk.CTkFrame):
         self.curSection = self.wing.wingSections[0]
 
         self.editWing_frame          = Edit_Wing               (self, wingFn, width=300)
-        self.editPlanformType_frame  = Edit_Wing_PlanformType  (self, wingFn, width=500)
+        self.editPlanformType_frame  = Edit_Planform_Master    (self, wingFn, width=500)
         self.editSectionMaster_frame = Edit_WingSection_Master (self, wingFn)
 
         # edit maingrid 1 x 4  with subframes
@@ -123,8 +125,10 @@ class Edit(ctk.CTkFrame):
         self.ctk_root.bind(WING_NEW,                 self.new_wing, add='+')
         self.ctk_root.bind(WING_CHANGED,             self.changed_wing, add='+')
         self.ctk_root.bind(CHORD_CHANGED,            self.changed_chord, add='+')
+        self.ctk_root.bind(CHORD_CHANGED_BY_MOUSE,   self.changed_chord, add='+')
         self.ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
         self.ctk_root.bind(SECTION_CHANGED,          self.changed_section, add='+')
+
 
         # bindings from plot diagrams 
         self.ctk_root.bind(DIAGRAMM_SECTION_SELECTED,self.sectionSelected_in_diagram, add='+')
@@ -162,6 +166,7 @@ class Edit(ctk.CTkFrame):
         if self.planform.sections_depend_on_planform:
             # refesh fields of current section
             self.editSectionMaster_frame.refresh_current()    # e.g. section position (wingSpan) 
+            self.editPlanformType_frame.refresh()             # Bezier parameters
 
     def changed_planform (self, event): 
         """ Eventhandler for changes of planform data"""
@@ -235,7 +240,7 @@ class Edit_Abstract (ctk.CTkFrame):
         # refresh typically based on changed events 
         for widget in self.widgets:
             if isinstance(widget, Base_Widget): widget.refresh()
-        # print ("  - refresh in ", self.__class__.__name__," for %s widgets" % len(self.widgets))
+            # print ("  - refresh in ", self.__class__.__name__," for %s widgets" % len(self.widgets))
 
         
 #-------------------------------------------
@@ -311,7 +316,7 @@ class Edit_Wing_Data (Edit_Abstract):
 
 #-------------------------------------------
 
-class Edit_Wing_PlanformType(Edit_Abstract):
+class Edit_Planform_Master(Edit_Abstract):
     """ 
     Master/Header frame for planform type specific sub frames
     """
@@ -348,7 +353,7 @@ class Edit_Wing_PlanformType(Edit_Abstract):
         """
 
         if self.wing().planformType != aType:
-            try: 
+            try:
                 self.wing().set_planformType (aType) 
                 handled = True
             except:
@@ -372,10 +377,12 @@ class Edit_Wing_PlanformType(Edit_Abstract):
 
             if(newPlanformType =="elliptical"): 
                 curFrame = Edit_Planform_Elliptical(self, self._wingFn, fg_color='transparent')
+            elif(newPlanformType =="Bezier"): 
+                curFrame = Edit_Planform_Bezier(self, self._wingFn, fg_color='transparent')
             elif(newPlanformType =="trapezoidal"): 
                 curFrame = Edit_Planform_Trapezoid(self, self._wingFn, fg_color='transparent')
-            elif(newPlanformType =="elliptical TE straight"): 
-                curFrame = Edit_Planform_Elliptical_StraightTE(self, self._wingFn, fg_color='transparent')
+            elif(newPlanformType =="Bezier TE straight"): 
+                curFrame = Edit_Planform_Bezier_StraightTE(self, self._wingFn, fg_color='transparent')
             elif(newPlanformType =="DXF file"): 
                 curFrame = Edit_Planform_DXF(self, self._wingFn, fg_color='transparent')
             else:
@@ -413,6 +420,57 @@ class Edit_Wing_PlanformType(Edit_Abstract):
 
 
 #-------------------------------------------
+
+
+class Edit_Planform_Bezier(Edit_Abstract):
+    """ 
+    Frame to edit the parameters of a Bezier based planform
+    """
+    name = Planform_Bezier.planformType
+
+    def planform(self) -> Planform_Bezier:
+        return self.wing().planform
+
+    def init(self):
+
+        self.grid_columnconfigure   (0, weight=0)
+        self.grid_rowconfigure      (6, weight=1)
+
+        r = 0 
+        # self.add (Field_Widget  (self,r,0, lab="Root tangent y", obj=self.planform, get='p1y', set='set_p1y',
+        #                             event=CHORD_CHANGED, lim=(0.4,1), dec=2, spin=True, step=0.01))
+        # self.add (Field_Widget  (self,r,3, lab="x", lab_width=60, obj=self.planform, get='p1x', set='set_p1x',
+        #                             event=CHORD_CHANGED, lim=(0.4,1), dec=2, spin=True, step=0.01))
+        # r += 1
+        self.add (Field_Widget  (self,r,0, lab="Root tangent", obj=self.planform, 
+                                    get='tangentAngle_root', set='set_tangentAngle_root', unit='°',
+                                    event=CHORD_CHANGED, lim=(-20,10), dec=1, spin=True, step=0.5))
+        self.add (Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
+                                    get='tangentLength_root', set='set_tangentLength_root',
+                                    event=CHORD_CHANGED, lim=(0.1,1), dec=2, spin=True, step=0.01))
+        # r += 1
+        # self.add (Field_Widget  (self,r,0, lab="Tip tangent y", obj=self.planform, get='p2y', dec=2, spin=True))
+        # self.add (Field_Widget  (self,r,3, lab="x", lab_width=60, obj=self.planform, get='p2x', set='set_p2x',
+        #                             event=CHORD_CHANGED, lim=(0.1,0.8), dec=2, spin=True, step=0.01))
+        r += 1
+        self.add (Field_Widget  (self,r,0, lab="Tip tangent", obj=self.planform, 
+                                    get='tangentAngle_tip', unit='°',
+                                    event=CHORD_CHANGED, dec=1, spin=True, step=0.5))
+        self.add (Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
+                                    get='tangentLength_tip', set='set_tangentLength_tip',
+                                    event=CHORD_CHANGED, lim=(0.1,1), dec=2, spin=True, step=0.01))
+        r += 1
+        Blank_Widget (self,r,0,  height= 20)
+
+        r += 1
+        self.add (Field_Widget  (self,r,0, lab="Banana height", obj=self.planform, 
+                                    get='banana_p1x', set='set_banana_p1x',  
+                                    event=CHORD_CHANGED, lim=(-0.1,0.1),dec=2, spin=True, step=0.01))
+        self.add (Field_Widget  (self,r,3, lab="position", lab_width=60, obj=self.planform, 
+                                    get='banana_p1y', set='set_banana_p1y',
+                                    event=CHORD_CHANGED, lim=(0.1,0.9), dec=2, spin=True, step=0.05))
+
+        
 
 
 class Edit_Planform_Elliptical(Edit_Abstract):
@@ -469,23 +527,32 @@ class Edit_Planform_Trapezoid (Edit_Abstract):
 #-------------------------------------------
 
 
-class Edit_Planform_Elliptical_StraightTE (Edit_Abstract):
+class Edit_Planform_Bezier_StraightTE (Edit_Abstract):
     """ 
     Frame to edit the parameters of a elliptical planform
     """
-    name = Planform_Elliptical_StraightTE.planformType
+    name = Planform_Bezier_StraightTE.planformType
 
-    def planform(self) -> Planform_Elliptical_StraightTE:
+    def planform(self) -> Planform_Bezier_StraightTE:
         return self.wing().planform
 
     def init(self):
 
-        self.add (Field_Widget  (self,0,0, lab="Tip belly",       obj=self.planform, get='ellipseTipBelly', set='set_ellipseTipBelly',
-                                 lim=(0,1),   dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
-        self.add (Field_Widget  (self,1,0, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
-                                 lim=(0,1),   dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
-        self.add (Field_Widget  (self,2,0, lab="Ellipse correct.",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
-                                 lim=(-1,1),  dec=2, spin=True, step=0.05, event=CHORD_CHANGED))
+        r = 0 
+
+        self.add (Field_Widget  (self,r,0, lab="Root tangent", obj=self.planform, 
+                                    get='tangentAngle_root', set='set_tangentAngle_root', unit='°',
+                                    event=CHORD_CHANGED, lim=(-20,10), dec=1, spin=True, step=0.5))
+        self.add (Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
+                                    get='tangentLength_root', set='set_tangentLength_root',
+                                    event=CHORD_CHANGED, lim=(0.1,1), dec=2, spin=True, step=0.01))
+        r += 1
+        self.add (Field_Widget  (self,r,0, lab="Tip tangent", obj=self.planform, 
+                                    get='tangentAngle_tip', unit='°',
+                                    event=CHORD_CHANGED, dec=1, spin=True, step=0.5))
+        self.add (Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
+                                    get='tangentLength_tip', set='set_tangentLength_tip',
+                                    event=CHORD_CHANGED, lim=(0.1,1), dec=2, spin=True, step=0.01))
 
 
 #-------------------------------------------
@@ -858,11 +925,22 @@ class Diagram_Abstract(ctk.CTkFrame):
         self.setup_artists ()
 
         # init of switches / plots if a frame for the switches is available 
+        r,c = 0,1
         if self.view_frame: 
             self.view_frame.grid_columnconfigure(0, weight=1)   # to center switches
             self.view_frame.grid_columnconfigure(2, weight=1)   # to center switches
-            self.setup_Switches (r=0, c=1)                       
 
+            r,c = self.setup_Switches (r, c)   
+
+            r +=1
+            Blank_Widget (self.view_frame,r,c)
+            self.view_frame.grid_rowconfigure(r, weight=1)
+            r +=1
+            Label_Widget (self.view_frame, r, 0, lab='Pan and zoom')
+            r +=1
+            self.toolbar = Plot_Toolbar(self.canvas, self.view_frame, background=ctk.get_appearance_mode())
+            self.toolbar.grid (row=r, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,10))
+                    
         # react on changes of model
         self.setChangeBindings ()
         self._active            = False                     # is active frame? control change events 
@@ -990,7 +1068,7 @@ class Diagram_Planform (Diagram_Abstract):
             r += 1
             Switch_Widget (self.view_frame,r,c, padx=10, lab='Ref DXF', 
                     get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
-        
+        return r,c 
 
     # -------- event handler
 
@@ -1014,17 +1092,14 @@ class Diagram_Planform (Diagram_Abstract):
         """ Eventhandler for changes of the complete wing - like wing span """
         self.gridArtist.plot()
         self.refresh()
-        self.refresh_sections() 
 
     def changed_chord (self, dummy): 
         """ Eventhandler for changes of chord"""
         self.refresh()
-        self.refresh_sections() 
 
     def changed_planform (self, dummy): 
         """ Eventhandler for changes of planform"""
         self.refresh()
-        self.refresh_sections() 
 
     def changed_airfoil (self, dummy): 
         """ Eventhandler for changes of planform"""
@@ -1117,9 +1192,10 @@ class Diagram_Planform_Mini (Diagram_Abstract):
         """ artists are not set automatically - set from outside """
         pass
 
-    def setup_Switches (self, r = 0, col=0):
-        """ no switches"""
-        pass
+    def setup_Switches (self, r = 0, c=0):
+        """ no switches"""   
+        return r,c 
+
 
     def setChangeBindings (self):
         # overloaded
@@ -1151,16 +1227,15 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         """ setup axes, axis, artiss for this plot type """
         self.axes.set_ylim([ 0.0, 1.19])
         self.axes.set_xlim([ 0.0, 1.06])
-        self.axes.text(.95,.9, self.wing.name, fontsize ='x-large', ha='right', transform=self.axes.transAxes)
 
     def setup_artists(self):
         """ setup axes, axis, artists for this plot type """
 
         super().setup_artists()
-        self.chordArtist        = Chord_Artist (self.axes, self._wingFn, show=True)
+        self.chordArtist        = Chord_Artist (self.axes, self._wingFn, onMove=self.chord_by_mouse, show=True)
         self.chordLinesArtist   = ChordLines_Artist (self.axes, self._wingFn, norm=True, show=False)
-        self.curSectionArtist   = CurrentSection_Artist (self.axes, self._wingFn, norm=True, show=True)
-        self.sectionsArtist     = Sections_Artist (self.axes, self._wingFn, show=True, norm=True,
+        self.curSectionArtist   = CurrentSection_Artist (self.axes, self._wingFn, norm=True, show=False)
+        self.sectionsArtist     = Sections_Artist (self.axes, self._wingFn, show=False, norm=True,
                                                        onPick=self.sectionPicked)
         self.referenceArtist    = RefChord_Artist (self.axes, self._wingFn, norm=True)
         self.dxfArtist          = RefChord_DXF_Artist (self.axes, self._wingFn, norm=True)
@@ -1174,8 +1249,8 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         # Switch_Widget  (self.view_frame,r,0, lab='Chord distribution', 
         #                 get=lambda: self.chordArtist.show, set=self.chordArtist.set_show)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Chord lines', 
-                get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Mouse click points', 
+                get=lambda: self.chordArtist.mouseActive, set=self.chordArtist.set_mouseActive)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Wing sections', 
                         get=lambda: self.sectionsArtist.show, set=self.sectionsArtist.set_show)
@@ -1189,6 +1264,7 @@ class Diagram_ChordDistribution (Diagram_Abstract):
             r += 1
             Switch_Widget  (self.view_frame,r,c, padx=10, lab='Ref DXF', 
                             get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
+        return r,c 
 
 
     # -------- event handler
@@ -1228,6 +1304,14 @@ class Diagram_ChordDistribution (Diagram_Abstract):
             #retrieve new section name from App 
             myApp : App = self.winfo_toplevel()
             self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=True)  
+
+    # -------- Callbacks from Artits 
+
+    def chord_by_mouse(self): 
+        """" chord distribution was changed with mouse """
+        self.changed_chord("")
+        fireEvent (self.ctk_root, CHORD_CHANGED_BY_MOUSE)
+
 
     # -------- refresh my Artists which are on 'show mode' 
 
@@ -1299,11 +1383,12 @@ class Diagram_Airfoils (Diagram_Abstract):
         r,c =super().setup_Switches(r, c)
 
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='In real size', 
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='as wing section', 
                        get=lambda: self.airfoilArtist.abs, set=self.airfoilArtist.set_abs)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Straked airfoils', 
                        get=self.show_strakedAirfoils, set=self.set_show_strakedAirfoils)
+        return r,c 
 
 
     # -------- switch call back 

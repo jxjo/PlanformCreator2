@@ -22,6 +22,7 @@
 import os
 import numpy as np
 from math import  sin
+import bisect
 import json
 import sys
 from pathlib import Path
@@ -30,6 +31,7 @@ from pathlib import Path
 # let python find the other modules in the dir of self  
 sys.path.append(Path(__file__).parent)
 from common_utils       import *
+from spline             import BezierCubic, BezierQuadratic
 from airfoil            import Airfoil
 from airfoil_examples   import Root_Example, Tip_Example
 
@@ -233,6 +235,7 @@ class Wing:
         if (newChord > 1.0):
             self._tipchord = newChord
             self.tipSection.adjustToWing()
+            self.planform.refresh()             # e.g. update Bezier curve        
 
     @property
     def hingeAngle(self): return self._hingeAngle
@@ -808,11 +811,11 @@ class Planform:
         return y, leadingEdge, trailingEdge
 
 
-    def flapPolygon  (self, fromY, toY, nPoints = 20):
+    def flapPolygon  (self, fromY, toY, nPoints = 50):
         """
         returns an y,x polygon describing a flap between fromY and toY   
 
-        Keyword Arguments:
+        Arguments:
             nPoints --  number of points for idealization of trailing edge - default 20
         """
         yFlapLine = []
@@ -830,9 +833,11 @@ class Planform:
         yFlapLine.append(toY)
         xFlapLine.append(self._planform_function (toY)[1])
         # ... finally along TE to starting point back to TE
-        for y in np.linspace(toY, fromY, num=nPoints):
-           yFlapLine.append(y)  
-           xFlapLine.append(self._planform_function (y)[1])
+        y, le, te = self.lines()
+        i1 = min(bisect.bisect(y, fromY)-1, len(y) -2)
+        i2 = min(bisect.bisect(y, toY)  -1, len(y) -2)
+        yFlapLine.extend (np.flip(y [i1:i2]))  
+        xFlapLine.extend (np.flip(te[i1:i2]))
 
         return yFlapLine, xFlapLine
     
@@ -869,6 +874,276 @@ class Planform:
 
         aspectRatio = 2 * self.halfwingspan **2 / area
         return area, aspectRatio
+
+    def refresh (self): 
+        """ refresh planform if wing parameters e.g. tipchord have changed"""
+        # to be overloaded when needed
+        pass
+
+#-------------------------------------------------------------------------------
+
+class Planform_Bezier(Planform):
+    """ 
+    Chord distribution is defined by a Bezier Curve 
+    """
+    planformType  = "Bezier"
+    isTemplate    = True
+
+    shortDescription = "Planform based on a Bezier curve function, which is defined by its\n" + \
+                        "root and tip tangent. The banana function adapts the flap depth."
+
+    # is the planform defined by wing section or vice versa - overwrite 
+    sections_depend_on_planform = True           # e.g.elliptical    
+    planform_depend_on_sections = False          # e.g trapezoid
+
+    wingSection_eitherPosOrChord = True
+
+
+    def __init__(self, myWing: Wing, dataDict: dict = None):
+        super().__init__(myWing, dataDict)
+        """
+        Args:
+            :myWing: the wing object self belongs to  
+            :dataDict: optional - dictonary with all the data for a valid section
+        """
+
+        # init Cubic Bezier for chord distribution 
+       
+        self._px = [1.0, 1.0, 0.55, 0.0]                            # wing coordinate system 
+        self._py = [0.0, 0.55, 1.0, 1.0]
+        # from dict only the variable point coordinates of Bezier
+        self._px[1]   = fromDict (dataDict, "p1x", 1.00, False)
+        self._px[2]   = fromDict (dataDict, "p2x", 0.55, False)     # nearly elliptic
+        self._py[1]   = fromDict (dataDict, "p1y", 0.55, False)
+        self._px[3]   = self.tipchord / self.rootchord              # p3 sits on tip chord
+
+        self._bezier = BezierCubic (self._py, self._px)
+
+
+        # init Quadratic Bezier for banana of leading edge  
+       
+        self._banana_px = [0.0, 0.0, 0.0]                           # wing coordinate system 
+        self._banana_py = [0.0, 0.5, 1.0]
+        # from dict only the variable point coordinates of Bezier
+        self._banana_px[1]   = fromDict (dataDict, "banana_p1x", 0.0, False)
+        self._banana_py[1]   = fromDict (dataDict, "banana_p1y", 0.5, False)
+
+        self._banana = None                                         # init see _norm_banana_function 
+
+
+
+    def _save (self, dataDict):
+        """ stores the variables into the dataDict"""
+
+        # the flex points of chord Bezier curve 
+        toDict (dataDict, "p1x", self._px[1]) 
+        toDict (dataDict, "p2x", self._px[2]) 
+        toDict (dataDict, "p1y", self._py[1]) 
+
+
+    # ---Properties --------------------- 
+
+    # Bezier free definition points for chord distribution
+
+    @property                                   # root tangent 
+    def p1x(self): return self._px[1]
+    def set_p1x(self, aVal): 
+        self._px[1] = aVal 
+        self._bezier.set_points (self._py, self._px)
+    @property
+    def p1y(self): return self._py[1]
+    def set_p1y(self, aVal): 
+        self._py[1] = aVal 
+        self._bezier.set_points (self._py, self._px)
+
+    @property
+    def tangentAngle_root (self):
+        """ angle in degrees of the bezier tangent at root """
+        # watch the different coordinate system 
+        dx = self._py[1] - self._py[0]
+        dy = self._px[1] - self._px[0]
+        return np.arctan (dy/dx) * 180 / np.pi
+    def set_tangentAngle_root (self, anAngle : float):
+        """ set angle in degrees of the bezier tangent at root 
+            Will keep the y-coordinate of point 1"""
+        # watch the different coordinate system 
+        hypo = self.tangentLength_root
+        dy = hypo * np.sin (anAngle * np.pi / 180.0)
+        dx = hypo * np.cos (anAngle * np.pi / 180.0)
+        self.set_p1x (self._px[0] + dy)
+        self.set_p1y (self._py[0] + dx)
+    @property
+    def tangentLength_root (self):
+        dx = self._py[1] - self._py[0]
+        dy = self._px[1] - self._px[0]
+        return (dx**2 + dy**2)**0.5
+    def set_tangentLength_root (self, aLength):
+        angle = self.tangentAngle_root
+        dy = aLength * np.sin (angle * np.pi / 180.0)
+        dx = aLength * np.cos (angle * np.pi / 180.0)
+        self.set_p1x (self._px[0] + dy)
+        self.set_p1y (self._py[0] + dx)
+
+    @property                                   # tip tangent
+    def p2x(self): return self._px[2]
+    def set_p2x(self, aVal): 
+        self._px[2] = aVal 
+        self._bezier.set_points (self._py, self._px)
+    @property                                   
+    def p3x(self): return self._px[3]
+    def set_p3x(self, aVal): 
+        self._px[3] = aVal 
+        self._bezier.set_points (self._py, self._px)
+    @property                                    
+    def p2y(self): return self._py[2]
+    @property
+    def tangentAngle_tip (self):
+        """ angle in degrees of the bezier tangent at tip - fixed to 90° """
+        return 90.0
+    @property
+    def tangentLength_tip (self):
+        dx = self._py[3] - self._py[2]
+        dy = self._px[3] - self._px[2]
+        return (dx**2 + dy**2)**0.5
+    def set_tangentLength_tip (self, aLength):
+        angle = self.tangentAngle_tip
+        dy = aLength * np.sin (angle * np.pi / 180.0)
+        self.set_p2x (self._px[3] + dy)
+
+    # Banana quadratic Bezier free definition points 
+
+    @property                                   
+    def banana_p1x(self): return self._banana_px[1]
+    @property                                 
+    def banana_p1y(self): return self._banana_py[1]
+    def set_banana_p1x(self, aVal): 
+        self._banana_px[1] = aVal 
+        self._banana = None                             # Bezier with cache will be rebuild
+    def set_banana_p1y(self, aVal): 
+        self._banana_py[1] = aVal 
+        self._banana = None                             # Bezier with cache will be rebuild
+
+
+    def _norm_u_points (self):
+        """ array of u (arc) points along the chord line  """
+        return np.linspace(0.0, 1.0, num=50) 
+
+
+    def norm_chord_line (self):
+        """
+        the normalized chord distribution along the span
+        Returns:
+            :y: array of the y-stations of the lines 
+            :chord: array of chord values 
+        """
+        #
+        # overloaded  - Bezier needs arc points u not y coordinates 
+        #
+
+        y, chord = self._bezier.eval (self._norm_u_points() )
+        return y, chord
+
+    def norm_chord_function (self, y_norm):
+        """
+        Returns the normalized chord of the planform at y 0..1
+        Args:
+            :y_norm: the normalized y-Position in the planform 0..1
+        Returns:
+            :chord: the chord 0..1 at y
+        """
+
+        return self._bezier.eval_y_on_x (y_norm)        # wing coordinate system 
+    
+    def _norm_banana_function (self, y_norm):
+        """
+        Returns the value of the "banana curve" bending the planform 
+        Args:
+            :y_norm: the normalized y-Position in the planform 0..1
+        Returns:
+            :banana_x: the value 0..1 at y
+        """
+
+        if self._banana_px[1] == 0.0:                               # optimize for no banana
+            banana_x = 0.0 
+        else: 
+            if self._banana is None: 
+
+                # init cache of Bezier curve so following calls will be optimized
+                self._banana = BezierQuadratic (self._banana_py, self._banana_px)
+                x,y = self._banana.eval (self._norm_u_points ())
+
+            banana_x = self._banana.eval_y_on_x (y_norm)            # wing coordinate system 
+ 
+        return banana_x       
+
+
+    def lines (self):
+        """
+        returns the major lines leading and trailing edge as arrays  
+        Returns:
+            :y: array of the spanwise y-stations of lines 
+            :leadingEdge:  array of x coordinates (chord direction)
+            :trailingEdge: array of x coordinates (chord direction)
+        """
+
+        # overloaded to optimize for Bezier 
+
+        norm_y, norm_chord = self.norm_chord_line ()
+        y = norm_y * self.halfwingspan
+        chord = norm_chord * self.rootchord
+
+        leadingEdge  = np.zeros (y.size)
+        trailingEdge = np.zeros (y.size)
+        for i in range(y.size): 
+            leadingEdge[i], trailingEdge[i] = self._planform_function (y[i], chord=chord[i])
+
+        return y, leadingEdge, trailingEdge
+    
+
+    def _planform_function (self, y, chord= None):
+        """
+        calculates all relevant geo data of the planform at y 
+
+        Args:
+            :y: the y-Position in the planform 0.. halfSpanWidth
+            :chord: chord length at y - optional - for optimization 
+        Returns:
+            :leadingEdge:  ...-point at y
+            :trailingEdge: ...-point at y
+        """
+
+        # chord-length at y
+        y_norm = y / self.halfwingspan
+        if chord is None: 
+            chord =  self.norm_chord_function (y_norm) * self.rootchord 
+
+        # calculate hingeDepth in percent at this particular point along the wing
+        hingeRootx   = (1-(self.flapDepthRoot/100)) * self.rootchord
+        hingeTipx    = hingeRootx + np.tan((self.hingeAngle/180) * np.pi) * self.halfwingspan
+        hingeDepth_y = interpolate(0.0, self.halfwingspan, self.flapDepthRoot, self.flapDepthTip,y)
+
+        # apply banana (bending of planform) at flapDepth
+        flapDepth = (hingeDepth_y/100) * chord + \
+                    self._norm_banana_function (y_norm) * self.rootchord 
+
+        # finally the main "lines" at position y
+        hinge        = (hingeTipx-hingeRootx)/(self.halfwingspan) * (y) + hingeRootx
+        leadingEdge  = hinge - (chord - flapDepth)
+        trailingEdge = leadingEdge + chord
+
+        return leadingEdge, trailingEdge
+    
+    def refresh (self): 
+        """ refresh planform if wing parameters e.g. tipchord have changed"""
+
+        # when a new tip chord is set, move the bezier points p2 and p3 accordingly 
+        #    so length of the tangent at tip is nit changed 
+
+        tangentLength = self.tangentLength_tip          # store current length
+
+        self.set_p3x (self.tipchord / self.rootchord)
+        self.set_p2x (self.p3x + tangentLength)
+
 
 
 #-------------------------------------------------------------------------------
@@ -946,7 +1221,7 @@ class Planform_Elliptical(Planform):
     isTemplate    = True
 
     shortDescription = "Elliptical based planform generated by various functions.\n" + \
-                       "Therefore either position or chord of a section can be defined."
+                       "- deprecated -"
 
     # is the planform defined by wing section or vice versa - overwrite 
     sections_depend_on_planform = True           # e.g.elliptical    
@@ -1118,30 +1393,31 @@ class Planform_Elliptical(Planform):
 
 #-------------------------------------------------------------------------------
 
-class Planform_Elliptical_StraightTE (Planform_Elliptical):
+class Planform_Bezier_StraightTE (Planform_Bezier):
     """ 
-    Defines the outline of an elliptical planform with straight trailing edge -
-    (like Amokka) adapted with ellipse functions 
+    Defines the outline of a Bezier based planform with straight trailing edge like Amokka 
     """
-    shortDescription = "Elliptical chord distribution with a straight TE generated by functions.\n" + \
-                       "Therefore either position or chord of a section can be defined.\n" + \
-                       "'Flap depth tip' is calculated at 90% span width..." 
-    
-    planformType  = "elliptical TE straight"
+
+    shortDescription = "Planform with a straight TE based on a Bezier curve function.\n" + \
+                       "Therefore either position or chord of a section can be defined."
+        
+    planformType  = "Bezier TE straight"
     isTemplate    = True                        # user may make mods 
 
-
-    def __init__(self, myWing: Wing, dataDict: dict = None):
-        super().__init__(myWing, dataDict)
+    def _norm_banana_function (self, y_norm):
         """
+        Returns the value of the "banana curve" bending the planform 
         Args:
-            :myWing: the wing object self belongs to  
-            :dataDict: optional - dictonary with all the data for a valid section
+            :y_norm: the normalized y-Position in the planform 0..1
+        Returns:
+            :banana_x: the value 0..1 at y
         """
-        self._ellipseShift           = 0     # can't be changed
 
+        # overloaded - straight TE doesn't allow banana
+        return 0.0
+    
 
-    def _planform_function (self, y):
+    def _planform_function (self, y, chord= None):
         """
         calculates LE and TE of the planform at y 
 
@@ -1165,8 +1441,10 @@ class Planform_Elliptical_StraightTE (Planform_Elliptical):
         chordCloseToTip   = self.norm_chord_function (closeToTip) * self.rootchord
         teCloseToTipx     = hingeCloseToTipx + (self.flapDepthTip/100) *  chordCloseToTip
 
-        y_norm = y / self.halfwingspan
-        chord =  self.norm_chord_function (y_norm) * self.rootchord 
+        # chord-length at y
+        if chord is None: 
+            y_norm = y / self.halfwingspan
+            chord =  self.norm_chord_function (y_norm) * self.rootchord 
 
         # trailingEdge = interpolate(0.0, self.halfwingspan, teRootx, teTipx, y)
         trailingEdge = interpolate(0.0, teCloseToTipy, teRootx, teCloseToTipx, y)

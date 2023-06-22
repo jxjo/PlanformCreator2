@@ -195,7 +195,7 @@ class Curvature_Artist (Airfoil_Line_Artist):
 
                 if self.upper: 
                     line = airfoil.spline.curv_upper 
-                    p = self.ax.plot (line.x, -line.y, ls_curvature, color = color, label=line.name, 
+                    p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=line.name, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
                     self._plot_marker (line, color, upper=True)
@@ -222,14 +222,14 @@ class Curvature_Artist (Airfoil_Line_Artist):
             for i, point in enumerate(reversals): 
                 text = "R"
                 marker_x = point[0]
-                if upper:
-                    marker_y = - point[1] - 0.3
+                if point[1] < 0.0:
+                    marker_y = point[1] - 0.5
                     va = 'bottom'
                 else: 
-                    marker_y = point[1] + 0.3
+                    marker_y = point[1] + 0.5
                     va = 'top'
 
-                p = self.ax.text (marker_x, marker_y, text, va=va, ha='right', color = color )
+                p = self.ax.text (marker_x, marker_y, text, va=va, ha='center', color = color )
                 self._add (p) 
                 
 
