@@ -68,6 +68,7 @@ WING_CHANGED                = "<<WING_CHANGED>>"
 CHORD_CHANGED               = "<<CHORD_CHANGED>>"             
 CHORD_CHANGED_BY_MOUSE      = "<<CHORD_CHANGED_BY_MOUSE>>"             
 PLANFORM_CHANGED            = "<<PLANFORM_CHANGED>>"
+PLANFORM_CHANGED_BY_MOUSE   = "<<PLANFORM_CHANGED_BY_MOUSE>>"
 SECTION_CHANGED             = "<<SECTION_CHANGED>>"
 CURRENT_SECTION_CHANGED     = "<<CURRENT_SECTION_CHANGED>>"
 DIAGRAMM_SECTION_SELECTED   = "<<DIAGRAMM_SECTION_SELECTED>>"
@@ -127,6 +128,7 @@ class Edit(ctk.CTkFrame):
         self.ctk_root.bind(CHORD_CHANGED,            self.changed_chord, add='+')
         self.ctk_root.bind(CHORD_CHANGED_BY_MOUSE,   self.changed_chord, add='+')
         self.ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
+        self.ctk_root.bind(PLANFORM_CHANGED_BY_MOUSE,self.changed_planform, add='+')
         self.ctk_root.bind(SECTION_CHANGED,          self.changed_section, add='+')
 
 
@@ -171,6 +173,8 @@ class Edit(ctk.CTkFrame):
     def changed_planform (self, event): 
         """ Eventhandler for changes of planform data"""
 
+        # e.g. banana changed with mouse in diagram 
+        self.editPlanformType_frame.refresh()                   # banana parameters      
         # doesn't change wing data
         # doesn't change wing sections - only changed_chord does 
     
@@ -609,7 +613,7 @@ class Edit_WingSection_Master(Edit_Abstract):
 
     def init(self):
 
-        # set first section as initial 
+        # set second section as initial 
         self.curSection : WingSection = self.wing().wingSections[1]
         self.curSectionFrame = None
 
@@ -834,26 +838,27 @@ class Diagrams(ctk.CTkTabview):
          
 
         self.myPlot_frames = []
+        diagramClasses = [Diagram_ChordDistribution, Diagram_Planform, Diagram_Airfoils]
         # Get all subclasses of Plot_Frame and create a tab for each 
-        for plot_cls in Diagram_Abstract.__subclasses__():
-            if plot_cls != Diagram_Planform_Mini: 
-                tab_frame = self.add("   " + plot_cls.name + "   ")
-                tab_frame.grid_columnconfigure(1, weight=1)
-                tab_frame.grid_rowconfigure(0, weight=1)
+        for diaClass in diagramClasses:
 
-                # switches
-                view_frame=  ctk.CTkFrame(tab_frame)
-                view_frame.grid (row=0, column=0, padx=(0, 5), pady=(0,0), sticky='news')
+            tab_frame = self.add("   " + diaClass.name + "   ")
+            tab_frame.grid_columnconfigure(1, weight=1)
+            tab_frame.grid_rowconfigure(0, weight=1)
 
-                # plot area
-                plot_frame=  ctk.CTkFrame(tab_frame, fg_color="transparent")
-                plot_frame.grid (row=0, column=1, padx=(0,0), pady=0, sticky='wens')
-                plot_frame.grid_columnconfigure(0, weight=1)
-                plot_frame.grid_rowconfigure(0, weight=1)
-                
-                # create the diagram in the plot frame
-                self.myPlot_frames.append (plot_cls (plot_frame,  self._wingFn,
-                                        view_frame=view_frame))
+            # switches
+            view_frame=  ctk.CTkFrame(tab_frame)
+            view_frame.grid (row=0, column=0, padx=(0, 5), pady=(0,0), sticky='news')
+
+            # plot area
+            plot_frame=  ctk.CTkFrame(tab_frame, fg_color="transparent")
+            plot_frame.grid (row=0, column=1, padx=(0,0), pady=0, sticky='wens')
+            plot_frame.grid_columnconfigure(0, weight=1)
+            plot_frame.grid_rowconfigure(0, weight=1)
+            
+            # create the diagram in the plot frame
+            self.myPlot_frames.append (diaClass (plot_frame,  self._wingFn,
+                                    view_frame=view_frame))
 
         # set size of tab view titles
         self._segmented_button.configure(font=("", 16))
@@ -1028,10 +1033,10 @@ class Diagram_Planform (Diagram_Abstract):
         """ setup artists for this plot type """
 
         super().setup_artists()
-        self.planformArtist     = Planform_Artist (self.axes, self._wingFn, show=True)
+        self.planformArtist     = Planform_Artist (self.axes, self._wingFn, onMove=self.banana_by_mouse, show=True)
         self.chordLinesArtist   = ChordLines_Artist (self.axes, self._wingFn, show=False)
-        self.curSectionArtist   = CurrentSection_Artist (self.axes, self._wingFn, show=True)
         self.sectionsArtist     = Sections_Artist (self.axes, self._wingFn, show=True,onPick=self.sectionPicked)     
+        self.curSectionArtist   = CurrentSection_Artist (self.axes, self._wingFn, show=True, onMove=self.section_by_mouse)
         self.airfoilNameArtist  = AirfoilName_Artist (self.axes, self._wingFn, show=False)     
         self.flapArtist         = Flap_Artist (self.axes, self._wingFn)
         self.referenceArtist    = RefPlanform_Artist (self.axes, self._wingFn)
@@ -1044,6 +1049,9 @@ class Diagram_Planform (Diagram_Abstract):
         r,c = super().setup_Switches(r,c)
 
         # the whole plot work will be done by the artists
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Mouse helper', 
+                get=lambda: self.planformArtist.mouseActive, set=self.set_mouseHelpers)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Chord lines', 
                 get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
@@ -1069,6 +1077,13 @@ class Diagram_Planform (Diagram_Abstract):
             Switch_Widget (self.view_frame,r,c, padx=10, lab='Ref DXF', 
                     get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
         return r,c 
+
+    def set_mouseHelpers (self, aBool): 
+
+        self.planformArtist.set_mouseActive (aBool)
+        self.curSectionArtist.set_mouseActive (aBool)
+        self.sectionsArtist.set_mouseActive (aBool)
+
 
     # -------- event handler
 
@@ -1116,7 +1131,35 @@ class Diagram_Planform (Diagram_Abstract):
         if self._active:
             #retrieve new section name from App 
             myApp : App = self.winfo_toplevel()
-            self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=True)  
+
+            self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=False) 
+            self.refresh_sections() 
+
+    # -------- Callbacks from Artists 
+
+    def banana_by_mouse(self): 
+        """" banana curve was changed with mouse """
+        self.changed_planform("")
+        fireEvent (self.ctk_root, PLANFORM_CHANGED_BY_MOUSE)
+
+    def section_by_mouse(self): 
+        """" current section was moved with mouse """
+        self.changed_sections("")
+        fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
+
+
+    def sectionPicked (self, aSectionLabel):
+        # callback method - the user pciked a wing section in the plot
+
+        "fire event only if new section was selected"
+        if aSectionLabel != self.curSectionArtist.curLineLabel:
+            myApp : App = self.winfo_toplevel()
+            myApp.set_curWingSectionName(aSectionLabel)
+            fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
+
+            self.curSectionArtist.set_current (aSectionLabel, figureUpdate=False)  
+
+            self.axes.figure.canvas.draw_idle()     # draw ony if Windows is idle!
 
 
     # -------- refresh my Artists which are on 'show mode' 
@@ -1157,14 +1200,6 @@ class Diagram_Planform (Diagram_Abstract):
             self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
             # print ("  - refresh sections in ", self.__class__.__name__," for active artists")
 
-    # -------- pick object in axes handling  
-
-    def sectionPicked (self, aSectionLabel):
-        # callback method - the user pciked a wing section in the plot
-        myApp : App = self.winfo_toplevel()
-        myApp.set_curWingSectionName(aSectionLabel)
-        fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
-        self.curSectionArtist.set_current (aSectionLabel, figureUpdate=True)  
 
 
 
@@ -1234,7 +1269,7 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         super().setup_artists()
         self.chordArtist        = Chord_Artist (self.axes, self._wingFn, onMove=self.chord_by_mouse, show=True)
         self.chordLinesArtist   = ChordLines_Artist (self.axes, self._wingFn, norm=True, show=False)
-        self.curSectionArtist   = CurrentSection_Artist (self.axes, self._wingFn, norm=True, show=False)
+        self.curSectionArtist   = CurrentSection_Artist (self.axes, self._wingFn, norm=True, show=False, onMove=self.section_by_mouse)
         self.sectionsArtist     = Sections_Artist (self.axes, self._wingFn, show=False, norm=True,
                                                        onPick=self.sectionPicked)
         self.referenceArtist    = RefChord_Artist (self.axes, self._wingFn, norm=True)
@@ -1249,8 +1284,8 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         # Switch_Widget  (self.view_frame,r,0, lab='Chord distribution', 
         #                 get=lambda: self.chordArtist.show, set=self.chordArtist.set_show)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Mouse click points', 
-                get=lambda: self.chordArtist.mouseActive, set=self.chordArtist.set_mouseActive)
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Mouse helper', 
+                get=lambda: self.chordArtist.mouseActive, set=self.set_mouseHelpers)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Wing sections', 
                         get=lambda: self.sectionsArtist.show, set=self.sectionsArtist.set_show)
@@ -1265,6 +1300,12 @@ class Diagram_ChordDistribution (Diagram_Abstract):
             Switch_Widget  (self.view_frame,r,c, padx=10, lab='Ref DXF', 
                             get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
         return r,c 
+
+    def set_mouseHelpers (self, aBool): 
+
+        self.chordArtist.set_mouseActive (aBool)
+        self.curSectionArtist.set_mouseActive (aBool)
+        self.sectionsArtist.set_mouseActive (aBool)
 
 
     # -------- event handler
@@ -1341,8 +1382,14 @@ class Diagram_ChordDistribution (Diagram_Abstract):
             self.curSectionArtist.refresh()
             self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
             # print ("  - refresh sections in ", self.__class__.__name__," for active artists")
-  
-    # -------- pick object in axes handling  
+
+    # -------- Callbacks from Artists 
+
+    def section_by_mouse(self): 
+        """" current section was moved with mouse """
+        self.changed_sections("")
+        fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
+
 
     def sectionPicked (self, aSectionLabel):
         # call method - the user pciked a wing section in the plot

@@ -8,6 +8,8 @@
 """
 import bisect
 import numpy as np
+from math_util import findMin 
+
 
 
 #------------ Helper -----------------------------------
@@ -580,7 +582,41 @@ class BezierCubic:
             # evaluate y from u 
             return self._eval (self._py, u)
         else: 
-            raise ValueError ("Bezier: evaluation of y from x = %f not implemented" %x)
+            u = findMin (lambda u: abs(self._eval(self._px,u) - x), 0.5, bounds=(0, 1)) 
+            y =  self._eval (self._py, u)
+            # print ("x: ",x, "  y evaluated ", y)
+            return y
+            # raise ValueError ("Bezier: evaluation of y from x = %f not implemented" %x)
+        
+
+
+    def eval_x_on_y (self, y, fast=True):
+        """
+        Evaluate the x value based on y 
+
+        A interpolation is made to find u(y) - either linear (fast=True) or based on the curve
+
+        Parameters
+        ----------
+        y :   Scalar - y-value 
+        fast : bool, optional - only a linear interpolation of u is made .
+
+        Returns
+        -------
+        x : Scalar - x evaluated at y 
+        """
+
+        if fast and (not self._y is None) and (y <= self._y[0] and y >= self._y[-1]):
+            i = min(bisect.bisect(self._y, y)-1, len(self._y) -2)
+            # interpolate u 
+            u = ((self._u[i+1]-self._u[i])/(self._y[i+1]-self._y[i])) * (y - self._y[i]) + self._u[i]
+            # evaluate y from u 
+            return self._eval (self._px, u)
+        else: 
+            u = findMin (lambda u: abs(self._eval(self._py,u) - y), 0.5, bounds=(0, 1)) 
+            x =  self._eval (self._px, u)
+            # print ("y: ",y, "  x evaluated ", x)
+            return x
         
 
     def set_points(self, px, py):

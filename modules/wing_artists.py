@@ -41,22 +41,48 @@ class Grid_Artist (Artist):
         self.ax.figure.canvas.draw_idle()
 
 
+# ----------------------------------
+
+
 class CurrentSection_Artist (Artist):
     """Plot a Marker Symbol at the current (selected) wing sections.
-    May plot in real coordinates and normed
+       May plot in real coordinates and normed
 
     Keyword Arguments:
         norm --   True: plot in a normed coordinate system
     """    
+    def __init__ (self, axes, modelFn, **kwargs):
+        super().__init__ (axes, modelFn, **kwargs)
+
+        # yPos limits for movement of section 
+        self._leftLimit  = None
+        self._rightLimit = None
+
+        # show mouse helper / allow drag of points 
+        self.section_line_artist = None
+        self.chord_marker_artist = None
+        self.chord_marker_anno   = None
+        self.pos_marker_artist   = None
+        self.pos_marker_anno     = None
+
     @property   
     def wing (self) -> Wing:
         return self.model
+
     @property
     def wingSections (self): 
         return self.wing.wingSections
 
-    def __init__ (self, axes, dataModel, norm = False, onPick=None, show=False):
-        super().__init__ (axes, dataModel, norm = norm, onPick=onPick, show=show)
+    @property 
+    def curSection (self) -> WingSection: 
+        # find current section based on name 
+        sectionName = self._curLineLabel
+        sec : WingSection
+        for sec in self.wingSections:
+            if sec.name() == sectionName:
+                return sec
+        return None
+
 
     def set_current (self, aLineLabel, figureUpdate=False):
         """ tries to set a Marker to a line with Label aLabel 
@@ -66,42 +92,189 @@ class CurrentSection_Artist (Artist):
             if self.show:                       # view is switched on by user? 
                 self.plot (figureUpdate=figureUpdate)
 
+
     def _plot (self): 
         """ do plot of wing sections in the prepared axes   
         """ 
-        section : WingSection
 
-        sectionName = self._curLineLabel
-        found = False
-        for section in self.wingSections:
-            if section.name() == sectionName:
-                found = True
-                break
-        if not found: return 
+        if self.curSection is None: 
+            return
+        else: 
+            # coordinates of line and limits for movement by mouse 
+            if self._norm: 
+                y_sec, x_sec =  self.curSection.norm_line()
+                self._leftLimit, self._rightLimit = self.curSection.limits_norm_yPos ()
+            else:
+                y_sec, x_sec =  self.curSection.line()
+                self._leftLimit, self._rightLimit = self.curSection.limits_yPos ()
 
-        if self._norm: 
-            y, le_to_te = section.norm_line()
-            marker_y = - 0.02                # le_to_te[1] - 0.01 
-            delta = 0.001
-        else:
-            y, le_to_te = section.line()
-            marker_y = le_to_te[1] + 10 
-            delta = 1
+        # plot current section as a thick line 
+        p = self.ax.plot(y_sec, x_sec, '-', color=cl_wingSection_fix,  linewidth=2.5)
+        self._add (p)              # remind plot to delete 
 
-        # a marker triangle close to x-axis
-        marker_x = y[0]
-        p = self.ax.plot(marker_x, marker_y,  markersize=10, clip_on=False, 
-                         marker=6, color = cl_userHint)
+        if self.mouseActive and not self.curSection.isRootOrTip:        # don't move root or tip
+
+            self.show_mouseHelper (self.curSection, y_sec, x_sec)
+
+            # make section points draggable - install callback when move is finished
+            self._dragManagers.append (DragManager (self.ax, self.chord_marker_artist, 
+                                        bounds=[None,None], 
+                                        dependant_artists = [self.section_line_artist, self.chord_marker_anno], 
+                                        callback_draw_animated = self.draw_animated_byChord,
+                                        callback_on_moved=self._moveCallback))
+            self._dragManagers.append (DragManager (self.ax, self.pos_marker_artist, 
+                                        bounds=[None,None], 
+                                        dependant_artists = [self.section_line_artist, self.pos_marker_anno], 
+                                        callback_draw_animated = self.draw_animated_byPos,
+                                        callback_on_moved=self._moveCallback))
+            
+
+    def show_mouseHelper (self, section, y_sec, x_sec): 
+        """ show the helper points for section movement"""
+
+        # ! animated=True must be set for all artists moving around !
+        # highlight section
+
+        p = self.ax.plot (y_sec, x_sec, '--', linewidth=0.5, color= cl_wingSection_fix, animated=True) 
         self._add(p)
+        (self.section_line_artist,) = p 
 
-        # 2 lines left and right of section to highlight section
-        ynew = np.asarray(y) + delta
-        p = self.ax.plot(ynew, le_to_te, ':', color=cl_userHint)
-        self._add (p)              # remind plot to delete 
-        ynew = np.asarray(y) - delta
-        p = self.ax.plot(ynew, le_to_te, ':', color=cl_userHint)
-        self._add (p)              # remind plot to delete 
+        # upper marker at le - move "chord"
 
+        p = self.ax.plot(y_sec [0], x_sec[0],  markersize=8, clip_on=False, 
+                         marker=11 , color = cl_userHint, 
+                         animated=True, pickradius=10)
+        self._add(p)
+        (self.chord_marker_artist,) = p 
+
+        p = self.ax.annotate('move by chord', color=cl_userHint, backgroundcolor= cl_background,
+                        xy=(y_sec [0], x_sec[0]), ha='left', va= 'top', fontsize = 'small',
+                        xytext=(8, -5), textcoords='offset points', animated=True)
+        self._add(p)
+        self.chord_marker_anno = p 
+
+        # lower marker at te - move "pos"
+
+        x = y_sec[1]
+        if self.norm:
+            y = 0.022
+            xytext=(8, 0)
+            va = 'bottom'
+            ha = 'left'
+        else:
+            y = x_sec[1]
+            xytext= (8, -12)
+            va= 'top'
+            ha='left'
+
+        p = self.ax.plot(x, y,  markersize=8, clip_on=False, 
+                         marker=6, color = cl_userHint, 
+                         animated=True, pickradius=10)
+        self._add(p)
+        (self.pos_marker_artist,) = p 
+
+        p = self.ax.annotate('move by pos', color=cl_userHint, backgroundcolor= cl_background,
+                        xy=(x, y), ha=ha, va= va, fontsize = 'small', annotation_clip=False,
+                        xytext=xytext, textcoords='offset points', animated=True)
+        self._add(p)
+        self.pos_marker_anno = p 
+
+
+    def draw_animated_byPos(self, duringMove=False): 
+        """ call back when point for new position was moved"""
+
+        # just draw marker if no move 
+        if not duringMove:
+            self.ax.draw_artist (self.pos_marker_artist)
+            self.ax.draw_artist (self.pos_marker_anno)
+            return
+
+        # get new coordinates (when dragged) 
+        xm,ym = self.pos_marker_artist.get_xydata()[0]
+
+        # is new pos between left and right section? 
+        new_yPos = xm
+        new_yPos = max (self._leftLimit,  new_yPos)
+        new_yPos = min (self._rightLimit, new_yPos)
+        # new_yPos = round(new_yPos,1)
+
+        # update new section pos
+        if self.norm: 
+            self.curSection.set_norm_yPos (new_yPos)
+            y_sec, x_sec =  self.curSection.norm_line()
+        else:
+            self.curSection.set_yPos (new_yPos)
+            y_sec, x_sec =  self.curSection.line()
+
+        # draw new section line 
+        self.section_line_artist.set_xdata(y_sec)
+        self.section_line_artist.set_ydata(x_sec)
+        self.ax.draw_artist (self.section_line_artist)
+
+        # draw marker - keep marker on trailing 
+        if self.norm: 
+            x, y =  y_sec[1], 0.022
+        else:
+            x, y =  y_sec[1],x_sec[1]
+        self.pos_marker_artist.set_xdata(x)
+        self.pos_marker_artist.set_ydata(y)
+        self.ax.draw_artist (self.pos_marker_artist)
+
+        self.pos_marker_anno.xy =  (x,y)
+        self.pos_marker_anno.set ( text="%.2f" % x)
+        self.ax.draw_artist (self.pos_marker_anno)
+
+
+
+    def draw_animated_byChord(self, duringMove=False): 
+        """ call back when point for new chord length was moved"""
+
+        # just draw marker if no move 
+        if not duringMove:
+            self.ax.draw_artist (self.chord_marker_artist)
+            self.ax.draw_artist (self.chord_marker_anno)
+            return
+
+        # get new coordinates (when dragged) 
+        xm,ym = self.chord_marker_artist.get_xydata()[0]
+         
+        # is new pos between left and right section 
+        new_yPos = xm
+        new_yPos = max (self._leftLimit,  new_yPos)
+        new_yPos = min (self._rightLimit, new_yPos)
+
+        # get chord at this position 
+        if self.norm: 
+            new_yPos_norm = new_yPos
+        else:
+            new_yPos_norm = new_yPos / self.wing.halfwingspan
+        new_norm_chord = self.wing.planform.norm_chord_function(new_yPos_norm, fast=False) 
+        # update new section pos
+        self.curSection.set_norm_chord (new_norm_chord)
+        if self.norm: 
+            y_sec, x_sec =  self.curSection.norm_line()
+        else:
+            y_sec, x_sec =  self.curSection.line()
+
+        # draw new section line 
+        self.section_line_artist.set_xdata(y_sec)
+        self.section_line_artist.set_ydata(x_sec)
+        self.ax.draw_artist (self.section_line_artist)
+
+        # draw marker - keep marker on leading edge 
+        self.chord_marker_artist.set_xdata(y_sec[0])
+        self.chord_marker_artist.set_ydata(x_sec[0])
+        self.ax.draw_artist (self.chord_marker_artist)
+
+        self.chord_marker_anno.xy =  (y_sec[0],x_sec[0])
+        if self.norm: 
+            self.chord_marker_anno.set ( text="%.2f" % self.curSection.norm_chord)
+        else:
+            self.chord_marker_anno.set ( text="%.1f" % self.curSection.chord)
+        self.ax.draw_artist (self.chord_marker_anno)
+
+
+# ----------------------------------
 
 
 class Planform_Artist (Artist):
@@ -114,6 +287,14 @@ class Planform_Artist (Artist):
         # an alternative planform - not taken from Wing
         self._planform = planform
 
+        # show mouse helper / allow drag of points 
+        self.p1_marker_artist = None
+        self.p1_marker_anno = None
+        self.p1_line_artist = None
+        self.banana_line_artist = None 
+        self.planform_line_artist = None 
+
+
     @property
     def planform (self) -> Planform:
         if self._planform is None:
@@ -123,44 +304,123 @@ class Planform_Artist (Artist):
     
     def _plot(self):
     
-        y, leadingEdge, trailingEdge = self.planform.lines()
+        # self._show_wingData (y, leadingEdge, trailingEdge)
 
-        self._show_wingData (y, leadingEdge, trailingEdge)
-
-        p = self.ax.plot(y, leadingEdge,  '-', color=cl_planform)
+        y, x = self.planform.linesPolygon()
+        p = self.ax.plot(y, x,  '-', color=cl_planform)
         self._add (p)
-        p = self.ax.plot(y, trailingEdge, '-', color=cl_planform)
-        self._add (p)
-        p = self.ax.fill_between(y, leadingEdge, trailingEdge, facecolor=cl_planform, alpha=0.10)
-        self._add (p)
+        (self.planform_line_artist,) = p 
 
         # hinge line
-        y, hinge = self.planform.hingeLine()
-        p = self.ax.plot(y, hinge,  '-', linewidth=0.8, color='springgreen')
+        yh, hinge = self.planform.hingeLine()
+        p = self.ax.plot(yh, hinge,  '-', linewidth=0.8, color='springgreen')
         self._add (p)
 
-        # plot at last chord and tip 
-        section = self.planform.wing.rootSection
-        y, le_to_te = section.line()
-        p = self.ax.plot(y, le_to_te,  '-', color=cl_planform)
-        self._add (p)
-        section = self.planform.wing.tipSection
-        y, le_to_te = section.line()
-        p = self.ax.plot(y, le_to_te,  '-', color=cl_planform)
-        self._add (p)
+        # plot banana line with mouse helper 
+        if self.mouseActive and self.planform.planformType == "Bezier": 
 
-    def _show_wingData (self, y, leadingEdge, trailingEdge):
+            self.show_mouseHelper_banana (self.planform)
 
-        area, aspectRatio = self.planform.calc_area_AR (y, leadingEdge, trailingEdge)
+            # make p1,2 of Bezier draggable - install callback when move is finished
+            bounds_x = ( 0.1 * self.planform.halfwingspan, 0.9 * self.planform.halfwingspan)
+            bounds_y = (-0.2 * self.planform.rootchord,    0.2 * self.planform.rootchord)
+            self._dragManagers.append (DragManager (self.ax, self.p1_marker_artist, 
+                                        bounds=[bounds_x, bounds_y], 
+                                        dependant_artists = [self.banana_line_artist, self.p1_marker_anno], 
+                                        callback_draw_animated = self.draw_animated_p1,
+                                        callback_on_moved=self._moveCallback))
+
+        self._show_wingData(y, x)
+
+
+    def show_mouseHelper_banana (self, planform: Planform_Bezier): 
+        """ show the helper points and lines for bezier curve definition """
+
+        # ! animated=True must be set for all artists moving around !
+        x, y = planform.banana_line()
+        p = self.ax.plot (x,y , '--', linewidth=0.5, color= cl_userHint, animated=True) 
+        self._add(p)
+        (self.banana_line_artist,) = p 
+
+        # end points of banana bezier
+        p = self.ax.plot (x[0], y[0],   marker=(3, 0, 0), fillstyle='none', color=cl_userHint, markersize=8 )
+        self._add(p)
+        p = self.ax.plot (x[-1], y[-1], marker=(3, 0, 0), fillstyle='none', color=cl_userHint, markersize=8 )
+        self._add(p)
+
+        # drag marker 
+        x = planform.banana_p1y * planform.halfwingspan
+        y = planform.banana_p1x * planform.rootchord
+        p = self.ax.plot (x, y, marker='o', color=cl_userHint, markersize=6, animated=True )
+        self._add(p)
+        (self.p1_marker_artist,) = p 
+
+        p = self.ax.annotate('banana', color=cl_userHint, fontsize = 'small',
+                            xy=(x, y), ha='left', va= 'bottom',
+                            xytext=(5, 3), textcoords='offset points', animated=True)
+        self._add(p)
+        self.p1_marker_anno = p 
+
+
+    def draw_animated_p1(self, duringMove=False): 
+        """ call back when bezier point 1 was moved"""
+
+        # just draw planform if no move 
+        if not duringMove:
+            self.planform_line_artist.set_linestyle('-')
+            self.ax.draw_artist (self.planform_line_artist)
+            self.ax.draw_artist (self.p1_marker_artist)
+            self.ax.draw_artist (self.p1_marker_anno)
+            self.ax.draw_artist (self.banana_line_artist)
+            return
+
+        # draw marker and get new coordinates (when dragged) 
+        self.ax.draw_artist (self.p1_marker_artist)
+        x1,y1 = self.p1_marker_artist.get_xydata()[0]
+
+        # update planform banana - ! wing coordinate system
+        norm_y1 = x1 / self.planform.halfwingspan
+        norm_x1 = y1 /  self.planform.rootchord
+
+        self.planform : Planform_Bezier
+        self.planform.set_banana_p1x (norm_x1)  
+        self.planform.set_banana_p1y (norm_y1)  
+
+        # because of animate=True the artist has to be provided with actual data...
+        y, banana_x = self.planform.banana_line()
+        self.banana_line_artist.set_xdata(y)
+        self.banana_line_artist.set_ydata(banana_x)
+        self.ax.draw_artist (self.banana_line_artist)
+
+        # update planform outline  
+        y, x = self.planform.linesPolygon()
+        self.planform_line_artist.set_xdata(y)
+        self.planform_line_artist.set_ydata(x)
+        self.planform_line_artist.set_linestyle(':')
+        # and plotted with special command
+        self.ax.draw_artist (self.planform_line_artist)
+
+        # update annotation text   
+        self.p1_marker_anno.xy =  (x1,y1)
+        self.p1_marker_anno.set ( text="height %.2f  pos %.2f" % (norm_x1, norm_y1))
+        self.ax.draw_artist (self.p1_marker_anno)
+
+
+    def _show_wingData (self, x, y):
+        """ x,y coordinates of the closed polygon"""
+
+        area, aspectRatio = self.planform.calc_area_AR (x,y)
         text  = "Wing span %.0f mm\n" % (self.planform.halfwingspan * 2)
         text += "Wing area %.1f dm²\n" % (area * 2 / 10000)
         text += "Aspect ratio %.1f\n" % (aspectRatio)
 
-        p = self.ax.text (0.91, 0.05, text, color=cl_labelGrid, # fontsize = 'small',
+        p = self.ax.text (0.89, 0.05, text, color=cl_labelGrid, # fontsize = 'small',
                           transform=self.ax.transAxes, 
                           horizontalalignment='left', verticalalignment='bottom')
         self._add (p)   
        
+
+# ----------------------------------
 
 
 class ChordLines_Artist (Artist):
@@ -381,41 +641,18 @@ class Chord_Artist (Artist):
     """
     color = cl_planform     
 
-    def set_mouseActive (self, aBool): 
-        # overloaded for user tip 
-        if aBool:
-            self.userTip = 'Drag tangent endpoints with mouse'
-        else: 
-            self.userTip = '' 
-        super().set_mouseActive(aBool)
-
-
     def __init__ (self, axes, modelFn, **kwargs):
         super().__init__ (axes, modelFn, **kwargs)
 
         # show mouse helper / allow drag of points 
         self.p1_marker_artist = None
+        self.p1_marker_anno = None
         self.p1_line_artist = None
         self.p2_marker_artist = None
+        self.p2_marker_anno = None
         self.p2_line_artist = None
         self.chord_line_artist = None 
-        self.chord_fill_artist = None 
 
-        # DragManager instances
-        self._dm1 = None
-        self._dm2 = None
-
-
-    def _deleteMyPlots(self):
-        # overloaded to remove mouse bindung of DragManager"
-    
-        if not self._dm1 is None:
-            self._dm1.disconnect()
-            self._dm1 = None 
-        if not self._dm2 is None:
-            self._dm2.disconnect()
-            self._dm1 = None 
-        super()._deleteMyPlots ()
     
     @property
     def planform (self) -> Planform :
@@ -426,7 +663,7 @@ class Chord_Artist (Artist):
         return self.model.planform.norm_chord_line ()    
     
     def _plot (self): 
-        
+
         y, chord = self.chord_line ()
 
         # draw chord - if mouse is active animate=True has to be set!
@@ -434,26 +671,22 @@ class Chord_Artist (Artist):
         self._add(p)
         (self.chord_line_artist,) = p 
 
-        # p = self.ax.fill_between(y, 0, chord, facecolor=self.color, alpha=0.10, animated=True)
-        # self._add(p)
-        # (self.chord_fill_artist,) = p 
 
         if self.mouseActive and isinstance(self.planform, Planform_Bezier): 
 
             self.show_mouseHelper_bezier (self.model.planform)
 
             # make p1,2 of Bezier draggable - install callback when move is finished
-            self._dm1 = DragManager (self.ax, self.p1_marker_artist, 
-                                    bounds=[(0.1, 0.95),(0.8, 1.1)], 
-                                    dependant_artists = [self.p1_line_artist], 
-                                    callback_draw_animated = self.draw_animated_p1,
-                                    callback_on_moved=self._moveCallback)
-                                    # callback_on_moved=self.on_p1_moved)
-            self._dm2 = DragManager (self.ax, self.p2_marker_artist, 
-                                    bounds=[(1, 1),(0.05, 0.95)], 
-                                    dependant_artists = [self.p2_line_artist], 
-                                    callback_draw_animated = self.draw_animated_p2,
-                                    callback_on_moved=self._moveCallback)
+            self._dragManagers.append (DragManager (self.ax, self.p1_marker_artist, 
+                                        bounds=[(0.1, 0.95),(0.6, 1.0)], 
+                                        dependant_artists = [self.p1_line_artist, self.p1_marker_anno], 
+                                        callback_draw_animated = self.draw_animated_p1,
+                                        callback_on_moved=self._moveCallback))
+            self._dragManagers.append (DragManager (self.ax, self.p2_marker_artist, 
+                                        bounds=[(1, 1),(0.05, 0.95)], 
+                                        dependant_artists = [self.p2_line_artist, self.p2_marker_anno], 
+                                        callback_draw_animated = self.draw_animated_p2,
+                                        callback_on_moved=self._moveCallback))
 
 
     def show_mouseHelper_bezier (self, planform: Planform): 
@@ -461,28 +694,46 @@ class Chord_Artist (Artist):
 
         # ! animated=True must be set for all artists moving around !
 
+        # Bezier p1 tangent line
         p = self.ax.plot (planform._py[0:2], planform._px[0:2], '--', linewidth=0.5, color= cl_userHint, animated=True) 
         self._add(p)
         (self.p1_line_artist,) = p 
-        p = self.ax.plot (planform._py[0]+0.002, planform._px[0], marker='s', color=cl_userHint, markersize=5 )
+        p = self.ax.plot (planform._py[0]+0.002, planform._px[0], marker=(3, 0, 0), fillstyle='none', color=cl_userHint, markersize=8 )
         self._add(p)
-        p = self.ax.plot (planform._py[1], planform._px[1], marker='o', color=cl_userHint, markersize=8, animated=True )
+
+        # Bezier p1 marker and annotation
+        p = self.ax.plot (planform._py[1], planform._px[1], marker='o', color=cl_userHint, markersize=6, animated=True )
         self._add(p)
         (self.p1_marker_artist,) = p 
+        p = self.ax.annotate('root tangent', color=cl_userHint, fontsize='small',
+                            xy=(planform._py[1], planform._px[1]), ha='left', va='center',
+                            xytext=(8, 0), textcoords='offset points', animated=True)
+        self._add(p)
+        self.p1_marker_anno = p 
 
+        # Bezier p2 tangent line
         p = self.ax.plot (planform._py[2:], planform._px[2:], '--', linewidth=0.5, color= cl_userHint)    
         self._add(p)
         (self.p2_line_artist,) = p 
-        p = self.ax.plot (planform._py[3], planform._px[3], marker='s', color=cl_userHint, markersize=5 )
+        p = self.ax.plot (planform._py[3], planform._px[3],marker=(3, 0, 0), fillstyle='none', color=cl_userHint, markersize=8 )
         self._add(p)
-        p = self.ax.plot (planform._py[2], planform._px[2], marker='o', color=cl_userHint, markersize=8 )
+
+        # Bezier p2 marker and annotation
+        p = self.ax.plot (planform._py[2], planform._px[2], marker='o', color=cl_userHint, markersize=6)
         self._add(p)
         (self.p2_marker_artist,) = p 
+        p = self.ax.annotate('tip tangent', color=cl_userHint, fontsize='small',
+                            xy=(planform._py[2], planform._px[2]), ha='center', va= 'bottom',
+                            xytext=(0, 5), textcoords='offset points', animated=True)
+        self._add(p)
+        self.p2_marker_anno = p 
+
 
 
     def draw_animated_p1(self, duringMove=False): 
         """ call back when bezier point 1 was moved"""
 
+        self.planform : Planform_Bezier
         # draw marker and get new coordinates (when dragged) 
         self.ax.draw_artist (self.p1_marker_artist)
         x1,y1 = self.p1_marker_artist.get_xydata()[0]
@@ -500,6 +751,14 @@ class Chord_Artist (Artist):
         self.planform.set_p1x (y1)  
         self.planform.set_p1y (x1)  
         self.draw_animated_chord(duringMove=duringMove)  
+
+        # update annotation
+        if duringMove: 
+            angle  = self.planform.tangentAngle_root
+            length = self.planform.tangentLength_root
+            self.p1_marker_anno.xy =  (x1,y1)
+            self.p1_marker_anno.set ( text="angle %.1f  length %.2f" % (angle, length))
+        self.ax.draw_artist (self.p1_marker_anno)
 
 
     def draw_animated_p2(self, duringMove=False): 
@@ -522,6 +781,14 @@ class Chord_Artist (Artist):
         self.planform.set_p2x (y2)
         self.draw_animated_chord(duringMove=duringMove)  
 
+        # update annotation
+        if duringMove: 
+            angle  = self.planform.tangentAngle_tip
+            length = self.planform.tangentLength_tip
+            self.p2_marker_anno.xy =  (x2,y2)
+            self.p2_marker_anno.set ( text="angle %.1f  length %.2f" % (angle, length))
+        self.ax.draw_artist (self.p2_marker_anno)
+
 
     def draw_animated_chord (self, duringMove=False):
 
@@ -530,13 +797,11 @@ class Chord_Artist (Artist):
         # because of animate=True the artist has to be provided with actual data...
         self.chord_line_artist.set_xdata(y)
         self.chord_line_artist.set_ydata(chord)
-        self.chord_line_artist.set_xdata(y)
-        self.chord_line_artist.set_ydata(chord)
         if duringMove:
             self.chord_line_artist.set_linestyle(':')
         else:
             self.chord_line_artist.set_linestyle('-')
-        # and plotted with special commans
+        # and plotted with special command
         self.ax.draw_artist (self.chord_line_artist)
 
 
@@ -567,9 +832,6 @@ class Sections_Artist (Artist):
     Keyword Arguments:
         norm --   True: plot in a normed coordinate system
     """
-    def _defaultUserTip (self):
-        # overwritten in subclass"
-        return 'Click section to select'
 
     @property   
     def wing (self) -> Wing:
@@ -587,34 +849,48 @@ class Sections_Artist (Artist):
         for section in self.wingSections:
             if self._norm: 
                 y, le_to_te = section.norm_line()
-                le_to_te [1] =  0.08
             else:
                 y, le_to_te = section.line()
 
-            if section.hasFixedPosition():
-                color = cl_wingSection_fix
-                linewidth= 1.5
-                linestyle='solid'
-            else:
-                color = cl_wingSection_flex
-                linewidth = 1
-                linestyle='dashed'
+            color = cl_wingSection_fix
+            linewidth= 1.0
+            linestyle='solid'
 
             label = section.name()
 
-            if not (section.isRootOrTip and self._norm): 
-                p = self.ax.plot(y, le_to_te, color=color, label=label, linestyle=linestyle, 
-                                linewidth=linewidth)
-                self._add (p)              # remind plot to delete 
+            # if not (section.isRootOrTip and self._norm): 
+            p = self.ax.plot(y, le_to_te, color=color, label=label, linestyle=linestyle, 
+                            linewidth=linewidth)
+            self._add (p)              # remind plot to delete 
 
-                if self._pickActive: 
-                    self._makeLinePickable (p)
+            if self._pickActive: 
+                self._makeLinePickable (p)
 
-                self.plot_markers (y, le_to_te, section)
+            self.plot_markers (y, le_to_te, section)
 
         # activate event for clicking on line 
-        if self._pickActive:
-            self.ax.figure.canvas.mpl_connect('pick_event', self._on_pick)
+        if self._pickActive: 
+            self._connectPickEvent ()
+            if self.mouseActive:      
+                self.show_mouseHelper ()
+
+
+    def show_mouseHelper (self):
+        """ show info for section select"""
+
+        if len(self.wingSections) > 2:
+            iSec = -(-len(self.wingSections) // 2) - 1                # trick to round up
+
+            if self.norm:
+                y_sec, x_sec = self.wingSections [iSec].norm_line()
+            else:
+                y_sec, x_sec = self.wingSections [iSec].line()
+
+            p = self.ax.annotate('click to select', color=cl_userHint, fontsize = 'small',
+                    xy=(y_sec [0], (x_sec[0] + x_sec[1])/3), ha='left', va= 'top',
+                    xytext=(6, 0), textcoords='offset points')
+            self._add(p)
+
 
 
     def plot_markers (self, y, le_to_te, section: WingSection): 
@@ -625,38 +901,38 @@ class Sections_Artist (Artist):
         if self._norm:
             # if section.isRoot: return               # no norm_chord for root
             text = "%.2f" % (section.norm_chord)
-            marker_x = (le_to_te[0] + le_to_te[1]) * 0.6
+            marker_x = (le_to_te[0] + le_to_te[1]) * 0.40
             marker_y = y[0] + 0.007
         else: 
-            text = "%.0fmm" % section.chord
-            marker_x = le_to_te[1] - (le_to_te[1] - le_to_te[0]) * 0.6
+            text = "%.0f" % section.chord
+            marker_x = le_to_te[1] - (le_to_te[1] - le_to_te[0]) * 0.40
             marker_y = y[0] + 6
 
         if not sectionFix:                          # fixed chord 
-            text = "fix\n" + text 
+            text = text + " fix"
 
         color = cl_wingSection_fix
 
-        p = self.ax.text (marker_y, marker_x, text, ha='left',color = color )
+        p = self.ax.text (marker_y, marker_x, text, ha='left',color = color, rotation=90 )
         self._add (p)   
 
         # section pos at bottom  
         if not section.isRootOrTip: 
             if self._norm:
-                marker_y = -0.05                            # in axis coordinates
+                marker_y = 0.06                             # in axis coordinates
                 text = "%.2f" % (section.norm_yPos)
-                if sectionFix:                                  # fixed position 
-                    text = "fix\n\n" + text 
+                if sectionFix:                              # fixed position 
+                    text = "fix\n" + text 
             else: 
                 marker_y = 0.02                             # in axis coordinates
-                text = "%.0fmm" % section.yPos
-                if sectionFix:                                  # fixed position 
+                text = "%.0f" % section.yPos
+                if sectionFix:                              # fixed position 
                     text = "fix\n" + text 
 
             color = cl_wingSection_fix
             marker_x = y[0]                                 # in data coordinates
 
-            p = self.ax.text (marker_x, marker_y, text, color=color, # fontsize = 'small',
+            p = self.ax.text (marker_x, marker_y, text, color=color, backgroundcolor= cl_background, 
                             transform=self.ax.get_xaxis_transform(), 
                             horizontalalignment='center', verticalalignment='bottom')
             self._add (p)   
@@ -760,9 +1036,6 @@ class Airfoil_Artist (Artist):
 
         self._strak = strak
 
-    def _defaultUserTip (self):
-        # overwritten in subclass"
-        return 'Click airfoil to select'
 
     def set_current (self, aLineLabel, figureUpdate=False):
         """ tries to set a highlighted airfoil  to section with name ''aLineLabel' 
@@ -837,8 +1110,8 @@ class Airfoil_Artist (Artist):
                     self._makeLinePickable (p)
 
         # activate event for clicking on line 
-        if self._pickActive:
-            self.ax.figure.canvas.mpl_connect('pick_event', self._on_pick)     
+        if self._pickActive: self._connectPickEvent ()
+
         if not self._norm: 
             self._plot_zero_marker (self.wing.rootchord)
 

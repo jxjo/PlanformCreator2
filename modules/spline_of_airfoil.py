@@ -32,8 +32,9 @@ class SplineOfAirfoil:
         self._curv_upper : SideOfAirfoil = None
         self._curv_lower : SideOfAirfoil = None
 
-        self._spline : Spline2D           = None  # 2 D cubic spline representation of self
+        self._spline : Spline2D          = None   # 2 D cubic spline representation of self
         self._uLe = None                          # leading edge  - u value 
+        self._le_highPrecision           = False  # will evaluate LE based on spline and normalize
 
         self._curvature   = None                  # curvature along u  
 
@@ -68,7 +69,10 @@ class SplineOfAirfoil:
         if xle != 0.0 or yle != 0.0: return False
 
         # LE of spline close enough to 0,0? 
-        return self.isLe_closeTo_leSpline
+        if self.le_highPrecision:
+            return self.isLe_closeTo_leSpline
+        else: 
+            return True
 
 
     @property
@@ -77,6 +81,12 @@ class SplineOfAirfoil:
         ile = np.argmin (self._x)
         return self._x[ile], self._y[ile]
 
+    @property
+    def le_highPrecision (self): 
+        """ is le calculated based on spline and normalized"""
+        return self._le_highPrecision
+    def set_le_highPrecision (self, aBool):
+        self._le_highPrecision = aBool
 
     @property
     def uLe (self): 
@@ -377,7 +387,8 @@ class SplineOfAirfoil:
     def _y_oppoTo (self, side): 
         """
         Evalutes y values right opposite (having same x-value) to side.
-        Note: if self isn't normalized, it will be normalized prior to evaluation
+        Note: if self isn't normalized, it will be normalized if le_highPrecision
+              prior to evaluation
 
         Parameters
         ----------
@@ -390,7 +401,7 @@ class SplineOfAirfoil:
         y_oppo : np array - y_values on the opposite side in the same order as side
         """
 
-        if not self.isNormalized:
+        if not self.isNormalized and self.le_highPrecision:
             self._normalize()
 
         iLe = np.argmin (self._x)
@@ -633,7 +644,7 @@ class SideOfAirfoil:
                 xmax = 0.0 
                 ymax = 0.0 
             else:
-                xmax = findMax (self.yFn, 0.3)
+                xmax = findMax (self.yFn, 0.3, bounds=(0.0,1.0))
                 ymax = self.yFn (xmax)
             self._maximum = (xmax, ymax)
         return self._maximum 

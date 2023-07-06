@@ -87,7 +87,7 @@ class Messagebox(ctk.CTkToplevel):
 
         if button_color=="default":
             self.button_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
-            # jxjo second and third button in a darker color 
+            # second and third button in a darker color 
             self.button2_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"])
         else:
             self.button_color = button_color

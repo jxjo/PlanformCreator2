@@ -319,20 +319,20 @@ class Edit_Coordinates(Edit_Abstract):
         Blank_Widget (self, r,0)    
         c = 1                                  # left blank column to inset the fields 
         self.add (Field_Widget  (self,r,c,   lab="Leading edge", get=lambda: self.airfoil().le[0],
-                                 width=80, lab_width=90, dec=7, text_style=lambda: self.style('le_x')))
+                                 width=75, lab_width=90, dec=6, text_style=lambda: self.style('le_x')))
         self.add (Field_Widget  (self,r,c+3,                     get=lambda: self.airfoil().le[1],
-                                 width=80, dec=7,               text_style=lambda: self.style('le_y')))
+                                 width=75,               dec=6, text_style=lambda: self.style('le_y')))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="Trailing edge", get=lambda: self.airfoil().te_fromPoints[0],
-                                 width=80, lab_width=90, dec=7, text_style=lambda: self.style('te_x')))
+                                 width=75, lab_width=90, dec=6, text_style=lambda: self.style('te_x')))
         self.add (Field_Widget  (self,r,c+3,                     get=lambda: self.airfoil().te_fromPoints[1],
-                                 width=80,               dec=7, text_style=lambda: self.style('te_y')))
+                                 width=75,               dec=6, text_style=lambda: self.style('te_y')))
  
         r += 1
         self.add (Field_Widget  (self,r,c,   lab=" " ,            get=lambda: self.airfoil().te_fromPoints[2],
-                                 width=80, lab_width=90, dec=7, text_style=lambda: self.style('te_x')))
+                                 width=75, lab_width=90, dec=6, text_style=lambda: self.style('te_x')))
         self.add (Field_Widget  (self,r,c+3,                      get=lambda: self.airfoil().te_fromPoints[3],
-                                 width=80,               dec=7, text_style=lambda: self.style('te_y')))
+                                 width=75,               dec=6, text_style=lambda: self.style('te_y')))
 
         r += 1
         Blank_Widget (self, r,c)
@@ -901,9 +901,11 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
         super().__init__(master, *args, **kwargs)
 
         self.airfoilOrg : Airfoil = airfoilFn()
-        self.airfoilOrg._spline = None              # ensure a new, clean spline (leSpline) 
+        self.airfoilOrg._spline = None                     # ensure a new, clean spline 
+        self.airfoilOrg.spline.set_le_highPrecision(True)  # ensure exact le based on spline
 
         self.airfoil  = Airfoil.asCopy (self.airfoilOrg, nameExt=nameExt) 
+        self.airfoil.spline.set_le_highPrecision(True)     # ensure exact le based on spline
 
         # input field will fire this event when data is changed
         self.change_event = AIRFOIL_CHANGED
@@ -1506,11 +1508,11 @@ class AirfoilEditor (ctk.CTk):
         edit_Airfoil_frame    = Edit_Airfoil_Data   (edit_frame, self.curAirfoil, myApp=self)
         edit_Airfoil_frame.grid   (row=0, column=0, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
 
-        edit_Curvature_frame  = Edit_Panels (edit_frame, self.curAirfoil, myApp=self)
-        edit_Curvature_frame.grid (row=0, column=1, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
+        edit_Panels_frame  = Edit_Panels (edit_frame, self.curAirfoil, myApp=self)
+        edit_Panels_frame.grid (row=0, column=1, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
 
-        edit_Curvature_frame  = Edit_Coordinates (edit_frame, self.curAirfoil, myApp=self)
-        edit_Curvature_frame.grid (row=0, column=2, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
+        edit_Coordinates_frame  = Edit_Coordinates (edit_frame, self.curAirfoil, myApp=self)
+        edit_Coordinates_frame.grid (row=0, column=2, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
 
         edit_Curvature_frame  = Edit_Curvature (edit_frame, self.curAirfoil, myApp=self)
         edit_Curvature_frame.grid (row=0, column=3, pady=(0,5), padx=(5,5), ipadx=10, sticky="news")
@@ -1622,10 +1624,10 @@ if __name__ == "__main__":
             sys.exit(1)
     else: 
         NoteMsg ("No airfoil file as argument. Showing example airfoil...")
-        airfoil_files = None
-        # airfoil_dir   =".\\modules\\test_airfoils"
-        # airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
-        # airfoil_files = sorted (airfoil_files)
+        # airfoil_files = None
+        airfoil_dir   =".\\test_airfoils"
+        airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
+        airfoil_files = sorted (airfoil_files)
 
     myApp = AirfoilEditor (airfoil_files)
     

@@ -59,10 +59,6 @@ class Airfoil_Artist (Artist):
     def set_points (self, aBool): self._points = aBool 
 
 
-    def _defaultUserTip (self):
-        # overwritten in subclass"
-        return None                         # 'Click airfoil to select'
-
     def set_current (self, aLineLabel, figureUpdate=False):
         """ tries to set a highlighted airfoil  to section with name ''aLineLabel' 
         """
@@ -119,8 +115,7 @@ class Airfoil_Artist (Artist):
                     self._makeLinePickable (p)
 
         # activate event for clicking on line 
-        if self._pickActive:
-            self.ax.figure.canvas.mpl_connect('pick_event', self._on_pick)     
+        if self._pickActive: self._connectPickEvent ()
 
         p = self.ax.legend(labelcolor=cl_labelGrid,)
         self._add(p)

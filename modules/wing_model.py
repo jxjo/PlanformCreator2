@@ -82,7 +82,7 @@ class Wing:
 
 
         # attach the Planform 
-        tmp_planformType      = fromDict (dataDict, "planformType", "elliptical", wingExists)
+        tmp_planformType      = fromDict (dataDict, "planformType", "Bezier", wingExists)
         self._planform        = None
         self.planform         = Planform.having (tmp_planformType, self, dataDict) # via setter
 
@@ -117,7 +117,7 @@ class Wing:
         loads the dataDict of wing paramters from json-File 'paramFilePath'
         """
         dataDict = None
-        if paramFilePath is not None:
+        if paramFilePath:
             try:
                 paramFile = open(paramFilePath)
                 try:
@@ -810,6 +810,25 @@ class Planform:
 
         return y, leadingEdge, trailingEdge
 
+    def linesPolygon (self):
+        """
+        returns the major lines leading and trailing edge as a closed polygon   
+        Returns:
+            :outline_y: array of the spanwise y-stations of lines 
+            :outline_x: array of x coordinates (chord direction)
+        """
+
+        y, leadingEdge, trailingEdge = self.lines()
+
+        # append lines and nose point to close the polygon 
+        outline_y = np.append(y, np.flip(y))
+        outline_y = np.append(outline_y, [y[0]])
+        
+        outline_x = np.append(leadingEdge, np.flip(trailingEdge))
+        outline_x = np.append(outline_x, [leadingEdge[0]])
+
+        return outline_y, outline_x
+    
 
     def flapPolygon  (self, fromY, toY, nPoints = 50):
         """
@@ -863,17 +882,72 @@ class Planform:
         return yFlapLine, xFlapLine
 
 
-    def calc_area_AR (self, y, le, te):
-        """calculates (approximates) wing area and aspect ration AR based 
-        on le and te points which are already calculated"""
+    def find_yPosFromChord (self, chord):
+        """
+        calculates the y-Position from a chord length 
+        Returns:
+            :y:   
+        """
 
-        area = 0 
-        # trapez verfahren 
-        for i in range(len(y) -1): 
-            area += (y[i+1] - y[i]) * ((te[i] - le[i]) + (te[i+1] - le[i+1])) / 2
+        # some kind of bubble search is performed until accuracy is better than epsilon
+        # Should be overloaded for more precision 
 
-        aspectRatio = 2 * self.halfwingspan **2 / area
-        return area, aspectRatio
+        epsilon = 0.0001                           # normalized chord accuracy 
+        myChord = chord / self.rootchord            # normalize 
+
+        if(myChord > 1.0 or myChord < 0): 
+            ErrorMsg ("Chord %f must be between 0.0 and root chord" % chord)
+            return
+
+        y       = None
+        yLeft   = 0 
+        yRight  = 1
+        chordLeft   = self.norm_chord_function (yLeft,  fast=False)
+        chordRight  = self.norm_chord_function (yRight, fast=False)
+        
+        while y == None:
+            if   (abs (myChord - chordLeft)  < epsilon):
+                y = yLeft 
+                break
+            elif (abs (myChord - chordRight) < epsilon):
+                y = yRight
+                break
+            yMiddle = (yLeft + yRight) / 2 
+            chordMiddle = self.norm_chord_function (yMiddle, fast=False)
+            if (myChord > chordMiddle): 
+                yRight     = yMiddle 
+                chordRight = chordMiddle
+            else:
+                yLeft      = yMiddle
+                chordLeft  = chordMiddle
+
+        return y * self.halfwingspan
+
+
+
+    def calc_area_AR (self, x, y):
+        """calculates (approximates) halfwing area and aspect ration AR based 
+        on the closed polygon defined by x,y points which are already calculated
+
+        Parameters
+        ----------
+        x,y : array_like    coordinates of the closed polygon 
+
+        Returns
+        -------
+        half_area 
+        aspectRatio
+        """
+
+        # see https://stackoverflow.com/questions/24467972/calculate-area-of-polygon-given-x-y-coordinates
+        correction = x[-1] * y[0] - y[-1]* x[0]
+        main_area = np.dot(x[:-1], y[1:]) - np.dot(y[:-1], x[1:])
+        
+        half_area =  0.5*np.abs(main_area + correction) 
+
+        aspectRatio = 2 * self.halfwingspan **2 / half_area
+        return half_area, aspectRatio
+    
 
     def refresh (self): 
         """ refresh planform if wing parameters e.g. tipchord have changed"""
@@ -948,7 +1022,7 @@ class Planform_Bezier(Planform):
     @property                                   # root tangent 
     def p1x(self): return self._px[1]
     def set_p1x(self, aVal): 
-        self._px[1] = aVal 
+        self._px[1] = min (aVal, self._px[0])      # The angle may not become negative as chord value won't be unique!
         self._bezier.set_points (self._py, self._px)
     @property
     def p1y(self): return self._py[1]
@@ -964,9 +1038,10 @@ class Planform_Bezier(Planform):
         dy = self._px[1] - self._px[0]
         return np.arctan (dy/dx) * 180 / np.pi
     def set_tangentAngle_root (self, anAngle : float):
-        """ set angle in degrees of the bezier tangent at root 
-            Will keep the y-coordinate of point 1"""
+        """ set angle in degrees of the bezier tangent at root.
+            ! The angle may not become negative as chord value won't be unique! """
         # watch the different coordinate system 
+        anAngle = max (anAngle, 0.0)
         hypo = self.tangentLength_root
         dy = hypo * np.sin (anAngle * np.pi / 180.0)
         dx = hypo * np.cos (anAngle * np.pi / 180.0)
@@ -1023,10 +1098,28 @@ class Planform_Bezier(Planform):
         self._banana_py[1] = aVal 
         self._banana = None                             # Bezier with cache will be rebuild
 
+    def banana_line (self):
+        """
+        returns the outline of the banana in wing coordinates 
+        Returns:
+            :y: array of the spanwise y-stations of lines 
+            :banana_x:  array of x coordinates (chord direction)
+        """
+
+        if self._banana is None: 
+            self._banana = BezierQuadratic (self._banana_py, self._banana_px)
+
+        norm_y, norm_x = self._banana.eval (self._norm_u_points ())
+
+        y        = norm_y * self.halfwingspan
+        banana_x = norm_x * self.rootchord
+
+        return y, banana_x
+
 
     def _norm_u_points (self):
         """ array of u (arc) points along the chord line  """
-        return np.linspace(0.0, 1.0, num=50) 
+        return np.linspace(0.0, 1.0, num=100) 
 
 
     def norm_chord_line (self):
@@ -1043,16 +1136,18 @@ class Planform_Bezier(Planform):
         y, chord = self._bezier.eval (self._norm_u_points() )
         return y, chord
 
-    def norm_chord_function (self, y_norm):
+    def norm_chord_function (self, y_norm, fast=True):
         """
         Returns the normalized chord of the planform at y 0..1
+        Normally a linear interpolation is done for fast evaulation (fast=True). 
+        Higher Precision is achieved with interpolation of the curve (fast=False) 
         Args:
             :y_norm: the normalized y-Position in the planform 0..1
         Returns:
             :chord: the chord 0..1 at y
         """
 
-        return self._bezier.eval_y_on_x (y_norm)        # wing coordinate system 
+        return self._bezier.eval_y_on_x (y_norm, fast=fast)        # wing coordinate system 
     
     def _norm_banana_function (self, y_norm):
         """
@@ -1132,6 +1227,25 @@ class Planform_Bezier(Planform):
         trailingEdge = leadingEdge + chord
 
         return leadingEdge, trailingEdge
+    
+
+    
+    def find_yPosFromChord (self, chord):
+        """
+        calculates the y-Position from a chord length 
+        Returns:
+            :y:   
+        """
+        
+        # overloaded for Bezier 
+
+        normChord = chord / self.wing.rootchord       # normalize 
+
+        yPos = self._bezier.eval_x_on_y (normChord, fast=False) * self.wing.halfwingspan
+
+        return yPos 
+
+
     
     def refresh (self): 
         """ refresh planform if wing parameters e.g. tipchord have changed"""
@@ -2270,7 +2384,7 @@ class WingSection:
         elif (self.isTip):                      # enforce position
             pos = self.wing.halfwingspan
         elif (self._norm_chord != None): 
-            pos = self.find_yPosFromChord (self._norm_chord * self.wing.rootchord) 
+            pos = self.wing.planform.find_yPosFromChord (self._norm_chord * self.wing.rootchord) 
         else:
             pos = None
         return pos 
@@ -2461,7 +2575,7 @@ class WingSection:
             leftLimit  = self.yPos
             rightLimit = self.yPos
         else:
-            safety = 1.01               # = 1%
+            safety = self.wing.halfwingspan / 500.0 
             if leftSec: 
                 leftLimit = leftSec.yPos
             else:
@@ -2470,7 +2584,7 @@ class WingSection:
                 rightLimit = rightSec.yPos
             else:
                 rightLimit = self.yPos
-        return (leftLimit * safety, rightLimit / safety)
+        return (leftLimit + safety, rightLimit - safety)
     
     def limits_norm_yPos (self): 
         """ position limits as tuple of self before touching the neighbour section
@@ -2581,44 +2695,6 @@ class WingSection:
 
         return os.path.basename(filePathName) 
         
-
-    def find_yPosFromChord (self, chord):
-        """
-        calculates the y-Position from a chord length 
-        Returns:
-            :y:   
-        """
-        # some kind of bubble search is performed until accuracy is better than epsilon
-        epsilon = 0.001                             # normalized y accuracy 
-        myChord = chord / self.wing.rootchord       # normalize 
-        planform = self.wing.planform
-
-        if(myChord > 1.0 or myChord < 0): 
-            ErrorMsg ("Chord %f must be between 0.0 and root chord" % chord)
-            return
-
-        yLeft   = 0 
-        y       = None
-        yRight  = 1
-        
-        while y == None:
-            chordLeft   = planform.norm_chord_function (yLeft)
-            chordRight  = planform.norm_chord_function (yRight)
-            if   (abs (myChord - chordLeft)  < epsilon):
-                y = yLeft 
-                break
-            elif (abs (myChord - chordRight) < epsilon):
-                y = yRight
-                break
-            yMiddle = (yLeft + yRight) / 2 
-            chordMiddle = planform.norm_chord_function (yMiddle)
-            if (myChord > chordMiddle): 
-                yRight = yMiddle 
-            else:
-                yLeft  = yMiddle
-
-        return y * self.wing.halfwingspan
-
     
     def line (self):
         """

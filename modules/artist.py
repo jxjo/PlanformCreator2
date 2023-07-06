@@ -68,25 +68,23 @@ class Artist():
         self._show = show                   # should self be plotted? 
         self.showMarker = showMarker
         self._myPlots = []                  # plots (line artists) made up to now 
+        self._dragManagers  = []            # DragManagers which are instanciated by self
+        self._mouseActive  = False
+        self._moveCallback = None
+        self._pickActive   = False
+        self._pickCallback = None
     
         if onPick:
             self._pickActive = True
+            self._mouseActive = True
             self._pickCallback = onPick
-        else:
-            self._pickActive = False
-            self._pickCallback = None
 
         if onMove:
             self._mouseActive = True
             self._moveCallback = onMove
-        else:
-            self._mouseActive = False
-            self._moveCallback = None
 
-        self._dragManager = None
+        self._cidpick      = None           # callback id pick event 
         self._curLineLabel = None
-
-        self.userTip  = self._defaultUserTip ()
 
 
     # ------- public ----------------------
@@ -127,7 +125,6 @@ class Artist():
         if self.show:                           # view is switched on by user? 
             self._deleteMyPlots()               # remove current plot elements
             self._plot()                        # repaint everything 
-            self._showUserTip ()
             if figureUpdate:                    
                 self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
@@ -161,6 +158,10 @@ class Artist():
         self._mouseActive = aBool
         self.plot(figureUpdate=True)        # enforce redraw
 
+    @property
+    def curLineLabel (self): return self._curLineLabel
+    """ Label of current line object"""
+
     # --------------  private -------------
 
     def _plot (self):
@@ -168,7 +169,9 @@ class Artist():
         pass
 
     def _deleteMyPlots(self):
+        """ remove all artists and artifacts of self to reset an artist"""
 
+        # remove matplotlib artists 
         for p in self._myPlots:
             if isinstance (p, list):
                 for l in p:                     # ax.plot returns a list of plot items(lines)
@@ -183,17 +186,32 @@ class Artist():
                     print (" -!- ups - artist %snot found", p)
         self._myPlots = []
 
+        # remove registered pick events 
+        if not self._cidpick is None:
+            self.ax.figure.canvas.mpl_disconnect(self._cidpick)
+
+        # remove DragManagers 
+        dm : DragManager
+        for dm in self._dragManagers:
+            dm.disconnect()
+        self._dragManagers = []
+
 
     def _add(self, aPlot):
         self._myPlots.append(aPlot)
 
     def _makeLinePickable (self, aLine): 
-
+        """ make aLine clickibale on axes"""
         try: 
             aLine[0].set_picker (True)
             aLine[0].set_pickradius(5)
         except: 
             pass
+
+    def _connectPickEvent (self):
+        """ installs and connects callback for pick event """ 
+        self._cidpick = self.ax.figure.canvas.mpl_connect('pick_event', self._on_pick)     
+
 
 
     def _on_pick (self, event):
@@ -201,27 +219,11 @@ class Artist():
         try: 
             myLabel = event.artist.get_label()
         except: 
-            pass # print ("- Pick event couldn't be handled ", event.artist, "callback: ", self._pickCallback)
+            print ("- Pick event couldn't be handled ", event.artist, "callback: ", self._pickCallback)
 
         # now callback parent with myLabel as argument
         if self._pickCallback:
             self._pickCallback(myLabel)
-        # default remove of user tip 
-        if self.userTip:
-            self.userTip = ''
-            self.plot()
-
-
-    def _showUserTip (self):
-
-        if self.userTip: 
-            p = self.ax.text(0.5, 0.06, self.userTip , color=cl_userHint, 
-                            horizontalalignment='center', transform=self.ax.transAxes)
-            self._add(p)
- 
-    def _defaultUserTip (self):
-        # default user tip - overwritten in subclass"
-        return None
 
 
     def _set_colorcycle (self, nColors = 10, colormap='Set2'):
@@ -363,7 +365,6 @@ class DragManager:
         contains, attrd = self._artist.contains(event)
         if not contains:
             return
-        # print('Artist: ', self._artist, '  event contains', self._artist.get_xydata()[0])
 
         # the only way to get a background image just without self.artistis to set self invisible
         #  - watch if there could be many dragManager  -
@@ -383,7 +384,7 @@ class DragManager:
 
 
     def on_motion(self, event):
-        """Move the rectangle if the mouse is over us."""
+        """Move the artits if the mouse is draged over us."""
         if self._press_xy is None or event.inaxes != self.ax:
             return
         (x0, y0), (xpress, ypress) = self._press_xy
