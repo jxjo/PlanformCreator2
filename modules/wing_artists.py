@@ -301,11 +301,10 @@ class Planform_Artist (Artist):
             return self.model.planform
         else:
             return self._planform
-    
+
+
     def _plot(self):
     
-        # self._show_wingData (y, leadingEdge, trailingEdge)
-
         y, x = self.planform.linesPolygon()
         p = self.ax.plot(y, x,  '-', color=cl_planform)
         self._add (p)
@@ -645,12 +644,12 @@ class Chord_Artist (Artist):
         super().__init__ (axes, modelFn, **kwargs)
 
         # show mouse helper / allow drag of points 
-        self.p1_marker_artist = None
-        self.p1_marker_anno = None
-        self.p1_line_artist = None
-        self.p2_marker_artist = None
-        self.p2_marker_anno = None
-        self.p2_line_artist = None
+        self.p1_marker_artist  = None
+        self.p1_marker_anno    = None
+        self.p1_line_artist    = None
+        self.p2_marker_artist  = None
+        self.p2_marker_anno    = None
+        self.p2_line_artist    = None
         self.chord_line_artist = None 
 
     
@@ -659,18 +658,15 @@ class Chord_Artist (Artist):
         return self.model.planform
     
     def chord_line (self):
-        # will be overwritten by subclasses
         return self.model.planform.norm_chord_line ()    
     
     def _plot (self): 
 
         y, chord = self.chord_line ()
 
-        # draw chord - if mouse is active animate=True has to be set!
-        p = self.ax.plot(y, chord, '-', label = 'Chord distribution', color=self.color, animated=self.mouseActive)
+        p = self.ax.plot(y, chord, '-', color=self.color)
         self._add(p)
         (self.chord_line_artist,) = p 
-
 
         if self.mouseActive and isinstance(self.planform, Planform_Bezier): 
 

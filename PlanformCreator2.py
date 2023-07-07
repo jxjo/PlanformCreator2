@@ -55,7 +55,7 @@ from modules.wing_artists       import *
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "0.8.0"
+AppVersion = "0.8.1"
 
 #------------------------------------------------
 
@@ -337,7 +337,7 @@ class Edit_Planform_Master(Edit_Abstract):
         self.add(Header_Widget (self,0,0, lab=self.name, width=110))
         self.add(Option_Widget (self,0,1, get='planformType', set = 'set_planformType',
                                 width = 150, options=Planform.allTemplatePlanformTypes(),
-                                event=PLANFORM_CHANGED))
+                                event=CHORD_CHANGED))
 
         self.add(Label_Widget  (self,1, 0, lab= self.shortDescription))
         self.add(Blank_Widget  (self,2, 0))
@@ -1051,21 +1051,20 @@ class Diagram_Planform (Diagram_Abstract):
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Mouse helper', 
                 get=lambda: self.planformArtist.mouseActive, set=self.set_mouseHelpers)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Chord lines', 
-                get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
-        r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Wing sections', 
-                get=lambda: self.sectionsArtist.show, set=self.sectionsArtist.set_show)
-
-        r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Current section', 
-                get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
+                get=lambda: self.sectionsArtist.show, set=self.set_showSections)
+        # r += 1
+        # Switch_Widget (self.view_frame,r,c, padx=10, lab='Current section', 
+        #         get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Airfoil names', 
                 get=lambda: self.airfoilNameArtist.show, set=self.airfoilNameArtist.set_show)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Flaps', 
                 get=lambda: self.flapArtist.show, set=self.flapArtist.set_show)
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Chord lines', 
+                get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Ref elliptical', 
                 get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
@@ -1081,6 +1080,11 @@ class Diagram_Planform (Diagram_Abstract):
         self.planformArtist.set_mouseActive (aBool)
         self.curSectionArtist.set_mouseActive (aBool)
         self.sectionsArtist.set_mouseActive (aBool)
+
+    def set_showSections (self, aBool): 
+
+        self.curSectionArtist.set_show (aBool)
+        self.sectionsArtist.set_show (aBool)
 
 
     # -------- event handler
@@ -1279,17 +1283,12 @@ class Diagram_ChordDistribution (Diagram_Abstract):
 
         r,c = super().setup_Switches(r, c)
 
-        # Switch_Widget  (self.view_frame,r,0, lab='Chord distribution', 
-        #                 get=lambda: self.chordArtist.show, set=self.chordArtist.set_show)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Mouse helper', 
                 get=lambda: self.chordArtist.mouseActive, set=self.set_mouseHelpers)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Wing sections', 
-                        get=lambda: self.sectionsArtist.show, set=self.sectionsArtist.set_show)
-        r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Current section', 
-                get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
+                        get=lambda: self.sectionsArtist.show, set=self.set_showSections)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Ref elliptical', 
                         get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
@@ -1299,11 +1298,18 @@ class Diagram_ChordDistribution (Diagram_Abstract):
                             get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
         return r,c 
 
+
     def set_mouseHelpers (self, aBool): 
 
         self.chordArtist.set_mouseActive (aBool)
         self.curSectionArtist.set_mouseActive (aBool)
         self.sectionsArtist.set_mouseActive (aBool)
+
+
+    def set_showSections (self, aBool): 
+
+        self.curSectionArtist.set_show (aBool)
+        self.sectionsArtist.set_show (aBool)
 
 
     # -------- event handler
