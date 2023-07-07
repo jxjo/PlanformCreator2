@@ -2,19 +2,16 @@
   "wingName":"Amokka-JX",
   "wingspan":2380.0,
   "rootchord":235.0,
-  "tipchord":22.0,
+  "tipchord":10.0,
   "hingeLineAngle":-2.2,
   "flapDepthRoot":22.0,
   "flapDepthTip":28.0,
   "rootRe":400000,
   "airfoilNickPrefix":"RS",
-  "dxfFile":"",
-  "planformType":"elliptical TE straight",
-  "ellipseTipBelly":0.2,
-  "ellipseBellyWidth":0.4,
-  "leCorrection":0.0,
-  "ellipseCorrection":-0.32,
-  "ellipseShift":0,
+  "planformType":"Bezier TE straight",
+  "p1x":0.865751,
+  "p2x":0.352553,
+  "p1y":0.930364,
   "wingSections":[
     {
       "position":0.0,
@@ -46,7 +43,8 @@
       }
     },
     {
-      "position":1190,
+      "position":1190.0,
+      "norm_chord":0.042553,
       "flapGroup":2,
       "airfoil":{
         "file":"JX-RS-Tip.dat"
@@ -55,7 +53,7 @@
   ],
   "refPlanform_dxfPath":"Amokka-JX_wing_outline.dxf",
   "xflr5":{
-    "exportDir":"./xflr5",
+    "exportDir":"xflr5",
     "useNick":true,
     "x-panels":10,
     "x-distribution":"cosine",
@@ -69,5 +67,19 @@
     "x-distribution":"cosine",
     "y-panels":10,
     "y-minWidth":5
+  },
+  "dxf":{
+    "exportDir":"dxf",
+    "useNick":true,
+    "setTeGap":false,
+    "teGap_mm":0.5,
+    "includeAirfoils":true,
+    "exportAirfoils":true
+  },
+  "airfoils":{
+    "exportDir":"airfoils",
+    "useNick":true,
+    "setTeGap":false,
+    "teGap_mm":0.5
   }
 }

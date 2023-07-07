@@ -45,7 +45,7 @@ import customtkinter as ctk
 sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 
 from modules.common_utils       import * 
-from modules.wing_model         import Planform, Planform_Elliptical, Planform_Bezier_StraightTE, \
+from modules.wing_model         import Planform, Planform_Bezier_StraightTE, \
                                        Planform_DXF, Planform_Trapezoidal, Planform_Bezier                         
 from modules.widgets            import * 
 from modules.artist             import Plot_Toolbar
@@ -379,9 +379,7 @@ class Edit_Planform_Master(Edit_Abstract):
                 curFrame.grid_forget()              # remove current 
                 curFrame.destroy()
 
-            if(newPlanformType =="elliptical"): 
-                curFrame = Edit_Planform_Elliptical(self, self._wingFn, fg_color='transparent')
-            elif(newPlanformType =="Bezier"): 
+            if(newPlanformType =="Bezier"): 
                 curFrame = Edit_Planform_Bezier(self, self._wingFn, fg_color='transparent')
             elif(newPlanformType =="trapezoidal"): 
                 curFrame = Edit_Planform_Trapezoid(self, self._wingFn, fg_color='transparent')
@@ -477,30 +475,30 @@ class Edit_Planform_Bezier(Edit_Abstract):
         
 
 
-class Edit_Planform_Elliptical(Edit_Abstract):
-    """ 
-    Frame to edit the parameters of a elliptical planform
-    """
-    name = Planform_Elliptical.planformType
+# class Edit_Planform_Elliptical(Edit_Abstract):
+#     """ 
+#     Frame to edit the parameters of a elliptical planform
+#     """
+#     name = Planform_Elliptical.planformType
 
-    def planform(self) -> Planform_Elliptical:
-        return self.wing().planform
+#     def planform(self) -> Planform_Elliptical:
+#         return self.wing().planform
 
-    def init(self):
+#     def init(self):
 
-        self.grid_columnconfigure   (0, weight=0)
-        self.grid_rowconfigure      (6, weight=1)
+#         self.grid_columnconfigure   (0, weight=0)
+#         self.grid_rowconfigure      (6, weight=1)
 
-        self.add (Field_Widget  (self,0,0, lab="Tip belly",       obj=self.planform, get='ellipseTipBelly', set='set_ellipseTipBelly',
-                                    event=CHORD_CHANGED, lim=(0,1), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,1,0, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
-                                    event=CHORD_CHANGED, lim=(0,1), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,2,0, lab="Ellipse shift",   obj=self.planform,  get='ellipseShift', set='set_ellipseShift',
-                                    event=CHORD_CHANGED, lim=(0,0.5), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,3,0, lab="Ellipse correction",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
-                                    event=CHORD_CHANGED, lim=(-1,1), dec=2, spin=True, step=0.05))
-        self.add (Field_Widget  (self,4,0, lab="LE correction",   obj=self.planform, get='leCorrection', set='set_leCorrection',
-                                    event=PLANFORM_CHANGED, lim=(-1,1), dec=2, spin=True, step=0.05))
+#         self.add (Field_Widget  (self,0,0, lab="Tip belly",       obj=self.planform, get='ellipseTipBelly', set='set_ellipseTipBelly',
+#                                     event=CHORD_CHANGED, lim=(0,1), dec=2, spin=True, step=0.05))
+#         self.add (Field_Widget  (self,1,0, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
+#                                     event=CHORD_CHANGED, lim=(0,1), dec=2, spin=True, step=0.05))
+#         self.add (Field_Widget  (self,2,0, lab="Ellipse shift",   obj=self.planform,  get='ellipseShift', set='set_ellipseShift',
+#                                     event=CHORD_CHANGED, lim=(0,0.5), dec=2, spin=True, step=0.05))
+#         self.add (Field_Widget  (self,3,0, lab="Ellipse correction",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
+#                                     event=CHORD_CHANGED, lim=(-1,1), dec=2, spin=True, step=0.05))
+#         self.add (Field_Widget  (self,4,0, lab="LE correction",   obj=self.planform, get='leCorrection', set='set_leCorrection',
+#                                     event=PLANFORM_CHANGED, lim=(-1,1), dec=2, spin=True, step=0.05))
         
 
 
@@ -533,7 +531,7 @@ class Edit_Planform_Trapezoid (Edit_Abstract):
 
 class Edit_Planform_Bezier_StraightTE (Edit_Abstract):
     """ 
-    Frame to edit the parameters of a elliptical planform
+    Frame to edit the parameters of a Bezier planform with straight TE
     """
     name = Planform_Bezier_StraightTE.planformType
 
@@ -1789,7 +1787,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         self.input_frame.grid_columnconfigure (10, weight=2)
 
         self.add(Field_Widget  (self.input_frame,r,c, lab=self.mode+ " directory", obj=self.exporter, get='baseAndExportDir', set='',
-                                width=180, disable=True))
+                                width=220, disable=True, justify='left'))
         self.add(Button_Widget (self.input_frame,r,c+2, lab='Select', width=60, sticky='w', set=self.select_dir ))
         self.add(Switch_Widget (self.input_frame,r+1,c, lab='Use airfoil nick names for airfoils', 
                                 columnspan=2, padx=0, 

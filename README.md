@@ -4,7 +4,7 @@
 
 An app to design a wing focusing on model sailplanes 
 
-* Define the planform based on elliptical chord distribution functions
+* Define the planform based on function defined chord distribution functions
 * Major parameter is the hinge line of the wing
 * Add an arbitrary number of wing sections with fixed position or relative chord length
 * Generate blended airfoils for intermediate wing sections ('strak')

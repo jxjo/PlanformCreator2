@@ -1007,6 +1007,7 @@ class Combo_Widget(Base_Widget):
 
         self.mainCTk = ctk.CTkComboBox (self.parent, values= self.options, 
                                         width=self.width, height=self.height, 
+                                        button_color=cl_spin, border_width=1,
                                         command=self.CTk_callback)        
 
         self.mainCTk.grid (row=r, column=c+1, padx=padx, pady=pady, sticky='w')
