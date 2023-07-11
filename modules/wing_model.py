@@ -1267,7 +1267,7 @@ class Planform_Pure_Elliptical(Planform):
     Defines the outline of a unmodified (more or less) elliptical planform for
     reference purposes
     """
-    planformType  = "pure_elliptical"
+    planformType  = "Pure elliptical"
     isTemplate    = False
 
     def __init__(self, myWing: Wing, dataDict: dict = None):

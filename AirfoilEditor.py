@@ -182,9 +182,8 @@ class Edit_Curvature(Edit_Abstract):
 
         r, c = 0, 0 
         self.add (Header_Widget (self,r,c,   width=90, lab=self.name, columnspan= 2))
-        # c += 6
-        # self.add(Button_Widget  (self,r,c, lab='Smooth', width=80, padx= 0, columnspan=2, sticky='w', 
-        #                          disable=True, set=self.smooth_airfoil ))
+        self.add (Button_Widget (self,r,c+3, lab='Smooth', width=80, padx= (10,0), columnspan=2, sticky='w', 
+                                 set=self.smooth_airfoil ))
 
         r = 1
         Blank_Widget (self, r,0)                # left blank column to inset the fields 
@@ -209,7 +208,7 @@ class Edit_Curvature(Edit_Abstract):
         """ Open smooth dialog - if 'OK' the new smoothed airfoil will be inserted to the list 
         of airfoils and set to current """
 
-        dialog = Dialog_Repanel (self, self._airfoilFn )
+        dialog = Dialog_Smooth (self, self._airfoilFn )
         self.wait_window (dialog)
 
         if dialog.return_OK: 
@@ -690,6 +689,7 @@ class Diagram_LeTe_Mini (Diagram_Abstract):
         self.ax1.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
 
+
 class Diagram_Thickness_Mini (Diagram_Abstract):
     """ 
     plots the airfoil to change thickness and camber in mini format
@@ -697,7 +697,7 @@ class Diagram_Thickness_Mini (Diagram_Abstract):
     name = "Thickness and Camber"
 
     def create_axes (self):
-        """ setup 3 axes for airfoil, thickness and camber """
+        """ setup 2 axes for airfoil, thickness and camber """
 
         from matplotlib.gridspec import GridSpec
 
@@ -728,6 +728,56 @@ class Diagram_Thickness_Mini (Diagram_Abstract):
         # self.ax2.set_xlim([0.96,1.001])
         self.ax2.grid ()
 
+
+    def setup_artists(self):
+        """ artists are not set automatically - set from outside """
+        pass
+
+    def setup_Switches(self, r=0, c=0):
+        """ no switches"""
+        return r, c
+
+    # -------- event handler
+
+    # refresh handled in App 
+
+    # -------- refresh my Artists which are on 'show mode' 
+
+    def refresh(self): 
+        # overloaded
+
+        self.ax1.figure.canvas.draw_idle()    # draw ony if Windows is idle!
+
+
+
+class Diagram_Curvature_Mini (Diagram_Abstract):
+    """ 
+    plots the airfoil curvature to smooth
+    """
+    name = "Curvature"
+
+    def create_axes (self):
+        """ setup 1 axes for airfoilcurvature """
+
+        from matplotlib.gridspec import GridSpec
+
+        gs = GridSpec(1, 1)
+        self.ax1 = self.figure.add_subplot(gs[:, :])            # full   - curv
+
+        self.figure.subplots_adjust(left=0.04, bottom=0.08, right=0.98, top=0.97, wspace=0.07, hspace=0.15)
+
+    def setup_axes(self):
+        """ setup axes, axis, artiss for this plot type """
+
+        self.ax1.tick_params (labelsize='small')
+        self.ax1.set_xlim([-0.05,1.05])
+        self.ax1.grid ()
+        # suppress warning of a motplotlib bug reported: 
+        # https://github.com/matplotlib/matplotlib/issues/26118
+        import warnings
+        warnings.filterwarnings("ignore", message = "All values for SymLogScale")
+        self.ax1.set_yscale('symlog', linthresh=1)
+        self.ax1.set_ylim([ -100, 1000])
 
     def setup_artists(self):
         """ artists are not set automatically - set from outside """
@@ -1146,6 +1196,164 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
         self.teArtist.refresh(figureUpdate=True)
         self.airfoilArtist.refresh(figureUpdate=True)
         super().refresh()
+
+
+
+#-------------------------------------------
+
+class Dialog_Smooth (Dialog_Airfoil_Abstract):
+    """ 
+    Dialog to repanel airfoil  
+    """
+
+    width  = 1380
+    height = 630
+
+    def __init__(self, master, airfoilFn, *args, **kwargs):
+        super().__init__(master, airfoilFn, *args, nameExt='-smoothed', height=self.height/2, **kwargs)
+
+        # start with a repaneld airfoil  using default values 
+        self.airfoil_before  = Airfoil.asCopy (self.airfoilOrg, nameExt='-before') 
+        self.airfoil.set_isEdited(True)               
+
+        self.title ("Smooth airfoil  [" + self.airfoil.name + "]")
+
+        # set specific diagram frame for this dialog 
+        self.diagram_frame = Diagram_Curvature_Mini (self.edit_frame, self.airfoilListFn, size=(7.0,4.0))
+        self.diagram_frame.grid(row=1, column=0, sticky="nwe")
+
+        # artists for preview in diagram_frame
+        self.smoothArtist  = Curvature_Smooth_Artist (self.diagram_frame.ax1, self.airfoilListFn, 
+                                                      show=True, onPick=self._pointPicked)
+        self.smoothArtist.set_upper (True)
+        self.smoothArtist.set_lower (True)
+        self.smoothArtist.refresh(figureUpdate=True)
+
+
+        # Header 
+        c = 0 
+        r = 0 
+        Header_Widget (self.header_frame,r,c, pady=0, lab= "Smooth Airfoil", sticky = 'nw', width=100)
+        
+        Switch_Widget (self.header_frame,r,c+1, padx=(30,30), lab='Upper Side',
+                       get=lambda: self.smoothArtist.upper, set=self._set_upper)
+        c += 2
+        Switch_Widget (self.header_frame,r,c+1, padx=(0,30), lab='Lower Side',
+                       get=lambda: self.smoothArtist.lower, set=self._set_lower)
+
+        Label_Widget  (self.header_frame,r, c+2, padx= 20, sticky = 'nw', columnspan=1,
+                        lab= "! Dev playground for smoothing !")
+
+        self.header_frame.grid_columnconfigure (7, weight=1)
+
+        # input fields
+        r,c = 0,0
+        Blank_Widget (self.input_frame,r,c,  height= 10)
+        r +=1 
+        self.add (Field_Widget (self.input_frame,r,c, lab="Points to remove", lab_width=100, 
+                                width=150, 
+                                obj=self, get=lambda: str(self._selectedPoints), set='',
+                                event=self.change_event ))
+
+        Button_Widget (self.input_frame,r,c+3, lab='Remove selected', set=self._remove_selected, width=120)
+        Button_Widget (self.input_frame,r,c+4, lab='Rebuild airfoil', set=self._rebuild_airfoil, width=120)
+
+        r +=1 
+        Blank_Widget (self.input_frame,r,c, width=20, height = 15) 
+        r +=1 
+        Button_Widget (self.input_frame,r,c, lab='Low res repanel', columnspan = 1,
+                       set=self._low_repanel_airfoil, width=120)
+        Button_Widget (self.input_frame,r,c+1, lab='High res repanel', columnspan = 1,
+                       set=self._repanel_airfoil, width=120)
+
+
+        self.input_frame.grid_columnconfigure (8, weight=2)
+
+        # buttons are defined in super class 
+
+    # ---- 
+
+    def airfoilListFn (self):
+        return [self.airfoil]
+    
+    def _pointPicked (self, aPointLabel):
+
+        self.refresh()
+
+    def _set_upper (self, aBool):
+        self.smoothArtist.set_upper(aBool)
+        self.smoothArtist.refresh(figureUpdate=True)
+
+    def _set_lower (self, aBool):
+        self.smoothArtist.set_lower(aBool) 
+        self.smoothArtist.refresh(figureUpdate=True)
+
+    @property
+    def _selectedPoints (self):
+
+        sel_upper = self.smoothArtist.get_selected (side='upper')
+        sel_lower = self.smoothArtist.get_selected(side='lower')
+
+        iLe = self.airfoil.iLe
+
+        selected = []
+        for i, iSel in enumerate (sel_upper):
+            selected.append(abs(iSel-iLe)) 
+        for i, iSel in enumerate (sel_lower):
+            selected.append(abs(iSel+iLe)) 
+
+        return selected  
+
+    def _remove_selected(self): 
+        """ remove the selected coordinate points from airfoil"""
+        selected = self._selectedPoints
+        if selected: 
+            x_new = np.delete (self.airfoil.x, selected)
+            y_new = np.delete (self.airfoil.y, selected)
+
+            self.airfoil.set_xy(x_new, y_new)
+            self.smoothArtist.refresh(figureUpdate=True)
+            self.refresh()
+
+    def _rebuild_airfoil(self): 
+        """ remove the selected coordinate points from airfoil"""
+
+        iLe = self.airfoil_before.iLe
+        x_new = self.airfoil.x
+        y_new = self.airfoil.y
+
+        for i, xi in enumerate (self.airfoil_before.x):
+
+            if xi != x_new[i]:                 # is there a x-Coordinate not in airfoil with removed coords
+                if i <= iLe:
+                    yi_new = self.airfoil.spline.get_y_on ("upper", [xi])
+                else:
+                    yi_new = self.airfoil.spline.get_y_on ("lower", [xi])
+                x_new = np.insert (x_new, i, xi)
+                y_new = np.insert (y_new, i, yi_new)
+
+        self.airfoil.set_xy(x_new, y_new)
+        self.smoothArtist.refresh(figureUpdate=True)
+        self.refresh()
+
+    def _low_repanel_airfoil(self): 
+        """ repanel after removing the selected coordinate points from airfoil"""
+
+        x_new, y_new = self.airfoil.spline.get_repaneled (50, 0.995, 0.5)
+        self.airfoil.set_xy(x_new, y_new)
+        self.airfoil_before  = Airfoil.asCopy (self.airfoil, nameExt='-before') 
+
+        self.smoothArtist.refresh(figureUpdate=True)
+        self.refresh()
+
+    def _repanel_airfoil(self): 
+        """ repanel after removing the selected coordinate points from airfoil"""
+
+        self.airfoil.repanel()
+        self.airfoil_before  = Airfoil.asCopy (self.airfoil, nameExt='-before') 
+
+        self.smoothArtist.refresh(figureUpdate=True)
+        self.refresh()
 
 
 #-------------------------------------------

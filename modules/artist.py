@@ -113,6 +113,7 @@ class Artist():
         if (self._show != aBool):               # only when changed do something
             if not aBool:                       # was showed and switched off
                 self._deleteMyPlots()           # remove current plot elements
+                self._showLegend()
                 self.ax.figure.canvas.draw_idle()
             self._show = aBool
             if aBool:
@@ -125,6 +126,7 @@ class Artist():
         if self.show:                           # view is switched on by user? 
             self._deleteMyPlots()               # remove current plot elements
             self._plot()                        # repaint everything 
+            self._showLegend()
             if figureUpdate:                    
                 self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
@@ -173,17 +175,10 @@ class Artist():
 
         # remove matplotlib artists 
         for p in self._myPlots:
-            if isinstance (p, list):
-                for l in p:                     # ax.plot returns a list of plot items(lines)
-                    try:
-                        l.remove()
-                    except:
-                        print (" -!- ups - artist %s not found", l)
-            else:
-                try:
-                    p.remove()
-                except:
-                    print (" -!- ups - artist %snot found", p)
+            try:
+                p.remove()
+            except:
+                print (" -!- ups - artist %snot found" %p)
         self._myPlots = []
 
         # remove registered pick events 
@@ -198,13 +193,37 @@ class Artist():
 
 
     def _add(self, aPlot):
-        self._myPlots.append(aPlot)
+        """ add matplotlib artist to artists of self"""
+        if isinstance (aPlot, list):            # .plot returns list 
+            art = aPlot [0]
+        else:
+            art = aPlot
 
-    def _makeLinePickable (self, aLine): 
-        """ make aLine clickibale on axes"""
+        self._myPlots.append(art)
+
+    def _showLegend(self):
+        """ shows the legend """
+
+        # are there any lines with labels
+        h, l = self.ax.get_legend_handles_labels()
+        if h: 
+            leg = self.ax.legend(h, l, labelcolor=cl_labelGrid)
+        else: 
+            leg = self.ax.legend([], [])        # remove legend 
+        leg.set_zorder(2)
+        leg.get_frame().set_linewidth(0.0)
+
+
+    def _makeObjectPickable (self, aObject): 
+        """ make aLine or point clickable on axes"""
+
+        if isinstance (aObject, list):
+            obj = aObject[0]                    # could be matplotlib list 
+        else:
+            obj = aObject
         try: 
-            aLine[0].set_picker (True)
-            aLine[0].set_pickradius(5)
+            obj.set_picker (True)
+            obj.set_pickradius(5)
         except: 
             pass
 
@@ -223,6 +242,9 @@ class Artist():
 
         # now callback parent with myLabel as argument
         if self._pickCallback:
+            # remove '_' which was used to suppress artist to appear in legend 
+            if myLabel[0] == '_':
+                myLabel = myLabel[1:]
             self._pickCallback(myLabel)
 
 

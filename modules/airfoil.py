@@ -354,7 +354,7 @@ class Airfoil:
     def set_nPanelsNew (self, newVal): 
         """ set number of panels and repanel"""
         newVal = int (newVal / 2) * 2           # must be even 
-        newVal = max (50,  newVal)
+        newVal = max (40,  newVal)
         newVal = min (500, newVal) 
         self._nPanelsNew = int (newVal)
         self.repanel()

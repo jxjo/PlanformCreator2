@@ -7,18 +7,20 @@ The "Artists" to plot a airfoil object on a matplotlib axes
 
 """
 import numpy as np
-from artist import Artist, cl_labelGrid
+from artist import Artist, cl_userHint
 
 from common_utils import *
 from airfoil import* 
 
 cl_planform         = 'whitesmoke'
 cl_editing          = 'deeppink'
+cl_editing_lower    = 'orchid'
 cl_helperLine       = 'orange'
 ls_curvature        = '-'
 ls_camber           = '--'
 ls_thickness        = ':'
 ms_points           = dict(marker='o', fillstyle='none'    , markersize=4)   # marker style for points
+ms_points_selected  = dict(marker='x', fillstyle='none'    , markersize=6)   # marker style for points
 ms_points_vline     = dict(marker='|', fillstyle='none'    , markersize=4)   # marker style for points
 ms_le               = dict(marker='o'                      , markersize=7)   # marker style for leading edge
 ms_warning          = dict(marker='o', color='orange'      , markersize=6)   # marker style for wrong points
@@ -49,8 +51,8 @@ class Grid_Artist (Artist):
 class Airfoil_Artist (Artist):
     """Plot the airfoils contour  """
 
-    def __init__ (self, axes, modelFn, onPick=None, show=False, showMarker=True):
-        super().__init__ (axes, modelFn, onPick=onPick, show=show, showMarker=showMarker)
+    def __init__ (self, axes, modelFn, **kwargs):
+        super().__init__ (axes, modelFn, **kwargs)
 
         self._points = False                    # show point marker 
 
@@ -98,8 +100,6 @@ class Airfoil_Artist (Artist):
                 elif self._points:
                     _marker_style = ms_points
                     linewidth=0.5
-                    # p = self.ax.plot (airfoil.le, color= color, **ms_le)
-                    # self._add(p)
                 else:  
                     _marker_style = dict()
                     linewidth=1.0
@@ -112,15 +112,10 @@ class Airfoil_Artist (Artist):
                 self._nextColor()                       # in colorycle are pairs 
 
                 if self._pickActive: 
-                    self._makeLinePickable (p)
+                    self._makeObjectPickable (p)
 
         # activate event for clicking on line 
         if self._pickActive: self._connectPickEvent ()
-
-        p = self.ax.legend(labelcolor=cl_labelGrid,)
-        self._add(p)
-        p.get_frame().set_linewidth(0.0)
-
 
 
 
@@ -180,7 +175,6 @@ class Curvature_Artist (Airfoil_Line_Artist):
         self._set_colorcycle (10 , colormap="Paired")         
 
         airfoilList = self.airfoils
-        # airfoilList.append (self.airfoils[0].asNormalized)
 
         airfoil: Airfoil
         for airfoil in airfoilList:
@@ -203,11 +197,6 @@ class Curvature_Artist (Airfoil_Line_Artist):
                     self._add(p)
                     self._plot_marker (line, color, upper=False)
 
-        if self.upper or self.lower:
-            p = self.ax.legend(labelcolor=cl_labelGrid)
-            p.get_frame().set_linewidth(0.0)
-            self._add(p)
-
 
     def _plot_marker (self, line : SideOfAirfoil, color, upper=True):
         # annotate reversals of curvature  ... 
@@ -226,6 +215,126 @@ class Curvature_Artist (Airfoil_Line_Artist):
 
                 p = self.ax.text (marker_x, marker_y, text, va=va, ha='center', color = color )
                 self._add (p) 
+                
+
+
+class Curvature_Smooth_Artist (Airfoil_Line_Artist):
+    """Plot curvature (top or bottom) of an airfoil
+       Select coordinate points to smooth
+    """
+
+    def _on_pick (self, event):
+        # callback of matplt - having matplt 'event' as argument
+        # overloaded to toggle marker 
+        try: 
+            artist = event.artist
+            myMarker = artist.get_marker()
+            side     = artist.get_label().split('_')[1]
+        except: 
+            myMarker = None
+            print ("- Pick event couldn't be handled ", event.artist, "callback: ", self._pickCallback)
+
+        if   myMarker == ms_points.get('marker'):
+            artist.set (color=cl_userHint, **ms_points_selected)
+
+        elif myMarker == ms_points_selected.get('marker'):
+            if side == 'upper':
+                color = cl_editing
+            else:
+                color = cl_editing_lower
+            artist.set (color=color, **ms_points)
+
+        super()._on_pick(event)
+        self.ax.figure.canvas.draw_idle()
+
+    
+    def get_selected(self, side='upper'): 
+        """ 
+        returns list of selected points of upper or lower side
+        Point index is from 0..n starting at LE 
+        """
+
+        selected = []
+        iside = 0
+
+        for i, artist in enumerate(self._myPlots):
+            try:
+                myMarker = artist.get_marker()
+            except: 
+                myMarker = 'None'
+            if myMarker != 'None':
+                mySide     = artist.get_label().split('_')[1]
+                if mySide == side:
+                    if myMarker == ms_points_selected.get('marker'):
+                        selected.append(iside)
+                    iside += 1
+        return selected
+
+    
+    def _plot (self): 
+
+        if not len(self.airfoils) : return 
+        # create cycled colors 
+        self._set_colorcycle (10 , colormap="Paired")         
+
+        airfoilList = self.airfoils
+
+        airfoil: Airfoil
+        for airfoil in airfoilList:
+            if (airfoil.isLoaded):
+
+
+                linewidth=0.8
+
+                if self.upper: 
+                    line = airfoil.spline.curv_upper 
+                    if airfoil.isEdited:
+                        color = cl_editing
+                    else:
+                        color = self._nextColor()
+                    p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=line.name, 
+                                      linewidth= linewidth, **self._marker_style)
+                    self._add(p)
+
+                    if airfoil.isEdited:
+                        self._plot_marker (line, color, 'upper')
+
+                if self.lower: 
+                    line = airfoil.spline.curv_lower 
+                    if airfoil.isEdited:
+                        color = cl_editing_lower
+                    else:
+                        color = self._nextColor()
+                    p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=line.name, 
+                                      linewidth= linewidth, **self._marker_style)
+                    self._add(p)
+
+                    if airfoil.isEdited:
+                        self._plot_marker (line, color, 'lower')
+
+        # activate event for clicking on line 
+        if self._pickActive: self._connectPickEvent ()
+        self.show_mouseHelper()
+
+
+    def show_mouseHelper (self):
+        """ show info for section select"""
+        p = self.ax.text (0.40, 0.05, 'click points to be removed', color=cl_userHint, fontsize = 'small',
+                    transform=self.ax.transAxes, horizontalalignment='left', verticalalignment='bottom')
+        self._add(p)
+
+
+    def _plot_marker (self, line : SideOfAirfoil, lineColor, side):
+        # plot coordinate points to click   ... 
+
+        for i in range (len(line.x)-1):                     # TE not clickable
+
+            label = '_' + side + '_' + str(i)               # '_' do not appear in legend
+            p = self.ax.plot (line.x[i], line.y[i], color = lineColor, label=label, 
+                              **ms_points)
+            self._add(p)
+            self._makeObjectPickable (p)
+
                 
 
 
@@ -263,7 +372,7 @@ class Le_Artist (Artist):
         for airfoil in self.airfoils:
             if (airfoil.isLoaded):
 
-                legend = ("%s" % (airfoil.name))  
+                label = ("%s" % (airfoil.name))  
 
                 if airfoil.isEdited:
                     color = cl_editing
@@ -275,7 +384,7 @@ class Le_Artist (Artist):
                 self._plot_le_angle (airfoil)
                 self._plot_le_coordinates (airfoil)
 
-                p = self.ax.plot (airfoil.x, airfoil.y, '-', color = color, label=legend, 
+                p = self.ax.plot (airfoil.x, airfoil.y, '-', color = color, label=label, 
                                   linewidth= linewidth, **self._marker_style)
                 self._add(p)
 
@@ -382,11 +491,6 @@ class Thickness_Artist (Airfoil_Line_Artist):
 
                     self._plot_max_val(airfoil.maxThicknessX, airfoil.maxThickness, airfoil.isModified, color)
                     self._plot_max_val(airfoil.maxCamberX,    airfoil.maxCamber,    airfoil.isModified, color)
-
-        # show legend 
-        p = self.ax.legend(labelcolor=cl_labelGrid,)
-        p.get_frame().set_linewidth(0.0)
-        self._add(p)
 
 
     def _plot_max_val (self, x, y, isNew, color):

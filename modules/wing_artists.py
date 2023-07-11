@@ -306,13 +306,13 @@ class Planform_Artist (Artist):
     def _plot(self):
     
         y, x = self.planform.linesPolygon()
-        p = self.ax.plot(y, x,  '-', color=cl_planform)
+        p = self.ax.plot(y, x,  '-', color=cl_planform, label=self.planform.wing.name)
         self._add (p)
         (self.planform_line_artist,) = p 
 
         # hinge line
         yh, hinge = self.planform.hingeLine()
-        p = self.ax.plot(yh, hinge,  '-', linewidth=0.8, color='springgreen')
+        p = self.ax.plot(yh, hinge,  '-', linewidth=0.8, label="Hinge line", color='springgreen')
         self._add (p)
 
         # plot banana line with mouse helper 
@@ -330,6 +330,7 @@ class Planform_Artist (Artist):
                                         callback_on_moved=self._moveCallback))
 
         self._show_wingData(y, x)
+
 
 
     def show_mouseHelper_banana (self, planform: Planform_Bezier): 
@@ -413,9 +414,9 @@ class Planform_Artist (Artist):
         text += "Wing area %.1f dm²\n" % (area * 2 / 10000)
         text += "Aspect ratio %.1f\n" % (aspectRatio)
 
-        p = self.ax.text (0.89, 0.05, text, color=cl_labelGrid, # fontsize = 'small',
+        p = self.ax.text (0.99, 0.05, text, color=cl_labelGrid, # fontsize = 'small',
                           transform=self.ax.transAxes, 
-                          horizontalalignment='left', verticalalignment='bottom')
+                          horizontalalignment='right', verticalalignment='bottom')
         self._add (p)   
        
 
@@ -438,7 +439,7 @@ class ChordLines_Artist (Artist):
             y, leadingEdge, trailingEdge = self.planform.lines()
             quarterChord = leadingEdge + (trailingEdge - leadingEdge)/4
 
-        p = self.ax.plot(y, quarterChord, '--', color= cl_quarter, linewidth=0.7)
+        p = self.ax.plot(y, quarterChord, '--', color= cl_quarter, linewidth=0.7, label="Chord lines")
         self._add (p)
 
         if self._norm: 
@@ -468,26 +469,12 @@ class RefPlanform_Artist (Planform_Artist):
 
     def _plot(self):
         y, leadingEdge, trailingEdge = self.refPlanform.lines()
-        p = self.ax.plot(y, leadingEdge,  color=self.color)
+        p = self.ax.plot(y, leadingEdge,  color=self.color, label=self.refPlanform.planformType)
         self._add (p)              # remind plot to delete 
         p = self.ax.plot(y, trailingEdge, color=self.color)
         self._add (p)              # remind plot to delete 
 
-        self.plot_markers (y, leadingEdge)
-
-    def plot_markers (self, y, leadingEdge): 
-        def closest(list, Number):
-            aux = []
-            for valor in list:
-                aux.append(abs(Number-valor))
-            return aux.index(min(aux))
-        # print a line label with dxf filename 
-        iclosest = closest (y, 0.7 * y[-1])         # pos at 90% span 
-        marker_y = y[iclosest] 
-        marker_x = leadingEdge[iclosest] - 15
-        text = self.refPlanform.planformType
-        p = self.ax.text (marker_y, marker_x, text , color = self.color, ha='left', va='bottom')
-        self._add (p)   
+ 
 
 
 class RefPlanform_DXF_Artist (Planform_Artist):
@@ -507,9 +494,9 @@ class RefPlanform_DXF_Artist (Planform_Artist):
         if (self.refPlanform_DXF): 
             y, leadingEdge, trailingEdge = self.refPlanform_DXF.lines ()
             if y != []: 
-                p = self.ax.plot(y, leadingEdge,  label='DXF contour', color=self.color)
+                p = self.ax.plot(y, leadingEdge,  label=self.refPlanform_DXF.dxf_filename(), color=self.color)
                 self._add (p)              # remind plot to delete 
-                p = self.ax.plot(y, trailingEdge, label='DXF contour', color=self.color)
+                p = self.ax.plot(y, trailingEdge, color=self.color)
                 self._add (p)              # remind plot to delete 
 
                 # rootline 
@@ -523,26 +510,6 @@ class RefPlanform_DXF_Artist (Planform_Artist):
                 if yh != []:
                     p = self.ax.plot(yh, xh, color=self.color)
                     self._add (p)              # remind plot to delete 
-
-                if self.showMarker: 
-                    self.plot_markers (y, leadingEdge)
-
-    def plot_markers (self, y, leadingEdge): 
-
-        def closest(list, Number):
-            aux = []
-            for valor in list:
-                aux.append(abs(Number-valor))
-            return aux.index(min(aux))
-        
-        # print a line label with dxf filename 
-        iclosest = closest (y, 0.82 * y[-1])         # 90% span 
-        marker_y = y[iclosest] 
-        marker_x = leadingEdge[iclosest] - 15
-
-        text = self.refPlanform_DXF.dxf_filename()
-        p = self.ax.text (marker_y, marker_x, text , color = self.color, ha='left', va='bottom')
-        self._add (p)   
 
 
 class PaneledPlanform_Artist (Planform_Artist):
@@ -658,13 +625,16 @@ class Chord_Artist (Artist):
         return self.model.planform
     
     def chord_line (self):
-        return self.model.planform.norm_chord_line ()    
-    
+        return self.model.planform.norm_chord_line ()  
+
+    def label (self):
+        return 'Normalized chord distribution'
+
     def _plot (self): 
 
         y, chord = self.chord_line ()
 
-        p = self.ax.plot(y, chord, '-', color=self.color)
+        p = self.ax.plot(y, chord, '-', color=self.color, label=self.label())
         self._add(p)
         (self.chord_line_artist,) = p 
 
@@ -806,11 +776,15 @@ class Chord_Artist (Artist):
 
 
 class RefChord_Artist (Chord_Artist):
-    """Plot the chord distribution of a planform.
+    """Plot the reference chord distribution of a planform.
     """
     color = cl_pureElliptical
     def chord_line (self):
         return self.model.refPlanform.norm_chord_line ()
+
+    def label (self):
+        return 'Elliptical chord distribution'
+
 
 
 class RefChord_DXF_Artist (Chord_Artist):
@@ -819,6 +793,9 @@ class RefChord_DXF_Artist (Chord_Artist):
     color = cl_dxf
     def chord_line (self):
         return self.model.refPlanform_DXF.norm_chord_line ()
+
+    def label (self):
+        return self.model.refPlanform_DXF.dxf_filename()
 
 
 class Sections_Artist (Artist):
@@ -852,15 +829,15 @@ class Sections_Artist (Artist):
             linewidth= 1.0
             linestyle='solid'
 
-            label = section.name()
+            label = '_' + section.name()        # add '_' to not appear in legend          
 
             # if not (section.isRootOrTip and self._norm): 
             p = self.ax.plot(y, le_to_te, color=color, label=label, linestyle=linestyle, 
                             linewidth=linewidth)
-            self._add (p)              # remind plot to delete 
+            self._add (p)                               # remind plot to delete 
 
             if self._pickActive: 
-                self._makeLinePickable (p)
+                self._makeObjectPickable (p)
 
             self.plot_markers (y, le_to_te, section)
 
@@ -987,7 +964,6 @@ class Flap_Artist (Artist):
             color = p[0].get_facecolor()                      # get last cycler color 
             self._plot_markers (flap, color)
 
-        # self.ax.legend()
 
         
     def  _plot_markers (self, flap : Flap, color): 
@@ -1079,7 +1055,7 @@ class Airfoil_Artist (Artist):
             airfoil = section.airfoil
             if (airfoil.isLoaded) and not (not self._strak and airfoil.isStrakAirfoil):
 
-                legend = ("%s:  %s" % (section.name(), airfoil.name))  
+                label = ("%s:  %s" % (section.name(), airfoil.name))  
 
                 if self._norm:
                     x = airfoil.x
@@ -1090,7 +1066,7 @@ class Airfoil_Artist (Artist):
                     y = airfoil.y * section.chord 
 
                 color = next(self.ax._get_lines.prop_cycler)['color']
-                if self._curLineLabel == legend:
+                if self._curLineLabel == label:
                     if not self._norm:                     # for norm it would be too much colorr confusion
                         p = self.ax.fill (x, y, facecolor=color, alpha=0.1)
                         self._add(p)
@@ -1099,19 +1075,17 @@ class Airfoil_Artist (Artist):
                 else:
                     linewidth=0.8
 
-                p = self.ax.plot (x, y, '-', color = color, label=legend, linewidth= linewidth)
+                p = self.ax.plot (x, y, '-', color = color, label=label, linewidth= linewidth)
                 self._add(p)
 
                 if self._pickActive: 
-                    self._makeLinePickable (p)
+                    self._makeObjectPickable (p)
 
         # activate event for clicking on line 
         if self._pickActive: self._connectPickEvent ()
 
         if not self._norm: 
             self._plot_zero_marker (self.wing.rootchord)
-
-        # self.ax.legend()
 
 
     def _plot_marker (self, x,y, color, section: WingSection):
@@ -1178,12 +1152,12 @@ class AirfoilName_Artist (Artist):
     def plot_markers (self, y, le_to_te, section: WingSection): 
         # print airfoil name and nickname below the planform 
 
-        marker_y = 0.97                         # in axis coordinates
+        marker_y = 0.87                         # in axis coordinates
         marker_x = y[0]                         # in data coordinates
         text = "'"+ section.airfoilNick() + "'" + "\n" + section.airfoilName()
 
         color = next(self.ax._get_lines.prop_cycler)['color']
-        p = self.ax.text (marker_x, marker_y, text, color=color, 
+        p = self.ax.text (marker_x, marker_y, text, color=color, backgroundcolor= cl_background,
                           transform=self.ax.get_xaxis_transform(), 
                           horizontalalignment='center', verticalalignment='top')
         self._add (p)   
