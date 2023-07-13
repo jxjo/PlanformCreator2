@@ -86,6 +86,8 @@ class Artist():
         self._cidpick      = None           # callback id pick event 
         self._curLineLabel = None
 
+        self._xticks = []                   # the axis ticks self added
+        self._yticks = []
 
     # ------- public ----------------------
 
@@ -191,6 +193,9 @@ class Artist():
             dm.disconnect()
         self._dragManagers = []
 
+        # remove ticks self added to axis
+        self._remove_myticks ()
+
 
     def _add(self, aPlot):
         """ add matplotlib artist to artists of self"""
@@ -262,6 +267,28 @@ class Artist():
         "returns next color in color cycle"
         return next(self.ax._get_lines.prop_cycler)['color']
     
+    def _add_xticks (self, ticks):
+        """ add ticks list to the axis"""
+        self._xticks = np.append(self._xticks,ticks)
+        self.ax.set_xticks (np.append(self.ax.get_xticks(), ticks))
+    
+    def _add_yticks (self, ticks):
+        """ add ticks list to the axis"""
+        self._yticks = np.append(self._yticks,ticks)
+        self.ax.set_yticks (np.append(self.ax.get_yticks(), ticks))
+
+    def _remove_myticks (self):
+        """ remove all axis ticks on x and y self had added"""
+
+        if len(self._xticks): 
+            ticks = self.ax.get_xticks()
+            self.ax.set_xticks(np.setdiff1d(ticks, self._xticks))
+            self._xticks= []
+
+        if len(self._yticks): 
+            ticks = self.ax.get_yticks()
+            self.ax.set_yticks(np.setdiff1d(ticks, self._yticks))
+            self._yticks= []
 
 
 # ----------------------------------------------------------

@@ -1016,6 +1016,15 @@ class Diagram_Planform (Diagram_Abstract):
     """
     name = "Planform"
 
+    def create_axes (self):
+        """ setup axes, axis for this plot type """
+    
+        # overloaded to have no ticks for this diagram
+        super().create_axes()
+        self.axes.set_xticks ([])
+        self.axes.set_yticks ([])
+
+
     def setup_axes (self):
         """ setup axes, axis for this plot type """
 
@@ -1260,6 +1269,15 @@ class Diagram_ChordDistribution (Diagram_Abstract):
     """
     name = "Chord distribution"
 
+    def create_axes (self):
+        """ setup axes, axis for this plot type """
+    
+        # overloaded to have no ticks for this diagram
+        super().create_axes()
+        self.axes.set_xticks ([])
+        self.axes.set_yticks ([])
+
+
     def setup_axes(self):
         """ setup axes, axis, artiss for this plot type """
         self.axes.set_ylim([ 0.0, 1.19])
@@ -1415,9 +1433,13 @@ class Diagram_Airfoils (Diagram_Abstract):
     name = "Airfoils"
     _show_strakedAirfoils = False
 
+
     def setup_axes(self):
         """ setup axes, axis, artiss for this plot type """
         self.axes.axis('equal')
+        self.axes.relim()
+        self.axes.autoscale(enable=True, axis='Both')
+
 
 
     def setup_artists(self):

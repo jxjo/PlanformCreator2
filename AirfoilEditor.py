@@ -1262,9 +1262,9 @@ class Dialog_Smooth (Dialog_Airfoil_Abstract):
         Blank_Widget (self.input_frame,r,c, width=20, height = 15) 
         r +=1 
         Button_Widget (self.input_frame,r,c, lab='Low res repanel', columnspan = 1,
-                       set=self._low_repanel_airfoil, width=120)
+                       set=self._repanel_low_res, width=120)
         Button_Widget (self.input_frame,r,c+1, lab='High res repanel', columnspan = 1,
-                       set=self._repanel_airfoil, width=120)
+                       set=self._repanel_high_res, width=120)
 
 
         self.input_frame.grid_columnconfigure (8, weight=2)
@@ -1336,17 +1336,17 @@ class Dialog_Smooth (Dialog_Airfoil_Abstract):
         self.smoothArtist.refresh(figureUpdate=True)
         self.refresh()
 
-    def _low_repanel_airfoil(self): 
+    def _repanel_low_res(self): 
         """ repanel after removing the selected coordinate points from airfoil"""
 
-        x_new, y_new = self.airfoil.spline.get_repaneled (50, 0.995, 0.5)
+        x_new, y_new = self.airfoil.spline.get_repaneled (70, 0.995, 0.2)
         self.airfoil.set_xy(x_new, y_new)
         self.airfoil_before  = Airfoil.asCopy (self.airfoil, nameExt='-before') 
 
         self.smoothArtist.refresh(figureUpdate=True)
         self.refresh()
 
-    def _repanel_airfoil(self): 
+    def _repanel_high_res(self): 
         """ repanel after removing the selected coordinate points from airfoil"""
 
         self.airfoil.repanel()

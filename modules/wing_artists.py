@@ -305,6 +305,7 @@ class Planform_Artist (Artist):
 
     def _plot(self):
     
+
         y, x = self.planform.linesPolygon()
         p = self.ax.plot(y, x,  '-', color=cl_planform, label=self.planform.wing.name)
         self._add (p)
@@ -331,6 +332,9 @@ class Planform_Artist (Artist):
 
         self._show_wingData(y, x)
 
+        # set ticks 
+        self._add_xticks ([0, self.planform.halfwingspan])
+        self._add_yticks ([0, self.planform.rootchord])
 
 
     def show_mouseHelper_banana (self, planform: Planform_Bezier): 
@@ -654,6 +658,10 @@ class Chord_Artist (Artist):
                                         callback_draw_animated = self.draw_animated_p2,
                                         callback_on_moved=self._moveCallback))
 
+        # set ticks 
+        self._add_xticks ([0, 1])
+        self._add_yticks ([0, 1])
+
 
     def show_mouseHelper_bezier (self, planform: Planform): 
         """ show the helper points and lines for bezier curve definition """
@@ -892,23 +900,21 @@ class Sections_Artist (Artist):
         # section pos at bottom  
         if not section.isRootOrTip: 
             if self._norm:
+                marker_x = round(y[0],2)                    # in data coordinates
                 marker_y = 0.06                             # in axis coordinates
-                text = "%.2f" % (section.norm_yPos)
-                if sectionFix:                              # fixed position 
-                    text = "fix\n" + text 
             else: 
+                marker_x = y[0]                             # in data coordinates
                 marker_y = 0.02                             # in axis coordinates
-                text = "%.0f" % section.yPos
-                if sectionFix:                              # fixed position 
-                    text = "fix\n" + text 
 
-            color = cl_wingSection_fix
-            marker_x = y[0]                                 # in data coordinates
+            # add position as xtick 
+            self._add_xticks ([marker_x])
 
-            p = self.ax.text (marker_x, marker_y, text, color=color, backgroundcolor= cl_background, 
-                            transform=self.ax.get_xaxis_transform(), 
-                            horizontalalignment='center', verticalalignment='bottom')
-            self._add (p)   
+            # add fixed Position info 
+            if sectionFix:
+                p = self.ax.text (marker_x, marker_y, "fix", color=cl_wingSection_fix, backgroundcolor= cl_background, 
+                                transform=self.ax.get_xaxis_transform(), 
+                                horizontalalignment='center', verticalalignment='bottom')
+                self._add (p)   
 
         # section name above le
         marker_top_y = y[0] 
@@ -955,30 +961,31 @@ class Flap_Artist (Artist):
         flap : Flap
         for flap in flaps:   
 
-            p = self.ax.plot(flap.y, flap.x, label="Flap group %d" %flap.flapGroup, color = cl_planform, linewidth=0.5)
+            p = self.ax.plot(flap.y, flap.x, color = cl_planform, linewidth=0.5)
             self._add(p)
 
-            p = self.ax.fill(flap.y, flap.x, linewidth=3, alpha=0.3)
+            p = self.ax.fill(flap.y, flap.x, linewidth=3, alpha=0.3)   # color from cycler 
             self._add(p)
 
-            color = p[0].get_facecolor()                      # get last cycler color 
-            self._plot_markers (flap, color)
+            self._plot_markers (flap)
 
 
         
-    def  _plot_markers (self, flap : Flap, color): 
+    def  _plot_markers (self, flap : Flap): 
+
+        # show xtick of flap left end - exclude most left flap as it would be tip 
+        if flap.lineRight [0][1] != self.wing().halfwingspan: 
+            self._add_xticks ([round(flap.lineRight [0][1], 0)])
+
+        # show ytick of flap at root
+        if flap.lineLeft [0][0] == 0.0: 
+            self._add_yticks ([round(flap.lineLeft [1][1], 0)])
 
         # flapDepth
         self._text_flapDepth (flap.lineLeft, flap.depthLeft)
         if flap.lineRight [0][1] == self.wing().halfwingspan:    
             # plot extra depth at tip
             self._text_flapDepth (flap.lineRight, flap.depthRight)
-        # if (flap.lineRight [0][1] - flap.lineLeft [0][1]) > self.wing().halfwingspan /10 :    
-        #     # plot extra depth in the middle if thre is space
-        #     line  = ((flap.lineLeft [0] + flap.lineRight[0]) / 2.0 , 
-        #              (flap.lineLeft [1] + flap.lineRight[1]) / 2.0) 
-        #     depth = (flap.depthLeft + flap.depthRight) / 2.0
-        #     self._text_flapDepth (line, depth)
 
         # flapGroup
         yBase = (flap.lineLeft [0][0] + flap.lineRight [0][1]) / 2  # middle of flap span
@@ -1061,13 +1068,14 @@ class Airfoil_Artist (Artist):
                     x = airfoil.x
                     y = airfoil.y
                 else:
-                    # x = 0 at quarter chord 
-                    x = airfoil.x * section.chord - section.chord / 4
+                    # x = 0 at root LE
+                    le = section.line ()[1][0]
+                    x = airfoil.x * section.chord + le 
                     y = airfoil.y * section.chord 
 
                 color = next(self.ax._get_lines.prop_cycler)['color']
                 if self._curLineLabel == label:
-                    if not self._norm:                     # for norm it would be too much colorr confusion
+                    if not self._norm:                     # for norm it would be too much color confusion
                         p = self.ax.fill (x, y, facecolor=color, alpha=0.1)
                         self._add(p)
                     linewidth=1.6
@@ -1083,9 +1091,6 @@ class Airfoil_Artist (Artist):
 
         # activate event for clicking on line 
         if self._pickActive: self._connectPickEvent ()
-
-        if not self._norm: 
-            self._plot_zero_marker (self.wing.rootchord)
 
 
     def _plot_marker (self, x,y, color, section: WingSection):
@@ -1104,24 +1109,6 @@ class Airfoil_Artist (Artist):
                 xytext=(0, -50), textcoords='offset points')
         self._add(p)
 
-
-    def  _plot_zero_marker (self, rootChord): 
-
-        # draw a vertical line at x=0 to indicate quarter chord 
-        # yfrom = - rootChord / 15
-        # yto   = - rootChord / 25
-        yfrom = 0.1
-        yto   = 0.3
-        p = self.ax.plot ([0,0],[yfrom,yto], color=  cl_labelGrid, 
-                          transform=self.ax.get_xaxis_transform(), 
-                          linestyle="dashed", linewidth=0.7)
-        self._add(p) 
-
-        y = 0.054
-        p = self.ax.text(0 , y,  "quarter chord" , color=cl_labelGrid, 
-                        transform=self.ax.get_xaxis_transform(), 
-                        horizontalalignment='center', verticalalignment= "bottom")
-        self._add(p) 
 
 
 class AirfoilName_Artist (Artist):
