@@ -46,7 +46,7 @@ from modules.airfoil_artists    import *
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "0.8.1"
+AppVersion = "0.8.2"
 
 #------------------------------------------------
 

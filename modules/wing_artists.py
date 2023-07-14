@@ -10,12 +10,12 @@ import numpy as np
 from common_utils import *
 from artist import *
 from wing_model import (Wing, Planform, WingSection, Planform_DXF, Flap, 
-                        Planform_Bezier, Airfoil, Planform_Paneled)
+                        Planform_Bezier, Planform_Paneled)
 
 cl_planform         = 'whitesmoke'
 cl_quarter          = 'lightgrey'
-cl_pureElliptical   = 'royalblue'
-cl_dxf              = 'chocolate'
+cl_pureElliptical   = 'dodgerblue'
+cl_dxf              = 'salmon'
 cl_wingSection_fix  = 'deeppink'
 cl_wingSection_flex = 'mediumvioletred'
 cl_paneled          = 'steelblue'
@@ -307,9 +307,13 @@ class Planform_Artist (Artist):
     
 
         y, x = self.planform.linesPolygon()
-        p = self.ax.plot(y, x,  '-', color=cl_planform, label=self.planform.wing.name)
+        p = self.ax.plot(y, x,  '-', color=cl_planform, label= "Planform")  
         self._add (p)
         (self.planform_line_artist,) = p 
+
+        p = self.ax.fill(y, x, linewidth=0.8, color=cl_planform, alpha=0.1)    
+        self._add(p)
+
 
         # hinge line
         yh, hinge = self.planform.hingeLine()
@@ -413,12 +417,24 @@ class Planform_Artist (Artist):
     def _show_wingData (self, x, y):
         """ x,y coordinates of the closed polygon"""
 
+        # Planform name
+        if self.planform.hingeAngle < 2.0: 
+            yText = 0.95
+            va = 'top'
+        else:
+            yText = 0.09
+            va= 'bottom'
+        p = self.ax.text (0.05, yText, self.planform.wing.name, color=cl_labelGrid, fontsize = 'x-large',
+                          transform=self.ax.transAxes, horizontalalignment='left', verticalalignment=va)
+        self._add (p)   
+
+        # wing data 
         area, aspectRatio = self.planform.calc_area_AR (x,y)
         text  = "Wing span %.0f mm\n" % (self.planform.halfwingspan * 2)
         text += "Wing area %.1f dm²\n" % (area * 2 / 10000)
         text += "Aspect ratio %.1f\n" % (aspectRatio)
 
-        p = self.ax.text (0.99, 0.05, text, color=cl_labelGrid, # fontsize = 'small',
+        p = self.ax.text (0.99, 0.0, text, color=cl_labelGrid, # fontsize = 'small',
                           transform=self.ax.transAxes, 
                           horizontalalignment='right', verticalalignment='bottom')
         self._add (p)   

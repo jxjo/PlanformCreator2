@@ -17,7 +17,7 @@ from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 from cycler import cycler  
 
 cl_background       = '#101010'
-cl_labelGrid        = '#B0B0B0'
+cl_labelGrid        = '#C0C0C0'
 cl_text             = '#D0D0D0'
 cl_userHint         = '#E0A721'
 cl_toolbar          = ('gray85', 'gray35')

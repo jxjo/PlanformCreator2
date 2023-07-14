@@ -55,7 +55,7 @@ from modules.wing_artists       import *
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "0.8.1"
+AppVersion = "0.8.2"
 
 #------------------------------------------------
 
@@ -439,25 +439,16 @@ class Edit_Planform_Bezier(Edit_Abstract):
         self.grid_rowconfigure      (6, weight=1)
 
         r = 0 
-        # self.add (Field_Widget  (self,r,0, lab="Root tangent y", obj=self.planform, get='p1y', set='set_p1y',
-        #                             event=CHORD_CHANGED, lim=(0.4,1), dec=2, spin=True, step=0.01))
-        # self.add (Field_Widget  (self,r,3, lab="x", lab_width=60, obj=self.planform, get='p1x', set='set_p1x',
-        #                             event=CHORD_CHANGED, lim=(0.4,1), dec=2, spin=True, step=0.01))
-        # r += 1
         self.add (Field_Widget  (self,r,0, lab="Root tangent", obj=self.planform, 
                                     get='tangentAngle_root', set='set_tangentAngle_root', unit='°',
-                                    event=CHORD_CHANGED, lim=(-20,10), dec=1, spin=True, step=0.5))
+                                    event=CHORD_CHANGED, lim=(-20,0), dec=1, spin=True, step=0.5))
         self.add (Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
                                     get='tangentLength_root', set='set_tangentLength_root',
                                     event=CHORD_CHANGED, lim=(0.1,1), dec=2, spin=True, step=0.01))
-        # r += 1
-        # self.add (Field_Widget  (self,r,0, lab="Tip tangent y", obj=self.planform, get='p2y', dec=2, spin=True))
-        # self.add (Field_Widget  (self,r,3, lab="x", lab_width=60, obj=self.planform, get='p2x', set='set_p2x',
-        #                             event=CHORD_CHANGED, lim=(0.1,0.8), dec=2, spin=True, step=0.01))
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Tip tangent", obj=self.planform, 
                                     get='tangentAngle_tip', unit='°',
-                                    event=CHORD_CHANGED, dec=1, spin=True, step=0.5))
+                                    event=CHORD_CHANGED, dec=1, spin=True))
         self.add (Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
                                     get='tangentLength_tip', set='set_tangentLength_tip',
                                     event=CHORD_CHANGED, lim=(0.1,1), dec=2, spin=True, step=0.01))
@@ -957,7 +948,7 @@ class Diagram_Abstract(ctk.CTkFrame):
 
     def create_axes (self):
         """ setup axes, axis for this plot type """
-        self.axes : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
+        self.ax : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
         self.figure.subplots_adjust(left=0.04, bottom=0.07, right=0.98, top=0.98, wspace=None, hspace=None)
 
 
@@ -968,7 +959,7 @@ class Diagram_Abstract(ctk.CTkFrame):
 
     def setup_artists(self):
         """ setup artists for this plot type """
-        self.gridArtist = Grid_Artist (self.axes, self._wingFn, show=True)
+        self.gridArtist = Grid_Artist (self.ax, self._wingFn, show=True)
         self.gridArtist.plot()          # force to show first time
 
 
@@ -1021,33 +1012,34 @@ class Diagram_Planform (Diagram_Abstract):
     
         # overloaded to have no ticks for this diagram
         super().create_axes()
-        self.axes.set_xticks ([])
-        self.axes.set_yticks ([])
+        self.ax.set_xticks ([])
+        self.ax.set_yticks ([])
 
 
     def setup_axes (self):
         """ setup axes, axis for this plot type """
 
-        limy = self.axes.get_ylim()
+        limy = self.ax.get_ylim()
         if limy[0] < limy[1]: 
-            self.axes.invert_yaxis() 
-        self.axes.axis('equal')
-        self.axes.relim()
-        self.axes.autoscale(enable=True, axis='Both')
+            self.ax.invert_yaxis() 
+        self.ax.axis('equal')
+        self.ax.relim()
+        self.ax.autoscale(enable=True, axis='Both')
+        self.ax.margins(x=0.06, y= 0.1)
 
 
     def setup_artists (self):
         """ setup artists for this plot type """
 
         super().setup_artists()
-        self.planformArtist     = Planform_Artist (self.axes, self._wingFn, onMove=self.banana_by_mouse, show=True)
-        self.chordLinesArtist   = ChordLines_Artist (self.axes, self._wingFn, show=False)
-        self.sectionsArtist     = Sections_Artist (self.axes, self._wingFn, show=True,onPick=self.sectionPicked)     
-        self.curSectionArtist   = CurrentSection_Artist (self.axes, self._wingFn, show=True, onMove=self.section_by_mouse)
-        self.airfoilNameArtist  = AirfoilName_Artist (self.axes, self._wingFn, show=False)     
-        self.flapArtist         = Flap_Artist (self.axes, self._wingFn)
-        self.referenceArtist    = RefPlanform_Artist (self.axes, self._wingFn)
-        self.dxfArtist          = RefPlanform_DXF_Artist (self.axes, self._wingFn)
+        self.planformArtist     = Planform_Artist (self.ax, self._wingFn, onMove=self.banana_by_mouse, show=True)
+        self.chordLinesArtist   = ChordLines_Artist (self.ax, self._wingFn, show=False)
+        self.sectionsArtist     = Sections_Artist (self.ax, self._wingFn, show=True,onPick=self.sectionPicked)     
+        self.curSectionArtist   = CurrentSection_Artist (self.ax, self._wingFn, show=True, onMove=self.section_by_mouse)
+        self.airfoilNameArtist  = AirfoilName_Artist (self.ax, self._wingFn, show=False)     
+        self.flapArtist         = Flap_Artist (self.ax, self._wingFn)
+        self.referenceArtist    = RefPlanform_Artist (self.ax, self._wingFn)
+        self.dxfArtist          = RefPlanform_DXF_Artist (self.ax, self._wingFn)
 
 
     def setup_Switches (self, r = 0, c = 0 ):
@@ -1110,7 +1102,6 @@ class Diagram_Planform (Diagram_Abstract):
 
     def wing_new (self, dummy): 
         """ Eventhandler for new wing """
-        self.axes.clear()
         self.changed_wing (dummy)
         self.changed_currentSection (dummy)
 
@@ -1170,7 +1161,7 @@ class Diagram_Planform (Diagram_Abstract):
 
             self.curSectionArtist.set_current (aSectionLabel, figureUpdate=False)  
 
-            self.axes.figure.canvas.draw_idle()     # draw ony if Windows is idle!
+            self.ax.figure.canvas.draw_idle()     # draw ony if Windows is idle!
 
 
     # -------- refresh my Artists which are on 'show mode' 
@@ -1197,7 +1188,7 @@ class Diagram_Planform (Diagram_Abstract):
 
             self.setup_axes()                       # maybe the axis limits changed
 
-            self.axes.figure.canvas.draw_idle()     # draw ony if Windows is idle!
+            self.ax.figure.canvas.draw_idle()     # draw ony if Windows is idle!
 
             # print ("  - refresh in ", self.__class__.__name__," for active artists")
 
@@ -1208,7 +1199,7 @@ class Diagram_Planform (Diagram_Abstract):
             self.flapArtist.refresh     () 
             self.curSectionArtist.refresh()
 
-            self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
+            self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
             # print ("  - refresh sections in ", self.__class__.__name__," for active artists")
 
 
@@ -1222,16 +1213,16 @@ class Diagram_Planform_Mini (Diagram_Abstract):
 
     def create_axes (self):
         """ setup axes, axis for this plot type """
-        self.axes : plt.Axes = self.figure.add_subplot(frameon=False)        # the pyplot axes this diagram is plotted
+        self.ax : plt.Axes = self.figure.add_subplot(frameon=False)        # the pyplot axes this diagram is plotted
         self.figure.subplots_adjust(left=0.01, bottom=0.0, right=0.99, top=1, wspace=None, hspace=None)
 
     def setup_axes (self):
         """ setup axes, axis for this plot type """
-        self.axes.set_ylim([self.wing.rootchord, 0.0])
-        self.axes.set_xlim([-0.05 * self.wing.halfwingspan, self.wing.halfwingspan * 1.05])
-        self.axes.axis('equal')
-        self.axes.set_xticks([], [])
-        self.axes.set_yticks([], [])
+        self.ax.set_ylim([self.wing.rootchord, 0.0])
+        self.ax.set_xlim([-0.05 * self.wing.halfwingspan, self.wing.halfwingspan * 1.05])
+        self.ax.axis('equal')
+        self.ax.set_xticks([], [])
+        self.ax.set_yticks([], [])
 
 
     def setup_artists (self):
@@ -1256,7 +1247,7 @@ class Diagram_Planform_Mini (Diagram_Abstract):
         pass
 
     def refresh(self): 
-        self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
+        self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
 
 #-------------------------------------------------------------------------------
@@ -1274,26 +1265,26 @@ class Diagram_ChordDistribution (Diagram_Abstract):
     
         # overloaded to have no ticks for this diagram
         super().create_axes()
-        self.axes.set_xticks ([])
-        self.axes.set_yticks ([])
+        self.ax.set_xticks ([])
+        self.ax.set_yticks ([])
 
 
     def setup_axes(self):
         """ setup axes, axis, artiss for this plot type """
-        self.axes.set_ylim([ 0.0, 1.19])
-        self.axes.set_xlim([ 0.0, 1.06])
+        self.ax.set_ylim([ 0.0, 1.19])
+        self.ax.set_xlim([ 0.0, 1.06])
 
     def setup_artists(self):
         """ setup axes, axis, artists for this plot type """
 
         super().setup_artists()
-        self.chordArtist        = Chord_Artist (self.axes, self._wingFn, onMove=self.chord_by_mouse, show=True)
-        self.chordLinesArtist   = ChordLines_Artist (self.axes, self._wingFn, norm=True, show=False)
-        self.curSectionArtist   = CurrentSection_Artist (self.axes, self._wingFn, norm=True, show=False, onMove=self.section_by_mouse)
-        self.sectionsArtist     = Sections_Artist (self.axes, self._wingFn, show=False, norm=True,
+        self.chordArtist        = Chord_Artist (self.ax, self._wingFn, onMove=self.chord_by_mouse, show=True)
+        self.chordLinesArtist   = ChordLines_Artist (self.ax, self._wingFn, norm=True, show=False)
+        self.curSectionArtist   = CurrentSection_Artist (self.ax, self._wingFn, norm=True, show=False, onMove=self.section_by_mouse)
+        self.sectionsArtist     = Sections_Artist (self.ax, self._wingFn, show=False, norm=True,
                                                        onPick=self.sectionPicked)
-        self.referenceArtist    = RefChord_Artist (self.axes, self._wingFn, norm=True)
-        self.dxfArtist          = RefChord_DXF_Artist (self.axes, self._wingFn, norm=True)
+        self.referenceArtist    = RefChord_Artist (self.ax, self._wingFn, norm=True)
+        self.dxfArtist          = RefChord_DXF_Artist (self.ax, self._wingFn, norm=True)
 
 
     def setup_Switches(self, r=0, c=0):
@@ -1395,14 +1386,14 @@ class Diagram_ChordDistribution (Diagram_Abstract):
             self.curSectionArtist.refresh()
             self.referenceArtist.refresh () 
             self.dxfArtist.refresh () 
-            self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
+            self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
             # print ("  - refresh in ", self.__class__.__name__," for active artists")
 
     def refresh_sections(self): 
         if self._active:
             self.sectionsArtist.refresh ()  
             self.curSectionArtist.refresh()
-            self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
+            self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
             # print ("  - refresh sections in ", self.__class__.__name__," for active artists")
 
     # -------- Callbacks from Artists 
@@ -1436,9 +1427,9 @@ class Diagram_Airfoils (Diagram_Abstract):
 
     def setup_axes(self):
         """ setup axes, axis, artiss for this plot type """
-        self.axes.axis('equal')
-        self.axes.relim()
-        self.axes.autoscale(enable=True, axis='Both')
+        self.ax.axis('equal')
+        self.ax.relim()
+        self.ax.autoscale(enable=True, axis='Both')
 
 
 
@@ -1446,7 +1437,7 @@ class Diagram_Airfoils (Diagram_Abstract):
         """ setup axes, axis, artists for this plot type """
 
         super().setup_artists()
-        self.airfoilArtist      = Airfoil_Artist (self.axes, self._wingFn, show=True, norm=True, 
+        self.airfoilArtist      = Airfoil_Artist (self.ax, self._wingFn, show=True, norm=True, 
                                                   strak=False, onPick=self.airfoilPicked)
 
 
@@ -1527,7 +1518,7 @@ class Diagram_Airfoils (Diagram_Abstract):
         # overloaded
         if self._active:
             self.airfoilArtist.refresh ()  
-            self.axes.figure.canvas.draw_idle()    # draw ony if Windows is idle!
+            self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
     # -------- pick object in axes handling  
 

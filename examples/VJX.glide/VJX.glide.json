@@ -1,17 +1,17 @@
 {
-  "wingName":"VJX.glide PC",
+  "wingName":"VJX.glide",
   "wingspan":2940.0,
-  "rootchord":235.0,
-  "tipchord":5.0,
+  "rootchord":230.0,
+  "tipchord":3.0,
   "hingeLineAngle":-0.7,
   "flapDepthRoot":28.0,
   "flapDepthTip":27.0,
   "rootRe":400000,
   "airfoilNickPrefix":"GP",
   "planformType":"Bezier",
-  "p1x":0.96,
-  "p2x":0.4,
-  "p1y":0.85,
+  "p1x":0.958047,
+  "p2x":0.395571,
+  "p1y":0.856495,
   "wingSections":[
     {
       "position":0.0,
@@ -51,42 +51,12 @@
     },
     {
       "position":1470.0,
-      "norm_chord":0.021277,
+      "norm_chord":0.013043,
       "flapGroup":2,
       "airfoil":{
         "file":"JX-GP-033.dat"
       }
     }
   ],
-  "refPlanform_dxfPath":"VJX.glide_planform.dxf",
-  "xflr5":{
-    "exportDir":"xflr5",
-    "useNick":true,
-    "x-panels":10,
-    "x-distribution":"cosine",
-    "y-panels":10,
-    "y-minWidth":5
-  },
-  "flz":{
-    "exportDir":"Flz_vortex",
-    "useNick":true,
-    "x-panels":10,
-    "x-distribution":"cosine",
-    "y-panels":10,
-    "y-minWidth":5
-  },
-  "dxf":{
-    "exportDir":"dxf",
-    "useNick":true,
-    "setTeGap":true,
-    "teGap_mm":0.6,
-    "includeAirfoils":true,
-    "exportAirfoils":true
-  },
-  "airfoils":{
-    "exportDir":"airfoils",
-    "useNick":true,
-    "setTeGap":false,
-    "teGap_mm":0.5
-  }
+  "refPlanform_dxfPath":"VJX.glide_planform.dxf"
 }

@@ -159,10 +159,14 @@ class Wing:
 
         self.refPlanform_DXF._save (dataDict)
 
-        toDict (dataDict, "xflr5",              self.exporterXflr5._save()) 
-        toDict (dataDict, "flz",                self.exporterFlz._save()) 
-        toDict (dataDict, "dxf",                self.exporterDxf._save()) 
-        toDict (dataDict, "airfoils",           self.exporterAirfoils._save()) 
+        if self._exporterXflr5: 
+            toDict (dataDict, "xflr5",              self.exporterXflr5._save()) 
+        if self._exporterFlz: 
+            toDict (dataDict, "flz",                self.exporterFlz._save()) 
+        if self._exporterDxf: 
+            toDict (dataDict, "dxf",                self.exporterDxf._save()) 
+        if self._exporterAirfoils: 
+            toDict (dataDict, "airfoils",           self.exporterAirfoils._save()) 
 
         return dataDict
 
@@ -1041,7 +1045,7 @@ class Planform_Bezier(Planform):
         """ set angle in degrees of the bezier tangent at root.
             ! The angle may not become negative as chord value won't be unique! """
         # watch the different coordinate system 
-        anAngle = max (anAngle, 0.0)
+        anAngle = min (anAngle, 0.0)
         hypo = self.tangentLength_root
         dy = hypo * np.sin (anAngle * np.pi / 180.0)
         dx = hypo * np.cos (anAngle * np.pi / 180.0)
