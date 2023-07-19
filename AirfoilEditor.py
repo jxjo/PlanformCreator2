@@ -1831,11 +1831,14 @@ if __name__ == "__main__":
             ErrorMsg ("Airfoil file '%s' doesn't exist" %airfoil_files )
             sys.exit(1)
     else: 
-        NoteMsg ("No airfoil file as argument. Showing example airfoil...")
-        # airfoil_files = None
-        airfoil_dir   =".\\test_airfoils"
-        airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
-        airfoil_files = sorted (airfoil_files)
+        if os.path.isdir(".\\test_airfoils"):
+            airfoil_dir   =".\\test_airfoils"
+            airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
+            airfoil_files = sorted (airfoil_files)
+            NoteMsg ("No airfoil file as argument. Showing example airfoils in '%s'" %airfoil_dir)
+        else:
+            NoteMsg ("No airfoil file as argument. Showing example airfoil...")
+            airfoil_files = None
 
     myApp = AirfoilEditor (airfoil_files)
     

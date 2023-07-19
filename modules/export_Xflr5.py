@@ -157,7 +157,7 @@ class Export_Xflr5:
                 dihedral.text = str(0)
 
             # airfoil - use nick name? 
-            if self.useNick:
+            if self.useNick and section.airfoilNick():
                 airfoilName = section.airfoilNick()
             else: 
                 airfoilName = section.airfoilName()

@@ -243,7 +243,10 @@ class Wing:
 
     @property
     def hingeAngle(self): return self._hingeAngle
-    def set_hingeAngle(self, newAngle): self._hingeAngle = newAngle
+    def set_hingeAngle(self, newAngle): 
+        newAngle = max (newAngle, -5)
+        newAngle = min (newAngle, 45)
+        self._hingeAngle = newAngle
 
     @property
     def flapDepthRoot(self): return self._flapDepthRoot
@@ -2658,11 +2661,9 @@ class WingSection:
         """ the airfoil nickname like GP-16 from nickname prefix and reynolds (or normchord)"""
 
         if self.wing.airfoilNickPrefix:
-            prefix = self.wing.airfoilNickPrefix
+            return self.wing.airfoilNickPrefix + self.airfoilNickPostfix()
         else:
-            prefix = "JX"
-        return prefix + self.airfoilNickPostfix()
-
+            return None
 
     def airfoil_canBeRemoved (self):
         return (not self.isRootOrTip) and (not self.airfoil.isStrakAirfoil)
@@ -2684,7 +2685,7 @@ class WingSection:
         Optionally define a teGap in mm for the exported airfoil 
         Returns the filename of the exported airfoil
         """
-        if useNick: 
+        if useNick and self.airfoilNick(): 
             newName = self.airfoilNick()
         else: 
             newName = None

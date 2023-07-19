@@ -375,8 +375,13 @@ class DragManager:
         self._dependant_artists = dependant_artists
 
         # bounds for movements
-        self._bounds_x = bounds[0]
-        self._bounds_y = bounds[1]
+        if bounds: 
+            self._bounds_x = bounds[0]
+            self._bounds_y = bounds[1]
+        else:
+            self._bounds_x = None
+            self._bounds_y = None
+
         self._bg = None
         self._artist = animated_artist
         self._press_xy = None

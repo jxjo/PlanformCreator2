@@ -232,9 +232,10 @@ class Dxf_Artist:
             line = [p1,p2]
             self._plot_line_fromPoints (line)
 
-            airfoilText = "'"+ sec.airfoilNick()+"'" 
-            self.msp.add_text(airfoilText, height = fontsize).set_placement(
-                                (y_m, x_m+35), align=enums.TextEntityAlignment.CENTER)
+            if sec.airfoilNick():
+                airfoilText = "'"+ sec.airfoilNick()+"'" 
+                self.msp.add_text(airfoilText, height = fontsize).set_placement(
+                                    (y_m, x_m+35), align=enums.TextEntityAlignment.CENTER)
 
             airfoilText = sec.airfoilName()
             self.msp.add_text(airfoilText, height = fontsize).set_placement(

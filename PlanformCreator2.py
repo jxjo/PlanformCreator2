@@ -65,6 +65,7 @@ cl_background               = ('#EBEBEB','#242424')                     # backgr
 
 WING_NEW                    = "<<WING_NEW>>"                #tk event types
 WING_CHANGED                = "<<WING_CHANGED>>"             
+WING_CHANGED_BY_MOUSE       = "<<WING_CHANGED_BY_MOUSE>>"
 CHORD_CHANGED               = "<<CHORD_CHANGED>>"             
 CHORD_CHANGED_BY_MOUSE      = "<<CHORD_CHANGED_BY_MOUSE>>"             
 PLANFORM_CHANGED            = "<<PLANFORM_CHANGED>>"
@@ -128,9 +129,10 @@ class Edit(ctk.CTkFrame):
         self.ctk_root.bind(CHORD_CHANGED,            self.changed_chord, add='+')
         self.ctk_root.bind(CHORD_CHANGED_BY_MOUSE,   self.changed_chord, add='+')
         self.ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
-        self.ctk_root.bind(PLANFORM_CHANGED_BY_MOUSE,self.changed_planform, add='+')
         self.ctk_root.bind(SECTION_CHANGED,          self.changed_section, add='+')
 
+        self.ctk_root.bind(PLANFORM_CHANGED_BY_MOUSE,self.changed_planform, add='+')
+        self.ctk_root.bind(WING_CHANGED_BY_MOUSE,    self.changed_wing, add='+')
 
         # bindings from plot diagrams 
         self.ctk_root.bind(DIAGRAMM_SECTION_SELECTED,self.sectionSelected_in_diagram, add='+')
@@ -949,7 +951,7 @@ class Diagram_Abstract(ctk.CTkFrame):
     def create_axes (self):
         """ setup axes, axis for this plot type """
         self.ax : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
-        self.figure.subplots_adjust(left=0.04, bottom=0.07, right=0.98, top=0.98, wspace=None, hspace=None)
+        self.figure.subplots_adjust(left=0.04, bottom=0.08, right=0.98, top=0.96, wspace=None, hspace=None)
 
 
     def setup_axes(self):
@@ -1032,7 +1034,7 @@ class Diagram_Planform (Diagram_Abstract):
         """ setup artists for this plot type """
 
         super().setup_artists()
-        self.planformArtist     = Planform_Artist (self.ax, self._wingFn, onMove=self.banana_by_mouse, show=True)
+        self.planformArtist     = Planform_Artist (self.ax, self._wingFn, onMove=self.changed_by_mouse, show=True)
         self.chordLinesArtist   = ChordLines_Artist (self.ax, self._wingFn, show=False)
         self.sectionsArtist     = Sections_Artist (self.ax, self._wingFn, show=True,onPick=self.sectionPicked)     
         self.curSectionArtist   = CurrentSection_Artist (self.ax, self._wingFn, show=True, onMove=self.section_by_mouse)
@@ -1139,9 +1141,10 @@ class Diagram_Planform (Diagram_Abstract):
 
     # -------- Callbacks from Artists 
 
-    def banana_by_mouse(self): 
-        """" banana curve was changed with mouse """
+    def changed_by_mouse(self): 
+        """" planform (banana) or wing (hinge) was changed with mouse """
         self.changed_planform("")
+        fireEvent (self.ctk_root, WING_CHANGED_BY_MOUSE)
         fireEvent (self.ctk_root, PLANFORM_CHANGED_BY_MOUSE)
 
     def section_by_mouse(self): 
@@ -1339,11 +1342,12 @@ class Diagram_ChordDistribution (Diagram_Abstract):
     def changed_chord (self, dummy): 
         """ Eventhandler for changes of chord"""
         self.refresh()
-        self.refresh_sections() 
 
     def changed_planform (self, dummy): 
         """ Eventhandler for changes of planform"""
-        # only sections here
+
+        if self._active:
+            self.dxfArtist.refresh ()           # a new ref dxf could have been loaded
         self.refresh_sections() 
 
     def changed_sections (self, dummy): 
@@ -1662,8 +1666,8 @@ class Dialog_Load_DXF (Dialog_Abstract):
         # show a little dxf preview
         self.diagram_frame = Diagram_Planform_Mini (frame,  wingFn, size=(3.5,1.2))
         self.diagram_frame.grid(row=r, column=2, columnspan= 4)
-        self.diagram_axes = self.diagram_frame.axes
-        self.planformArtist = RefPlanform_DXF_Artist (self.diagram_frame.axes, wingFn(), show=True, 
+        self.diagram_ax    = self.diagram_frame.ax
+        self.planformArtist = RefPlanform_DXF_Artist (self.diagram_ax, wingFn(), show=True, 
                                                       showMarker=False, planform=self.tmpPlanform)
         self.planformArtist.refresh(figureUpdate=True)
 
@@ -1763,8 +1767,8 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         self.edit_frame.grid_rowconfigure    (2, weight=1)
 
         # artists for preview
-        self.diagram_axes = self.diagram_frame.axes
-        self.panelArtist  = PaneledPlanform_Artist (self.diagram_frame.axes, 
+        self.diagram_ax  = self.diagram_frame.ax
+        self.panelArtist = PaneledPlanform_Artist (self.diagram_ax, 
                                 wingFn, self.paneledPlanform, show=True)
         self.panelArtist.refresh(figureUpdate=True)
 

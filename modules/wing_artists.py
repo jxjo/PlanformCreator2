@@ -15,7 +15,7 @@ from wing_model import (Wing, Planform, WingSection, Planform_DXF, Flap,
 cl_planform         = 'whitesmoke'
 cl_quarter          = 'lightgrey'
 cl_pureElliptical   = 'dodgerblue'
-cl_dxf              = 'salmon'
+cl_dxf              = 'tomato'
 cl_wingSection_fix  = 'deeppink'
 cl_wingSection_flex = 'mediumvioletred'
 cl_paneled          = 'steelblue'
@@ -287,6 +287,8 @@ class Planform_Artist (Artist):
         # an alternative planform - not taken from Wing
         self._planform = planform
 
+        self._halfwingspan_sav = None                   # keep original span for mouse modifications
+
         # show mouse helper / allow drag of points 
         self.p1_marker_artist = None
         self.p1_marker_anno = None
@@ -294,6 +296,10 @@ class Planform_Artist (Artist):
         self.banana_line_artist = None 
         self.planform_line_artist = None 
 
+        self.hinge_line_artist = None
+        self.hinge_marker_artist = None
+        self.hinge_marker_anno = None
+        
 
     @property
     def planform (self) -> Planform:
@@ -305,7 +311,9 @@ class Planform_Artist (Artist):
 
     def _plot(self):
     
+        self._halfwingspan_sav = self.planform.halfwingspan
 
+        # planform outline 
         y, x = self.planform.linesPolygon()
         p = self.ax.plot(y, x,  '-', color=cl_planform, label= "Planform")  
         self._add (p)
@@ -314,26 +322,34 @@ class Planform_Artist (Artist):
         p = self.ax.fill(y, x, linewidth=0.8, color=cl_planform, alpha=0.1)    
         self._add(p)
 
-
         # hinge line
         yh, hinge = self.planform.hingeLine()
         p = self.ax.plot(yh, hinge,  '-', linewidth=0.8, label="Hinge line", color='springgreen')
         self._add (p)
+        (self.hinge_line_artist,) = p 
 
-        # plot banana line with mouse helper 
-        if self.mouseActive and self.planform.planformType == "Bezier": 
+        if self.mouseActive: 
 
-            self.show_mouseHelper_banana (self.planform)
-
-            # make p1,2 of Bezier draggable - install callback when move is finished
-            bounds_x = ( 0.1 * self.planform.halfwingspan, 0.9 * self.planform.halfwingspan)
-            bounds_y = (-0.2 * self.planform.rootchord,    0.2 * self.planform.rootchord)
-            self._dragManagers.append (DragManager (self.ax, self.p1_marker_artist, 
-                                        bounds=[bounds_x, bounds_y], 
-                                        dependant_artists = [self.banana_line_artist, self.p1_marker_anno], 
-                                        callback_draw_animated = self.draw_animated_p1,
+            # plot hinge line helper
+            self.show_mouseHelper_hinge(self.planform)
+            self._dragManagers.append (DragManager (self.ax, self.hinge_marker_artist, 
+                                        dependant_artists = [self.hinge_marker_anno], 
+                                        callback_draw_animated = self.draw_animated_hinge,
                                         callback_on_moved=self._moveCallback))
 
+            if self.planform.planformType == "Bezier": 
+
+                # plot banana line with mouse helper 
+                self.show_mouseHelper_banana (self.planform)
+                # make p1,2 of Bezier draggable - install callback when move is finished
+                bounds_x = ( 0.1 * self.planform.halfwingspan, 0.9 * self.planform.halfwingspan)
+                bounds_y = (-0.2 * self.planform.rootchord,    0.2 * self.planform.rootchord)
+                self._dragManagers.append (DragManager (self.ax, self.p1_marker_artist, 
+                                            bounds=[bounds_x, bounds_y], 
+                                            dependant_artists = [self.banana_line_artist, self.p1_marker_anno], 
+                                            callback_draw_animated = self.draw_animated_banana,
+                                            callback_on_moved=self._moveCallback))
+                
         self._show_wingData(y, x)
 
         # set ticks 
@@ -363,20 +379,86 @@ class Planform_Artist (Artist):
         self._add(p)
         (self.p1_marker_artist,) = p 
 
-        p = self.ax.annotate('banana', color=cl_userHint, fontsize = 'small',
+        p = self.ax.annotate('banana', color=cl_userHint, backgroundcolor= cl_background, fontsize = 'small',
                             xy=(x, y), ha='left', va= 'bottom',
-                            xytext=(5, 3), textcoords='offset points', animated=True)
+                            xytext=(7, 3), textcoords='offset points', animated=True)
         self._add(p)
         self.p1_marker_anno = p 
 
 
-    def draw_animated_p1(self, duringMove=False): 
+    def show_mouseHelper_hinge (self, planform: Planform_Bezier): 
+        """ show the helper points for hinge line modification """
+
+        # drag marker 
+        xl, yl = planform.hingeLine()
+        x = xl[1]
+        y = yl[1]
+        p = self.ax.plot (x, y, marker='o', color=cl_userHint, markersize=6, animated=True )
+        self._add(p)
+        (self.hinge_marker_artist,) = p 
+
+        p = self.ax.annotate('hinge\nspan', color=cl_userHint, backgroundcolor= cl_background, fontsize = 'small',
+                            xy=(x, y), ha='right', va= 'top', multialignment='left',
+                            xytext=(-4, -6), textcoords='offset points', animated=True)
+        self._add(p)
+        self.hinge_marker_anno = p 
+
+
+    def draw_animated_hinge(self, duringMove=False): 
         """ call back when bezier point 1 was moved"""
 
         # just draw planform if no move 
         if not duringMove:
-            self.planform_line_artist.set_linestyle('-')
-            self.ax.draw_artist (self.planform_line_artist)
+            self.ax.draw_artist (self.hinge_marker_anno)
+            self.ax.draw_artist (self.hinge_marker_artist)
+            return
+
+        # draw marker and get new coordinates (when dragged) 
+        self.ax.draw_artist (self.hinge_marker_artist)
+        x1,y1 = self.hinge_marker_artist.get_xydata()[0]
+
+        # when span should be increased take square of delta span
+        dx = x1 - self._halfwingspan_sav
+        if dx > 0: dx = dx **2 / 10
+        span_new = self._halfwingspan_sav + dx
+
+        # update planform span with x coordinate  
+        self.planform.wing.set_wingspan (span_new * 2)  
+        span_new = self.planform.halfwingspan
+
+        # update hinge angle
+        xl, yl = self.planform.hingeLine()
+        dx = xl[1] - xl[0]
+        dy = y1    - yl[0]
+        angle = np.arctan (dy/dx) * 180 / np.pi
+        self.planform.wing.set_hingeAngle (angle)  
+ 
+        # update planform outline  
+        y, x = self.planform.linesPolygon()
+        self.planform_line_artist.set_xdata(y)
+        self.planform_line_artist.set_ydata(x)
+        self.planform_line_artist.set_linestyle(':')
+        self.ax.draw_artist (self.planform_line_artist)
+
+        # update dotted hinge line   
+        y, x = self.planform.hingeLine()
+        self.hinge_line_artist.set_xdata(y)
+        self.hinge_line_artist.set_ydata(x)
+        self.hinge_line_artist.set_linestyle(':')
+        self.ax.draw_artist (self.hinge_line_artist)
+
+        # update annotation text   
+        self.hinge_marker_anno.xy =  (x1,y1)
+        self.hinge_marker_anno.set ( text="hinge %.1f°\nhalf  %.0fmm" % (angle, span_new))
+        self.ax.draw_artist (self.hinge_marker_anno)
+
+
+
+    def draw_animated_banana(self, duringMove=False): 
+        """ call back when bezier point 1 was moved"""
+
+        # just draw planform if no move 
+        if not duringMove:
             self.ax.draw_artist (self.p1_marker_artist)
             self.ax.draw_artist (self.p1_marker_anno)
             self.ax.draw_artist (self.banana_line_artist)
@@ -388,7 +470,7 @@ class Planform_Artist (Artist):
 
         # update planform banana - ! wing coordinate system
         norm_y1 = x1 / self.planform.halfwingspan
-        norm_x1 = y1 /  self.planform.rootchord
+        norm_x1 = y1 / self.planform.rootchord
 
         self.planform : Planform_Bezier
         self.planform.set_banana_p1x (norm_x1)  
@@ -861,7 +943,8 @@ class Sections_Artist (Artist):
             self._add (p)                               # remind plot to delete 
 
             if self._pickActive: 
-                self._makeObjectPickable (p)
+                if not (self.mouseActive and section.isTip):  # avoid conflict with drag hinge line
+                    self._makeObjectPickable (p)
 
             self.plot_markers (y, le_to_te, section)
 
@@ -1078,7 +1161,7 @@ class Airfoil_Artist (Artist):
             airfoil = section.airfoil
             if (airfoil.isLoaded) and not (not self._strak and airfoil.isStrakAirfoil):
 
-                label = ("%s:  %s" % (section.name(), airfoil.name))  
+                label = ("%s  @ %s" % (airfoil.name, section.name() ))  
 
                 if self._norm:
                     x = airfoil.x
@@ -1106,14 +1189,29 @@ class Airfoil_Artist (Artist):
                     self._makeObjectPickable (p)
 
         # activate event for clicking on line 
-        if self._pickActive: self._connectPickEvent ()
+        if self._pickActive: 
+            self._connectPickEvent ()
+            self.show_mouseHelper ()
+
+
+    def show_mouseHelper (self):
+        """ show info for section select"""
+
+        p = self.ax.text (0.40, 0.05, 'click airfoil to select', color=cl_userHint, fontsize = 'small',
+                    transform=self.ax.transAxes, horizontalalignment='left', verticalalignment='bottom')
+        self._add(p)
 
 
     def _plot_marker (self, x,y, color, section: WingSection):
         # annotate airfoil with name etc. 
 
         airfoil = section.airfoil 
-        text = "'"+ section.airfoilNick() + "' - " + section.airfoilName() + "  @" + section.name() + \
+        if section.airfoilNick():
+            nickname = "'"+ section.airfoilNick() + "' - "
+        else:
+            nickname = ''
+
+        text = nickname + section.airfoilName() + "  @ " + section.name() + \
                "\n" + \
                "\nThickness  %.2f%%  at  %.2f%%" % (airfoil.maxThickness, airfoil.maxThicknessX) +\
                "\nCamber     %.2f%%  at  %.2f%%" % (airfoil.maxCamber   , airfoil.maxCamberX   ) 
@@ -1157,7 +1255,12 @@ class AirfoilName_Artist (Artist):
 
         marker_y = 0.87                         # in axis coordinates
         marker_x = y[0]                         # in data coordinates
-        text = "'"+ section.airfoilNick() + "'" + "\n" + section.airfoilName()
+        if section.airfoilNick():
+            nickname = "'"+ section.airfoilNick() + "'" + "\n"
+        else:
+            nickname = ''
+
+        text = nickname + section.airfoilName()
 
         color = next(self.ax._get_lines.prop_cycler)['color']
         p = self.ax.text (marker_x, marker_y, text, color=color, backgroundcolor= cl_background,
