@@ -140,10 +140,8 @@ class CurrentSection_Artist (Artist):
         (self.section_line_artist,) = p 
 
         # upper marker at le - move "chord"
-
-        p = self.ax.plot(y_sec [0], x_sec[0],  markersize=8, clip_on=False, 
-                         marker=11 , color = cl_userHint, 
-                         animated=True, pickradius=10)
+        p = self.ax.plot(y_sec [0], x_sec[0],  markersize=6, clip_on=False, 
+                         marker='o', color = cl_userHint, animated=True, pickradius=10)
         self._add(p)
         (self.chord_marker_artist,) = p 
 
@@ -154,10 +152,9 @@ class CurrentSection_Artist (Artist):
         self.chord_marker_anno = p 
 
         # lower marker at te - move "pos"
-
         x = y_sec[1]
         if self.norm:
-            y = 0.022
+            y = 0.015
             xytext=(8, 0)
             va = 'bottom'
             ha = 'left'
@@ -167,8 +164,8 @@ class CurrentSection_Artist (Artist):
             va= 'top'
             ha='left'
 
-        p = self.ax.plot(x, y,  markersize=8, clip_on=False, 
-                         marker=6, color = cl_userHint, 
+        p = self.ax.plot(x, y,  markersize=6, clip_on=False, 
+                         marker='o', color = cl_userHint, 
                          animated=True, pickradius=10)
         self._add(p)
         (self.pos_marker_artist,) = p 
@@ -299,6 +296,12 @@ class Planform_Artist (Artist):
         self.hinge_line_artist = None
         self.hinge_marker_artist = None
         self.hinge_marker_anno = None
+
+        self.root_marker_artist = None
+        self.root_marker_anno = None
+        
+        self.flap_marker_artist = None
+        self.flap_marker_anno = None
         
 
     @property
@@ -329,6 +332,24 @@ class Planform_Artist (Artist):
         (self.hinge_line_artist,) = p 
 
         if self.mouseActive: 
+
+            # plot root chord  helper
+            self.show_mouseHelper_root(self.planform)
+            bounds_y = (self.planform.rootchord/10, self.planform.rootchord * 4)
+            self._dragManagers.append (DragManager (self.ax, self.root_marker_artist, 
+                                        bounds=[(0,0), bounds_y], 
+                                        dependant_artists = [self.root_marker_anno], 
+                                        callback_draw_animated = self.draw_animated_root,
+                                        callback_on_moved=self._moveCallback))
+
+            # plot root flap depth helper
+            self.show_mouseHelper_flap(self.planform)
+            bounds_y = (self.planform.rootchord/3, self.planform.rootchord * 0.95)
+            self._dragManagers.append (DragManager (self.ax, self.flap_marker_artist, 
+                                        bounds=[(0,0), bounds_y], 
+                                        dependant_artists = [self.flap_marker_anno], 
+                                        callback_draw_animated = self.draw_animated_flap,
+                                        callback_on_moved=self._moveCallback))
 
             # plot hinge line helper
             self.show_mouseHelper_hinge(self.planform)
@@ -366,12 +387,6 @@ class Planform_Artist (Artist):
         self._add(p)
         (self.banana_line_artist,) = p 
 
-        # end points of banana bezier
-        p = self.ax.plot (x[0], y[0],   marker=(3, 0, 0), fillstyle='none', color=cl_userHint, markersize=8 )
-        self._add(p)
-        p = self.ax.plot (x[-1], y[-1], marker=(3, 0, 0), fillstyle='none', color=cl_userHint, markersize=8 )
-        self._add(p)
-
         # drag marker 
         x = planform.banana_p1y * planform.halfwingspan
         y = planform.banana_p1x * planform.rootchord
@@ -384,6 +399,42 @@ class Planform_Artist (Artist):
                             xytext=(7, 3), textcoords='offset points', animated=True)
         self._add(p)
         self.p1_marker_anno = p 
+
+
+    def show_mouseHelper_root (self, planform: Planform_Bezier): 
+        """ show the helpe point  for root chord definition """
+
+        # drag marker 
+        x = 0
+        y = planform.rootchord
+        p = self.ax.plot (x, y, marker='o', color=cl_userHint, markersize=6, animated=True )
+        self._add(p)
+        (self.root_marker_artist,) = p 
+
+        # ... and its annotation 
+        p = self.ax.annotate('chord', color=cl_userHint, backgroundcolor= cl_background, fontsize = 'small',
+                            xy=(x, y), ha='right', va= 'top', multialignment='left',
+                            xytext=(-6, -3), textcoords='offset points', animated=True)
+        self._add(p)
+        self.root_marker_anno = p 
+
+
+    def show_mouseHelper_flap (self, planform: Planform_Bezier): 
+        """ show the helpe point for root flap depth definition """
+
+        # drag marker 
+        x = 0
+        y = planform.rootchord * (1 - planform.flapDepthRoot / 100.0)
+        p = self.ax.plot (x, y, marker='o', color=cl_userHint, markersize=6, animated=True )
+        self._add(p)
+        (self.flap_marker_artist,) = p 
+
+        # ... and its annotation 
+        p = self.ax.annotate('flap', color=cl_userHint, backgroundcolor= cl_background, fontsize = 'small',
+                            xy=(x, y), ha='right', va= 'top', multialignment='left',
+                            xytext=(-6, -3), textcoords='offset points', animated=True)
+        self._add(p)
+        self.flap_marker_anno = p 
 
 
     def show_mouseHelper_hinge (self, planform: Planform_Bezier): 
@@ -402,6 +453,73 @@ class Planform_Artist (Artist):
                             xytext=(-4, -6), textcoords='offset points', animated=True)
         self._add(p)
         self.hinge_marker_anno = p 
+
+
+    def draw_animated_root(self, duringMove=False): 
+        """ call back when bezier point 1 was moved"""
+
+        # just draw planform if no move 
+        if not duringMove:
+            self.ax.draw_artist (self.root_marker_anno)
+            self.ax.draw_artist (self.root_marker_artist)
+            return
+
+        # draw marker and get new coordinates (when dragged) 
+        self.ax.draw_artist (self.root_marker_artist)
+        x1,y1 = self.root_marker_artist.get_xydata()[0]
+
+        # update planform rootchoord with y coordinate  
+        self.planform.wing.set_rootchord (y1)  
+        root_new = self.planform.rootchord
+ 
+        # update planform outline  
+        y, x = self.planform.linesPolygon()
+        self.planform_line_artist.set_xdata(y)
+        self.planform_line_artist.set_ydata(x)
+        self.planform_line_artist.set_linestyle(':')
+        self.ax.draw_artist (self.planform_line_artist)
+
+        # update annotation text   
+        self.root_marker_anno.xy =  (x1,y1)
+        self.root_marker_anno.set ( text="%.0fmm" % (root_new))
+        self.ax.draw_artist (self.root_marker_anno)
+
+
+    def draw_animated_flap(self, duringMove=False): 
+        """ call back when flap marker was moved"""
+
+        # just draw planform if no move 
+        if not duringMove:
+            self.ax.draw_artist (self.flap_marker_anno)
+            self.ax.draw_artist (self.flap_marker_artist)
+            return
+
+        # draw marker and get new coordinates (when dragged) 
+        self.ax.draw_artist (self.flap_marker_artist)
+        x1,y1 = self.flap_marker_artist.get_xydata()[0]
+
+        # update wing flap depth root with y coordinate  
+        flapdepth_new = round (100 * (self.planform.rootchord - y1) / self.planform.rootchord, 1) 
+        self.planform.wing.set_flapDepthRoot (flapdepth_new)  
+ 
+        # update planform outline  
+        y, x = self.planform.linesPolygon()
+        self.planform_line_artist.set_xdata(y)
+        self.planform_line_artist.set_ydata(x)
+        self.planform_line_artist.set_linestyle(':')
+        self.ax.draw_artist (self.planform_line_artist)
+
+        # update dotted hinge line   
+        y, x = self.planform.hingeLine()
+        self.hinge_line_artist.set_xdata(y)
+        self.hinge_line_artist.set_ydata(x)
+        self.hinge_line_artist.set_linestyle(':')
+        self.ax.draw_artist (self.hinge_line_artist)
+
+        # update annotation text   
+        self.flap_marker_anno.xy =  (x1,y1)
+        self.flap_marker_anno.set ( text="%.1f%%" % (flapdepth_new))
+        self.ax.draw_artist (self.flap_marker_anno)
 
 
     def draw_animated_hinge(self, duringMove=False): 
@@ -451,7 +569,6 @@ class Planform_Artist (Artist):
         self.hinge_marker_anno.xy =  (x1,y1)
         self.hinge_marker_anno.set ( text="hinge %.1f°\nhalf  %.0fmm" % (angle, span_new))
         self.ax.draw_artist (self.hinge_marker_anno)
-
 
 
     def draw_animated_banana(self, duringMove=False): 
@@ -506,7 +623,7 @@ class Planform_Artist (Artist):
         else:
             yText = 0.09
             va= 'bottom'
-        p = self.ax.text (0.05, yText, self.planform.wing.name, color=cl_labelGrid, fontsize = 'x-large',
+        p = self.ax.text (0.04, yText, self.planform.wing.name, color=cl_labelGrid, fontsize = 'x-large',
                           transform=self.ax.transAxes, horizontalalignment='left', verticalalignment=va)
         self._add (p)   
 
@@ -943,7 +1060,7 @@ class Sections_Artist (Artist):
             self._add (p)                               # remind plot to delete 
 
             if self._pickActive: 
-                if not (self.mouseActive and section.isTip):  # avoid conflict with drag hinge line
+                if not (self.mouseActive and section.isRootOrTip):  # avoid conflict with drag hinge line
                     self._makeObjectPickable (p)
 
             self.plot_markers (y, le_to_te, section)
@@ -1032,7 +1149,7 @@ class Sections_Artist (Artist):
             label = str(section.wing.wingSectionIndexOf (section))
 
         p = self.ax.text (marker_top_y, marker_top_x, "%s" % label, ha='center', va='bottom',
-                          color = cl_wingSection_fix, fontsize = 'x-large' )
+                          color = cl_wingSection_fix, fontsize = 'large')   
         self._add (p)   
 
 
@@ -1264,6 +1381,6 @@ class AirfoilName_Artist (Artist):
 
         color = next(self.ax._get_lines.prop_cycler)['color']
         p = self.ax.text (marker_x, marker_y, text, color=color, backgroundcolor= cl_background,
-                          transform=self.ax.get_xaxis_transform(), 
+                          transform=self.ax.get_xaxis_transform(), fontsize='small',
                           horizontalalignment='center', verticalalignment='top')
         self._add (p)   

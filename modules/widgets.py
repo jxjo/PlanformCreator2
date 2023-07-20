@@ -24,8 +24,8 @@ cl_styles ={
 cl_entry            = ("gray95","gray35")         # background of entry fields
 cl_entry_disable    = ("gray88","gray35")         # background of diabeld entry fields
 cl_spin             = ("gray75","gray25")         # background of spin buttons
-cl_spin_text        = ("gray10","gray95")         # text color of spin buttons
-cl_spin_text_disable= ("gray40","gray70")         # text color of spin buttons
+cl_spin_text        = ("gray5" ,"gray95")         # text color of spin buttons
+cl_spin_text_disable= ("gray55","gray70")         # text color of spin buttons
 cl_button_primary   = ctk.ThemeManager.theme["CTkButton"]["fg_color"] # default Button darker  
 cl_button_secondary = ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"] # default Button darker  
 fs_header           = 18                          # font size header 
@@ -614,7 +614,8 @@ class Button_Widget(Base_Widget):
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
 
     def _getFrom_CTkControl (self):
-        return None                     # button has nothing to give ...
+        # button has nothing to give ...
+        return None                     
 
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
         widgetCTk.configure (text=newLabelStr)
@@ -625,12 +626,9 @@ class Button_Widget(Base_Widget):
         if not self.disabled: return super().CTk_callback(dummy)
 
     def _set_CTkControl_state (self, widgetCTk, disable: bool):
-        """sets the disabled / normal state in CTk control 
-        """
         # overwritten because of flicker of CTkButton
         if disable: 
-            # for buttons always color of Dark mode
-            widgetCTk.configure (text_color = self._text_color('Disabled')[1])
+            widgetCTk.configure (text_color = cl_spin_text_disable) 
             widgetCTk.configure (fg_color =cl_spin )
         else: 
             # for buttons always color of Dark mode

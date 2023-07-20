@@ -20,7 +20,7 @@
                         |-- Header_Widget       - a page header  
                         ...                     - ...
 
-        |-- Diagramms                           - the master to select one of the diagrams
+        |-- Diagrams                            - the master to select one of the diagrams
                 |-- Diagram_Planform            - the planform (outline) of a half wing 
                 |-- ChordDistribution           - normalized chord distribution of the wing
                 |-- Airfoils                    - the airfoils at the wing sections 
@@ -72,7 +72,7 @@ PLANFORM_CHANGED            = "<<PLANFORM_CHANGED>>"
 PLANFORM_CHANGED_BY_MOUSE   = "<<PLANFORM_CHANGED_BY_MOUSE>>"
 SECTION_CHANGED             = "<<SECTION_CHANGED>>"
 CURRENT_SECTION_CHANGED     = "<<CURRENT_SECTION_CHANGED>>"
-DIAGRAMM_SECTION_SELECTED   = "<<DIAGRAMM_SECTION_SELECTED>>"
+DIAGRAM_SECTION_SELECTED    = "<<DIAGRAM_SECTION_SELECTED>>"
 AIRFOIL_CHANGED             = "<<AIRFOIL_CHANGED>>"
 PANELS_CHANGED              = "<<PANELS_CHANGED>>"
 
@@ -93,7 +93,7 @@ class Edit(ctk.CTkFrame):
     """
     # - holds the current data object wing, planform, wing secttion
     # - Handles the interaction between the different sub frames
-    # - informs the diagramms about changes 
+    # - informs the diagrams about changes 
     #
     def __init__(self, master, wingFn, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
@@ -135,7 +135,7 @@ class Edit(ctk.CTkFrame):
         self.ctk_root.bind(WING_CHANGED_BY_MOUSE,    self.changed_wing, add='+')
 
         # bindings from plot diagrams 
-        self.ctk_root.bind(DIAGRAMM_SECTION_SELECTED,self.sectionSelected_in_diagram, add='+')
+        self.ctk_root.bind(DIAGRAM_SECTION_SELECTED,self.sectionSelected_in_diagram, add='+')
 
     # ------ properties ------
 
@@ -262,9 +262,9 @@ class Edit_Wing(Edit_Abstract):
         self.grid_rowconfigure      (1, weight=1)
         self.grid_columnconfigure   (4, weight=1)
                
-        self.add (Header_Widget (self,0,0, lab=self.name, width=80))
+        self.add (Header_Widget (self,0,0, lab=self.name, width=105))
         self.add (Field_Widget  (self,0,1, lab=None, obj=self.wing, get='name', set='set_name',
-                                 lab_width=1, event=WING_CHANGED, width=140, justify='left'))
+                                 lab_width=1, event=WING_CHANGED, width=200, justify='left'))
 
 
         self.dataFrame = Edit_Wing_Data (self, self._wingFn, fg_color='transparent')
@@ -287,31 +287,34 @@ class Edit_Wing_Data (Edit_Abstract):
     def init (self):
 
         unit = self.wing().unit
-                
-        self.add (Field_Widget  (self,2,0, lab="Wing span",     obj=self.wing, get='wingspan', set='set_wingspan',
+
+        r = 0         
+        self.add (Field_Widget  (self,r,0, lab="Wing span",     obj=self.wing, get='wingspan', set='set_wingspan',
                                  event=WING_CHANGED, lim=(100,20000), dec=1, spin= True, step=10, unit=unit))
-        self.add (Field_Widget  (self,2,3, lab="Hinge angle",   obj=self.wing, get='hingeAngle', set='set_hingeAngle',
-                                 event=WING_CHANGED, lim=(-5,45), dec=1, spin=True, step=0.1, unit="°"))
-        self.add (Field_Widget  (self,3,0, lab="Chord at root", obj=self.wing, get='rootchord', set='set_rootchord',
+        r += 1
+        self.add (Field_Widget  (self,r,0, lab="Chord at root", obj=self.wing, get='rootchord', set='set_rootchord',
                                  event=WING_CHANGED, lim=(10,500), dec=1, spin=True, step=1, unit=unit))
-        self.add (Field_Widget  (self,3,3, lab="Chord at tip",  obj=self.wing, get='tipchord', set='set_tipchord',
+        self.add (Field_Widget  (self,r,3, lab="Chord at tip",  obj=self.wing, get='tipchord', set='set_tipchord',
                                  event=CHORD_CHANGED,               
                                  lim=(1,500), dec=1, spin=True, step=1, unit=unit))
-
-        self.add (Field_Widget  (self,4,0, lab="Flap at root",  obj=self.wing, get='flapDepthRoot', set='set_flapDepthRoot',
+        r += 1
+        self.add (Field_Widget  (self,r,0, lab="Flap at root",  obj=self.wing, get='flapDepthRoot', set='set_flapDepthRoot',
                                  event=PLANFORM_CHANGED, lim=(0,50), dec=1, spin=True, step=0.5, unit='%'))
-        self.add (Field_Widget  (self,4,3, lab="Flap at tip",   obj=self.wing, get='flapDepthTip', set='set_flapDepthTip',
+        self.add (Field_Widget  (self,r,3, lab="Flap at tip",   obj=self.wing, get='flapDepthTip', set='set_flapDepthTip',
                                  event=PLANFORM_CHANGED,            
                                  lim=(0,50), dec=1, spin=True, step=0.5, unit='%'))
-        
-        Blank_Widget (self,5,0, width=20, height = 15) 
-
-        self.add (Field_Widget  (self,6,0, lab="Re at root",    obj=self.wing, get='rootRe', set='set_rootRe',
+        r += 1
+        self.add (Field_Widget  (self,r,0, lab="Hinge angle",   obj=self.wing, get='hingeAngle', set='set_hingeAngle',
+                                 event=WING_CHANGED, lim=(-5,45), dec=1, spin=True, step=0.1, unit="°"))
+        r += 1
+        Blank_Widget (self,r,0, width=20, height = 15) 
+        r += 1
+        self.add (Field_Widget  (self,r,0, lab="Re at root",    obj=self.wing, get='rootRe', set='set_rootRe',
                                  event=WING_CHANGED, lim=(0,10000000), dec=0, spin=True, step=1000))
 
         # a mini frame to bring the two nick fields together
         self.nick_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.nick_frame.grid    (row=7, column=0, columnspan=3, sticky="nwes")
+        self.nick_frame.grid    (row=r, column=3, columnspan=3, sticky="nwes")
 
         self.add (Field_Widget  (self.nick_frame,0,0, lab="Airfoils nick", obj=self.wing, get='airfoilNickPrefix', set='set_airfoilNickPrefix',
                                  event=SECTION_CHANGED, width= 60))
@@ -336,7 +339,7 @@ class Edit_Planform_Master(Edit_Abstract):
         self.grid_columnconfigure   (2, weight=1)
         self.grid_rowconfigure      (3, weight=1)
 
-        self.add(Header_Widget (self,0,0, lab=self.name, width=110))
+        self.add(Header_Widget (self,0,0, lab=self.name, width=105))
         self.add(Option_Widget (self,0,1, get='planformType', set = 'set_planformType',
                                 width = 150, options=Planform.allTemplatePlanformTypes(),
                                 event=CHORD_CHANGED))
@@ -407,7 +410,7 @@ class Edit_Planform_Master(Edit_Abstract):
    
         dxf_Path = dxf_dialog.dxf_pathFilename
         if dxf_Path:  
-            self.wing().planform =  Planform_DXF( self.wing(), dxf_Path= dxf_Path, ref = False, workingkDir = self.workingDir)
+            self.wing().planform =  Planform_DXF( self.wing(), dxf_Path= dxf_Path, ref = False)
             handled = True
             fireEvent (self.ctk_root, WING_CHANGED)                   # update hinge, flaps
         else: 
@@ -613,7 +616,7 @@ class Edit_WingSection_Master(Edit_Abstract):
         self.grid_columnconfigure   (1, weight=1)
         self.grid_rowconfigure      (1, weight=1)
 
-        self.add(Header_Widget (hfrm,0,0, lab=self.name, width=100))
+        self.add(Header_Widget (hfrm,0,0, lab=self.name, width=105))
 
         self.add(Option_Widget (hfrm,0,1,   get=self.curSectionName, set=self.set_curSection,
                                             spin=True, width=100, options=self.sectionNames))
@@ -917,7 +920,7 @@ class Diagram_Abstract(ctk.CTkFrame):
         self.create_axes()
         self.setup_axes ()
 
-        # Create the artists for the diagramm
+        # Create the artists for the diagram
         self.setup_artists ()
 
         # init of switches / plots if a frame for the switches is available 
@@ -984,7 +987,7 @@ class Diagram_Abstract(ctk.CTkFrame):
     # ----- general refresh when getting active view again
 
     def setActive(self, active: bool):
-        # the Diagramm master (Tabview) will activate/deactivate to avoid plot generation
+        # the Diagram master (Tabview) will activate/deactivate to avoid plot generation
         #   if self is not visible
         if active: 
             self._active = True
@@ -1150,7 +1153,7 @@ class Diagram_Planform (Diagram_Abstract):
     def section_by_mouse(self): 
         """" current section was moved with mouse """
         self.changed_sections("")
-        fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
+        fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
 
 
     def sectionPicked (self, aSectionLabel):
@@ -1160,7 +1163,7 @@ class Diagram_Planform (Diagram_Abstract):
         if aSectionLabel != self.curSectionArtist.curLineLabel:
             myApp : App = self.winfo_toplevel()
             myApp.set_curWingSectionName(aSectionLabel)
-            fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
+            fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
 
             self.curSectionArtist.set_current (aSectionLabel, figureUpdate=False)  
 
@@ -1405,14 +1408,14 @@ class Diagram_ChordDistribution (Diagram_Abstract):
     def section_by_mouse(self): 
         """" current section was moved with mouse """
         self.changed_sections("")
-        fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
+        fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
 
 
     def sectionPicked (self, aSectionLabel):
         # call method - the user pciked a wing section in the plot
         myApp : App = self.winfo_toplevel()
         myApp.set_curWingSectionName(aSectionLabel)
-        fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
+        fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
         self.curSectionArtist.set_current (aSectionLabel, figureUpdate=True)  
 
 
@@ -1532,7 +1535,7 @@ class Diagram_Airfoils (Diagram_Abstract):
         sectionName = aAirfoilLabel.split(":")[0]
         myApp : App = self.winfo_toplevel()
         myApp.set_curWingSectionName(sectionName)
-        fireEvent (self.ctk_root, DIAGRAMM_SECTION_SELECTED)
+        fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
 
 
 #-------------------------------------------------------------------------------
@@ -1802,7 +1805,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         r +=1  
         self.add (Field_Widget  (self.input_frame,r,c, lab="  y min width", width=80,
                                  obj=self.paneledPlanform, get='y_minWidth', set='set_y_minWidth',
-                                 event=PANELS_CHANGED, lim=(1,20), dec=0, spin=True, step=1, unit="mm"))
+                                 event=PANELS_CHANGED, lim=(1,20), dec=0, spin=True, step=1, unit=self.wing.unit))
 
         r = 1 
         c = 7 
@@ -2188,7 +2191,7 @@ class App(ctk.CTk):
         # maximize the window using state property
         # self.state('zoomed')
 
-        self._curWingSectionName = None                 # Dispatcher field between Diagramm and Edit
+        self._curWingSectionName = None                 # Dispatcher field between Diagram and Edit
 
         # intercept app close by user  
         self.protocol("WM_DELETE_WINDOW", self.onExit)
@@ -2220,11 +2223,11 @@ class App(ctk.CTk):
 
     
     def curWingSectionName (self):
-        """ Dispatcher for current WingSection between Edit and Diagramm """
+        """ Dispatcher for current WingSection between Edit and Diagram """
         return self._curWingSectionName 
     
     def set_curWingSectionName (self, aName):
-        """ Dispatcher for current WingSection between Edit and Diagramm """
+        """ Dispatcher for current WingSection between Edit and Diagram """
         self._curWingSectionName = aName
 
 

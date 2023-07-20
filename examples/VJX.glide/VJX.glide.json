@@ -18,7 +18,7 @@
       "norm_chord":1.0,
       "flapGroup":1,
       "airfoil":{
-        "file":"JX-G-Root_t=7.9.dat"
+        "file":"JX-G-Root.dat"
       }
     },
     {
