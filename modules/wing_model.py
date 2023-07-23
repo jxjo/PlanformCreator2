@@ -2578,11 +2578,11 @@ class WingSection:
         leftSec, rightSec = self.wing.getNeighbourSectionsOf (self) 
 
         if self.isRoot or self.isTip:
-            safety = 1.0                # = fixed
+            safety = 0.0                # = fixed
             leftLimit  = self.yPos
             rightLimit = self.yPos
         else:
-            safety = self.wing.halfwingspan / 500.0 
+            safety = int (self.wing.halfwingspan / 500.0) 
             if leftSec: 
                 leftLimit = leftSec.yPos
             else:

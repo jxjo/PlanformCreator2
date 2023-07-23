@@ -1,11 +1,11 @@
 # Planform Creator 2
 
--- Work in Progress --
+
 
 An app to design a wing focusing on model sailplanes 
 
-* Define the planform based on function defined chord distribution functions
-* Major parameter is the hinge line of the wing
+* Define the planform based on chord distribution functions
+* Major parameter is the hinge line of the wing and the flap depth at root and tip
 * Add an arbitrary number of wing sections with fixed position or relative chord length
 * Generate blended airfoils for intermediate wing sections ('strak')
 * Import dxf outline of a wing either as template for a new wing or as reference for an existing wing
@@ -15,22 +15,30 @@ An app to design a wing focusing on model sailplanes
   * dxf file  - for use in CAD
 * View airfoil and edit its properties 
 
-
 Inspired and partially based on the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine) - Thanks Matthias!  
 
 
 
-![PC2](images/Screenshot.png "First screenshot")
+![PC2](images/PlanformCreator2_App.png "First screenshot")
 
+Some variations of wing planform when flap depth  ...
 
-![PC2](images/Screenshot_Xflr5-Export.png "Screenshot of Xflr5 Export")
+![PC2](images/Flap_depth_controlling_planform.png "Different flap depths")
+
+... or hinge line angle is changed
+
+![PC2](images/hinge_angle_controlling_planform.png "Different flap depths")
+
+Export the wing design prepared for Xflr5 or FLZ_vortex 
+
+![PC2](images/Xflr5_export_ok.png "Xflr5 export")
 
 
 ## Airfoil Editor
 
-The `AirfoilEditor` shows more detailed information of an airfoil like thickness and camber distribution or curvature of the surface. 
+The `AirfoilEditor` is part of PLanformCreator2 and shows more detailed information of an airfoil like thickness and camber distribution or curvature of the surface. 
 
-![PC2](images/AirfoilEditor.png "Screenshot of the AirfoilEditor ")
+![PC2](images/AirfoilEditor_App.png "Screenshot of the AirfoilEditor ")
 
 
 Operations like repaneling, normalizing and changing geometry parameters make extensive use of splines to achieve high precision results. 
