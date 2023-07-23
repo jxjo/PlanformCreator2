@@ -27,7 +27,7 @@ Some variations of wing planform when flap depth  ...
 
 ... or hinge line angle is changed
 
-![PC2](images/hinge_angle_controlling_planform.png "Different flap depths")
+![PC2](images/Hinge_angle_controlling_planform.png "Different flap depths")
 
 Export the wing design prepared for Xflr5 or FLZ_vortex 
 
