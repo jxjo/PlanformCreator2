@@ -17,7 +17,7 @@ from worker_driver import XfoilWorker
 
 #------------------------------------------------------------------------------
 
-class polarSet:
+class PolarSet:
     """ 
     Manage the polars of an airfoil   
 
@@ -33,12 +33,12 @@ class polarSet:
         Args:
             :myAirfoil: the airfoil object it belongs to  
         """
-        self.__airfoil = myAirfoil 
+        self._airfoil = myAirfoil 
         self.polars = []
 
         # set also default values for polar generation
         self.ncrit = 7
-        self.valRange = [-3, 13, 0.25]
+        self.valRange = [-4, 13, 0.25]
         self.spec_al = True
         self.polarType = 'T1'
 
@@ -60,18 +60,19 @@ class polarSet:
         myWorker = XfoilWorker()
 
         # which polars are already generated?
-        polarFilesExist = myWorker.get_existingPolarFiles (self.__airfoil.pathFileName, reNumbers)
+        polarFilesExist = myWorker.get_existingPolarFiles (self._airfoil.pathFileName, reNumbers,
+                                    polarType = self.polarType, ncrit = self.ncrit)
 
         # import directly already existung polars
         for polarFile in polarFilesExist:
-            newPolar = polar(self)
+            newPolar = Polar(self)
             newPolar.import_FromFile(polarFile)
             loadedPolars.append (newPolar)
             if (reNumberNotExist): reNumberNotExist.remove (newPolar.re)
         
         # are there still missing reNumbers? Generate 
         if (reNumberNotExist != []): 
-            generatedPolars = self.__generatePolars (reNumberNotExist)
+            generatedPolars = self._generatePolars (reNumberNotExist)
 
         self.polars.extend (loadedPolars)
         self.polars.extend (generatedPolars)
@@ -79,7 +80,7 @@ class polarSet:
         return  loadedPolars + generatedPolars
 
 
-    def __generatePolars (self, reNumbers: list):
+    def _generatePolars (self, reNumbers: list):
         """ 
         Generate polars of myAirfoil for all renumbers.
         Does not append them to polarSet!
@@ -94,12 +95,12 @@ class polarSet:
         myWorker = XfoilWorker()
 
         # let worker generate new polar files 
-        myAirfoilFileName = self.__airfoil.fileName
-        polarFiles = myWorker.generatePolars (myAirfoilFileName, reNumbers)
+        polarFiles = myWorker.generatePolars (self._airfoil.pathFileName, reNumbers, 
+                                              polarType = self.polarType, ncrit = self.ncrit, valRange = self.valRange)
 
         # append new polar to my polars
         for polarFile in polarFiles:
-            newPolar = polar(self)
+            newPolar = Polar(self)
             newPolar.import_FromFile(polarFile)
             generatedPolars.append (newPolar)
 
@@ -141,7 +142,7 @@ class polarSet:
         ax3.set_ylabel('cl/cd')
         ax3.set_xlabel('cl')
         ax3.grid()
-        for polar in myPolars:  ax3.plot(polar.cl, polar.clcd , '-', label='%s' %polar)
+        for polar in myPolars:  ax3.plot(polar.cl, polar.glide , '-', label='%s' %polar)
         
         ax4.set_ylabel('cm')
         ax4.set_xlabel('cl')
@@ -154,7 +155,7 @@ class polarSet:
 
 #------------------------------------------------------------------------------
 
-class polar:
+class Polar:
     """ 
     A single polar of an airfoil created bei Xfoil(Worker)  
 
@@ -162,7 +163,7 @@ class polar:
         --> polarSet 
             --> polar   
     """
-    def __init__(self, mypolarSet: polarSet):
+    def __init__(self, mypolarSet: PolarSet):
         """
         Main constructor for new polar which belongs to a polarset 
 
@@ -170,22 +171,87 @@ class polar:
             :mypolarSet: the polarSet object it belongs to  
         """
         self.polarSet = mypolarSet
-        self.alpha = []
-        self.cl = []
-        self.cd = []
-        self.clcd = []
-        self.cm = [] 
-        self.cd = [] 
-        self.cdp = [] 
-        self.xtrt = []
-        self.xtrb = []
+
+        self._opPoints = []                     # the single opPoins of self
+        self._alpha = []
+        self._cl = []
+        self._cd = []
+        self._cm = [] 
+        self._cd = [] 
+        self._xtrt = []
+        self._xtrb = []
 
         self.re = 0
         self.ncrit = 0 
 
     def __repr__(self) -> str:
         # overwrite to get a nice print string wie polarType and Re
-        return self.polarSet.polarType + ' '+ type(self).__name__ + ' Re=%d' % self.re
+        return self.polarSet.polarType + ' Re=%dk ncrit=%d' % (int(self.re/1000), self.ncrit)
+
+    #--------------------------------------------------------
+
+    @property
+    def opPoints (self) -> list:
+        """ returns the sorted list of opPoints of self """
+        return self._opPoints
+    
+    def set_opPoints (self, opPoints_new):
+        """ set list of opPoints of self """
+         
+        nPoints = len(opPoints_new)
+        if nPoints == 0: return 
+
+        self._alpha = [0] * nPoints
+        self._cl    = self._alpha.copy()
+        self._cd    = self._alpha.copy()
+        self._glide = self._alpha.copy()
+        self._cm    = self._alpha.copy()
+        self._cd    = self._alpha.copy()
+        self._xtrt  = self._alpha.copy()
+        self._xtrb  = self._alpha.copy()
+
+        # fill the cached array 
+        op : OpPoint
+        for i, op in enumerate(opPoints_new):
+            self._alpha[i] = op.alpha
+            self._cl[i]    = op.cl
+            self._cd[i]    = op.cd
+            self._glide[i] = op.glide
+            self._cm[i]    = op.cm
+            self._cd[i]    = op.cd
+            self._xtrt[i]  = op.xtrt
+            self._xtrb[i]  = op.xtrb
+    
+
+    @property
+    def alpha (self) -> list:
+        return self._alpha
+    
+    @property
+    def cl (self) -> list:
+        return self._cl
+    
+    @property
+    def cd (self) -> list:
+        return self._cd
+    
+    @property
+    def glide (self) -> list:
+        return self._glide
+    
+    @property
+    def cm (self) -> list:
+        return self._cm
+    
+    @property
+    def xtrt (self) -> list:
+        return self._xtrt
+    
+    @property
+    def xtrb (self) -> list:
+        return self._xtrb
+    
+
 
     #--------------------------------------------------------
 
@@ -196,6 +262,9 @@ class polar:
         Args:
             :polarPathFileName: the full path and filename of polarfile
         """
+
+        opPoints = []
+
         BeginOfDataSectionTag = "-------"
         airfoilNameTag = "Calculated polar for:"
         reTag = "Re ="
@@ -239,21 +308,59 @@ class polar:
                     for element in splittedLine:
                         if element != '':
                             dataPoints.append(element)
-                    self.alpha.append(float(dataPoints[0]))
-                    self.cl.append(float(dataPoints[1]))
-                    self.cd.append(float(dataPoints[2]))
-                    self.cdp.append(float(dataPoints[3]))
-                    self.cm.append(float(dataPoints[4]))
-                    self.xtrt.append(float(dataPoints[5]))
-                    self.xtrb.append(float(dataPoints[6]))
-                    if (self.cd [-1] != 0.0):
-                        self.clcd.append (self.cl [-1] / self.cd [-1])
-                    else:
-                        self.clcd = 0.0 
+                    op = OpPoint ()
+                    op.alpha = float(dataPoints[0])
+                    op.cl = float(dataPoints[1])
+                    op.cd = float(dataPoints[2])
+                    # cdp = float(dataPoints[3])
+                    op.cm = float(dataPoints[4])
+                    op.xtrt = float(dataPoints[5])
+                    op.xtrb = float(dataPoints[6])
 
+                    opPoints.append(op)
         fpolar.close()
 
+        # guarantee opPoints are sorted based on spec 
+        if opPoints[0].spec == 'alpha':
+            opPoints.sort (key= lambda op: op.alpha)
+        else: 
+            opPoints.sort (key= lambda op: op.cl)
 
+        self.set_opPoints (opPoints)
+
+
+
+class OpPoint:
+    """ 
+    A single (operating) point of a polar of an airfoil   
+
+    airfoil 
+        --> polarSet 
+            --> polar   (1..n) 
+                --> opPoint  (1..n) 
+    """
+    def __init__(self):
+        """
+        Main constructor for new opPoint 
+
+        Args:
+            :-
+        """
+        self.spec   = 'alpha'                   # self based on 'alpha' or 'cl'
+        self.valid  = True                      # has it converged during xfoil calculation
+        self.alpha  = None
+        self.cl     = None
+        self.cd     = None
+        self.cm     = None 
+        self.xtrt   = None                      # transition top side
+        self.xtrb   = None                      # transition bot side
+
+    @property
+    def glide (self): 
+        if self.cd and self.cl:                 # cd != 0.0  
+            return self.cl/self.cd  
+        else: 
+            return 0.0 
 
 
 # Main program for testing -----------------------------------
@@ -268,40 +375,16 @@ if __name__ == "__main__":
 
     # ---- Test -----
     # loadFromFile = False
-    # myAirfoil = Root_Example()
-    # print ("New airfoil created: ", myAirfoil)
-    # myAirfoil.load()
+    myAirfoil = Root_Example()
+    print ("Airfoil loaded: ", myAirfoil)
+    myAirfoil.saveAs (dir='test')
 
-    # myInterpol = Airfoil_Interpolated.fromAirfoil(myAirfoil)
-    # myInterpol.plot()
+    print ("Starting polar generation")
+    myPolarSet = PolarSet (myAirfoil)
+    myPolarSet.load_or_generatePolars ([200000, 300000, 400000, 600000])
 
-    # fig = plt.figure()
-    # plt.style.use('seaborn-v0_8-ticks')
-    # fig.set_figwidth (fig.get_figwidth()  * 2 )     # enlarge window because of 4 plots
-
-    # ax = fig.add_subplot(1, 1, 1)
-    # ax.axis('equal')
-    # ax.set_title (myAirfoil.name)
-    # ax.grid()
-
-
-    # gap = 0.04
-
-    # for gap in np.linspace (0.0, 0.08, 3):
-    #     for xBlend in np.linspace (0.1, 1, 4):
-    #         x, y = myAirfoil.with_TEGap (gap,xBlend)
-    #         ax.plot(x, y, '-', label="gap=%.2f xBlend=%.2f" % (gap, xBlend))
-
-    #     # myAirfoil.plot(x=x, y=y)
-    # ax.legend()
-    # plt.subplots_adjust(left=0.10, bottom=0.10, right=0.95, top=0.90, wspace=None, hspace=None)
-    # plt.show()    
-
-    # print ("Starting polar generation")
-    # myAirfoil.polarSet.load_or_generatePolars ([200000, 220000, 270000, 500000])
-
-    # print ("Generated or loaded polars: ", myAirfoil.polarSet.polars)
-    # myAirfoil.polarSet.plot()
+    print ("Generated or loaded polars: ", myPolarSet.polars)
+    myPolarSet.plot()
 
 
 
