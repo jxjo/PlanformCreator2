@@ -6,6 +6,7 @@
 
 """
 import os
+from pathlib import Path
 import numpy as np
 from math_util import * 
 from common_utils import * 
@@ -50,6 +51,8 @@ class Airfoil:
         self._nPanelsNew     = 200               # repanel: no of panels 
         self._le_bunch       = 0.84              # repanel: panel bunch at leading edge
         self._te_bunch       = 0.7   	         # repanel: panel bunch at trailing edge
+
+        self._polarSet       = None              # a polarSet which is set from outside 
 
 
         if (pathFileName is not None): 
@@ -137,6 +140,15 @@ class Airfoil:
         """
         self._name = newName
         self.set_isModified (True)
+
+    @property 
+    def polarSet (self):
+        """ returns a PolarSet """
+        return self._polarSet
+    def set_polarSet (self, aPolarSet): 
+        """ a polarSet must be set from outside - Airfoil doesn't know about this """
+        self._polarSet = aPolarSet
+
 
     @property
     def isEdited (self): return self._isModified
@@ -498,7 +510,10 @@ class Airfoil:
             if self.isStrakAirfoil:
                 destName = self.sourceName                     # strak: take the long name of the two airfoils
             else:
-                destName = self.name    
+                if self.fileName:
+                    destName = Path(self.fileName).stem        # cut '.dat'
+                else: 
+                    destName = self.name    
         destName = destName + teText   
 
         # create dir if not exist - build airfoil filename
