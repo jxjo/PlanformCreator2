@@ -659,7 +659,7 @@ class Switch_Widget(Base_Widget):
         if pady is None: pady = 0
         if columnspan is None: columnspan = 1
 
-        self.mainCTk = ctk.CTkSwitch(self.parent, text=self.label, onvalue=1, command=self.CTk_callback)
+        self.mainCTk = ctk.CTkSwitch(self.parent, text=self.label, width=self.width, onvalue=1, command=self.CTk_callback)
         self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky="w")
 
         self.set_CTkControl()
@@ -1001,7 +1001,7 @@ class Combo_Widget(Base_Widget):
 
         if (self.label):  label_ctk = ctk.CTkLabel (self.parent, text=self.label)
         else:             label_ctk = ctk.CTkFrame (self.parent, width=10, height=5, fg_color="transparent")     # dummy frame
-        label_ctk.grid (row=r, column=c, padx=(15, 15), pady=1, sticky='e')
+        label_ctk.grid (row=r, column=c, padx=padx, pady=1, sticky='e')
 
         self.mainCTk = ctk.CTkComboBox (self.parent, values= self.options, 
                                         width=self.width, height=self.height, 
