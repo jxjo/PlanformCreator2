@@ -341,7 +341,7 @@ class Base_Widget():
         """write the current value of the widget to object via setter path
         """
         if not self.obj and not self.parent: raise ValueError ("Object for setter path is missing")
-        if not self.setter: raise ValueError ("Getter path is missing")
+        if not self.setter: raise ValueError ("Setter path is missing for getter %s" %self.getter)
 
         myVal = self.val 
 

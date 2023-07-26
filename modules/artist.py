@@ -67,6 +67,7 @@ class Artist():
         self._norm = norm                   # plot in normed coordinates
         self._show = show                   # should self be plotted? 
         self.showMarker = showMarker
+        self._showLegend = True             # show legend of labels are available
         self._myPlots = []                  # plots (line artists) made up to now 
         self._dragManagers  = []            # DragManagers which are instanciated by self
         self._mouseActive  = False
@@ -115,7 +116,7 @@ class Artist():
         if (self._show != aBool):               # only when changed do something
             if not aBool:                       # was showed and switched off
                 self._deleteMyPlots()           # remove current plot elements
-                self._showLegend()
+                self._plotLegend()
                 self.ax.figure.canvas.draw_idle()
             self._show = aBool
             if aBool:
@@ -128,7 +129,7 @@ class Artist():
         if self.show:                           # view is switched on by user? 
             self._deleteMyPlots()               # remove current plot elements
             self._plot()                        # repaint everything 
-            self._showLegend()
+            self._plotLegend()
             if figureUpdate:                    
                 self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
@@ -165,6 +166,10 @@ class Artist():
     @property
     def curLineLabel (self): return self._curLineLabel
     """ Label of current line object"""
+
+    def set_showLegend (self, aBool: bool):
+        """ switch display of axes legend - no refresh will be done"""
+        self._showLegend = aBool
 
     # --------------  private -------------
 
@@ -206,17 +211,18 @@ class Artist():
 
         self._myPlots.append(art)
 
-    def _showLegend(self):
+    def _plotLegend(self):
         """ shows the legend """
 
-        # are there any lines with labels
-        h, l = self.ax.get_legend_handles_labels()
-        if h: 
-            leg = self.ax.legend(h, l, labelcolor=cl_labelGrid)
-        else: 
-            leg = self.ax.legend([], [])        # remove legend 
-        leg.set_zorder(2)
-        leg.get_frame().set_linewidth(0.0)
+        if self._showLegend:
+            # are there any lines with labels
+            h, l = self.ax.get_legend_handles_labels()
+            if h: 
+                leg = self.ax.legend(h, l, labelcolor=cl_labelGrid)
+            else: 
+                leg = self.ax.legend([], [])        # remove legend 
+            leg.set_zorder(2)
+            leg.get_frame().set_linewidth(0.0)
 
 
     def _makeObjectPickable (self, aObject): 
