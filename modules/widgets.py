@@ -292,8 +292,11 @@ class Base_Widget():
         if self.limGetter:
             self.limits     = self.get_value(self.limGetter, self.obj, self.parent)
         if self.getter:
+            oldVal = self.val 
             self.val        = self.get_value(self.getter, self.obj, self.parent)
-            self.set_CTkControl ()
+            if oldVal != self.val: 
+                print (" refresh !=  ", oldVal, self.val)
+                self.set_CTkControl ()
         if self.labGetter:
             self.label      = self.get_value (self.labGetter, self.obj, self.parent)  
             self.set_CTkControl_label ()                     
@@ -990,7 +993,7 @@ class Combo_Widget(Base_Widget):
         set -- access path setter when switched              :)
         spin -- Boolean if entry field should have a spinner       :)
     """
-    def __init__(self, *args, padx=None, pady=None, **kwargs):
+    def __init__(self, *args, padx=None, pady=None, lab_width=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         if padx is None: padx = (1,1)
@@ -999,9 +1002,15 @@ class Combo_Widget(Base_Widget):
         r = self.row
         c = self.column
 
-        if (self.label):  label_ctk = ctk.CTkLabel (self.parent, text=self.label)
-        else:             label_ctk = ctk.CTkFrame (self.parent, width=10, height=5, fg_color="transparent")     # dummy frame
-        label_ctk.grid (row=r, column=c, padx=padx, pady=1, sticky='e')
+        if (self.label):
+            if lab_width:   width = lab_width
+            else:           width= 95
+            label_ctk = ctk.CTkLabel (self.parent, width=width, text=self.label,
+                                      justify='left', anchor='w')
+        else:
+            label_ctk = ctk.CTkFrame (self.parent, width=10, height=5, fg_color="transparent")     # dummy frame
+
+        label_ctk.grid (row=r, column=c, padx=padx, pady=1, sticky='w')
 
         self.mainCTk = ctk.CTkComboBox (self.parent, values= self.options, 
                                         width=self.width, height=self.height, 

@@ -525,6 +525,9 @@ class Airfoil:
             newPathFileName = destName + '.dat'
 
         # write header and coordinates
+
+        if not self.isLoaded: self.load()
+        
         with open(newPathFileName, 'w+') as file:
             file.write("%s\n" % destName)
             for i in range (len(x)):

@@ -39,7 +39,8 @@ class Example_Airfoil (Airfoil):
         self._loadLines (file_lines)
 
         # class name to identify example airfoil from code  
-        self.pathFileName = self.__class__.__name__
+        if self.pathFileName is None: 
+            self.pathFileName = self.__class__.__name__
 
 
 class Root_Example (Example_Airfoil):

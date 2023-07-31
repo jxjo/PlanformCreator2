@@ -5,14 +5,13 @@
 
 The "Artists" to plot a wing object on a matplotlib axes
 
+
 """
 from common_utils import *
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-# import matplotlib.backends.backend_tkagg
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk 
-# import tkinter as tk
 
 from cycler import cycler  
 
@@ -24,7 +23,10 @@ cl_toolbar          = ('gray85', 'gray35')
 
 
 class Artist():
-    """Base class of all artists
+    """
+    The "Artist" to plot a wing object on a matplotlib axes
+
+        - these are not MatplotLib artists  - 
 
     Arguments:
         axes --     the plt axes to plot onto
@@ -51,6 +53,8 @@ class Artist():
     plt.rcParams.update({'axes.spines.top': True})   
     plt.rcParams.update({'axes.spines.right': True})   
     plt.rcParams.update({'lines.linewidth': 1.0})               # line width in points
+
+    plt.rcParams.update({'legend.fontsize': 'medium'})          # fontsiize of legend 
 
     plt.rcParams.update({'axes.grid': False})                   # display grid or not    
     plt.rcParams.update({'grid.linewidth': 0.8})                # in points         
@@ -299,6 +303,73 @@ class Artist():
 
 # ----------------------------------------------------------
 
+#    Helper functions 
+
+
+
+def autoscale_y(ax,margin=(0.1, 0.1)):
+    """
+    This function rescales the y-axis based on the data that is visible given the current xlim of the axis.
+    ax -- a matplotlib axes object
+    margin -- the fraction of the total height of the y-data to pad the upper and lower ylims
+    """
+
+    def get_bottom_top(line):
+        xd = line.get_xdata()
+        yd = line.get_ydata()
+        lo,hi = ax.get_xlim()
+        y_displayed = yd[((xd>lo) & (xd<hi))]
+        h = np.max(y_displayed) - np.min(y_displayed)
+        bot = np.min(y_displayed)-margin*h
+        top = np.max(y_displayed)+margin*h
+        return bot,top
+
+    lines = ax.get_lines()
+    bot,top = np.inf, -np.inf
+
+    for line in lines:
+        new_bot, new_top = get_bottom_top(line)
+        if new_bot < bot: bot = new_bot
+        if new_top > top: top = new_top
+
+    ax.set_ylim(bot,top)
+
+
+def autoscale_x(ax, margin=(0.1, 0.1)):
+    """
+    This function rescales the x-axis based on the data that is visible given the current ylim of the axis.
+    ax -- a matplotlib axes object
+    margin -- the fraction of the total height of the y-data to pad the upper and lower ylims"""
+
+    def get_left_right(line):
+        xd = line.get_xdata()
+        yd = line.get_ydata()
+        lo,hi = ax.get_ylim()
+        x_displayed = xd[((yd>lo) & (yd<hi))]
+        if len(x_displayed) > 1:                # a normal line 
+            h = np.max(x_displayed) - np.min(x_displayed)
+            left  = np.min(x_displayed) - margin[0]*h
+            right = np.max(x_displayed) + margin[1]*h
+        else:                                   # just a point 
+            left  = xd[0] - margin[0] * xd[0]
+            right = xd[0] + margin[1] * xd[0]
+        return left,right
+
+    lines = ax.get_lines()
+    left,right = np.inf, -np.inf
+
+    for line in lines:
+        new_left, new_right = get_left_right(line)
+        if new_left  < left:  left  = new_left
+        if new_right > right: right = new_right
+
+    ax.set_xlim(left,right)
+
+
+
+
+# ----------------------------------------------------------
+
 
 class Plot_Toolbar(NavigationToolbar2Tk):
     """Base class of all artists"""
@@ -352,25 +423,27 @@ class Plot_Toolbar(NavigationToolbar2Tk):
 
 class DragManager:
     """ 
-    The DragManager enables moving around an matplotlib artist on its axes.
+    The DragManager enables moving around matplotlib artist(s) on its axes.
     
     An artist is typically a Line2D object like a line or point
     """
 
-    def __init__(self, ax, animated_artist, bounds=None,
+    def __init__(self, ax, animated_artists, bounds=None,
                  dependant_artists = None, 
                  callback_draw_animated = None, 
+                 callback_shiftCtrlClick = None, 
                  callback_on_moved=None):
         """
         Create a DragManager for an artist 
 
         Parameters
         ----------
-        ax : Axes - matplotlib axes we are working on 
-        animated_artist : Artist - matplotlib artist like LIne2D
-        dependant_artists : Artists - optional other artists which are dependand on self moves
-        bounds : [(x1,x2),(y1,y2)] - bounds for movement of the artist
+        ax :                Axes - matplotlib axes we are working on 
+        animated_artist :   Artist - matplotlib artist like Line2D - either single or list
+        dependant_artists : Artists - optional other artists (lists) which are dependand on self moves
+        bounds :            [(x1,x2),(y1,y2)] - bounds for movement of the artist - either scalar or array
         callback_draw_animated : function - optional external method to draw the artist (and do other thinsg)
+        callback_shiftCtrlClick : function - call with coordinates during double click
         callback_on_moved : function - call with final coordinates after movement
              
         """
@@ -378,18 +451,25 @@ class DragManager:
         self.canvas = ax.figure.canvas
         self._callback_on_moved = callback_on_moved
         self._callback_draw_animated = callback_draw_animated
+        self._callback_shiftCtrlClick = callback_shiftCtrlClick
         self._dependant_artists = dependant_artists
 
         # bounds for movements
         if bounds: 
             self._bounds_x = bounds[0]
             self._bounds_y = bounds[1]
+            if isinstance (animated_artists, list):
+                if isinstance (self._bounds_x,tuple) or isinstance (self._bounds_y,tuple):
+                    raise ValueError ("Dragmanager: Bounds of artist must be list")
         else:
             self._bounds_x = None
             self._bounds_y = None
 
         self._bg = None
-        self._artist = animated_artist
+        if isinstance (animated_artists, list):         # could be list or single artist
+            self._artists = animated_artists
+        else:
+            self._artists = [animated_artists]          #
         self._press_xy = None
 
         # Connect to all the events we need.
@@ -398,14 +478,17 @@ class DragManager:
         self.cidrelease = self.canvas.mpl_connect('button_release_event', self.on_release)
         self.cidmotion  = self.canvas.mpl_connect('motion_notify_event', self.on_motion)
 
-    def _draw_animated(self, duringMove=False):
-        """Draw all of the animated artists."""
+    def _draw_animated(self, duringMove=False, iArtist=0):
+        """Draw a single of the animated artists."""
  
         # use user calback if provided 
         if self._callback_draw_animated: 
-            self._callback_draw_animated(duringMove=duringMove)
+            if len(self._artists) > 1: 
+                self._callback_draw_animated(duringMove=duringMove, iArtist= iArtist)
+            else:                               # compatibility mode with single artist
+                self._callback_draw_animated(duringMove=duringMove)
         else: 
-            self.ax.draw_artist (self._artist)
+            self.ax.draw_artist (self._artists[iArtist])
         # print('Artist: ', self._artist, '  draw animated: ', self._artist.get_animated())
 
 
@@ -414,32 +497,62 @@ class DragManager:
         if event is not None:
             if event.canvas != self.canvas: raise RuntimeError
 
-        self._draw_animated()
+        for iArt, art in enumerate(self._artists):
+            self._draw_animated(iArtist=iArt)
         # print ("on draw ", self._artist )
 
 
     def on_press(self, event):
         """Check whether mouse is over us; if so, store some data."""
-        if event.inaxes != self.ax:
-            return
-        contains, attrd = self._artist.contains(event)
-        if not contains:
-            return
 
-        # the only way to get a background image just without self.artistis to set self invisible
+        if event.inaxes != self.ax: return
+
+        # is one of my artists hit? 
+        myArtistHit = False
+        iArt = None
+        for iArt, myArtist in enumerate (self._artists): 
+            contains, attrd = myArtist.contains(event)
+            if contains: 
+                myArtistHit = True
+                break
+
+        if not myArtistHit: iArt = None 
+
+        # dbouble click not on an artist ? Extra handling 
+        if event.key =='control' or event.key =='shift':
+            if self._callback_shiftCtrlClick:
+                self._callback_shiftCtrlClick(iArtist=iArt, event=event )
+                return 
+
+        if not myArtistHit: return
+
+        # now handle drag with mouse 
+
+        # the only way to get a background image just without my artists is to set them invisible
         #  - watch if there could be many dragManager  -
-        self._artist.set_visible (False)
+        myArtist.set_visible (False)
         if self._dependant_artists:
-            for a in self._dependant_artists: a.set_visible (False)
+            for a in self._dependant_artists: 
+                if isinstance (a, list): 
+                    a[iArt].set_visible (False)
+                else: 
+                    a.set_visible (False)
         self.canvas.draw()
 
         self._bg = self.canvas.copy_from_bbox(self.ax.bbox)
-        self._press_xy = self._artist.get_xydata()[0], (event.xdata, event.ydata)
+
+        # store all relevant data - index of artist, old position, new mouse poisition
+        self._press_xy = iArt, myArtist.get_xydata()[0], (event.xdata, event.ydata)
 
         # after copy show them again 
-        self._artist.set_visible (True)
+        myArtist.set_visible (True)
         if self._dependant_artists:
-            for a in self._dependant_artists: a.set_visible (True)
+            for a in self._dependant_artists: 
+                if isinstance (a, list): 
+                    a[iArt].set_visible (True)
+                else: 
+                    a.set_visible (True)
+
         self.canvas.draw()
 
 
@@ -447,24 +560,38 @@ class DragManager:
         """Move the artits if the mouse is draged over us."""
         if self._press_xy is None or event.inaxes != self.ax:
             return
-        (x0, y0), (xpress, ypress) = self._press_xy
+        " retrieve data from initial mouse down"
+        iArt, (x0, y0), (xpress, ypress) = self._press_xy
+
         dx = event.xdata - xpress
         dy = event.ydata - ypress
         newx = x0 + dx
         newy = y0 + dy
         if self._bounds_x: 
-            newx = max (newx, self._bounds_x[0])
-            newx = min (newx, self._bounds_x[1])
+            if isinstance (self._bounds_x[iArt], tuple):
+                bounds_min = self._bounds_x [iArt][0]
+                bounds_max = self._bounds_x [iArt][1]
+            else: 
+                bounds_min = self._bounds_x [0]
+                bounds_max = self._bounds_x [1]
+            newx = max (newx, bounds_min)
+            newx = min (newx, bounds_max)
         if self._bounds_y: 
-            newy = max (newy, self._bounds_y[0])
-            newy = min (newy, self._bounds_y[1])
+            if isinstance (self._bounds_y[iArt], tuple):
+                bounds_min = self._bounds_y [iArt][0]
+                bounds_max = self._bounds_y [iArt][1]
+            else: 
+                bounds_min = self._bounds_y [0]
+                bounds_max = self._bounds_y [1]
+            newy = max (newy, bounds_min)
+            newy = min (newy, bounds_max)
         # print(f'x0={x0}, xpress={xpress}, event.xdata={event.xdata}, '
         #       f'dx={dx}, x0+dx={x0+dx}')
-        self._artist.set_xdata([newx])
-        self._artist.set_ydata([newy])
+        self._artists[iArt].set_xdata([newx])
+        self._artists[iArt].set_ydata([newy])
 
         self.canvas.restore_region(self._bg)
-        self._draw_animated (duringMove=True)
+        self._draw_animated (duringMove=True, iArtist=iArt)
         self.canvas.blit(self.ax.bbox)
         self.canvas.flush_events()
 
@@ -476,13 +603,11 @@ class DragManager:
         # does the released button belong to self? 
         if self._press_xy: 
             self._press_xy = None
-            # self._draw_animated (duringMove=False)          # update e.g. linestyle
             self.canvas.draw()
 
-            # self._artist.set_animated(False)
             self._bg = None 
 
-            # callback with coordinates when move is finished
+            # callback when move is finished
             if not self._callback_on_moved is None:
                 self._callback_on_moved() 
 
@@ -500,10 +625,10 @@ class DragManager:
 
 #     # Test DraggableArtist 
 #     #     
-#     def on1_finished (coord): 
-#         print("Finished ", coord)
+#     def on1_finished (): 
+#         print("Finished ")
 
-#     def draw_animated():
+#     def draw_animated(duringMove=False):
 #         ax.draw_artist (markerArtist)
 #         x2,y2 = markerArtist.get_xydata()[0]
 #         x = [0,x2]
@@ -512,13 +637,17 @@ class DragManager:
 #         lineArtist.set_ydata(y)
 #         ax.draw_artist (lineArtist)
 
-#     def draw_animated2():
-#         ax.draw_artist (markerArtist2)
+#     def draw_animated2(duringMove=False, iArtist=None):
+
+#         if iArtist:
+#             ax.draw_artist (markerArtists[iArtist])
+#             print ("Artist: ", iArtist)
+#         # ax.draw_artist (markerArtist2)
 
 #     fig, ax = plt.subplots()
 
-#     ax.set_xlim((0, 6))
-#     ax.set_ylim((0, 6))
+#     # ax.set_xlim((0, 6))
+#     # ax.set_ylim((0, 6))
 
 
 #     (markerArtist,) =  ax.plot ([2], [2], marker='o', color="red", markersize=8, animated=True) 
@@ -528,9 +657,14 @@ class DragManager:
 #                        callback_draw_animated = draw_animated,
 #                        callback_on_moved=on1_finished)
 
-#     (markerArtist2,) =  ax.plot ([3], [3], marker='o', color="red", markersize=8, animated=True) 
+#     # test array of artists 
 
-#     dr2 = DragManager(ax, markerArtist2, bounds=[(2,5.5),(1,4)], 
+#     markerArtists = []
+#     for i in range (5):
+#         (art,) =  ax.plot ([i], [8-i], marker='o', color="blue", markersize=6, animated=True) 
+#         markerArtists.append(art)
+
+#     dr2 = DragManager(ax, markerArtists, bounds=None, 
 #                        callback_draw_animated = draw_animated2,
 #                        callback_on_moved=on1_finished)
 
