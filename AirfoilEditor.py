@@ -872,7 +872,10 @@ class Edit_File_Menu(Edit_Abstract):
     
     def curAirfoilFileName (self): 
 
-        return os.path.basename(self.myApp.curAirfoilFile)  
+        if self.myApp.curAirfoilFile is None: 
+            return ''
+        else: 
+            return os.path.basename(self.myApp.curAirfoilFile)  
 
     def set_curAirfoilFileName (self, newFileName): 
         
@@ -1709,7 +1712,8 @@ class AirfoilEditor ():
         self.curAirfoilFile = None
 
         if not airfoilFile:                            # show a demo airfoil 
-            self.airfoilFiles.append ("Root_Example")
+            airfoilFile = "Root_Example"
+            self.airfoilFiles.append (airfoilFile)
         else: 
             if os.path.isfile (airfoilFile):
                 self.airfoilFiles= self._getAirfoilFiles_sameDir (airfoilFile)
