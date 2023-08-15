@@ -35,7 +35,10 @@ class Airfoil:
         """
 
         self.pathFileName = None
-        self.workingDir   = workingDir if workingDir is not None else ''
+        if workingDir is not None:
+            self.workingDir = os.path.normpath (workingDir)
+        else: 
+            self.workingDir   = ''
         self._name        = name if name is not None else ''
         self.sourceName   = None                 # long name out of the two blended airfoils (TSrakAirfoil)
 
@@ -49,19 +52,22 @@ class Airfoil:
         self._spline         = None              # 2D spline object 
 
         self._nPanelsNew     = 200               # repanel: no of panels 
-        self._le_bunch       = 0.84              # repanel: panel bunch at leading edge
+        self._le_bunch       = 0.86              # repanel: panel bunch at leading edge
         self._te_bunch       = 0.7   	         # repanel: panel bunch at trailing edge
 
-        self._polarSet       = None              # a polarSet which is set from outside 
+        self._polarSets      = None              # polarSets which are defined from outside 
+
+        self._propertyDict   = {}                # multi purpose extra properties for an AIirfoil
 
 
         if (pathFileName is not None): 
+            pathFileName = os.path.normpath(pathFileName)       # make all slashes to double back
             if os.path.isabs (pathFileName):
                 checkPath = pathFileName
             else:
                 checkPath = os.path.join (self.workingDir, pathFileName)
             if not os.path.isfile(checkPath):
-                ErrorMsg ("Airfoil file \'%s\' does not exist. Couldn\'t create Airfoil" % checkPath)
+                ErrorMsg ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
                 self._name = "-- ? --"
             else:
                 self.pathFileName = pathFileName
@@ -141,19 +147,22 @@ class Airfoil:
         self._name = newName
         self.set_isModified (True)
 
-    @property 
-    def polarSet (self):
-        """ returns a PolarSet """
-        return self._polarSet
-    def set_polarSet (self, aPolarSet): 
-        """ a polarSet must be set from outside - Airfoil doesn't know about this """
-        self._polarSet = aPolarSet
+    def polarSets (self, onlyActive=True):
+        """ returns  PolarSets of self - onlyActive polarset are default"""
+        if onlyActive:
+            return  [p for p in self._polarSets if p.active]  
+        else: 
+            return self._polarSets
+
+    def set_polarSets (self, polarSets): 
+        """ polarSets must be set from outside - Airfoil doesn't know about this """
+        self._polarSets = polarSets
 
 
     @property
     def isEdited (self): return self._isModified
-    """ True if airfoil is being edited, modifiied, ..."""
-        # cuurently equals to isModified ...
+    """ True if airfoil is being edited, modified, ..."""
+        # currently equals to isModified ...
     def set_isEdited (self, aBool): 
         self.set_isModified (aBool) 
 
@@ -186,9 +195,9 @@ class Airfoil:
         return True
     
     @property
-    def isNormalized_HighPrec (self):
+    def isNormalized_highPrec (self):
         """ is LE at 0,0 and TE at 1,.. and also LE of spline at 0,0 ?"""
-        return self.spline.isNormalized
+        return self.isNormalized and self.spline.isNormalized_highPrec
 
 
     @property
@@ -389,6 +398,16 @@ class Airfoil:
         self._te_bunch = newVal
         self.repanel()
 
+
+    #-----------------------------------------------------------
+
+    def set_property (self, key, value):
+        """ set an arbritary property to this airfoil - hold in a dict """
+        self._propertyDict[key] = value  
+
+    def get_property (self, key):
+        """ returns the extra property to this airfoil - hold in a dict """
+        return self._propertyDict.get(key)   
 
     #-----------------------------------------------------------
 
@@ -599,13 +618,20 @@ class Airfoil:
         """
         Shift, rotate, scale airfoil so LE is at 0,0 and TE is symmetric at 1,y
         If 'highPrec' is set, the leading edge of the spline will also be at 0,0.
+
+        Returns: 
+            hasbeen_normalized:   True/False if normalizaing was done
         """
 
         # when high precision, normalizing will be done with the spline 
         if highPrec: 
+            self.spline.set_le_highPrecision(True)              # is LE of spline at 0,0 
             self.spline._normalize () 
-            self.set_xy(self.spline.x, self.spline.y)
-            return
+            if self.spline.hasBeen_normalized:
+                self.set_xy(self.spline.x, self.spline.y)
+                return True
+            else:
+                return False
 
         # Translate so that the leading edge is at 0,0 
         xLe, yLe = self.le
@@ -643,7 +669,7 @@ class Airfoil:
         yn[-1]  = round(yn[-1],10)
 
         self.set_xy (xn, yn)
-
+        return True 
 
 
     def do_strak (self, airfoil1 : 'Airfoil', airfoil2 : 'Airfoil', blendBy):

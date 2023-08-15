@@ -8,6 +8,9 @@ Common Utility functions for convinience
 from termcolor import colored
 from colorama import just_fix_windows_console
 import os
+from pathlib import Path
+import json
+
 
 
 #------------------------------------------------------------------------------
@@ -28,10 +31,10 @@ def my_print(message):
        print(message)
 
 def InfoMsg(message):
-    my_print(colored('Info: ' + message, 'white', attrs=["dark"]))
+    my_print(colored(' - ' + message, 'white', attrs=["dark"]))
 
 def ErrorMsg(message):
-    my_print(colored('\nError: ', 'red') + message)
+    my_print(colored('Error: ', 'red') + message)
 
 def WarningMsg(message):
     my_print(colored('Warning: ', 'yellow') + message)
@@ -113,24 +116,152 @@ def toDict(dict, key, value):
             value = round (value,6)
         dict [key] = value
 
-
         
 #------------------------------------------------------------------------------
-# Fiel, Path handling 
+# Settings and Paramter file 
+#------------------------------------------------------------------------------
+
+class Parameters ():
+    """ Handles a parameter file with a json structure representing a dictionary of paramteres""" 
+
+    def __init__ (self, paramFilePath):
+
+        self._paramFilePath = paramFilePath
+
+    def get_dataDict (self, msg=True):
+        """
+        returns the complete dataDict of self
+        """
+        dataDict = None
+        if self._paramFilePath:
+            try:
+                paramFile = open(self._paramFilePath)
+                try:
+                    dataDict = json.load(paramFile)
+                    paramFile.close()
+                except ValueError as e:
+                    ErrorMsg("Invalid json expression '%s' in parameter file '%s'" % (e, self._paramFilePath))
+                    paramFile.close()
+                    dataDict = None
+            except:
+                if msg: 
+                    NoteMsg ("Paramter file %s not found" % self._paramFilePath)
+        return dataDict
+
+
+    def write_dataDict (self, aDict, dataName='Parameters'):
+        """ writes data dict to file
+        
+        :Returns: 
+            True : if succeded, False if failed"""
+
+        try:
+            paramFile = open(self._paramFilePath, 'w')
+        except:
+            ErrorMsg("Failed to open file %s" % self._paramFilePath)
+            return False
+
+        # save parameter dictionary to .json-file
+        try:
+            json.dump(aDict, paramFile, indent=2, separators=(',', ':'))
+            paramFile.close()
+            InfoMsg ("%s saved to '%s'" % (dataName, self._paramFilePath))
+            return True
+
+        except ValueError as e:
+            ErrorMsg("Invalid json expression '%s'. Failed to save data to %s'" % (e, self._paramFilePath))
+            paramFile.close()
+            return False
+
+
+class Settings (Parameters):
+    """ Handles a named setting file with a json structure representing a dictionary of paramteres""" 
+
+    def __init__ (self, appName='', nameExtension='', fileExtension= '.json', msg=False):
+        """ 
+        Setting object to handle i/o of settings parameters <appName + nameExtension>.json
+
+        Args:
+            :appName: the name of parent app self belongs to  \n
+            :nameExtension: ... will be appended to appName - default '_settings'       \n
+            :msg: True -an info message will be printed        \n
+        """
+
+
+        if nameExtension:
+            paramFilePath = appName + nameExtension + fileExtension
+        else:
+            paramFilePath = appName + '_settings' + fileExtension
+
+        if msg: 
+            InfoMsg ("Reading settings from '%s'" % paramFilePath)
+
+        super().__init__(paramFilePath)
+
+
+    @property
+    def filePath (self): return self._paramFilePath
+
+    def get(self, key, default='no default', msg=False):
+        """
+        returns the value of 'key' from settings
+
+        Args:
+            :key: the key to look for       \n
+            :default: the value if key is missing
+            :msg: if True a log message will be printed when a value is missing 
+        """
+        dataDict = self.get_dataDict (msg=False)
+        return fromDict(dataDict, key, default=default, msg=msg)
+
+    def set(self, key, value):
+        """
+        sets 'key' with 'value' into settings
+
+        Args:
+            :key: the key to look for       \n
+            :default: the value if key is missing
+            :msg: if True a log message will be printed when a value is missing 
+        """
+        dataDict = self.get_dataDict ()
+        if dataDict is None: dataDict = {}              # init new dataDict 
+
+        toDict(dataDict, key, value)
+        self.write_dataDict (dataDict, dataName='Settings')
+
+
+
+#------------------------------------------------------------------------------
+# File, Path handling 
 #------------------------------------------------------------------------------
 
 class PathHandler(): 
     """ handles relative Path of actual files to a workingDir """
 
     def __init__ (self, workingDir=None, onFile=None): 
-
+        """  Pathhandler for working directory either from 'workinfDir' directly or based 'onFile' """
         self._workingDir = None
 
         if workingDir is not None: 
            self.workingDir = workingDir 
         elif onFile is not None:
            self.set_workingDirFromFile (onFile)
-           
+
+    @classmethod
+    def relPath(cls, pathFilename, start = None):
+        """Return a relative version of a path - like os.path.relpath - but checks for same drive
+
+        Args:
+            :start: start dir - default: cwd (current working Dir)
+        """
+        if start is None: start = os.getcwd()
+
+        if Path(pathFilename).anchor == Path(start).anchor: 
+            relPath = os.path.relpath(pathFilename, start = start)
+        else: 
+            relPath = pathFilename
+        return relPath  
+
 
     @property 
     def workingDir (self):
@@ -144,7 +275,8 @@ class PathHandler():
         elif not newDir: 
             self._workingDir = os.getcwd ()      # if no directory set, take current working Dir 
         elif not os.path.isdir(newDir): 
-            raise ValueError (self.__name__+ ": '%s' is not a directory" % newDir)
+            os.makedirs(newDir)  
+            self._workingDir = os.path.normpath(newDir)    
         else: 
             self._workingDir = os.path.normpath(newDir) 
 
@@ -153,12 +285,11 @@ class PathHandler():
         if aFilePath is None: 
             self.workingDir = None
         elif not aFilePath: 
-            self._workingDir = os.getcwd ()      # if no directory set, take current working Dir 
+            self.workingDir = os.getcwd ()      # if no directory set, take current working Dir 
         else: 
-            if not os.path.isfile(aFilePath): 
-                raise ValueError (self.__class__.__name__+ ": '%s' is not a file" % aFilePath)
-            else: 
-                self.workingDir = os.path.dirname(aFilePath) 
+            self.workingDir = os.path.dirname(aFilePath) 
+            if not os.path.isdir(self.workingDir):
+                os.makedirs(self.workingDir)
 
     def relFilePath (self, aFilePath):
         """ returns the relative path of aFilePath to the workingDir of self"""

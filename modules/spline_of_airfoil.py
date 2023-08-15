@@ -35,6 +35,7 @@ class SplineOfAirfoil:
         self._spline : Spline2D          = None   # 2 D cubic spline representation of self
         self._uLe = None                          # leading edge  - u value 
         self._le_highPrecision           = False  # will evaluate LE based on spline and normalize
+        self._hasBeen_normalized         = False  # .... was self "highprecision" normalized
 
         self._curvature   = None                  # curvature along u  
 
@@ -68,11 +69,13 @@ class SplineOfAirfoil:
         xle, yle = self.le
         if xle != 0.0 or yle != 0.0: return False
 
-        # LE of spline close enough to 0,0? 
-        if self.le_highPrecision:
-            return self.isLe_closeTo_leSpline
-        else: 
-            return True
+        return True
+
+
+    @property
+    def isNormalized_highPrec (self):
+        """ is LE at 0,0 and TE at 1,.. and also LE of spline at 0,0 ?"""
+        return self.isNormalized and self.isLe_closeTo_leSpline
 
 
     @property
@@ -106,7 +109,7 @@ class SplineOfAirfoil:
     @property
     def isLe_closeTo_leSpline (self): 
         """ true if LE of x,y cordinates nearly equal to the real (splined) leading edge.
-            If not the airfoil should be repaneld...! """
+            If not the airfoil should be repaneled...! """
 
         xle, yle   = self.le
         xleS, yleS = self.leSpline 
@@ -114,6 +117,11 @@ class SplineOfAirfoil:
             return False
         else: 
             return True
+        
+    @property
+    def hasBeen_normalized (self):
+        """ the airfoil was been (high precision normalized)"""
+        return self._hasBeen_normalized
 
     @property
     def camber (self) -> 'SideOfAirfoil': 
@@ -182,7 +190,7 @@ class SplineOfAirfoil:
     def curvature (self): 
         " return the curvature at knots 0..npoints"
         if self._curvature is None: 
-            self._curvature = self.curvatureFn (self.spline.u) 
+            self._curvature = self.spline.curvature (self.spline.u)  
         return self._curvature 
 
     @property
@@ -242,7 +250,7 @@ class SplineOfAirfoil:
     def _normalize (self):
         """Shift, rotate, scale airfoil so LE is at 0,0 and TE is symmetric at 1,y"""
 
-        if self.isNormalized: return 
+        if self.isNormalized_highPrec: return 
 
         # first do repanel airfoil if LE of coordinates and LE of spline differ too much 
 
@@ -254,7 +262,6 @@ class SplineOfAirfoil:
                 if not self.isLe_closeTo_leSpline:
                     print ("LE after 2nd repan: ", self.le, self.leSpline, self.isLe_closeTo_leSpline, self.uLe)
                     raise ValueError ("Leading edge couldn't be iterated") 
-
         # Translate so that the leading edge is at 0,0 
         xLe, yLe = self.le
         xn = self._x - xLe
@@ -294,20 +301,7 @@ class SplineOfAirfoil:
         self._x = xn
         self._y = yn
         self._reset()
-
-
-    def curvatureFn (self,u): 
-        " return the curvature at u"
-
-        dx, dy   = self.spline.eval (u, der=1)
-        ddx, ddy = self.spline.eval (u, der=2)
-
-        deriv2 = dx * ddy - dy * ddx
-        # get curvature from derivative 2
-        n = dx**2 + dy**2
-        curv = deriv2 / n**(3./2.)
-
-        return curv 
+        self._hasBeen_normalized = True
 
 
     def deriv1Fn (self,u): 
@@ -401,7 +395,7 @@ class SplineOfAirfoil:
         y_oppo : np array - y_values on the opposite side in the same order as side
         """
 
-        if not self.isNormalized and self.le_highPrecision:
+        if not self.isNormalized_highPrec:
             self._normalize()
 
         iLe = np.argmin (self._x)

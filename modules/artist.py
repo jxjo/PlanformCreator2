@@ -54,7 +54,7 @@ class Artist():
     plt.rcParams.update({'axes.spines.right': True})   
     plt.rcParams.update({'lines.linewidth': 1.0})               # line width in points
 
-    plt.rcParams.update({'legend.fontsize': 'medium'})          # fontsiize of legend 
+    plt.rcParams.update({'legend.fontsize': 'small'})          # fontsiize of legend 
 
     plt.rcParams.update({'axes.grid': False})                   # display grid or not    
     plt.rcParams.update({'grid.linewidth': 0.8})                # in points         
@@ -350,9 +350,12 @@ def autoscale_x(ax, margin=(0.1, 0.1)):
             h = np.max(x_displayed) - np.min(x_displayed)
             left  = np.min(x_displayed) - margin[0]*h
             right = np.max(x_displayed) + margin[1]*h
-        else:                                   # just a point 
+        elif len(x_displayed) == 1:              # just a point 
             left  = xd[0] - margin[0] * xd[0]
             right = xd[0] + margin[1] * xd[0]
+        else:                                   # empty plot 
+            left  = float('inf')
+            right = float('-inf')
         return left,right
 
     lines = ax.get_lines()
@@ -478,18 +481,27 @@ class DragManager:
         self.cidrelease = self.canvas.mpl_connect('button_release_event', self.on_release)
         self.cidmotion  = self.canvas.mpl_connect('motion_notify_event', self.on_motion)
 
-    def _draw_animated(self, duringMove=False, iArtist=0):
-        """Draw a single of the animated artists."""
+    def _draw_animated(self, duringMove=False, iArtMoved=None):
+        """Draw the animated artists."""
  
-        # use user calback if provided 
-        if self._callback_draw_animated: 
-            if len(self._artists) > 1: 
-                self._callback_draw_animated(duringMove=duringMove, iArtist= iArtist)
-            else:                               # compatibility mode with single artist
-                self._callback_draw_animated(duringMove=duringMove)
-        else: 
-            self.ax.draw_artist (self._artists[iArtist])
-        # print('Artist: ', self._artist, '  draw animated: ', self._artist.get_animated())
+        for iArt, art in enumerate(self._artists):
+
+            """ only the moved artist will be 'duringMove' for drawing"""
+            if duringMove and (iArt == iArtMoved):
+                duringMoveiArt = True
+            else:
+                duringMoveiArt = False
+
+            # use user calback if provided 
+            if self._callback_draw_animated: 
+                if len(self._artists) > 1: 
+                    self._callback_draw_animated(duringMove=duringMoveiArt, iArtist= iArt)
+                else:                               # compatibility mode with single artist
+                    self._callback_draw_animated(duringMove=duringMove)
+            else: 
+                self.ax.draw_artist (self._artists[iArt])
+
+        # print('Artist: ', self._artists[iArtist], '  during: ', duringMove)
 
 
     def on_draw(self, event):
@@ -497,9 +509,13 @@ class DragManager:
         if event is not None:
             if event.canvas != self.canvas: raise RuntimeError
 
-        for iArt, art in enumerate(self._artists):
-            self._draw_animated(iArtist=iArt)
-        # print ("on draw ", self._artist )
+        # save background without my artists
+        self._bg = self.canvas.copy_from_bbox(self.ax.bbox)
+
+        # initial draw 
+        self._draw_animated()
+
+        self.canvas.blit(self.ax.bbox)
 
 
     def on_press(self, event):
@@ -526,34 +542,8 @@ class DragManager:
 
         if not myArtistHit: return
 
-        # now handle drag with mouse 
-
-        # the only way to get a background image just without my artists is to set them invisible
-        #  - watch if there could be many dragManager  -
-        myArtist.set_visible (False)
-        if self._dependant_artists:
-            for a in self._dependant_artists: 
-                if isinstance (a, list): 
-                    a[iArt].set_visible (False)
-                else: 
-                    a.set_visible (False)
-        self.canvas.draw()
-
-        self._bg = self.canvas.copy_from_bbox(self.ax.bbox)
-
         # store all relevant data - index of artist, old position, new mouse poisition
         self._press_xy = iArt, myArtist.get_xydata()[0], (event.xdata, event.ydata)
-
-        # after copy show them again 
-        myArtist.set_visible (True)
-        if self._dependant_artists:
-            for a in self._dependant_artists: 
-                if isinstance (a, list): 
-                    a[iArt].set_visible (True)
-                else: 
-                    a.set_visible (True)
-
-        self.canvas.draw()
 
 
     def on_motion(self, event):
@@ -591,7 +581,10 @@ class DragManager:
         self._artists[iArt].set_ydata([newy])
 
         self.canvas.restore_region(self._bg)
-        self._draw_animated (duringMove=True, iArtist=iArt)
+
+        """ draw my artists during move - only the moved artist will be 'duringMove'"""
+        self._draw_animated(duringMove = True, iArtMoved=iArt)
+
         self.canvas.blit(self.ax.bbox)
         self.canvas.flush_events()
 
@@ -603,13 +596,21 @@ class DragManager:
         # does the released button belong to self? 
         if self._press_xy: 
             self._press_xy = None
-            self.canvas.draw()
 
-            self._bg = None 
-
-            # callback when move is finished
+            # callback when move is finished - before redraw - parent could change points
             if not self._callback_on_moved is None:
                 self._callback_on_moved() 
+
+            # self.canvas.draw()
+
+            self.canvas.restore_region(self._bg)
+
+            # draw my artists after movement in their 'static style' 
+            self._draw_animated()
+
+            self.canvas.blit(self.ax.bbox)
+            # self._bg = None 
+
 
     def disconnect(self):
         """Disconnect all callbacks."""

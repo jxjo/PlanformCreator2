@@ -247,7 +247,7 @@ class FLAECHE (FLZ_Element):
         self._write (aStream, "BEZEICHNUNG=%s"      % self.wing.name)
         self._write (aStream, "PROFILTIEFE=%.5f"    % (self.wing.rootchord/1000))
         self._write (aStream, "BEZUGSPUNKT_PROFILTIEFE=%.5f"    % (0.0))
-        self._write (aStream, "ANZAHL_PANELS_X=%d"  % self.paneledPlanform.x_panels)
+        self._write (aStream, "ANZAHL PANELS X=%d"  % self.paneledPlanform.x_panels)
         self._write (aStream, "VERTEILUNG=%s"       % distrib)
         self._write (aStream, "ANZAHL PANELS VOLUMENDARSTELLUNG=%s" % 30)
         self._write (aStream, "MASSE=%.5f"          % mass)
@@ -308,6 +308,10 @@ class SEGMENT (FLZ_Element):
         refChord = 0.0 
         twist = 0.0 
         dihedral = 0.0
+
+        # todo 
+        # do not write a segment with a chord length < 20 mm
+        if chord < 20.0 / 1000: return 
 
         le_left,_  = self.wing.planform._planform_function (self.leftSection.yPos)  
         le_right,_ = self.wing.planform._planform_function (self.rightSection.yPos) 

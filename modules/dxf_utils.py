@@ -252,7 +252,7 @@ def split_contour(contour):
     for idx in range(1, num):
         x, y = contour[idx]
         # determine idx of max x value
-        if (x > max_x):
+        if (x >= max_x):
             # if we have not reached maximum, append to LE
             max_x = x
             maxIdx = idx
@@ -508,7 +508,11 @@ def import_fromDXF(FileName):
     lines = __convert_toPlanform(sdoc.modelspace())
 
     # Extract leading- and trailing edge, hinge line - uff!
-    LE_norm, TE_norm, HL_norm, hingelineAngle = __create_planformShape(lines)
+    result = __create_planformShape(lines)
+    if not result is None: 
+        LE_norm, TE_norm, HL_norm, hingelineAngle = (result)
+        return LE_norm, TE_norm, HL_norm, hingelineAngle
+    else: 
+        return None, None, None, None
     
-    return LE_norm, TE_norm, HL_norm, hingelineAngle
 

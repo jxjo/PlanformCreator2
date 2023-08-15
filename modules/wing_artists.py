@@ -699,7 +699,15 @@ class RefPlanform_Artist (Planform_Artist):
 class RefPlanform_DXF_Artist (Planform_Artist):
     """Plot the outline of the dxf reference planform 
     """
-    color = cl_dxf  
+
+    def __init__ (self, axes, modelFn, showDetail=False, **kwargs):
+        super().__init__ (axes, modelFn, **kwargs)
+
+        self._showDetail = showDetail               # show TE, LE, hinge seperate 
+
+        if showDetail: 
+            self._set_colorcycle (8)         
+
     @property
     def refPlanform_DXF (self) -> Planform_DXF :
         if self._planform is None:
@@ -707,28 +715,51 @@ class RefPlanform_DXF_Artist (Planform_Artist):
         else:
             return self._planform
 
+    def _nextColor(self):
+        # overloaded to switch between 'details' and dxf in sinle color  
+
+        if self._showDetail: 
+            return super()._nextColor()
+        else: 
+            return cl_dxf
+              
+
     def _plot(self):
 
         # is there a DXF planform? 
         if (self.refPlanform_DXF): 
             y, leadingEdge, trailingEdge = self.refPlanform_DXF.lines ()
             if y != []: 
-                p = self.ax.plot(y, leadingEdge,  label=self.refPlanform_DXF.dxf_filename(), color=self.color)
-                self._add (p)              # remind plot to delete 
-                p = self.ax.plot(y, trailingEdge, color=self.color)
-                self._add (p)              # remind plot to delete 
+
+                # leading edge 
+                color = self._nextColor()
+                if self._showDetail:    label='Leading edge'
+                else:                   label= self.refPlanform_DXF.dxf_filename() 
+                p = self.ax.plot(y, leadingEdge, label=label, color=color)
+                self._add (p)  
+                            
+                # trailing edge 
+                color = self._nextColor()
+                if self._showDetail:    label='Trailing edge'
+                else:                   label= ''
+                p = self.ax.plot(y, trailingEdge, label=label,color=color)
+                self._add (p)              
 
                 # rootline 
                 yr = [y[0],y[0]]
                 xr = [leadingEdge[0],trailingEdge[0]]
-                p = self.ax.plot(yr, xr, color=self.color)
-                self._add (p)              # remind plot to delete 
+                color = self._nextColor()
+                if self._showDetail:    label='Root'
+                p = self.ax.plot(yr, xr,label=label, color=color)
+                self._add (p)              
 
                 # hinge line? 
                 yh, xh = self.refPlanform_DXF.hingeLine_dxf()
+                if self._showDetail:    label='Hinge line'
                 if yh != []:
-                    p = self.ax.plot(yh, xh, color=self.color)
-                    self._add (p)              # remind plot to delete 
+                    color = self._nextColor()
+                    p = self.ax.plot(yh, xh,  label=label, color=color)
+                    self._add (p)              
 
 
 class PaneledPlanform_Artist (Planform_Artist):
@@ -844,12 +875,15 @@ class Chord_Artist (Artist):
         return self.model.planform
     
     def chord_line (self):
-        return self.model.planform.norm_chord_line ()  
+        return self.planform.norm_chord_line ()  
 
     def label (self):
         return 'Normalized chord distribution'
 
     def _plot (self): 
+
+
+        if not self.planform.isValid: return                # e.g. dxf could be invalid 
 
         y, chord = self.chord_line ()
 
@@ -1002,8 +1036,10 @@ class RefChord_Artist (Chord_Artist):
     """Plot the reference chord distribution of a planform.
     """
     color = cl_pureElliptical
-    def chord_line (self):
-        return self.model.refPlanform.norm_chord_line ()
+
+    @property
+    def planform (self) -> Planform :
+        return self.model.refPlanform
 
     def label (self):
         return 'Elliptical chord distribution'
@@ -1014,8 +1050,11 @@ class RefChord_DXF_Artist (Chord_Artist):
     """Plot the chord distribution of a planform.
     """
     color = cl_dxf
-    def chord_line (self):
-        return self.model.refPlanform_DXF.norm_chord_line ()
+
+    @property
+    def planform (self) -> Planform :
+        return self.model.refPlanform_DXF
+
 
     def label (self):
         return self.model.refPlanform_DXF.dxf_filename()
@@ -1060,7 +1099,8 @@ class Sections_Artist (Artist):
             self._add (p)                               # remind plot to delete 
 
             if self._pickActive: 
-                if not (self.mouseActive and section.isRootOrTip):  # avoid conflict with drag hinge line
+                # if not (self.mouseActive and section.isRootOrTip):  # avoid conflict with drag hinge line
+                if self.mouseActive:  # avoid conflict with drag hinge line
                     self._makeObjectPickable (p)
 
             self.plot_markers (y, le_to_te, section)

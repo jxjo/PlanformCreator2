@@ -10,7 +10,6 @@ import os
 import customtkinter as ctk
 import tkinter as tk
 from PIL import Image
-from typing import Union, Callable
 
 # some additional color definitions 
 cl_styles ={
@@ -27,20 +26,52 @@ cl_spin             = ("gray75","gray25")         # background of spin buttons
 cl_spin_text        = ("gray5" ,"gray95")         # text color of spin buttons
 cl_spin_text_disable= ("gray55","gray70")         # text color of spin buttons
 cl_button_primary   = ctk.ThemeManager.theme["CTkButton"]["fg_color"] # default Button darker  
-cl_button_secondary = ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"] # default Button darker  
+cl_button_secondary = ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"] # brighter 
 fs_header           = 18                          # font size header 
 def_height          = 25                          # base height in px
 def_width           = 105                         # base width in px for entry fields
 
+PRIMARY             = 1                           # buttonstyle for highlighted button 
+SECONDARY           = 2                           # buttonstyle for normal action
+SUPTLE              = 3                           # buttonstyle for subtle appearance 
 
 #-------------------------------------------------------------------------------
 # Pretty Messagebox   
 #-------------------------------------------------------------------------------
+class MessageWindow ():
+    """ a little message window during 'functionFn' is executed"""
+
+    def __init__ (self, master, functionFn, message):
+
+                # #todo - not the real solution ... Title bar isn't painted ...
+        msg =  Messagebox(master, title="", message=message, icon="info", 
+                                  option_1=None, width=400, height=150).show()
+
+        msg.deiconify()
+        msg.after(100)
+        msg.update_idletasks()
+        msg.after(100)
+        msg.update_idletasks()
+
+        functionFn ()
+
+        msg.grab_release()
+        msg.destroy()
+  
+
 
 class Messagebox(ctk.CTkToplevel):
     """ Message in different styles - inspired vom CTKMessagebox"""
 
-    def __init__(self, master, 
+    ICONS = {
+            "check": None,
+            "cancel": None,
+            "info": None,
+            "question": None,
+            "warning": None
+        }
+
+    def __init__(self, master,                  
                  width: int = 400,
                  height: int = 200,
                  title: str = "Messagebox",
@@ -56,24 +87,32 @@ class Messagebox(ctk.CTkToplevel):
         
         super().__init__(master)
 
-        self.master_window = master
-
         self.width   = 250 if width<250 else width
         self.height  = 150 if height<150 else  height
-        self.spawn_x = int(self.master_window.winfo_width() * .5 + self.master_window.winfo_x() - .5 * self.width + 7)
-        self.spawn_y = int(self.master_window.winfo_height() * .5 + self.master_window.winfo_y() - .5 * self.height + 20)
+
+        master_width  = master.winfo_width()
+        master_height = master.winfo_height()
+        if master_height < 250 or master_width < 250: 
+            master = self._root()                   # self.winfo_toplevel() doesn't work here 
+            master_width  = master.winfo_width()
+            master_height = master.winfo_height()
+        master_x      = master.winfo_x()
+        master_y      = master.winfo_y()
+
+        self.spawn_x = int(master_width * .5  + master_x - .5 * self.width + 7)
+        self.spawn_y = int(master_height * .5 + master_y - .5 * self.height + 20)
+
+        self.after(10)
         self.geometry(f"{self.width}x{self.height}+{self.spawn_x}+{self.spawn_y}")
 
         self.title(title)
         self.protocol("WM_DELETE_WINDOW", self.button_event)
         self.resizable(width=False, height=False)
+
         self.transient(master)
 
-        self.focus_force()
-        self.grab_set()
-        self.after(10)
-
-
+        self.lift()
+        
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)   
         self.x = self.winfo_x()
@@ -93,11 +132,12 @@ class Messagebox(ctk.CTkToplevel):
             self.button_color = button_color
             self.button2_color = self.button_color
                     
-        if icon in ["check", "cancel", "info", "question", "warning"]:
-            self.icon = ctk.CTkImage(Image.open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon+'.png')),
-                                               size=(25, 25))
-        else:
-            self.icon = ctk.CTkImage(Image.open(icon), size=(25, 25)) if icon else None
+        self.icon = self.load_icon(icon, (25,25)) if icon else None                    
+        # if icon in ["check", "cancel", "info", "question", "warning"]:
+        #     self.icon = ctk.CTkImage(Image.open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon+'.png')),
+        #                                        size=(25, 25))
+        # else:
+        #     self.icon = ctk.CTkImage(Image.open(icon), size=(25, 25)) if icon else None
 
         # ---------------
 
@@ -121,34 +161,68 @@ class Messagebox(ctk.CTkToplevel):
         
 
         # ---------------
-        self.frame_bottom = ctk.CTkFrame(self, fg_color="transparent")
-        self.frame_bottom.grid(row=1, column=0, columnspan=3, sticky="nwes", padx=(0,0))
-        self.frame_bottom.grid_columnconfigure((0,4), weight=1)
-
-        self.option_text_1 = option_1
-        self.button_1 = ctk.CTkButton(self.frame_bottom, text=self.option_text_1, fg_color=self.button_color,
-                                                width=self.button_width, height=25, font=self.font, 
-                                                command=lambda: self.button_event(self.option_text_1))
-        self.button_1.grid(row=0, column=1, sticky="e", padx=(30,10), pady=10)
-
-        if option_2:
-            self.option_text_2 = option_2      
-            self.button_2 = ctk.CTkButton(self.frame_bottom, text=self.option_text_2, fg_color=self.button2_color,
-                                                    width=self.button_width, height=25, font=self.font, 
-                                                    command=lambda: self.button_event(self.option_text_2))
-            self.button_2.grid(row=0, column=2, sticky="e", padx=10, pady=10)
+        if option_1:
             
-        if option_3:
-            self.option_text_3 = option_3
-            self.button_3 = ctk.CTkButton(self.frame_bottom, text=self.option_text_3, fg_color=self.button2_color,
+            self.frame_bottom = ctk.CTkFrame(self, fg_color="transparent")
+            self.frame_bottom.grid(row=1, column=0, columnspan=3, sticky="nwes", padx=(0,0))
+            self.frame_bottom.grid_columnconfigure((0,4), weight=1)
+
+            self.option_text_1 = option_1
+            self.button_1 = ctk.CTkButton(self.frame_bottom, text=self.option_text_1, fg_color=self.button_color,
                                                     width=self.button_width, height=25, font=self.font, 
-                                                    command=lambda: self.button_event(self.option_text_3))
-            self.button_3.grid(row=0, column=3, sticky="e", padx=(10,0), pady=10)
-        
+                                                    command=lambda: self.button_event(self.option_text_1))
+            self.button_1.grid(row=0, column=1, sticky="e", padx=(30,10), pady=10)
+
+            if option_2:
+                self.option_text_2 = option_2      
+                self.button_2 = ctk.CTkButton(self.frame_bottom, text=self.option_text_2, fg_color=self.button2_color,
+                                                        width=self.button_width, height=25, font=self.font, 
+                                                        command=lambda: self.button_event(self.option_text_2))
+                self.button_2.grid(row=0, column=2, sticky="e", padx=10, pady=10)
+                
+            if option_3:
+                self.option_text_3 = option_3
+                self.button_3 = ctk.CTkButton(self.frame_bottom, text=self.option_text_3, fg_color=self.button2_color,
+                                                        width=self.button_width, height=25, font=self.font, 
+                                                        command=lambda: self.button_event(self.option_text_3))
+                self.button_3.grid(row=0, column=3, sticky="e", padx=(10,0), pady=10)
+
+
+        if self.winfo_exists():
+            self.grab_set()
+
+
+    def load_icon(self, icon, icon_size):
+            if icon not in self.ICONS or self.ICONS[icon] is None:
+                image_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon + '.png')
+                if icon_size:
+                    size_height = icon_size[1] if icon_size[1] <= self.height - 100 else self.height - 100
+                    size = (icon_size[0], size_height)
+                else:
+                    size = (self.height / 4, self.height / 4)
+                self.ICONS[icon] = ctk.CTkImage(Image.open(image_path), size=size)
+            return self.ICONS[icon]         
+
+
     def get(self):
         self.master.wait_window(self)
         return self.event
-                    
+
+    def show (self):
+        """ pops up self it is not used with get (wait_window) - returns self """
+
+        # #todo - not the real solution ... Title bar isn't painted ...
+        self.deiconify()
+        self.after(100)
+        self.update_idletasks()
+        self.after(100)
+        return self
+
+    def closeIt (self): 
+        """close self from outside """
+        self.grab_release()
+        self.destroy()
+
     def button_event(self, event=None):
         self.grab_release()
         self.destroy()
@@ -172,23 +246,23 @@ class Base_Widget():
         val --      value to show - overwrites a setter path :)
         lab --      label of an entry field, or text on button, header :)
         obj --      object getter and setter belong to :) 
+        objId --    an 'id' for object. If set, will be passed in callback
         get --      either string path or callable method to get the value to show :)
         set --      either string path or callable method to invoke after a value is entered by user  :)
         disable --  either string path or callable method to disbale/enable widget  :)
         event --    tkinter virtual event like '<<MY_ALARM>>' :)
+                       ... or  bound method, which will be called 
         lim  --     upper and lower numerical limit values for entry fields  :)
         dec --      decimals in numeric entry fields :)
         unit --     unit of entry fields like 'mm' :)
         step --     step size for spin button  :)
-        options --  Option_Widget: list of string values or access path being options to select 
-
     """
   
     def __init__(self, parent: ctk.CTkFrame, 
                  row:int, column:int, 
                  val = None, 
                  lab:str=None, 
-                 obj=None, get =None, set =None, 
+                 obj=None, get =None, set =None, objId=None,
                  disable = False, 
                  event: str= None,
                  lim:tuple=None, dec = None, unit : str = None, 
@@ -206,15 +280,16 @@ class Base_Widget():
         self.getter = get
         self.setter = set
         self.obj    = obj                 
+        self.objId  = objId                 
         if not val is None:  self.val = val                  # a input val overwrites the setter altwernative
         else:                self.val = self.get_value (get, obj, parent) 
         if self.val is None: self.val = ""
 
         if isinstance (self.val, bool):                       # supported data types
            self.valType = bool
-        elif isinstance  (self.val, float) or (spin and (not dec is None) and (dec > 0)):    
+        elif isinstance  (self.val, float) or ((not dec is None) and (dec > 0)):    
            self.valType = float
-        elif isinstance (self.val, int) or (spin and (not dec is None) and (dec == 0)):
+        elif isinstance (self.val, int) or ((not dec is None) and (dec == 0)):
            self.valType = int
         elif isinstance (self.val, str):
            self.valType = str
@@ -295,7 +370,7 @@ class Base_Widget():
             oldVal = self.val 
             self.val        = self.get_value(self.getter, self.obj, self.parent)
             if oldVal != self.val: 
-                print (" refresh !=  ", oldVal, self.val)
+                # print (" refresh !=  ", oldVal, self.val)
                 self.set_CTkControl ()
         if self.labGetter:
             self.label      = self.get_value (self.labGetter, self.obj, self.parent)  
@@ -322,8 +397,8 @@ class Base_Widget():
         """
         if not obj and not parent: raise ValueError ("%s: Object for getter path is missing" % self._name)
         if not getter: 
-            return None                 # could be a button
-        if callable(getter):                       # getter is a method ?
+            return None                                 # could be a button
+        if callable(getter):                            # getter is a method ?
             return getter()                
         else:                                           # ... no - getter is a String
             if obj:
@@ -343,17 +418,25 @@ class Base_Widget():
     def set_value(self):
         """write the current value of the widget to object via setter path
         """
+
+        if not self.setter: return              # self has no setter - do nothing
+
         if not self.obj and not self.parent: raise ValueError ("Object for setter path is missing")
-        if not self.setter: raise ValueError ("Setter path is missing for getter %s" %self.getter)
 
         myVal = self.val 
 
         self.whileSetting = True                # avoid circular actions with refresh()
         if callable(self.setter):               # getter is a method ?
-            if self.val is None: 
-                self.setter()                   # typically a button method which has bo arg
-            else:
-                self.setter(myVal)              # a method like: def myMth(self, newVal) 
+            if self.val is None:                # typically a button method which has bo arg
+                if not self.objId is None:      # an object Id was set to identify object
+                    self.setter(objId=self.objId) 
+                else:            
+                    self.setter()               # normal callback
+            else:                               # a method like: def myMth(self, newVal)
+                if not self.objId is None:      # an object Id was set to identify object
+                    self.setter(myVal, objId=self.objId) 
+                else:            
+                    self.setter(myVal)          # normal callback
         else:                                   # ... no - getter is a String of a function for 'obj'
             if self.obj:
                 if callable(self.obj):                       # obj getter is a method ?
@@ -363,10 +446,13 @@ class Base_Widget():
                 propOrMethod =  getattr (dataObject, self.setter)
             else:                               # if no obj-argument, try it with parent (self...)
                 propOrMethod =  getattr (self.parent, self.setter)
-            if (not callable(propOrMethod)):
-                propOrMethod = myVal            # access path showed to a property
-            else: 
-                 propOrMethod(myVal)            # access path showed to a method
+            if (not callable(propOrMethod)):    # access path showed to a property
+                propOrMethod = myVal            
+            else:                               # access path showed to a method
+                if not self.objId is None:      # an object Id was set to identify object
+                     propOrMethod(myVal, objId=self.objId) 
+                else:            
+                    propOrMethod(myVal)         # normal callback
         self.whileSetting = False               # avoid circular actions with refresh()
 
 
@@ -479,6 +565,8 @@ class Base_Widget():
         """converts string (from entry field) in the type val normally has 
         """
 
+        newVal = None 
+
         if valType == int:
             try:
                 newVal = int(float(newStr))
@@ -492,8 +580,8 @@ class Base_Widget():
             try:
                 newVal = float(newStr)
             except:                             # user enetered a non float
-                newVal = float(val) 
-            if limits: 
+                if val: newVal = float(val)     #   could also be None
+            if limits and newVal: 
                 minVal, maxVal = limits
                 newVal2 = max (float(minVal), newVal)
                 newVal  = min (float(maxVal), newVal2)
@@ -504,9 +592,13 @@ class Base_Widget():
         return newVal
 
     def fireEvent(self):
-        if self.ctk_root and self.event:
-            # print ("fire ", self.event, ' from ', self.__class__.__name__)
-            self.ctk_root.event_generate (self.event) 
+
+        if self.event:                            # the event property has a bound method 
+            if callable(self.event):
+               self.event()         
+            elif self.ctk_root:                       # the event property is a string with an event name
+                # print ("fire ", self.event, ' from ', self.__class__.__name__)
+                self.ctk_root.event_generate (self.event) 
 
     def _text_color (self, aStyle=None):
         """ returns the text_color depending on style"""
@@ -576,15 +668,19 @@ class Label_Widget(Base_Widget):
         Label_Widget  (self, 3,0, lab='Loremm ipsumm') :)
         Label_Widget  (self, 3,0, width=200, lab=self.myLabeText) :)
     """
-    def __init__(self, *args, padx=10, sticky = None, text_style='Disabled', columnspan=None, **kwargs):
+    def __init__(self, *args, padx=None, pady=None, sticky = None, text_style='Disabled', columnspan=None, **kwargs):
         super().__init__(*args, text_style=text_style, **kwargs)
 
         if sticky       is None: sticky = "sw"
         if columnspan   is None: columnspan = 6
 
+        if padx         is None: padx = 10
+        if pady         is None: pady = 0
+
         self.mainCTk = ctk.CTkLabel(self.parent, width=self.width, justify ='left', 
                                     text=self.label, anchor= "w", text_color=self._text_color())           
-        self.mainCTk.grid(row=self.row, column=self.column,  columnspan=columnspan, padx=padx, sticky=sticky)
+        self.mainCTk.grid(row=self.row, column=self.column,  columnspan=columnspan, 
+                          padx=padx, pady=pady, sticky=sticky)
 
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
         widgetCTk.configure (text_color=self._text_color())
@@ -598,20 +694,36 @@ class Button_Widget(Base_Widget):
     Keyword Arguments:
         val or obj+getter -- val string to show or access path with obj and getter          :)
         set -- access path setter when button is pressed             :)
+        style -- button appearance - either PRIMARY, SECONDARY or SUPTLE
     """
-    def __init__(self, *args, sticky= None, pady= None, padx=None, columnspan = 1, primary=False, **kwargs):
+    def __init__(self, *args, 
+                 style=SECONDARY, 
+                 sticky= None, anchor=None, 
+                 pady= None, padx=None, columnspan = 1, **kwargs):
         super().__init__(*args, **kwargs)
 
         if sticky is None: sticky = 'w'
+        if anchor is None: anchor = 'center'
         if padx   is None: padx = 10
         if pady   is None: pady = 0
-        if primary: 
+
+        if style == PRIMARY: 
             self.fg_color = cl_button_primary
+            self.style = style
+        elif style == SUPTLE:
+            self.fg_color = cl_spin
+            self.style = style
         else:
             self.fg_color = cl_button_secondary
+            self.style = SECONDARY
 
-        self.mainCTk = ctk.CTkButton(self.parent, text=self.label, height=self.height, width=self.width, 
-                                     command=self.CTk_callback)
+        if self.getter:                         # either 'get' or 'lab' can be used
+            text = self.val
+        else: 
+            text=self.label 
+
+        self.mainCTk = ctk.CTkButton(self.parent, text=text, height=self.height, width=self.width, 
+                                     anchor=anchor, command=self.CTk_callback)
         self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky=sticky)
      
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
@@ -619,6 +731,11 @@ class Button_Widget(Base_Widget):
     def _getFrom_CTkControl (self):
         # button has nothing to give ...
         return None                     
+
+    def _set_CTkControl  (self, widgetCTk, newLabelStr):
+        # if self is destroyed , newLaberlStr good be ''
+        if newLabelStr: 
+            widgetCTk.configure (text=newLabelStr)
 
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
         widgetCTk.configure (text=newLabelStr)
@@ -634,8 +751,12 @@ class Button_Widget(Base_Widget):
             widgetCTk.configure (text_color = cl_spin_text_disable) 
             widgetCTk.configure (fg_color =cl_spin )
         else: 
-            # for buttons always color of Dark mode
-            widgetCTk.configure (text_color = self._text_color()[1])
+            if self.style == SUPTLE: 
+                " for suptle buttons same as Spin Button (black)"
+                widgetCTk.configure (text_color = cl_spin_text)
+            else:
+                # for buttons always color of Dark mode
+                widgetCTk.configure (text_color = self._text_color()[1])
             widgetCTk.configure (fg_color =self.fg_color )
 
 
@@ -690,9 +811,10 @@ class CheckBox_Widget(Base_Widget):
         super().__init__(*args, **kwargs)
 
         height = def_height - 10
+        pady= 2
 
         self.mainCTk = ctk.CTkCheckBox (self.parent, text=self.label, onvalue=1, command=self.CTk_callback)
-        self.mainCTk.grid(row=self.row, column=self.column, padx=10, pady = 3, sticky="w")
+        self.mainCTk.grid(row=self.row, column=self.column, padx=10, pady = pady, sticky="w")
 
         self.set_CTkControl()
         self.set_CTkControl_state()
@@ -720,7 +842,7 @@ class Field_Widget(Base_Widget):
         spin -- Boolean if entry field should have a spinner       :)
         step -- integer step size              :)
     """
-    def __init__(self, *args, lab_width= None, columnspan=None, justify=None, **kwargs):
+    def __init__(self, *args, padx=None, lab_width= None, columnspan=None, justify=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         column = self.column
@@ -736,9 +858,12 @@ class Field_Widget(Base_Widget):
                 width = lab_width
             else:
                 width= 95
+            if padx is None:
+                padx= (5, 5)
+
             label_ctk = ctk.CTkLabel (self.parent, width= width, text=self.label,  
                                       justify='left', anchor='w')
-            label_ctk.grid (row=self.row, column=column, padx=(5, 5), pady=1, sticky='w')
+            label_ctk.grid (row=self.row, column=column, padx=padx, pady=0, sticky='w')
             column += 1
 
         if self.spinner:
@@ -770,15 +895,15 @@ class Field_Widget(Base_Widget):
 
             entry_frame.grid (row=self.row, column=column, columnspan= columnspan, padx=(1, 1), pady=0, sticky='w')
         else:
-            self.mainCTk.grid(row=self.row, column=column, columnspan= columnspan, padx=(1, 1), pady=1, sticky='w')
+            self.mainCTk.grid(row=self.row, column=column, columnspan= columnspan, padx=(1, 1), pady=0, sticky='w')
 
         column += 1
         if (self.unit):
             unit_ctk  = ctk.CTkLabel (self.parent, text=self.unit, anchor='w')
-            unit_ctk.grid (row=self.row, column=column, padx=(2,15), pady=1, sticky='w')
+            unit_ctk.grid (row=self.row, column=column, padx=(2,15), pady=0, sticky='w')
         else: 
             unit_ctk  = ctk.CTkFrame (self.parent, width=1, height=1, fg_color="transparent")
-            unit_ctk.grid (row=self.row, column=column, padx=(2,5),  pady=1, sticky='w')
+            unit_ctk.grid (row=self.row, column=column, padx=(2,5),  pady=0, sticky='w')
 
         self.mainCTk.bind('<Return>', self.CTk_callback)
         self.set_CTkControl()
@@ -928,10 +1053,10 @@ class Option_Widget(Base_Widget):
 
     def refresh (self):
         # first refresh options list 
-        if not self.whileSetting:                           # avoid circular actions with refresh()
-            if self.optionsGetter:
-                self.options = self.get_value(self.optionsGetter, self.obj, self.parent)
-                self.mainCTk.configure (values=self.options)
+        # if not self.whileSetting:                           # avoid circular actions with refresh()
+        if self.optionsGetter:
+            self.options = self.get_value(self.optionsGetter, self.obj, self.parent)
+            self.mainCTk.configure (values=self.options)
         # then refresh the selected item
         super().refresh()
 
@@ -1010,23 +1135,27 @@ class Combo_Widget(Base_Widget):
         else:
             label_ctk = ctk.CTkFrame (self.parent, width=10, height=5, fg_color="transparent")     # dummy frame
 
-        label_ctk.grid (row=r, column=c, padx=padx, pady=1, sticky='w')
+        label_ctk.grid (row=r, column=c, padx=padx, pady=pady, sticky='w')
 
         self.mainCTk = ctk.CTkComboBox (self.parent, values= self.options, 
                                         width=self.width, height=self.height, 
                                         button_color=cl_spin, border_width=1,
                                         command=self.CTk_callback)        
 
-        self.mainCTk.grid (row=r, column=c+1, padx=padx, pady=pady, sticky='w')
+        self.mainCTk.grid (row=r, column=c+1, padx=None, pady=pady, sticky='w')
         self.set_CTkControl()
         self.set_CTkControl_state()
+
+        self.mainCTk.bind('<Return>', self.CTk_callback)
+
 
     def _getFrom_CTkControl (self):
         return self.mainCTk.get()
 
     def _set_CTkControl (self, widgetCTk, newValStr: str):
         if newValStr == '':
-            widgetCTk.set(self.options[0])
+            widgetCTk.set(newValStr)
+            # widgetCTk.set(self.options[0])
         else:    
             widgetCTk.set(newValStr)
 

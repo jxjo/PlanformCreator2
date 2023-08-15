@@ -33,6 +33,7 @@
 """
 import os
 import sys
+import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -44,18 +45,18 @@ import customtkinter as ctk
 # let python find the other modules in modules relativ to path of self  
 sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 
-from modules.common_utils       import * 
-from modules.wing_model         import Planform, Planform_Bezier_StraightTE, \
+from common_utils       import * 
+from wing_model         import Planform, Planform_Bezier_StraightTE, \
                                        Planform_DXF, Planform_Trapezoidal, Planform_Bezier                         
-from modules.widgets            import * 
-from modules.artist             import Plot_Toolbar
-from modules.wing_artists       import *
+from widgets            import * 
+from artist             import Plot_Toolbar
+from wing_artists       import *
 
 
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "0.8.3"
+AppVersion = "0.8.4"
 
 #------------------------------------------------
 
@@ -299,13 +300,13 @@ class Edit_Wing_Data (Edit_Abstract):
                                  lim=(1,500), dec=1, spin=True, step=1, unit=unit))
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Flap at root",  obj=self.wing, get='flapDepthRoot', set='set_flapDepthRoot',
-                                 event=PLANFORM_CHANGED, lim=(0,50), dec=1, spin=True, step=0.5, unit='%'))
+                                 event=PLANFORM_CHANGED, lim=(0,50), dec=1, spin=True, step=0.1, unit='%'))
         self.add (Field_Widget  (self,r,3, lab="Flap at tip",   obj=self.wing, get='flapDepthTip', set='set_flapDepthTip',
                                  event=PLANFORM_CHANGED,            
-                                 lim=(0,50), dec=1, spin=True, step=0.5, unit='%'))
+                                 lim=(0,50), dec=1, spin=True, step=0.1, unit='%'))
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Hinge angle",   obj=self.wing, get='hingeAngle', set='set_hingeAngle',
-                                 event=WING_CHANGED, lim=(-5,45), dec=1, spin=True, step=0.1, unit="°"))
+                                 event=WING_CHANGED, lim=(-5,45), dec=2, spin=True, step=0.1, unit="°"))
         r += 1
         Blank_Widget (self,r,0, width=20, height = 15) 
         r += 1
@@ -446,7 +447,7 @@ class Edit_Planform_Bezier(Edit_Abstract):
         r = 0 
         self.add (Field_Widget  (self,r,0, lab="Root tangent", obj=self.planform, 
                                     get='tangentAngle_root', set='set_tangentAngle_root', unit='°',
-                                    event=CHORD_CHANGED, lim=(-20,0), dec=1, spin=True, step=0.5))
+                                    event=CHORD_CHANGED, lim=(-20,0), dec=1, spin=True, step=0.1))
         self.add (Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
                                     get='tangentLength_root', set='set_tangentLength_root',
                                     event=CHORD_CHANGED, lim=(0.1,1), dec=2, spin=True, step=0.01))
@@ -466,7 +467,7 @@ class Edit_Planform_Bezier(Edit_Abstract):
                                     event=CHORD_CHANGED, lim=(-0.1,0.1),dec=2, spin=True, step=0.01))
         self.add (Field_Widget  (self,r,3, lab="position", lab_width=60, obj=self.planform, 
                                     get='banana_p1y', set='set_banana_p1y',
-                                    event=CHORD_CHANGED, lim=(0.1,0.9), dec=2, spin=True, step=0.05))
+                                    event=CHORD_CHANGED, lim=(0.1,0.9), dec=2, spin=True, step=0.01))
 
         
 
@@ -581,7 +582,7 @@ class Edit_Planform_DXF (Edit_Abstract):
 
     def open_dxf_file (self):
 
-        current_dxf_path = self.planform().dxf_pathFilename()
+        current_dxf_path = self.planform().dxf_pathFilename
 
         dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path = current_dxf_path,  workingDir = self.workingDir) 
 
@@ -787,13 +788,18 @@ class Edit_WingSection(Edit_Abstract):
         absPathFileName = ph.fullFilePath (relPathFileName)
 
         dialog = AirfoilEditor (absPathFileName, parentApp=self.myApp)
-        self.wait_window (dialog.main)
+
+        if dialog.return_OK:                    # no early abort
+            self.wait_window (dialog.main)
     
-        if dialog.return_OK:
-            relPathFileName = ph.relFilePath(dialog.return_newAirfoilPathFileName)
-            self.wingSection().set_airfoilWithPathFileName(relPathFileName)
-            self.refresh()
-            fireEvent (self.ctk_root, AIRFOIL_CHANGED)
+            if dialog.return_OK:                # user pressed ok
+                relPathFileName = ph.relFilePath(dialog.return_newAirfoilPathFileName)
+                self.wingSection().set_airfoilWithPathFileName(relPathFileName)
+                self.refresh()
+                fireEvent (self.ctk_root, AIRFOIL_CHANGED)
+        else: 
+            Messagebox (self,title="Edit airfoil", message= "Airfoil\n\n'%s'\n\ndoesn't exist anymore."%absPathFileName,
+                        icon="cancel", option_1="Close")
 
 
     def edit_airfoil_disable (self):
@@ -1626,8 +1632,8 @@ class Dialog_Load_DXF (Dialog_Abstract):
 
     Returns in self.dxf_pathFilename if the user selected a valid file 
     """
-    width  = 700
-    height = 350
+    width  = 1000
+    height = 450
     titleText  = "Import dxf file"
 
     def __init__(self, master, *args, wingFn = None, dxf_Path= None, ref:bool = False, **kwargs):
@@ -1667,11 +1673,13 @@ class Dialog_Load_DXF (Dialog_Abstract):
         self.add(Label_Widget (frame,r,0, lab=lambda: self.tmpPlanform.infoText, columnspan=2, sticky = "ew" ))
 
         # show a little dxf preview
-        self.diagram_frame = Diagram_Planform_Mini (frame,  wingFn, size=(3.5,1.2))
-        self.diagram_frame.grid(row=r, column=2, columnspan= 4)
+        self.diagram_frame = Diagram_Planform_Mini (frame,  wingFn, size=(4.5,2.5))
+        self.diagram_frame.grid(row=r, column=2, columnspan= 4, padx=(0,15))
         self.diagram_ax    = self.diagram_frame.ax
-        self.planformArtist = RefPlanform_DXF_Artist (self.diagram_ax, wingFn(), show=True, 
+        self.planformArtist = RefPlanform_DXF_Artist (self.diagram_ax, wingFn(), show=True, showDetail=True, 
                                                       showMarker=False, planform=self.tmpPlanform)
+        frame.grid_columnconfigure (5, weight=1)
+
         self.planformArtist.refresh(figureUpdate=True)
 
         r +=1  
@@ -1679,7 +1687,7 @@ class Dialog_Load_DXF (Dialog_Abstract):
         frame.grid_rowconfigure (r, weight=1)
 
         r +=1  
-        self.add(Button_Widget (frame,r,2, lab='Ok', primary=True, set=self.ok, width=100,
+        self.add(Button_Widget (frame,r,2, lab='Ok', style=PRIMARY, set=self.ok, width=100,
                                 disable= self.ok_disable ))
         self.add(Button_Widget (frame,r,3, lab='Cancel',set=self.cancel, width= 100))
 
@@ -1708,13 +1716,13 @@ class Dialog_Load_DXF (Dialog_Abstract):
             self.planformArtist.refresh(figureUpdate=True)
 
     def remove_dxf_disable (self):
-            disable =  not self.tmpPlanform.dxf_pathFilename ()
+            disable =  not self.tmpPlanform.dxf_pathFilename
             return disable
 
     def ok (self):
         # to over load and do ok actions
         if self.tmpPlanform.isValid: 
-            self.dxf_pathFilename = self.tmpPlanform.dxf_pathFilename ()  # the return value 
+            self.dxf_pathFilename = self.tmpPlanform.dxf_pathFilename  # the return value 
         super().ok()
 
     def ok_disable (self):
@@ -1805,7 +1813,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         r +=1  
         self.add (Field_Widget  (self.input_frame,r,c, lab="  y min width", width=80,
                                  obj=self.paneledPlanform, get='y_minWidth', set='set_y_minWidth',
-                                 event=PANELS_CHANGED, lim=(1,20), dec=0, spin=True, step=1, unit=self.wing.unit))
+                                 event=PANELS_CHANGED, lim=(1,40), dec=0, spin=True, step=1, unit=self.wing.unit))
 
         r = 1 
         c = 7 
@@ -1822,7 +1830,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
 
         r = 0 
         c = 1 
-        self.add(Button_Widget (self.button_frame,r,c, lab='Export', set=self.ok, primary=True, width=100))
+        self.add(Button_Widget (self.button_frame,r,c, lab='Export', set=self.ok, style=PRIMARY, width=100))
         if Flz: 
             c += 1 
             self.add(Button_Widget (self.button_frame,r,c, lab='Launch FLZ', set=self.launch_Flz, width=100,
@@ -1976,7 +1984,7 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         self.add(self.teWidget) 
 
 
-        self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok, primary=True, width=100))
+        self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok, style=PRIMARY, width=100))
         self.add(Button_Widget (self.button_frame,0,2, lab='Cancel', set=self.cancel, width=100))
         self.button_frame.grid_columnconfigure (0, weight=1)
         self.button_frame.grid_columnconfigure (3, weight=1)
@@ -2087,7 +2095,7 @@ class Dialog_Export_Airfoils (Dialog_Abstract):
         self.add(self.teWidget) 
 
 
-        self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok, primary=True, width=100))
+        self.add(Button_Widget (self.button_frame,0,1, lab='Export', set=self.ok, style=PRIMARY, width=100))
         self.add(Button_Widget (self.button_frame,0,2, lab='Cancel', set=self.cancel, width=100))
         self.button_frame.grid_columnconfigure (0, weight=1)
         self.button_frame.grid_columnconfigure (3, weight=1)
@@ -2184,11 +2192,15 @@ class App(ctk.CTk):
         # setup event root - so there will be a single root -> ctk root
         self.ctk_root = self
 
+        # settings file handler
+        self.settings = Settings(App.name)
+
         # create the 'wing' model 
         self.paramFile = '' 
         self.loadNewWing (paramFile)
 
-        # maximize the window using state property
+        # initial size of app window 
+        self.set_initialWindowSize(widthFrac=0.92, heightFrac=0.8)
         # self.state('zoomed')
 
         self._curWingSectionName = None                 # Dispatcher field between Diagram and Edit
@@ -2237,6 +2249,34 @@ class App(ctk.CTk):
         Currently equals to dir of parameter file """
         return self.wing().workingDir        
 
+    def set_title (self): 
+        """ set window title"""
+
+        if self.paramFile:
+            project = self.paramFile
+        else:
+            project = "< new >"
+        self.title (AppName + "  v" + str(AppVersion) + "  [" + project + "]")
+
+
+    def set_initialWindowSize(self, master=None, widthFrac=0.9, heightFrac=0.8):
+        """ set size and position of tkinter window  """
+
+        if master is None: 
+            master = self
+
+        width  = int (master.winfo_screenwidth()  * widthFrac)
+        height = int (master.winfo_screenheight() * heightFrac) 
+
+        master.minsize(int(width*0.9), int(height*0.8))
+        master.geometry("%dx%d" %(width, height))
+
+        x = master.winfo_screenwidth()  // 2 - width // 2
+        y = (master.winfo_screenheight() // 2 - height // 2) // 2
+
+        master.geometry("+%d+%d" %(x, y))
+
+
     #------- file functions ----------------
 
     def new (self):
@@ -2252,7 +2292,7 @@ class App(ctk.CTk):
     def open (self):
         """ open a new wing definition json and load it"""
 
-        filetypes  = [('Planform Creator 2 files', '*.json')]
+        filetypes  = [('Planform Creator 2 files', '*.pc2')]
         newPathFilename = filedialog.askopenfilename(
                     title='Select new wing definition',
                     initialdir=self.workingDir,
@@ -2266,9 +2306,14 @@ class App(ctk.CTk):
         """ save wing data to the action parameter file - if new wing to saveAs"""
 
         if self.paramFile:
-            self.wing().save(self.paramFile)
-            text = "Wing successfully saved ...    " 
-            Messagebox(self, title="Save wing", message=text, icon="check", option_1="Ok", width=300, height=150)  
+            saveOk = self.wing().save(self.paramFile)
+            if saveOk:
+                text = "Wing successfully saved ...    " 
+                Messagebox(self, title="Save wing", message=text, icon="check", option_1="Ok", width=300, height=150)  
+                self.settings.set('lastOpenend', self.paramFile)
+            else:
+                text = "Paramteres couldn't be saved to '%s'" % self.paramFile
+                Messagebox(self, title="Save wing", message=text, icon="cancel", option_1="Close", width=300, height=150)  
         else:
             self.saveAs ()
 
@@ -2276,17 +2321,18 @@ class App(ctk.CTk):
     def saveAs (self):
         """ save wing data to a new file and set this as actual"""
 
-        filetypes  = [('PC2 files', '*.json')]
+        filetypes  = [('PC2 files', '*.pc2')]
         newPathFilename = filedialog.asksaveasfilename(title='Save parameter file',
                                      initialdir=self.workingDir, filetypes=filetypes,
-                                     defaultextension = '.json')
+                                     defaultextension = '.pc2')
         if newPathFilename: 
-            ret =  self.wing().save(newPathFilename)
-            if ret == 0: 
+            saveOk =  self.wing().save(newPathFilename)
+            if saveOk: 
                 self.paramFile = os.path.normpath(newPathFilename)
-                self.title("Planform Creator 2  [" + self.paramFile + "]")
+                self.set_title ()
                 text = "Wing saved to \n\n'%s'" % newPathFilename
                 Messagebox(self, title="Save wing", message=text, icon="check", option_1="Ok")  
+                self.settings.set('lastOpenend', self.paramFile)
             else: 
                 text = "Wing couldn't be saved to '%s'" % newPathFilename
                 Messagebox(self, title="Save wing", message=text, icon="cancel", option_1="Ok")  
@@ -2298,13 +2344,11 @@ class App(ctk.CTk):
         self.set_wing (Wing (pathFilename))
 
         if pathFilename:
-            self.paramFile = os.path.relpath(pathFilename, start = os.getcwd())
-            project = self.paramFile
+            self.paramFile = PathHandler.relPath (pathFilename)
+            self.settings.set('lastOpenend', self.paramFile)
         else:
             self.paramFile = ""
-            project = "< new >"
-
-        self.title (AppName + "  v" + str(AppVersion) + "  [" + project + "]")
+        self.set_title ()
 
 
     def export_xflr5 (self): 
@@ -2329,7 +2373,7 @@ class App(ctk.CTk):
 
     def load_reference_dxf (self): 
         """ load a dxf planform into the reference_dxf planform"""
-        current_dxf_path = self.wing().refPlanform_DXF.dxf_pathFilename()
+        current_dxf_path = self.wing().refPlanform_DXF.dxf_pathFilename
 
         dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path = current_dxf_path, ref=True, workingDir = self.workingDir) 
         self.wait_window (dxf_dialog)
@@ -2372,12 +2416,36 @@ if __name__ == "__main__":
     # init colorama
     just_fix_windows_console()
 
-    mySettings = ".\\examples\\vjx.glide\\VJX.glide.json"
-    # mySettings = ".\\examples\\Amokka-JX\\Amokka-JX.json"
-    # mySettings = ""
+    InfoMsg("Starting %s ..." % App.name)
 
-    InfoMsg("Starting  User Interface...")
+    # set ctk application settings prior to init 
 
-    myApp = App(mySettings)
+    mySettings = Settings(App.name, msg=True)
+
+    ctk.set_appearance_mode    (mySettings.get('appearance_mode', default='System'))   # Modes:  "System" (standard), "Dark", "Light"
+    ctk.set_default_color_theme(mySettings.get('color_theme', default='blue'))         # Themes: "blue" (standard), "green", "dark-blue"
+    scaling = mySettings.get('widget_scaling', default=1.0)
+    if scaling != 1.0: 
+        ctk.set_widget_scaling(scaling)  # widget dimensions and text size
+        NoteMsg ("The App is scaled to %.2f" %scaling)
+        # ctk.set_window_scaling(1)
+
+    # paramter file as argument?  
+
+    parmFile = ''
+    parser = argparse.ArgumentParser(prog=AppName, description='Create a wing planform')
+    parser.add_argument("paramterfile", nargs='*', help="Paramter file .pc2")
+    args = parser.parse_args()
+
+    if args.paramterfile: 
+        parmFile = args.paramterfile[0]
+        if not os.path.isfile (parmFile):
+            ErrorMsg ("Parameter file '%s' doesn't exist" %parmFile )
+            # sys.exit(1)
+    
+    if not parmFile: 
+        parmFile = mySettings.get('lastOpenend', default=".\\examples\\vjx.glide\\VJX.glide.pc2") 
+
+    myApp = App(parmFile)
     myApp.mainloop()
  

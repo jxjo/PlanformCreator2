@@ -54,15 +54,13 @@ class Wing:
         Init wing from parameters in paramFilePath
         """
 
-        InfoMsg("Starting wing model ...")
-
-        dataDict = self._loadDataDict (paramFilePath)
+        dataDict = Parameters (paramFilePath).get_dataDict()
         if dataDict is None:
             NoteMsg ('No input data - a default wing will be created')
             wingExists = False
             self.paramFilePath = None
         else: 
-            InfoMsg ('Reading wing parameter from %s' % paramFilePath)
+            InfoMsg ('Reading parameters from %s' % paramFilePath)
             wingExists = True
             self.paramFilePath = paramFilePath
 
@@ -92,7 +90,7 @@ class Wing:
         self.refPlanform_DXF  = Planform_DXF (self, dataDict, ref=True)
         
         # create an extra Planform as major reference ()
-        self.refPlanform      = Planform_Pure_Elliptical (self)
+        self.refPlanform      = Planform_Pure_Elliptical (self)     # could be not 'isValid'
 
         # will hold the class which manages Xflr5, FLZ export including its parameters
         self._exporterXflr5     = None 
@@ -111,25 +109,6 @@ class Wing:
         # overwrite to get a nice print string 
         return f"{type(self).__name__} \'{self.name}\'"
 
-
-    def _loadDataDict (self, paramFilePath):
-        """
-        loads the dataDict of wing paramters from json-File 'paramFilePath'
-        """
-        dataDict = None
-        if paramFilePath:
-            try:
-                paramFile = open(paramFilePath)
-                try:
-                    dataDict = json.load(paramFile)
-                    paramFile.close()
-                except ValueError as e:
-                    ErrorMsg('Invalid json: %s' % e)
-                    paramFile.close()
-                    dataDict = None
-            except:
-                ErrorMsg ("Input file %s not found" % paramFilePath)
-        return dataDict
 
     # --- save --------------------- 
 
@@ -326,38 +305,21 @@ class Wing:
 
 
     def save (self, pathFileName):
-        """ store data dict to file pathFileName
-        
+        """ store data dict to file pathFileName        
         :Returns: 
-            0 : if succeded, -1 if failed"""
-
-        try:
-            paramFile = open(pathFileName, 'w')
-        except:
-            ErrorMsg("Failed to open file %s" % pathFileName)
-            return -1
+            True : if succeded, False if failed"""
 
         currentDict = self._save()
 
-        # save parameter dictionary to .json-file
-        try:
-            json.dump(currentDict, paramFile, indent=2, separators=(',', ':'))
-            paramFile.close()
-            InfoMsg ("Parameters saved to '%s'" % pathFileName)
-            # store the actual dict to allow changed detection 
+        saveOk = Parameters (pathFileName).write_dataDict(currentDict)
 
-        except ValueError as e:
-            ErrorMsg('invalid json: %s' % e)
-            ErrorMsg('Error, failed to save data to file %s' % pathFileName)
-            paramFile.close()
-            return -1
+        if saveOk:
+            # keep dataDict for later change detection 
+            self.dataDict = currentDict  
+            # set the current working Dir to the dir of the new saved parameter file            
+            self.pathHandler.set_workingDirFromFile (pathFileName)
+        return saveOk
 
-        # keep dataDict for later change detection 
-        self.dataDict = currentDict  
-        # set the current working Dir to the dir of the new saved parameter file            
-        self.pathHandler.set_workingDirFromFile (pathFileName)
-
-        return 0
 
     def hasChanged (self):
         """returns true if the parameters has been changed since last save() of parameters"""
@@ -399,6 +361,8 @@ class Wing:
         if (newWing or not newSections [-1].isTip ):
             if not newWing: NoteMsg ('Tip wing section missing. Creating a new one ...')
             newSections.append(WingSection (self, {"position": self.halfwingspan}))
+
+        InfoMsg (" %d Wing sections added" % len(newSections))
 
         return newSections
 
@@ -664,7 +628,8 @@ class Planform:
         self.wing   = myWing
 
         # self.__class__.instances.append(weakref.proxy(self))
-        InfoMsg (' ' + str(self)  + ' created')
+        if dataDict:                                    # no info for internal planforms
+            InfoMsg (' ' + str(self)  + ' created')
 
     def __repr__(self) -> str:
         # overwrite class method to get a nice print string of self 
@@ -1277,12 +1242,11 @@ class Planform_Pure_Elliptical(Planform):
     planformType  = "Pure elliptical"
     isTemplate    = False
 
-    def __init__(self, myWing: Wing, dataDict: dict = None):
-        super().__init__(myWing, dataDict)
+    def __init__(self, myWing: Wing):
+        super().__init__(myWing)
         """
         Args:
             :myWing: the wing object self belongs to  
-            :dataDict: optional - dictonary with all the data for a valid section
         """
         
 
@@ -1774,9 +1738,11 @@ class Planform_Paneled (Planform_Trapezoidal):
             y_right  = y_sections [iSec+1]
             dy_sec = y_right - y_left
             # assure a min panel width in y-direction 
-            return min ( self.y_panels, round(dy_sec/self.y_minWidth))
+            npanels = min ( self.y_panels, round(dy_sec/self.y_minWidth))
+            npanels = max (npanels, 1)                                      # ensure at least 1 panel
         else:
-            return 0 
+            npanels = 0 
+        return npanels
 
 
     def distribution_fns_names (self):
@@ -1823,7 +1789,7 @@ class Planform_Paneled (Planform_Trapezoidal):
         lines_le_to_te = []  
 
         deviations = []        
-        tipArea   = 25                          # do not tke this tip mm into account for deviations 
+        tipArea   = 25                          # do not take this tip mm into account for deviations 
 
         y_distribution_fn = self.distribution_fns [self.y_dist]
         y_sections = self._norm_y_points() * self.halfwingspan
@@ -2006,6 +1972,7 @@ class Planform_DXF(Planform):
             fileName = ''
         return fileName
 
+    @property
     def dxf_pathFilename (self):
         """ the complete filename with the path of the dxf file"""
         return self._dxfPathFilename
@@ -2169,18 +2136,24 @@ class Planform_DXF(Planform):
         eps = 0.00001                           # deviation for 2 points to be equal
         y = None
 
+        iIdendical = None
+        iGreater = None 
+
         for idx in range(len(line)):
             xp, yp = line[idx]
             if (abs(x-xp) < eps):               # found identical point ?
-                x, y = line[idx]
-                break
-            elif (xp >= x) and (idx>=1):        # first point with x value >= x
-                x1, y1 = line[idx-1]
-                x2, y2 = line[idx]
-                y = interpolate(x1, x2, y1, y2, x)
+                iIdendical = idx
+            elif (xp >= (x+ eps)) and (idx>=1):        # first point with x value >= x
+                iGreater = idx
                 break
 
-        if (y == None): 
+        if iIdendical:
+             x, y = line[iIdendical] 
+        elif iGreater:
+            x1, y1 = line[iGreater-1]
+            x2, y2 = line[iGreater]
+            y = interpolate(x1, x2, y1, y2, x)
+        else:
             ErrorMsg("__get_yFromX, xcoordinate %f not found" % x)
             y = 0.0
                 
@@ -2326,8 +2299,6 @@ class WingSection:
 
         # create airfoil and load coordinates if exist 
         self._init_airfoil (dataDict = fromDict (dataDict, "airfoil", None))
-
-        InfoMsg ('  '   + str(self)  + ' created')
 
 
     def _save (self, sectionDict):

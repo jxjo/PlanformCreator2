@@ -7,7 +7,7 @@ The "Artists" to plot a airfoil object on a matplotlib axes
 
 """
 import numpy as np
-from artist import Artist, cl_userHint
+from artist import Artist, cl_userHint, cl_labelGrid
 
 from common_utils import *
 from airfoil import* 
@@ -197,6 +197,9 @@ class Curvature_Artist (Airfoil_Line_Artist):
                     self._add(p)
                     self._plot_marker (line, color, upper=False)
 
+        if self._myPlots:                     # something plotted? 
+            p = self.ax.plot ([], [], ' ', label="R: reversals")
+            self._add(p)
 
     def _plot_marker (self, line : SideOfAirfoil, color, upper=True):
         # annotate reversals of curvature  ... 

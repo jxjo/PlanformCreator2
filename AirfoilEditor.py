@@ -27,6 +27,7 @@ import os
 import sys
 import argparse
 from pathlib import Path
+import fnmatch 
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -35,18 +36,19 @@ import customtkinter as ctk
 
 # let python find the other modules in modules relativ to path of self  
 sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
-from modules.common_utils       import * 
-from modules.airfoil            import *
-from modules.airfoil_examples   import Root_Example
-from modules.widgets            import *
-from modules.artist             import Plot_Toolbar
-from modules.airfoil_artists    import *
+
+from common_utils       import * 
+from airfoil            import *
+from airfoil_examples   import Root_Example
+from widgets            import *
+from artist             import Plot_Toolbar
+from airfoil_artists    import *
 
 
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "0.8.3"
+AppVersion = "0.8.4"
 
 #------------------------------------------------
 
@@ -182,8 +184,8 @@ class Edit_Curvature(Edit_Abstract):
 
         r, c = 0, 0 
         self.add (Header_Widget (self,r,c,   width=90, lab=self.name, columnspan= 2))
-        self.add (Button_Widget (self,r,c+3, lab='Smooth', width=80, padx= (10,0), columnspan=2, sticky='w', 
-                                 set=self.smooth_airfoil ))
+        # self.add (Button_Widget (self,r,c+3, lab='Smooth', width=80, padx= (10,0), columnspan=2, sticky='w', 
+        #                          set=self.smooth_airfoil ))
 
         r = 1
         Blank_Widget (self, r,0)                # left blank column to inset the fields 
@@ -196,7 +198,7 @@ class Edit_Curvature(Edit_Abstract):
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="... threshold", get=lambda: self.curvature_threshold, 
                                 set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
-                                width=60, lab_width=80, lim=(0,1), dec=1, spin=False, step=0.1))
+                                width=60, lab_width=80, lim=(0,1), dec=2, spin=False, step=0.02))
 
 
     def refresh(self): 
@@ -259,7 +261,7 @@ class Edit_Panels(Edit_Abstract):
         airfoil = self.airfoil()
         minAngle, atIndex = self.airfoil().panelAngle_min
 
-        if airfoil.panelAngle_le > 170.0: 
+        if airfoil.panelAngle_le > 172.0: 
             text.append("- Panel angle at LE (%d°) is too blunt." %(self.airfoil().panelAngle_le))
         if minAngle < 150.0: 
             text.append("- Min. angle of two panels is < 150°")
@@ -517,7 +519,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.ax2 : plt.Axes = self.figure.add_subplot(2, 1, 2)
         self.figure.subplots_adjust(left=0.04, bottom=0.07, right=0.96, top=0.97, wspace=None, hspace=0.15)
 
-    def setup_axes(self):
+    def setup_axes(self, show_logScale=True):
         """ setup axes, axis, artiss for this plot type """
 
         # airfoil contour 
@@ -529,15 +531,30 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.ax2.tick_params (labelsize='small')
         self.ax2.set_xlim([-0.05,1.05])
 
-        # suppress warning of a motplotlib bug reported: 
-        # https://github.com/matplotlib/matplotlib/issues/26118
-        import warnings
-        warnings.filterwarnings("ignore", message = "All values for SymLogScale")
-        self.ax2.set_yscale('symlog', linthresh=1)
+        if show_logScale:
+            # log y scale to get full range of curvature 
+            # suppress warning of a motplotlib bug reported: 
+            # https://github.com/matplotlib/matplotlib/issues/26118
+            import warnings
+            warnings.filterwarnings("ignore", message = "All values for SymLogScale")
+            # ! linear range from 0..1 will lead to a kink in the curve 
+            thresh  = 1 
+            self.ax2.set_yscale('symlog', linthresh=thresh, linscale=1) # , linscale=2
+            self.ax2.set_ylim([ -10, 1000])
+            # mark linear and log y-axis because of kink in y log scale
+            x, y = 0.008, 0.5                   # x in axes coordinates
+            self.ax2.text (x, y, 'linear', va='center', ha='left', transform=self.ax2.get_yaxis_transform(), 
+                                color = cl_labelGrid, fontsize='small')
+            y = 40
+            self.ax2.text (x, y, 'log10', va='top',     ha='left', transform=self.ax2.get_yaxis_transform(), 
+                                color = cl_labelGrid, fontsize='small')
+            self.ax2.axhline (y= thresh, xmin=0, xmax=0.035, linestyle='dashed', linewidth=0.5, color = cl_labelGrid,)
+            self.ax2.axhline (y=-thresh, xmin=0, xmax=0.035, linestyle='dashed', linewidth=0.5, color = cl_labelGrid,)
+        else: 
+            self.ax2.clear()
+            self.ax2.set_ylim([ -1, 1])
 
-        self.ax2.set_ylim([ -100, 1000])
-        # self.ax2.set_aspect('auto', 'datalim')
-        self.ax2.grid ()
+        self.ax2.grid (visible=True)
 
 
     def setup_artists(self):
@@ -574,14 +591,15 @@ class Diagram_Airfoil (Diagram_Abstract):
 
         r += 1
         Label_Widget  (self.view_frame, r, 0, lab='Curvature')
-        # Switch_Widget (self.view_frame,r,c, padx=10, lab='Curvature', disable= True,
-        #                get=lambda: self.curvatureArtist.show, set=self.curvatureArtist.set_show)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Upper side', 
                        get=lambda: self.curvatureArtist.upper, set=self._set_upper)
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Lower side',
                        get=lambda: self.curvatureArtist.lower, set=self._set_lower)
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='log scale y',
+                       val=True, set=self._set_logScale)
 
         return r, c
 
@@ -599,6 +617,10 @@ class Diagram_Airfoil (Diagram_Abstract):
 
     def _set_lower (self, aBool):
         self.curvatureArtist.set_lower(aBool) 
+        self.refresh()
+
+    def _set_logScale (self, aBool):
+        self.setup_axes(show_logScale=aBool)
         self.refresh()
 
     # -------- event handler
@@ -826,7 +848,7 @@ class Edit_File_Menu(Edit_Abstract):
         # if called from parentApp offer "Ok and return" and "Cancel"
         if self.myApp.isModal:
             r +=1 
-            self.add(Button_Widget (self,r,c, lab='Ok & Return', primary=True,       
+            self.add(Button_Widget (self,r,c, lab='Ok & Return', style=PRIMARY,       
                                     width=120, pady=4, sticky = 'ew', set=self.myApp.ok_return))
             r +=1 
             self.add(Button_Widget (self,r,c, lab='Cancel', width=120, pady=4, sticky = 'ew', set=self.myApp.cancel))
@@ -835,6 +857,11 @@ class Edit_File_Menu(Edit_Abstract):
  
         r +=1 
         Blank_Widget (self,r,c,  height= 50)
+
+
+    def refresh(self):
+        # refresh typically based on changed events 
+        super().refresh()
 
     def airfoilFileNames (self): 
 
@@ -851,7 +878,9 @@ class Edit_File_Menu(Edit_Abstract):
         
         for aPathFileName in self.myApp.airfoilFiles:
             if newFileName == os.path.basename(aPathFileName):
-                self.myApp.loadNewAirfoil (aPathFileName)
+
+                if os.path.isfile (aPathFileName):                  # maybe it was deleted in meantime 
+                    self.myApp.loadNewAirfoil (aPathFileName)
                 self.refresh()
                 break
 
@@ -950,12 +979,14 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
     def __init__(self, master, airfoilFn, workingDir=None, nameExt='-mod', *args, **kwargs):
         super().__init__(master, *args, **kwargs)
 
-        self.airfoilOrg : Airfoil = airfoilFn()
-        self.airfoilOrg._spline = None                     # ensure a new, clean spline 
-        self.airfoilOrg.spline.set_le_highPrecision(True)  # ensure exact le based on spline
+        self.airfoilOrg : Airfoil = airfoilFn()             # keep the original airfoil 
 
         self.airfoil  = Airfoil.asCopy (self.airfoilOrg, nameExt=nameExt) 
-        self.airfoil.spline.set_le_highPrecision(True)     # ensure exact le based on spline
+        self.hasbeen_normalized = False
+
+        if not self.airfoil.isNormalized_highPrec:          # also LE of spline at 0,0? 
+            self.hasbeen_normalized = self.airfoil.normalize (highPrec = True)        # ensure exact le based on spline
+
 
         # input field will fire this event when data is changed
         self.change_event = AIRFOIL_CHANGED
@@ -985,15 +1016,17 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
         self.nameWidget = Field_Widget  (self.button_frame,r,c, lab="New Airfoil name", 
                                  obj=self.airfoil, get='name', set='set_name',
                                  lab_width=130, width=220, justify='left')
-        c += 3
-        Label_Widget (self.button_frame,r,c+8, text_style='Warning',
-                                lab= lambda: self._save_warning(), width= 110)
         c += 2
-        Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, width=100)
+        Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, width=90)
         c += 1 
-        Button_Widget (self.button_frame,r,c, lab='Ok', set=self.ok, primary=True, width=100)
+        Button_Widget (self.button_frame,r,c, lab='Ok', set=self.ok, style=PRIMARY, width=90)
         c += 1 
-        Button_Widget (self.button_frame,r,c, lab='Cancel', set=self.cancel, width=100)
+        Button_Widget (self.button_frame,r,c, lab='Cancel', set=self.cancel, width=90)
+
+        c += 1
+        Label_Widget (self.button_frame,r,c, text_style='Warning',
+                                lab= lambda: self._save_warning(), width= 110)
+
         self.button_frame.grid_columnconfigure (9, weight=1)
 
         # changed bindings
@@ -1174,7 +1207,7 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
 
     def le_bunch_message (self): 
         angle = self.airfoil.panelAngle_le
-        if angle > 170.0: 
+        if angle > 172.0: 
             text = "Angle at LE is too blunt. Decrease bunch" 
         elif angle < 155.0: 
             text = "Angle at LE is too sharp. Increase bunch"
@@ -1364,16 +1397,15 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
     Dialog to normalize airfoil
     """
 
-    width  = 840
+    width  = 900
     height = 370
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
         super().__init__(master, airfoilFn, *args, nameExt='-norm', height=self.height/2, **kwargs)
 
-        # start with a normalized airfoil 
-        self.airfoil.normalize(highPrec = True)
+        # ! see Dialog_Airfoil_Abstract for init of airfoil !
 
-        self.title ("Noramlize airfoil  [" + self.airfoil.name + "]")
+        self.title ("Normalize airfoil  [" + self.airfoil.name + "]")
 
         self.diagram_frame.grid_remove()                # not neeeded here
 
@@ -1466,7 +1498,7 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
             if self.airfoilOrg.te_fromPoints[0] != 1.0 or \
                self.airfoilOrg.te_fromPoints[2] != 1.0 : return 'Warning'
         elif coord =="te_y":
-            if self.airfoilOrg.te_fromPoints[3] != - self.airfoil.te_fromPoints[1] : return 'Warning'
+            if self.airfoilOrg.te_fromPoints[3] != - self.airfoilOrg.te_fromPoints[1] : return 'Warning'
 
 
 #-------------------------------------------
@@ -1485,12 +1517,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
 
         self.airfoil.set_isEdited (True)            # will indicate airfoil when plotted 
 
-        # the airfoil must be / will be normalized for geometry modifications
-        if not self.airfoil.isNormalized: 
-            self.airfoil.normalize (highPrec=True)  # will normalize also spline LE to 0,0
-            wasNormalized = True
-        else:
-            wasNormalized = False
+        # ! see Dialog_Airfoil_Abstract for init of airfoil !
 
         self.title ("Modify airfoil  [" + self.airfoil.name + "]")
 
@@ -1530,35 +1557,35 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
 
         r = 0 
         c = 0 
-        if wasNormalized: 
-            Label_Widget (self.input_frame,r,c, padx=5, lab= "Normalized, modified airfoil", columnspan = 3,
+        if self.hasbeen_normalized: 
+            Label_Widget (self.input_frame,r,c, padx=5, lab= "Working copy normalized for higher precision", columnspan = 3,
                           text_style="Warning")
         else:
-            Label_Widget (self.input_frame,r,c, padx=5, lab= "New, modified airfoil", columnspan = 2)
+            Label_Widget (self.input_frame,r,c, padx=5, lab= "Working copy", columnspan = 2)
 
         r += 1
         Blank_Widget (self.input_frame, r,10, height=5)
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="Thickness", obj=self.airfoil, 
-                                get='maxThickness', set='set_maxThickness', step=0.1, 
+                                get='maxThickness', set='set_maxThickness', step=0.01, 
                                 spin=True, width=95, lab_width=70, unit="%", dec=2,
                                 event=self.change_event))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
-                                get='maxThicknessX', set='set_maxThicknessX', step=0.5, 
+                                get='maxThicknessX', set='set_maxThicknessX', step=0.1, 
                                 spin=True, width=95, unit="%", dec=2,
                                 event=self.change_event))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="Camber", obj=self.airfoil, 
                                 get='maxCamber', set='set_maxCamber', disable= 'isSymmetric',  
-                                spin=True, width=95, lab_width=70, unit="%", dec=2, step=0.1,
+                                spin=True, width=95, lab_width=70, unit="%", dec=2, step=0.01,
                                 event=self.change_event))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
                                 get='maxCamberX', set='set_maxCamberX', disable= 'isSymmetric',  
-                                spin=True, width=95, unit="%", dec=2, step=0.5,
+                                spin=True, width=95, unit="%", dec=2, step=0.1,
                                 event=self.change_event))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="TE gap", obj=self.airfoil, 
-                                get='teGap', set='set_teGap', step=0.1,
+                                get='teGap', set='set_teGap', step=0.01,
                                 spin=True, width=95, lab_width=70, unit="%", dec=2,
                                 event=self.change_event))
 
@@ -1629,7 +1656,8 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
 #-------------------------------------------------------------------------------
 
 # class AirfoilEditor (ctk.CTkToplevel):
-class AirfoilEditor (ctk.CTk):
+# class AirfoilEditor (ctk.CTk):
+class AirfoilEditor ():
     '''
 
         The AirfoilEditor App
@@ -1640,7 +1668,7 @@ class AirfoilEditor (ctk.CTk):
 
     name = AppName  
 
-    def __init__(self, airfoilFiles, parentApp=None):
+    def __init__(self, airfoilFile, parentApp=None):
 
 
         # called from another App? Switch to modal window
@@ -1648,30 +1676,31 @@ class AirfoilEditor (ctk.CTk):
         #   self is not a subclass of ctk to support both modal and root window mode 
 
         self.parentApp = parentApp
+        self.ctk_root  = None                       # will be set later 
+        self.main      = None                       # the topLevel widget 
         self.isModal   = not self.parentApp is None
+        self.return_OK = False
+
+        # create windows 
 
         if self.isModal: 
             # modal - inherit ctk mode from parent
             main = ctk.CTkToplevel (parentApp)
+            self.set_initialWindowSize(master=main, widthFrac=0.88, heightFrac=0.7)
             main.geometry("1450x750")
             main.transient (parentApp)
             main.resizable(False, False)                # width, height
             main.focus_force() 
             main.grab_set()
-            self.return_OK = False
             self.return_newAirfoilPathFileName = None   # return value for parent
+            self.return_newAirfoilName         = None   # return value for parent
 
         else: 
-            # ctk.set_appearance_mode("System")           # Modes: "System" (standard), "Dark", "Light"
-            # ctk.set_default_color_theme("blue")         # Themes: "blue" (standard), "green", "dark-blue"
             main = ctk.CTk()  
-            main.geometry("1500x750")
-            main.minsize (width=1450, height=600)
+            self.set_initialWindowSize(master=main, widthFrac=0.9, heightFrac=0.75)
 
         self.main = main 
         main.protocol("WM_DELETE_WINDOW", self.onExit)  # intercept app close by user 
-
-        # setup event root - so there will be a single root -> ctk root
         self.ctk_root = main          
 
         # check and load the passed airfoil(s)
@@ -1679,19 +1708,16 @@ class AirfoilEditor (ctk.CTk):
         self.airfoilFiles =[]
         self.curAirfoilFile = None
 
-        if not airfoilFiles:                            # show a demo airfoil 
+        if not airfoilFile:                            # show a demo airfoil 
             self.airfoilFiles.append ("Root_Example")
         else: 
-            if not type(airfoilFiles) == list: 
-                if os.path.isfile (airfoilFiles):
-                    self.airfoilFiles.append (airfoilFiles)
-                else:
-                    ErrorMsg ("'%s' does not exist. AirfoilEditor aborted." % airfoilFiles) 
-                    # self.onExit()
-                    return
+            if os.path.isfile (airfoilFile):
+                self.airfoilFiles= self._getAirfoilFiles_sameDir (airfoilFile)
             else:
-                self.airfoilFiles = airfoilFiles
-        self.loadNewAirfoil (self.airfoilFiles[0])
+                ErrorMsg ("'%s' does not exist. AirfoilEditor aborted." % airfoilFile) 
+                self.cancel()
+                return
+        self.loadNewAirfoil (airfoilFile)
 
         # create main frames        
 
@@ -1757,24 +1783,60 @@ class AirfoilEditor (ctk.CTk):
         except: 
             ErrorMsg ("Could not add %s to airfoil list" % aPathFileName )
 
+    def _getAirfoilFiles_sameDir (self, anAirfoilFile): 
+        """ returns the list of airfoilFiles in the same directory as anAirfoilFile"""
+
+        if os.path.isfile (anAirfoilFile):
+            airfoil_dir = os.path.dirname(anAirfoilFile)
+            airfoil_files = fnmatch.filter(os.listdir(airfoil_dir), '*.dat')
+            airfoil_files = [os.path.normpath(os.path.join(airfoil_dir, f)) \
+                                for f in airfoil_files if os.path.isfile(os.path.join(airfoil_dir, f))]
+            return sorted (airfoil_files)
+        else:
+            return []
+
+
     def _set_title(self):
         """ sets window title of self """
         self.main.title (AppName + "  v" + str(AppVersion) + "  [" + self.curAirfoil().name + "]")
 
 
+    def set_initialWindowSize(self, master=None, widthFrac=0.9, heightFrac=0.8):
+        """ set size and position of tkinter window  """
+
+        if master is None: 
+            master = self
+
+        width  = int (master.winfo_screenwidth()  * widthFrac)
+        height = int (master.winfo_screenheight() * heightFrac) 
+
+        master.minsize(int(width*0.9), int(height*0.8))
+        master.geometry("%dx%d" %(width, height))
+
+        x = master.winfo_screenwidth()  // 2 - width // 2
+        y = (master.winfo_screenheight() // 2 - height // 2) // 2
+
+        master.geometry("+%d+%d" %(x, y))
+
+
+
     #------- file functions ----------------
 
     def open (self):
-        """ open a new wing definition json and load it"""
+        """ open a new wairfoil and load it"""
 
         filetypes  = [('Airfoil files', '*.dat')]
         newPathFilenames = filedialog.askopenfilenames(
                     title='Select one or more airfoils',
                     initialdir=os.getcwd(),
                     filetypes=filetypes)
-        if newPathFilenames:                       # user pressed open
-            self.airfoilFiles = list(newPathFilenames)
-            self.loadNewAirfoil (self.airfoilFiles[0])
+        if newPathFilenames:                    # user pressed open
+            newPathFilenames = list(newPathFilenames)
+            if len (newPathFilenames) <= 1:     # ... selected one file 
+                self.airfoilFiles= self._getAirfoilFiles_sameDir (newPathFilenames[0])
+            else:                               # ... and selected many files 
+                self.airfoilFiles = list(newPathFilenames)
+            self.loadNewAirfoil (newPathFilenames[0])
 
 
     def loadNewAirfoil(self, pathFilename, airfoil= None):
@@ -1788,8 +1850,9 @@ class AirfoilEditor (ctk.CTk):
         airfoil.load()
 
         self.curAirfoilFile = airfoil.pathFileName
-        self.set_curAirfoil (airfoil)
-        self._set_title()
+        if self.main:                               # during startup there is no main 
+            self.set_curAirfoil (airfoil)
+            self._set_title()
 
 
     def ok_return(self): 
@@ -1797,6 +1860,7 @@ class AirfoilEditor (ctk.CTk):
         if self.isModal:
             self.return_OK = True
             self.return_newAirfoilPathFileName = self.curAirfoil().pathFileName
+            self.return_newAirfoilName = self.curAirfoil().name
             self.onExit()
 
 
@@ -1821,25 +1885,26 @@ if __name__ == "__main__":
     # init colorama
     just_fix_windows_console()
 
-    parser = argparse.ArgumentParser(prog=AppName, description='Show and edit (tbd) an airfoil')
+    parser = argparse.ArgumentParser(prog=AppName, description='View and edit an airfoil')
     parser.add_argument("airfoil", nargs='*', help="Airfoil .dat file to show")
     args = parser.parse_args()
 
     if args.airfoil: 
-        airfoil_files = args.airfoil[0]
-        if not os.path.isfile (airfoil_files):
-            ErrorMsg ("Airfoil file '%s' doesn't exist" %airfoil_files )
+        airfoil_file = args.airfoil[0]
+        if not os.path.isfile (airfoil_file):
+            ErrorMsg ("Airfoil file '%s' doesn't exist" %airfoil_file )
             sys.exit(1)
     else: 
         if os.path.isdir(".\\test_airfoils"):
             airfoil_dir   =".\\test_airfoils"
             airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
             airfoil_files = sorted (airfoil_files)
+            airfoil_file = airfoil_files[0]
             NoteMsg ("No airfoil file as argument. Showing example airfoils in '%s'" %airfoil_dir)
         else:
             NoteMsg ("No airfoil file as argument. Showing example airfoil...")
-            airfoil_files = None
+            airfoil_file = None
 
-    myApp = AirfoilEditor (airfoil_files)
+    myApp = AirfoilEditor (airfoil_file)
     
  
