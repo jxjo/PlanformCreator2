@@ -62,7 +62,7 @@ class Export_Xflr5:
 
     @property
     def fileName(self): 
-        return self.wing.name.strip() +  '_wing.xfl'
+        return self.wing.name.strip() +  '_wing.xml'
 
 
     def doIt (self): 
@@ -77,13 +77,12 @@ class Export_Xflr5:
 
         self.export_wing (pathFileName)
 
-        airfoilList = self.wing.do_export_airfoils (targetDir, useNick=self.useNick)
+        nAirfoils = len(self.wing.do_export_airfoils (targetDir, useNick=self.useNick))
 
-        InfoMsg("Xflr5 data successfully written to %s." % pathFileName)
-        message = self.wing.name + " + airfoils: \n\n" + \
-                  ',  '.join(airfoilList)  + \
-                  "\n\n exported to \n\n" + \
-                  "'" +  targetDir + "'"      
+        InfoMsg("Xflr5 data written to %s." % pathFileName)
+        message = "'%s' and %d airfoils written to \n\n" %(self.fileName, nAirfoils) + \
+                  "'%s'\n\n" %(targetDir) + \
+                  "Import wing as xml into Xflr5"   
         return message
 
 
@@ -112,15 +111,26 @@ class Export_Xflr5:
             descriptionXml.text = "by Planform Creator 2"
 
         # find sections-data-template
-        for sectionTemplateXml in wingXml.iter('Sections'):
+        for sectionsTemplateXml in wingXml.iter('Sections'):
             # copy the template
-            newSectionXml = deepcopy(sectionTemplateXml)
+            # newSectionXml = deepcopy(sectionsTemplateXml)
+            sectionsXml = deepcopy(sectionsTemplateXml)
 
-            # remove the template
-            wingXml.remove(sectionTemplateXml)
+            # remove the template from wing 
+            wingXml.remove(sectionsTemplateXml)
+
+            # find section-data-template
+            for sectionTemplateXml in sectionsXml.iter('Section'):
+                newSectionXml = deepcopy(sectionTemplateXml)
+
+                # remove the template from sections
+                sectionsXml.remove(sectionTemplateXml)
 
         # write the new section-data to the wing
         section : WingSection
+
+        # get section yPos and chord from paneled planform as tip could be cutted 
+        sections_yPos, sections_chord = self.paneledPlanform._sections_yPos_chord()
 
         for iSec, section in enumerate(self.wing.wingSections):
             # copy the template
@@ -143,13 +153,13 @@ class Export_Xflr5:
                 y_panel_distribution.text = str(xflr5_dist)
 
             for yPosition in newSectionXml.iter('y_position'):
-                yPosition.text = str(section.yPos)
+                yPosition.text = str(sections_yPos[iSec])
 
             for chord in newSectionXml.iter('Chord'):
-                chord.text = str(section.chord)
+                chord.text = str(sections_chord[iSec])
 
             for xOffset in newSectionXml.iter('xOffset'):
-                le, te = self.paneledPlanform._planform_function (section.yPos)
+                le, te = self.paneledPlanform._planform_function (sections_yPos[iSec])
                 xOffset.text = str(le)
 
             for dihedral in newSectionXml.iter('Dihedral'):
@@ -168,7 +178,9 @@ class Export_Xflr5:
                 foilName.text = re.sub('.dat', '', airfoilName)
 
             # add the new section to the tree
-            wingXml.append(newSectionXml)
+            sectionsXml.append(newSectionXml)
+        
+        wingXml.append(sectionsXml)
 
         tree.write(pathFileName)
 

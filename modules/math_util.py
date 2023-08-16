@@ -256,7 +256,10 @@ def nelder_mead_1D (f, x_start,
 
         # reflection
         xr = x0 + alpha*(x0 - res[-1][0])
-        rscore = f(xr) + penalty(xr, bounds)
+        if penalty(xr, bounds):
+            rscore = penalty(xr, bounds)                    # xr out of bounds 
+        else: 
+            rscore = f(xr) + penalty(xr, bounds)
 
         if res[0][1] <= rscore < res[-2][1]:
             del res[-1]
@@ -339,8 +342,8 @@ def findMax (fn, xStart, bounds=None):
     xmax =  nelder_mead_wrap(lambda x: - (fn(x)), xStart, bounds=bounds)    
     return xmax 
 
-def findRoot (fn, xStart, bounds=None): 
-    xRoot =  nelder_mead_wrap(lambda x: abs(fn(x)), xStart, no_improve_thr=10e-12,  bounds=bounds)    
+def findRoot (fn, xStart, bounds=None, no_improve_thr=10e-12): 
+    xRoot =  nelder_mead_wrap(lambda x: abs(fn(x)), xStart, no_improve_thr=no_improve_thr,  bounds=bounds)    
     return xRoot 
 
 

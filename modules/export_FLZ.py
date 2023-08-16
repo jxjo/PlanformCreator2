@@ -293,33 +293,36 @@ class SEGMENT (FLZ_Element):
         leftSectionIndex  = self.wing.wingSectionIndexOf (self.leftSection)  - 1  # this index is +1 
         rightSectionIndex = self.wing.wingSectionIndexOf (self.rightSection) - 1  # this index is +1 
 
-        if self.leftSection.yPos < self.rightSection.yPos:          # right halfwing
-            chord     = self.rightSection.chord / 1000
+        # use sections of the paneled planform as original tip cut be cutted due to minTipChord ... 
+        sections_yPos, sections_chord = self.paneledPlanform._sections_yPos_chord()
+        leftSection_yPos   = sections_yPos  [leftSectionIndex]
+        leftSection_chord  = sections_chord [leftSectionIndex]
+        rightSection_yPos  = sections_yPos  [rightSectionIndex]
+        rightSection_chord = sections_chord [rightSectionIndex]
+
+        if leftSection_yPos <rightSection_yPos:          # right halfwing
+            chord     = rightSection_chord / 1000
             flapGroup = self.leftSection.flapGroup
             y_panels  = self.paneledPlanform.y_panels_forSection(leftSectionIndex)
         else:                                                       # left halfwing 
-            chord     = self.leftSection.chord / 1000
+            chord     = leftSection_chord / 1000
             flapGroup = self.rightSection.flapGroup
             y_panels  = self.paneledPlanform.y_panels_forSection(rightSectionIndex)
             # we have to flip FLZ SIN_R - SIN_L  on left side 
             if   distrib == "SIN_R": distrib = "SIN_L"
             elif distrib == "SIN_L": distrib = "SIN_R"
-        width = (self.rightSection.yPos - self.leftSection.yPos) / 1000
+        width = (rightSection_yPos - leftSection_yPos) / 1000
         refChord = 0.0 
         twist = 0.0 
         dihedral = 0.0
 
-        # todo 
-        # do not write a segment with a chord length < 20 mm
-        if chord < 20.0 / 1000: return 
-
-        le_left,_  = self.wing.planform._planform_function (self.leftSection.yPos)  
-        le_right,_ = self.wing.planform._planform_function (self.rightSection.yPos) 
+        le_left,_  = self.wing.planform._planform_function (leftSection_yPos)  
+        le_right,_ = self.wing.planform._planform_function (rightSection_yPos) 
         sweep = atan (abs((le_left - le_right)/(1000 *width))) * 180 / pi
         refSweep = 0
 
-        flapDepthLeft  = self.wing.planform.flapDepthAt (self.leftSection.yPos)  * 100
-        flapDepthRight = self.wing.planform.flapDepthAt (self.rightSection.yPos) * 100
+        flapDepthLeft  = self.wing.planform.flapDepthAt (leftSection_yPos)  * 100
+        flapDepthRight = self.wing.planform.flapDepthAt (rightSection_yPos) * 100
 
         self._write (aStream, self.startTag)
 

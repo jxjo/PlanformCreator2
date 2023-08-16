@@ -311,7 +311,7 @@ class Edit_Wing_Data (Edit_Abstract):
         Blank_Widget (self,r,0, width=20, height = 15) 
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Re at root",    obj=self.wing, get='rootRe', set='set_rootRe',
-                                 event=WING_CHANGED, lim=(0,10000000), dec=0, spin=True, step=1000))
+                                 event=WING_CHANGED, dec=0, spin=True, step=1000))
 
         # a mini frame to bring the two nick fields together
         self.nick_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -748,11 +748,12 @@ class Edit_WingSection(Edit_Abstract):
         self.add(Field_Widget  (self,5,0, lab="Airfoil", width=110, obj=self.wingSection, 
                                 get='airfoilName', set='', disable=True, event=SECTION_CHANGED))
         
-        self.add(Button_Widget (self,5,2, lab='Select', width=60, columnspan=2, sticky='w',  set=self.select_airfoil ))
-        self.add(Button_Widget (self,5,2, lab='Edit',   width=60, columnspan=2, sticky='e',   set=self.edit_airfoil,
-                                disable=self.edit_airfoil_disable ))
-        self.add(Button_Widget (self,5,4, lab='Remove', width=60, columnspan=3, sticky='w',  set=self.remove_airfoil, 
-                                disable=self.remove_airfoil_disable ))
+        self.add(Button_Widget (self,5,2, lab='Select', width=60, columnspan=2, sticky='w',style=SUPTLE, 
+                                set=self.select_airfoil ))
+        self.add(Button_Widget (self,5,2, lab='Edit',   width=60, columnspan=2, sticky='e', style=SUPTLE,
+                                set=self.edit_airfoil, disable=self.edit_airfoil_disable ))
+        self.add(Button_Widget (self,5,4, lab='Remove', width=60, columnspan=3, sticky='w', style=SUPTLE,
+                                set=self.remove_airfoil, disable=self.remove_airfoil_disable ))
 
         self.add(Field_Widget  (self,6,0, lab="Airfoil nick", obj=self.wingSection ,get='airfoilNick', 
                                                 disable=True, width=110))
@@ -1743,8 +1744,8 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
     Export planform as paneled for Xflr5 oder FLZ 
 
     """
-    width  = 1000
-    height = 470
+    width  = 1100
+    height = 500
     titleText  = "Export to ..."
 
     def __init__(self, master, wingFn, Xflr5=False, Flz=False, *args, **kwargs):
@@ -1764,7 +1765,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
 
         # main grid 3 x 1  (preview + edit + buttons) 
 
-        self.diagram_frame = Diagram_Planform_Mini (self.edit_frame, wingFn, size=(4,2.4))
+        self.diagram_frame = Diagram_Planform_Mini (self.edit_frame, wingFn, size=(4,2.8))
         self.diagram_frame.grid(row=0, column=0, sticky="nwe")
 
         self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
@@ -1794,7 +1795,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
 
         # entry fields 
         r +=1  
-        self.add (Field_Widget  (self.input_frame,r,c, lab="  x-panels", width=80,
+        self.add (Field_Widget  (self.input_frame,r,c, lab="x-panels", width=100, padx=(20,0),
                                  obj=self.paneledPlanform, get='x_panels', set='set_x_panels',
                                  event=PANELS_CHANGED, lim=(1,50), dec=0, spin=True, step=1))
         self.add (Combo_Widget  (self.input_frame,r,c+3, lab="x-distribution", width=90,
@@ -1803,7 +1804,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
                                  event=PANELS_CHANGED ))
 
         r +=1  
-        self.add (Field_Widget  (self.input_frame,r,c, lab="  y-panels", width=80,
+        self.add (Field_Widget  (self.input_frame,r,c, lab="y-panels", width=100, padx=(20,0),
                                  obj=self.paneledPlanform, get='y_panels', set='set_y_panels',
                                  event=PANELS_CHANGED, lim=(1,50), dec=0, spin=True, step=1))
         self.add (Combo_Widget  (self.input_frame,r,c+3, lab="y-distribution",  width=90,
@@ -1811,9 +1812,17 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
                                  options=self.paneledPlanform.distribution_fns_names(),
                                  event=PANELS_CHANGED ))
         r +=1  
-        self.add (Field_Widget  (self.input_frame,r,c, lab="  y min width", width=80,
+        self.add (Field_Widget  (self.input_frame,r,c, lab="Min panel width", width=100, padx=(20,0), lab_width=110,
                                  obj=self.paneledPlanform, get='y_minWidth', set='set_y_minWidth',
                                  event=PANELS_CHANGED, lim=(1,40), dec=0, spin=True, step=1, unit=self.wing.unit))
+        text = "Good value could be 20 %s" %(self.wing.unit)
+        self.add (Label_Widget  (self.input_frame,r,c+3, lab=text, padx=(0,0)))
+        r +=1  
+        self.add (Field_Widget  (self.input_frame,r,c, lab="Min tip chord", width=100, padx=(20,0),
+                                 obj=self.paneledPlanform, get='minTipChord', set='set_minTipChord',
+                                 event=PANELS_CHANGED, lim=(1,100), dec=0, spin=True, step=1, unit=self.wing.unit))
+        text = "Tip chord of wing is %d %s" %(self.wing.tipchord, self.wing.unit)
+        self.add (Label_Widget  (self.input_frame,r,c+3, lab=text, padx=(0,0)))
 
         r = 1 
         c = 7 
@@ -1836,7 +1845,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
             self.add(Button_Widget (self.button_frame,r,c, lab='Launch FLZ', set=self.launch_Flz, width=100,
                                     disable=self.launch_Flz_disabled))
         c += 1 
-        self.add(Button_Widget (self.button_frame,r,c, lab='Cancel', set=self.cancel, width=100))
+        self.add(Button_Widget (self.button_frame,r,c, lab='Close', set=self.cancel, width=100))
         self.button_frame.grid_columnconfigure (0, weight=1)
         self.button_frame.grid_columnconfigure (4, weight=1)
 
@@ -1884,6 +1893,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         """try to open FLZ_vortex on the exportet file"""
         
         pathFileName = os.path.join (self.exporter.baseAndExportDir, self.exporter.fileName) 
+        
         message = self.exporter.doIt()
         try: 
             os.startfile(pathFileName, 'open')
