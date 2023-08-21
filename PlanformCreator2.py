@@ -47,7 +47,8 @@ sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 
 from common_utils       import * 
 from wing_model         import Planform, Planform_Bezier_StraightTE, \
-                                       Planform_DXF, Planform_Trapezoidal, Planform_Bezier                         
+                                       Planform_DXF, Planform_Trapezoidal, Planform_Bezier         
+from ui_base            import Dialog_Abstract, Edit_Abstract, set_initialWindowSize, Dialog_Settings              
 from widgets            import * 
 from artist             import Plot_Toolbar
 from wing_artists       import *
@@ -82,6 +83,8 @@ def fireEvent(ctk_root : ctk.CTkToplevel, eventType):
     """ fire event for the current ctk_root toplevel widget """
     if not ctk_root is None: 
         ctk_root.event_generate (eventType) 
+        print ("Event ", eventType)
+
 
 
 #-------------------------------------------------------------------------------
@@ -115,8 +118,8 @@ class Edit(ctk.CTkFrame):
 
         self.grid_rowconfigure      (0, weight=1)
         self.grid_columnconfigure   (0, weight=0)
-        self.grid_columnconfigure   (1, weight=0, minsize=400)
-        self.grid_columnconfigure   (2, weight=0, minsize=400)
+        self.grid_columnconfigure   (1, weight=0) #, minsize=400
+        self.grid_columnconfigure   (2, weight=0) #, minsize=400
         self.grid_columnconfigure   (3, weight=1, minsize=400)
 
         self.editWing_frame.grid          (row=0, column=1, pady=(0,5), padx=(5,0), sticky="news")
@@ -200,22 +203,17 @@ class Edit(ctk.CTkFrame):
 #-------------------------------------------
 
 
-class Edit_Abstract (ctk.CTkFrame):
+class Edit_Abstract_Wing (Edit_Abstract):
     """ 
     Abstract superclass for all the edit like frames
     """
 
     def __init__(self, master, wingFn, *args, **kwargs):
-        super().__init__(master, *args, **kwargs)
 
         self._wingFn = wingFn               # the function to the wing (indirect because of new wing could be set)
-        self.widgets = []
 
-        # root for change events (widgets will have the same toplevel as root)
-        self.ctk_root = self.winfo_toplevel()
+        super().__init__(master, *args, **kwargs)
 
-        self.init()
-    
     def wing(self) -> Wing:
         # it's a method - not a property to exchange the wing 
         return self._wingFn()
@@ -223,36 +221,10 @@ class Edit_Abstract (ctk.CTkFrame):
     def planform(self) -> Planform:
         return self.wing().planform
     
-    @property
-    def myApp (self) -> 'App':
-        """ the App self belongs to"""
-        return self.winfo_toplevel()
-    
-    @property
-    def workingDir (self): 
-        """ the current (default) working for file saves etc. """
-        return self.myApp.workingDir
-
-
-
-    def init(self):
-        # main method - to be overloaded by sub class
-        pass
-
-    def add (self, aWidget): 
-        # kepp track of the widgets of self to be able to refresh them
-        self.widgets.append (aWidget)
-
-    def refresh(self):
-        # refresh typically based on changed events 
-        for widget in self.widgets:
-            if isinstance(widget, Base_Widget): widget.refresh()
-            # print ("  - refresh in ", self.__class__.__name__," for %s widgets" % len(self.widgets))
-
         
 #-------------------------------------------
 
-class Edit_Wing(Edit_Abstract):
+class Edit_Wing(Edit_Abstract_Wing):
     """ 
     Frame to edit main data of the wing like wingspan. This is just the header
     """
@@ -279,7 +251,7 @@ class Edit_Wing(Edit_Abstract):
         
 #-------------------------------------------
 
-class Edit_Wing_Data (Edit_Abstract):
+class Edit_Wing_Data (Edit_Abstract_Wing):
     """ 
     Frame to edit main data of the wing like wingspan ...
     """
@@ -326,7 +298,7 @@ class Edit_Wing_Data (Edit_Abstract):
 
 #-------------------------------------------
 
-class Edit_Planform_Master(Edit_Abstract):
+class Edit_Planform_Master(Edit_Abstract_Wing):
     """ 
     Master/Header frame for planform type specific sub frames
     """
@@ -430,7 +402,7 @@ class Edit_Planform_Master(Edit_Abstract):
 #-------------------------------------------
 
 
-class Edit_Planform_Bezier(Edit_Abstract):
+class Edit_Planform_Bezier(Edit_Abstract_Wing):
     """ 
     Frame to edit the parameters of a Bezier based planform
     """
@@ -499,7 +471,7 @@ class Edit_Planform_Bezier(Edit_Abstract):
         
 
 
-class Edit_Planform_Trapezoid (Edit_Abstract):
+class Edit_Planform_Trapezoid (Edit_Abstract_Wing):
     """ 
     Frame to edit the parameters of a trapezoid planform
     """
@@ -526,7 +498,7 @@ class Edit_Planform_Trapezoid (Edit_Abstract):
 #-------------------------------------------
 
 
-class Edit_Planform_Bezier_StraightTE (Edit_Abstract):
+class Edit_Planform_Bezier_StraightTE (Edit_Abstract_Wing):
     """ 
     Frame to edit the parameters of a Bezier planform with straight TE
     """
@@ -556,7 +528,7 @@ class Edit_Planform_Bezier_StraightTE (Edit_Abstract):
 
 #-------------------------------------------
 
-class Edit_Planform_DXF (Edit_Abstract):
+class Edit_Planform_DXF (Edit_Abstract_Wing):
     """ 
     Frame to edit the parameters of a planform based on DXF
     """
@@ -599,7 +571,7 @@ class Edit_Planform_DXF (Edit_Abstract):
 
 
 
-class Edit_WingSection_Master(Edit_Abstract):
+class Edit_WingSection_Master(Edit_Abstract_Wing):
     """ 
     Master frame for wingSection - to select, add, delete a wing section
     Is parent for a single wing section frame
@@ -629,7 +601,7 @@ class Edit_WingSection_Master(Edit_Abstract):
         hfrm.grid (row=0, column=0, pady=0, padx=0, sticky="w")
 
         # init and set section data frame to current section 
-        self.set_curSection (self.curSection.name())
+        self.set_curSection (self.curSection.name(), initial=True)
 
 
     def curSectionName(self): return self.curSection.name()
@@ -660,7 +632,7 @@ class Edit_WingSection_Master(Edit_Abstract):
     def addDisabled (self):
         return self.curSection.isTip
 
-    def set_curSection (self, aName, inEvent=False):
+    def set_curSection (self, aName, inEvent=False, initial=False):
         """ 
         set the current section to edit in child frame
         if it's already set - do nothing
@@ -680,7 +652,7 @@ class Edit_WingSection_Master(Edit_Abstract):
 
         # inform diagram 
         self.myApp.set_curWingSectionName(aName)
-        if not inEvent:                         # avoid event ping pong
+        if not inEvent and not initial:                         # avoid event ping pong
             fireEvent (self.ctk_root, CURRENT_SECTION_CHANGED)    
 
 
@@ -701,7 +673,7 @@ class Edit_WingSection_Master(Edit_Abstract):
         self.set_curSection (self.wing().wingSections[0].name())
 
 
-class Edit_WingSection(Edit_Abstract):
+class Edit_WingSection(Edit_Abstract_Wing):
     """ 
     Frame to edit the parameters of a single wing section 
     """
@@ -749,7 +721,7 @@ class Edit_WingSection(Edit_Abstract):
                                 get='airfoilName', set='', disable=True, event=SECTION_CHANGED))
         
         self.add(Button_Widget (self,5,2, lab='Select', width=60, columnspan=2, sticky='w',style=SUPTLE, 
-                                set=self.select_airfoil ))
+                                padx=(3,10),set=self.select_airfoil ))
         self.add(Button_Widget (self,5,2, lab='Edit',   width=60, columnspan=2, sticky='e', style=SUPTLE,
                                 set=self.edit_airfoil, disable=self.edit_airfoil_disable ))
         self.add(Button_Widget (self,5,4, lab='Remove', width=60, columnspan=3, sticky='w', style=SUPTLE,
@@ -1550,83 +1522,6 @@ class Diagram_Airfoils (Diagram_Abstract):
 #-------------------------------------------------------------------------------
 
 
-class Dialog_Abstract (ctk.CTkToplevel):
-    """ 
-    Abstract superclass for windows dialogs 
-
-    self.return_OK is True if user conformed 'ok' 
-    """
-    width  = 500
-    height = 400
-    titleText  = "My little title"
-
-    def __init__(self, master, workingDir=None, *args, **kwargs):
-        super().__init__(master, *args, **kwargs)
-
-        # the default directory for file activities
-        self.workingDir = workingDir
-
-        # the attribute for return ok
-        self.return_OK = False
-
-        xPos, yPos = self.centerPosition(self.width, self.height)
-        self.geometry("%sx%s+%s+%s" %(self.width, self.height, xPos, yPos))
-
-        self.title (self.titleText)
-        self.resizable(False, False)                        # width, height
-        self.transient(master)
-
-        # make dialog modal 
-        self.focus_force() 
-        self.grab_set()
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
-
-        # root for change events (widgets will have the same toplevel as root)
-        self.ctk_root = self.winfo_toplevel()
-
-        self.edit_frame    = ctk.CTkFrame (self) 
-        self.grid_rowconfigure    (0, weight=1)
-        self.grid_columnconfigure (0, weight=1)
-        self.edit_frame.grid    (row=0, column=0, pady=5, padx=5, sticky="nesw")
-
-        self.widgets = []                                   # for refresh logic  
-
-
-    def ok (self):
-        # to over load and do ok actions
-        self.return_OK = True
-        self.editFrame = None                                
-        self.widgets = []                                   # ensure no widgets bound anymore 
-        self.destroy()
-
-    def cancel (self): 
-        # to over load and do cancel actions
-        self.editFrame = None                                
-        self.widgets = []                                   # ensure no widgets bound anymore 
-        self.destroy()
-
-    def add (self, aWidget): 
-        self.widgets.append (aWidget)
-
-    def refresh(self):
-        for widget in self.widgets:
-            if isinstance(widget, Base_Widget): widget.refresh()
-
-    def centerPosition(self, width=None, height=None):
-        """ get center of a tkinter window
-        """
-        self.update_idletasks()
-
-        if width is None:  width  = self.winfo_width()
-        if height is None: height = self.winfo_height()
-
-        x = self.winfo_screenwidth() // 2 - width // 2
-        y = self.winfo_screenheight() // 2 - int (height / 1.7)
-        return x, y
-
-
-#-------------------------------------------
-
 class Dialog_Load_DXF (Dialog_Abstract):
     """ 
     Import dxf file to be overlay or template planform 
@@ -2142,7 +2037,7 @@ class Dialog_Export_Airfoils (Dialog_Abstract):
 
 
 
-class Edit_File_Menu(Edit_Abstract):
+class Edit_File_Menu(Edit_Abstract_Wing):
     """ 
     Frame for the high level commands like load, save, ...
     The parent is the App itself
@@ -2152,7 +2047,9 @@ class Edit_File_Menu(Edit_Abstract):
     def init (self):
 
         self.grid_columnconfigure   (0, weight=1)
-        self.add (Header_Widget (self,0,0, lab=self.name, width=160))
+        Header_Widget (self,0,0, lab=self.name, width=80)
+        Button_Widget (self,0,0, lab='Settings', width=60, padx=(100,10), sticky = 'e', style=SUPTLE,
+                       set=self.myApp.edit_settings)
 
         Button_Widget (self,1,0, lab='New',         width=100, padx=30, pady=4, sticky = '', set=self.myApp.new)
         Button_Widget (self,2,0, lab='Open',        width=100, pady=4, sticky = '', set=self.myApp.open)
@@ -2203,15 +2100,14 @@ class App(ctk.CTk):
         self.ctk_root = self
 
         # settings file handler
-        self.settings = Settings(App.name)
+        self.settings = Settings()
 
         # create the 'wing' model 
         self.paramFile = '' 
-        self.loadNewWing (paramFile)
+        self.loadNewWing (paramFile, initial=True)
 
         # initial size of app window 
-        self.set_initialWindowSize(widthFrac=0.92, heightFrac=0.8)
-        # self.state('zoomed')
+        set_initialWindowSize(self, widthFrac=0.92, heightFrac=0.8)
 
         self._curWingSectionName = None                 # Dispatcher field between Diagram and Edit
 
@@ -2236,12 +2132,14 @@ class App(ctk.CTk):
         to enable a new wing to be set """
         return self._myWing
 
-    def set_wing (self, aNewWing):
+    def set_wing (self, aNewWing, initial=False):
         """ encapsulates current wing. Childs should acces only via this function
         to enable a new wing to be set """
         self._myWing = aNewWing
-        # mega alarm - inform everything
-        fireEvent (self.ctk_root, WING_NEW)
+
+        if not initial: 
+            # mega alarm - inform everything
+            fireEvent (self.ctk_root, WING_NEW)
 
     
     def curWingSectionName (self):
@@ -2267,24 +2165,6 @@ class App(ctk.CTk):
         else:
             project = "< new >"
         self.title (AppName + "  v" + str(AppVersion) + "  [" + project + "]")
-
-
-    def set_initialWindowSize(self, master=None, widthFrac=0.9, heightFrac=0.8):
-        """ set size and position of tkinter window  """
-
-        if master is None: 
-            master = self
-
-        width  = int (master.winfo_screenwidth()  * widthFrac)
-        height = int (master.winfo_screenheight() * heightFrac) 
-
-        master.minsize(int(width*0.9), int(height*0.8))
-        master.geometry("%dx%d" %(width, height))
-
-        x = master.winfo_screenwidth()  // 2 - width // 2
-        y = (master.winfo_screenheight() // 2 - height // 2) // 2
-
-        master.geometry("+%d+%d" %(x, y))
 
 
     #------- file functions ----------------
@@ -2347,11 +2227,18 @@ class App(ctk.CTk):
                 text = "Wing couldn't be saved to '%s'" % newPathFilename
                 Messagebox(self, title="Save wing", message=text, icon="cancel", option_1="Ok")  
 
+    def edit_settings (self):
+        """ file menu edit settings """
 
-    def loadNewWing(self, pathFilename):
+        Dialog_Settings(self)
+
+
+    #-------------
+
+    def loadNewWing(self, pathFilename, initial=False):
         """loads and sets a new wing model returns - updates title """
         
-        self.set_wing (Wing (pathFilename))
+        self.set_wing (Wing (pathFilename), initial=initial)
 
         if pathFilename:
             self.paramFile = PathHandler.relPath (pathFilename)
@@ -2430,15 +2317,15 @@ if __name__ == "__main__":
 
     # set ctk application settings prior to init 
 
-    mySettings = Settings(App.name, msg=True)
+    Settings.belongTo (__file__, msg=True)
 
-    ctk.set_appearance_mode    (mySettings.get('appearance_mode', default='System'))   # Modes:  "System" (standard), "Dark", "Light"
-    ctk.set_default_color_theme(mySettings.get('color_theme', default='blue'))         # Themes: "blue" (standard), "green", "dark-blue"
-    scaling = mySettings.get('widget_scaling', default=1.0)
+    ctk.set_appearance_mode    (Settings().get('appearance_mode', default='System'))   # Modes:  "System" (standard), "Dark", "Light"
+    ctk.set_default_color_theme(Settings().get('color_theme', default='blue'))         # Themes: "blue" (standard), "green", "dark-blue"
+    scaling = Settings().get('widget_scaling', default=1.0)
     if scaling != 1.0: 
         ctk.set_widget_scaling(scaling)  # widget dimensions and text size
+        ctk.set_window_scaling(scaling)  # scaling of window
         NoteMsg ("The App is scaled to %.2f" %scaling)
-        # ctk.set_window_scaling(1)
 
     # paramter file as argument?  
 
@@ -2449,12 +2336,14 @@ if __name__ == "__main__":
 
     if args.paramterfile: 
         parmFile = args.paramterfile[0]
-        if not os.path.isfile (parmFile):
+    else: 
+        #parmFile = Settings().get('lastOpenend', default=".\\examples\\vjx.glide\\VJX.glide.pc2") 
+        parmFile = Settings().get('lastOpenend', default=None) 
+
+    if parmFile and not os.path.isfile (parmFile):
             ErrorMsg ("Parameter file '%s' doesn't exist" %parmFile )
-            # sys.exit(1)
-    
-    if not parmFile: 
-        parmFile = mySettings.get('lastOpenend', default=".\\examples\\vjx.glide\\VJX.glide.pc2") 
+            Settings().set('lastOpenend', None) 
+            parmFile = None
 
     myApp = App(parmFile)
     myApp.mainloop()

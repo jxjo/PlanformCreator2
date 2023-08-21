@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 from math_util import * 
 from common_utils import * 
-from spline_of_airfoil import SideOfAirfoil, SplineOfAirfoil
+from spline_of_airfoil import SideOfAirfoil, SplineOfAirfoil, SideOfAirfoil_Bezier, UPPER,LOWER
 
 
 
@@ -747,7 +747,44 @@ class Airfoil:
         plt.show()    
 
 
+#------------------------------------------------------
 
+class Airfoil_Bezier(Airfoil):
+    """ 
+
+    Airfoil based on Bezier curves for upper and lower sid 
+
+    """
+
+    def __init__(self, name = None, workingDir= None):
+        """
+        Main constructor for new Airfoil
+
+        Args:
+            :pathFileName: optional - string of existinng airfoil path and name \n
+            :name: optional - name of airfoil - no checks performed 
+        """
+        super().__init__( name = name, workingDir= workingDir)
+
+        self._upper          = None             # upper side as SideOfAirfoil_Bezier object
+        self._lower          = None             # lower side 
+
+
+    @property
+    def upper(self) -> SideOfAirfoil_Bezier : 
+        """upper side as SideOfAirfoil_Bezier object"""
+        # overloaded
+        if self._upper is None: 
+            self._upper = SideOfAirfoil_Bezier (curveType=UPPER)
+        return self._upper 
+
+    @property
+    def lower(self) -> SideOfAirfoil_Bezier : 
+        """upper side as SideOfAirfoil_Bezier object"""
+        # overloaded
+        if self._lower is None: 
+            self._lower = SideOfAirfoil_Bezier (curveType=LOWER)
+        return self._lower 
 
 # ------------ test functions - to activate  -----------------------------------
 

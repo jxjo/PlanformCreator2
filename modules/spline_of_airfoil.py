@@ -9,7 +9,8 @@
 
 import numpy as np
 from math_util import * 
-from spline import Spline1D, Spline2D
+from copy import deepcopy
+from spline import Spline1D, Spline2D, Bezier
 
 
 
@@ -722,6 +723,205 @@ class SideOfAirfoil:
         """ returns interpolated y values based on new x-distribution"""
                 
         return self.spline.eval (x)
+
+
+
+
+# ---------------------------
+
+UPPER  = 'upper'
+LOWER  = 'lower'
+
+class SideOfAirfoil_Bezier (SideOfAirfoil): 
+    """ 
+    1D line of an airfoil like upper, lower side based on a Bezier curce
+    with x 0..1
+
+    """
+
+    def __init__ (self, name=None, curveType=UPPER):
+
+        self._name      = name 
+        self._bezier    = None                  # the bezier curve 
+        self._u         = None                  # bezier paramters 0..1
+        self._curveType = curveType             
+
+        self._maximum   = None                  # the highpoint of the spline line
+        self._threshold = 0.001                 # threshold for reversal dectection 
+
+
+    @property
+    def bezier(self) -> Bezier:
+        """ returns the bezier object of self"""
+
+        if self._bezier is None: 
+            # start with dummy Bezier
+            if self._curveType == UPPER: 
+                x = [   0,   0.0,  0.3,   1]
+                y = [   0,  0.04,  0.1,   0]    
+            else: 
+                x = [   0,   0.0,  0.25,   1]
+                y = [   0, -0.03, -0.08,   0]    
+
+            self._bezier = Bezier(x,y)
+        return self._bezier 
+
+    @property
+    def x (self):
+        return self.bezier.eval(self._u)[0]
+    
+    @property
+    def y (self): 
+        return self.bezier.eval(self._u)[1]
+    
+    @property
+    def name (self): 
+        return self._name
+    
+    @property
+    def threshold (self):   return self._threshold 
+    def set_threshold (self, aVal): 
+        self._threshold =aVal 
+
+
+    # ------------------
+
+    def insert_controlPoint_at (self, x, y): 
+        """ insert a new Bezier control point at x,y - taking care of order of points 
+        Returns index, where inserted or None if not successful
+                and x,y coordinates of new point after checks """
+
+        px = self.bezier.points_x
+
+        # never go beyond p0 and p-1
+        if x <= px[0] or x >= px[-1]: return None, None, None
+
+        # find index to insert - never before point 1
+        for i_insert, pxi in enumerate (px):
+            if i_insert > 1:                        # do not insert before p0 and p1 
+                if pxi > x: 
+                    break 
+
+        cpoints =  deepcopy(self.bezier.points) 
+        cpoints.insert (i_insert, (x, y)) 
+
+        # check if distance to neighbour is ok 
+        px_new, py_new = zip(*cpoints)
+        dx_right = abs (x - px_new[i_insert+1])
+        dx_left  = abs (x - px_new[i_insert-1])
+        if (dx_right < 0.01) or (dx_left < 0.01): 
+           return None, None, None
+
+        # update Bezier now, so redraw wil use the new curve 
+        self.bezier.set_points (cpoints )
+
+        return i_insert, x, y 
+    
+
+    def delete_controlPoint_at (self, index): 
+        """ delete a  Bezier control point at index - point 0,1 and n-1 are not deleted 
+        Returns index if successful - or None"""
+
+        cpoints =  deepcopy(self.bezier.points) 
+
+        # never delete point 0, 1 and -1
+        noDelete = [0,1, len(cpoints)-1]
+
+        if not index in noDelete:
+            del cpoints [index]
+            # update Bezier now, so redraw wil use the new curve 
+            self.bezier.set_points (cpoints )
+            return index
+        else: 
+            return None    
+
+
+    def move_controlPoint_to (self, index, x, y): 
+        """ move Bezier control point to x,y - taking care of order of points 
+        Returns x, y of new (corrected) position """
+
+        px = self.bezier.points_x
+        py = self.bezier.points_y
+
+        if index == 0:                          # fixed
+            x, y = 0.0, 0.0 
+        elif index == 1:                        # only vertical move
+            x = 0.0 
+            if py[index] > 0: 
+                y = max (y, 0.01)
+            else: 
+                y = min (y, - 0.01)
+        elif index == len(px) - 1:              # do not move TE gap   
+            x = 1.0 
+            y = px[index]                       
+        else:                                   # not too close to neighbour 
+            x = min (x, px[index+1] - 0.01)
+            x = max (x, px[index-1] + 0.01)
+
+        self.bezier.set_point (index, x,y) 
+
+        return x, y 
+
+
+    def reversals (self, xStart= 0.1):
+        """ 
+        returns a list of reversals (change of curvature sign equals curvature = 0 )
+        A reversal is a tuple (x,y) indicating the reversal on self. 
+        Reversal detect starts at xStart - to exclude turbulent leading area... 
+        """
+        # algorithm from Xoptfoil where a change of sign of y[i] is detected 
+        x = self.x
+        y = self.y
+
+        iToDetect = np.nonzero (x >= xStart)[0]
+
+        reversals = []
+        yold    = y[iToDetect[0]]
+        for i in iToDetect:
+            if abs(y[i]) >= self.threshold:                # outside threshold range
+                if (y[i] * yold < 0.0):                     # yes - changed + - 
+                    reversals.append((round(x[i],10),round(y[i],10))) 
+                yold = y[i]
+        return reversals 
+    
+
+    @property
+    def maximum (self): 
+        """ 
+        returns the x,y position of the maximum y value of self
+        """
+        if self._maximum is None: 
+            if np.max(self.y) == 0.0: 
+                xmax = 0.0 
+                ymax = 0.0 
+            else:
+                t_at_ymax = findMax (self.bezier.eval_y , 0.3, bounds=(0.0,1.0))
+                xmax, ymax = self.bezier.eval (t_at_ymax)
+            self._maximum = (xmax, ymax)
+        return self._maximum 
+
+
+    def set_maximum (self, newX=None, newY=None): 
+        """ 
+        set x,y of the mx point of self 
+        """
+        # if e.g. camber is already = 0.0, a new camber line cannot be build
+
+        raise ValueError ("set maximum for Bezier not implmented")
+        
+
+    def _reset_spline (self):
+        """ reinit self spline data if x,y has changed""" 
+        self._spline     = None
+        self._maximum    = None                     # the highpoint of the line 
+
+
+
+    def yFn (self,x):
+        """ returns interpolated y values based on new x-distribution"""
+
+        raise ValueError ("yFn for Bezier not implmented")    
+        # return self.bezier.eval (x)
 
 
 

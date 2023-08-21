@@ -32,7 +32,7 @@ from math_util import findRoot
 # let python find the other modules in the dir of self  
 sys.path.append(Path(__file__).parent)
 from common_utils       import *
-from spline             import BezierCubic, BezierQuadratic
+from spline             import Bezier
 from airfoil            import Airfoil
 from airfoil_examples   import Root_Example, Tip_Example
 
@@ -61,7 +61,7 @@ class Wing:
             wingExists = False
             self.paramFilePath = None
         else: 
-            InfoMsg ('Reading parameters from %s' % paramFilePath)
+            InfoMsg ('Reading wing parameters from %s' % paramFilePath)
             wingExists = True
             self.paramFilePath = paramFilePath
 
@@ -985,7 +985,7 @@ class Planform_Bezier(Planform):
         self._py[1]   = fromDict (dataDict, "p1y", 0.55, False)
         self._px[3]   = self.tipchord / self.rootchord              # p3 sits on tip chord
 
-        self._bezier = BezierCubic (self._py, self._px)
+        self._bezier = Bezier (self._py, self._px)
 
 
         # init Quadratic Bezier for banana of leading edge  
@@ -1101,7 +1101,7 @@ class Planform_Bezier(Planform):
         """
 
         if self._banana is None: 
-            self._banana = BezierQuadratic (self._banana_py, self._banana_px)
+            self._banana = Bezier (self._banana_py, self._banana_px)
 
         norm_y, norm_x = self._banana.eval (self._norm_u_points ())
 
@@ -1158,7 +1158,7 @@ class Planform_Bezier(Planform):
             if self._banana is None: 
 
                 # init cache of Bezier curve so following calls will be optimized
-                self._banana = BezierQuadratic (self._banana_py, self._banana_px)
+                self._banana = Bezier (self._banana_py, self._banana_px)
                 x,y = self._banana.eval (self._norm_u_points ())
 
             banana_x = self._banana.eval_y_on_x (y_norm)            # wing coordinate system 

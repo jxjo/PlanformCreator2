@@ -119,12 +119,10 @@ class CurrentSection_Artist (Artist):
             # make section points draggable - install callback when move is finished
             self._dragManagers.append (DragManager (self.ax, self.chord_marker_artist, 
                                         bounds=[None,None], 
-                                        dependant_artists = [self.section_line_artist, self.chord_marker_anno], 
                                         callback_draw_animated = self.draw_animated_byChord,
                                         callback_on_moved=self._moveCallback))
             self._dragManagers.append (DragManager (self.ax, self.pos_marker_artist, 
                                         bounds=[None,None], 
-                                        dependant_artists = [self.section_line_artist, self.pos_marker_anno], 
                                         callback_draw_animated = self.draw_animated_byPos,
                                         callback_on_moved=self._moveCallback))
             
@@ -338,7 +336,6 @@ class Planform_Artist (Artist):
             bounds_y = (self.planform.rootchord/10, self.planform.rootchord * 4)
             self._dragManagers.append (DragManager (self.ax, self.root_marker_artist, 
                                         bounds=[(0,0), bounds_y], 
-                                        dependant_artists = [self.root_marker_anno], 
                                         callback_draw_animated = self.draw_animated_root,
                                         callback_on_moved=self._moveCallback))
 
@@ -347,14 +344,12 @@ class Planform_Artist (Artist):
             bounds_y = (self.planform.rootchord/3, self.planform.rootchord * 0.95)
             self._dragManagers.append (DragManager (self.ax, self.flap_marker_artist, 
                                         bounds=[(0,0), bounds_y], 
-                                        dependant_artists = [self.flap_marker_anno], 
                                         callback_draw_animated = self.draw_animated_flap,
                                         callback_on_moved=self._moveCallback))
 
             # plot hinge line helper
             self.show_mouseHelper_hinge(self.planform)
             self._dragManagers.append (DragManager (self.ax, self.hinge_marker_artist, 
-                                        dependant_artists = [self.hinge_marker_anno], 
                                         callback_draw_animated = self.draw_animated_hinge,
                                         callback_on_moved=self._moveCallback))
 
@@ -367,7 +362,6 @@ class Planform_Artist (Artist):
                 bounds_y = (-0.2 * self.planform.rootchord,    0.2 * self.planform.rootchord)
                 self._dragManagers.append (DragManager (self.ax, self.p1_marker_artist, 
                                             bounds=[bounds_x, bounds_y], 
-                                            dependant_artists = [self.banana_line_artist, self.p1_marker_anno], 
                                             callback_draw_animated = self.draw_animated_banana,
                                             callback_on_moved=self._moveCallback))
                 
@@ -898,12 +892,10 @@ class Chord_Artist (Artist):
             # make p1,2 of Bezier draggable - install callback when move is finished
             self._dragManagers.append (DragManager (self.ax, self.p1_marker_artist, 
                                         bounds=[(0.1, 0.95),(0.6, 1.0)], 
-                                        dependant_artists = [self.p1_line_artist, self.p1_marker_anno], 
                                         callback_draw_animated = self.draw_animated_p1,
                                         callback_on_moved=self._moveCallback))
             self._dragManagers.append (DragManager (self.ax, self.p2_marker_artist, 
                                         bounds=[(1, 1),(0.05, 0.95)], 
-                                        dependant_artists = [self.p2_line_artist, self.p2_marker_anno], 
                                         callback_draw_animated = self.draw_animated_p2,
                                         callback_on_moved=self._moveCallback))
 

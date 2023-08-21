@@ -7,9 +7,12 @@ The "Artists" to plot a airfoil object on a matplotlib axes
 
 """
 import numpy as np
-from artist import Artist, cl_userHint, cl_labelGrid
+from copy import deepcopy
+from artist import Artist, cl_userHint, cl_labelGrid, DragManager
 
 from common_utils import *
+from spline import Bezier 
+from spline_of_airfoil import SideOfAirfoil_Bezier
 from airfoil import* 
 
 cl_planform         = 'whitesmoke'
@@ -513,4 +516,163 @@ class Thickness_Artist (Airfoil_Line_Artist):
                                 xytext=(3, 3), textcoords='offset points', color = cl_helperLine)
             self._add (p)   
 
+
+
+class Bezier_Artist (Artist):
+    """Plot upper and lower Bezier curve - drag control points with mouse    """
+
+    def __init__ (self, axes, modelFn, **kwargs):
+        super().__init__ (axes, modelFn, **kwargs)
+
+        self._points = False                    # show point marker 
+
+        # show mouse helper / allow drag of points 
+        self.points_artist    = []            # the artists of opPoints in this view
+        self.bezier_artist    = None
+
+        self.set_showLegend(False)  
+
+        # connect to draw event for initial plot of the animated artists all together
+        self.ciddraw    = self.ax.figure.canvas.mpl_connect('draw_event', self.on_draw)
+
+    def _deleteMyPlots(self):
+        super()._deleteMyPlots()
+        # clear up 
+        self.ax.relim()                       # make sure all the data fits
+        self.points_artist    = []            # the artists of opPoints in this view
+        self.bezier_artist     = None
+
+    @property
+    def sideBezier (self) -> SideOfAirfoil_Bezier:  return self.model.upper
+   
+    @property
+    def u(self): 
+        return np.linspace (0, 1, 100)
+
+
+    def _plot (self): 
+        """ do plot of bezier control points and bezier curve 
+        """
+
+        # plot opPoint bezier control points 
+
+        for ipoint, cpoint in enumerate (self.sideBezier.bezier.points):
+
+            if ipoint == 0 or ipoint == (len(self.sideBezier.bezier.points)-1):
+                markerstyle = '.'
+            else:
+                markerstyle = 'o'
+            p = self.ax.plot (*cpoint, marker=markerstyle, color=cl_userHint, markersize=5, animated=True) 
+            self._add(p)
+            self.points_artist.append (p[0])
+
+           
+        # plot  bezier curve points 
+        
+        x, y = self.sideBezier.bezier.eval(self.u)
+
+        p = self.ax.plot (x,y , '-', linewidth=0.8, color= 'red', animated=True) 
+        self._add(p)
+        (self.bezier_artist,) = p 
+
+        # activate dragManager 
+        self._dragManagers.append (DragManager (self.ax, self.points_artist, 
+                            callback_draw_animated = self.handle_point_moving,
+                            callback_shiftCtrlClick = self.handle_shiftCtrlClick,
+                            callback_on_moved=None)) # self._moveCallback
+
+
+
+    def on_draw (self, event): 
+        """ call back of draw event when self will be drawn"""
+
+        canvas = self.ax.figure.canvas
+        if event is not None:
+            if event.canvas != canvas: raise RuntimeError
+
+        # get the current (empty) background of axes
+        background = canvas.copy_from_bbox(self.ax.bbox)
+        dragMan: DragManager
+        for dragMan in self._dragManagers:
+            # provide the dragManagers with an empty background image 
+            dragMan.set_background(background)
+            # do initial draw of all artists of dragMan  
+            dragMan.on_draw
+
+        # fix scaling as it would conflict the background image
+        self.ax.autoscale(enable=False, axis='both')
+
+    def draw_point_static (self, iArtist): 
+        """ call back to draw point when it's ot moving"""
+        if iArtist is None: 
+            self.bezier_artist.set_linestyle('-')
+            self.ax.draw_artist (self.bezier_artist)
+        else: 
+            self.ax.draw_artist (self.points_artist[iArtist])
+
+
+    def handle_point_moving(self, duringMove=False, iArtist = None ): 
+        """ call back when point is moving - draw and update Bezier """
+
+        # just draw if no move 
+        if not duringMove:
+            if iArtist is None: 
+                self.bezier_artist.set_linestyle('-')
+                self.ax.draw_artist (self.bezier_artist)
+            else: 
+                self.ax.draw_artist (self.points_artist[iArtist])
+            return
+
+        # get new coordinates (when dragged) and try to move control point 
+        x_try, y_try = self.points_artist[iArtist].get_xydata()[0]
+
+        x, y = self.sideBezier.move_controlPoint_to(iArtist, x_try, y_try)
+        
+        # draw marker and get new coordinates (when dragged) 
+        self.points_artist[iArtist].set_xdata(x)
+        self.points_artist[iArtist].set_ydata(y)
+        self.ax.draw_artist (self.points_artist[iArtist])
+
+        # draw new Bezier 
+        x,y = self.sideBezier.bezier.eval(self.u)
+        self.bezier_artist.set_xdata(x)
+        self.bezier_artist.set_ydata(y)
+        self.bezier_artist.set_linestyle('--')
+        self.ax.draw_artist (self.bezier_artist)
+
+
+    def handle_shiftCtrlClick (self, iArtist=None, event=None):
+        """handle shift or control click - if posssible insert new opPoint at eventxy
+                               - or remove if shift click  
+        """
+        if not event: return 
+
+        updateBezier = False 
+
+        if event.key == 'control' and iArtist is None:                     # no new opPoint on an exiysting point
+
+            # new control point - insert according x-coordinate, x,y will be checked
+            i_insert, x, y = self.sideBezier.insert_controlPoint_at (event.xdata, event.ydata)
+            if not i_insert is None: 
+                # create artist for the new point 
+                p = self.ax.plot (x, y, marker='o', color=cl_userHint, 
+                                  markersize=5, animated=True) 
+                self._add(p)
+                self.points_artist.insert (i_insert, p[0])
+                updateBezier = True 
+
+        elif event.key == 'shift' and iArtist:
+
+            # remove control Point on which shift-click was made
+            i_delete = self.sideBezier.delete_controlPoint_at (index = iArtist)
+            if not i_delete is None:
+                self.points_artist [iArtist].remove()       # matplotlib remove 
+                del self.points_artist [iArtist]
+                updateBezier = True 
+
+        if updateBezier: 
+            # update Bezier now, so redraw wil use the new curve 
+            x,y = self.sideBezier.bezier.eval(self.u)
+            self.bezier_artist.set_xdata(x)
+            self.bezier_artist.set_ydata(y)
 

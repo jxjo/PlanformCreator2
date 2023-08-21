@@ -431,8 +431,7 @@ class DragManager:
     An artist is typically a Line2D object like a line or point
     """
 
-    def __init__(self, ax, animated_artists, bounds=None,
-                 dependant_artists = None, 
+    def __init__(self, ax, animated_artists, bounds=None, draw_event=True, 
                  callback_draw_animated = None, 
                  callback_shiftCtrlClick = None, 
                  callback_on_moved=None):
@@ -443,8 +442,9 @@ class DragManager:
         ----------
         ax :                Axes - matplotlib axes we are working on 
         animated_artist :   Artist - matplotlib artist like Line2D - either single or list
-        dependant_artists : Artists - optional other artists (lists) which are dependand on self moves
         bounds :            [(x1,x2),(y1,y2)] - bounds for movement of the artist - either scalar or array
+        draw_event :      = False: self does not listen to draw_eevent. The initial draw of artists
+                            must be initialized from 'outside' - also the background image must be provided 
         callback_draw_animated : function - optional external method to draw the artist (and do other thinsg)
         callback_shiftCtrlClick : function - call with coordinates during double click
         callback_on_moved : function - call with final coordinates after movement
@@ -455,7 +455,6 @@ class DragManager:
         self._callback_on_moved = callback_on_moved
         self._callback_draw_animated = callback_draw_animated
         self._callback_shiftCtrlClick = callback_shiftCtrlClick
-        self._dependant_artists = dependant_artists
 
         # bounds for movements
         if bounds: 
@@ -476,46 +475,72 @@ class DragManager:
         self._press_xy = None
 
         # Connect to all the events we need.
-        self.ciddraw    = self.canvas.mpl_connect('draw_event', self.on_draw)
+        if draw_event:
+            self.ciddraw    = self.canvas.mpl_connect('draw_event', self.on_draw)
+        else: 
+            self.ciddraw    = None 
         self.cidpress   = self.canvas.mpl_connect('button_press_event', self.on_press)
         self.cidrelease = self.canvas.mpl_connect('button_release_event', self.on_release)
         self.cidmotion  = self.canvas.mpl_connect('motion_notify_event', self.on_motion)
+        self.cid_enter  = self.canvas.mpl_connect('axes_enter_event', self.on_enter_event)
 
     def _draw_animated(self, duringMove=False, iArtMoved=None):
         """Draw the animated artists."""
  
         for iArt, art in enumerate(self._artists):
 
-            """ only the moved artist will be 'duringMove' for drawing"""
-            if duringMove and (iArt == iArtMoved):
-                duringMoveiArt = True
-            else:
-                duringMoveiArt = False
-
             # use user calback if provided 
             if self._callback_draw_animated: 
-                if len(self._artists) > 1: 
-                    self._callback_draw_animated(duringMove=duringMoveiArt, iArtist= iArt)
-                else:                               # compatibility mode with single artist
+                if len(self._artists) > 1:                  # list of artists
+
+                    if duringMove: 
+                        if iArt == iArtMoved:               # on move - draw on move only current
+                            self._callback_draw_animated(duringMove=True, iArtist= iArt)
+                        else: 
+                            self._callback_draw_animated(duringMove=False, iArtist= iArt)
+                    else:                                   # not moved - redraw all 
+                       self._callback_draw_animated(duringMove=False, iArtist= iArt)
+
+                else:                                       # compatibility mode with single artist
                     self._callback_draw_animated(duringMove=duringMove)
             else: 
-                self.ax.draw_artist (self._artists[iArt])
+                self.ax.draw_artist (art)
+
+        # finally maybe draw dependand artists in callback if now move
+        if len(self._artists) > 1 and not duringMove:
+            self._callback_draw_animated(duringMove=False, iArtist= None)
 
         # print('Artist: ', self._artists[iArtist], '  during: ', duringMove)
 
+    def on_enter_event(self, event): 
+        """Callback to register with 'motion_notify_even' which is fired when entering axes"""
+
+        # the tkkinter widget doesn't have initially the fous - ctrl / shift key is lost  
+        # print ("enter " , event )
+        self.canvas.get_tk_widget().focus_set()
+
+
+    def set_background(self, aBackground):
+        """ background image can also be provided from outside if there are several dragMans """ 
+        self._bg = aBackground
+
 
     def on_draw(self, event):
-        """Callback to register with 'draw_event'."""
+        
         if event is not None:
             if event.canvas != self.canvas: raise RuntimeError
 
-        # save background without my artists
-        self._bg = self.canvas.copy_from_bbox(self.ax.bbox)
+        # save background without my artists - can also be provided from outside 
+        if self._bg is None:
+            self._bg = self.canvas.copy_from_bbox(self.ax.bbox)
 
         # initial draw 
         self._draw_animated()
 
         self.canvas.blit(self.ax.bbox)
+
+        # fix scaling as it would conflict the background image
+        self.ax.autoscale(enable=False, axis='both')
 
 
     def on_press(self, event):
@@ -537,7 +562,14 @@ class DragManager:
         # dbouble click not on an artist ? Extra handling 
         if event.key =='control' or event.key =='shift':
             if self._callback_shiftCtrlClick:
+
+                #call back into parent 
                 self._callback_shiftCtrlClick(iArtist=iArt, event=event )
+
+                # refresh  - maybe point deleted / inserted 
+                self.canvas.restore_region(self._bg)
+                self._draw_animated()
+                self.canvas.blit(self.ax.bbox)
                 return 
 
         if not myArtistHit: return
@@ -614,10 +646,12 @@ class DragManager:
 
     def disconnect(self):
         """Disconnect all callbacks."""
-        self.canvas.mpl_disconnect(self.ciddraw)
+        if self.ciddraw is not None: 
+            self.canvas.mpl_disconnect(self.ciddraw)
         self.canvas.mpl_disconnect(self.cidpress)
         self.canvas.mpl_disconnect(self.cidrelease)
         self.canvas.mpl_disconnect(self.cidmotion)
+        self.canvas.mpl_disconnect(self.cid_enter)
 
 
 
@@ -654,7 +688,6 @@ class DragManager:
 #     (markerArtist,) =  ax.plot ([2], [2], marker='o', color="red", markersize=8, animated=True) 
 #     (lineArtist,) =  ax.plot ([0,2], [0,2],  color="red", animated=True) 
 #     dr1 = DragManager(ax, markerArtist, bounds=[(2,5.5),(1,4)], 
-#                        dependant_artists = [lineArtist], 
 #                        callback_draw_animated = draw_animated,
 #                        callback_on_moved=on1_finished)
 

@@ -212,6 +212,7 @@ class Messagebox(ctk.CTkToplevel):
         """ pops up self it is not used with get (wait_window) - returns self """
 
         # #todo - not the real solution ... Title bar isn't painted ...
+        self.wm_overrideredirect(True)  
         self.deiconify()
         self.after(100)
         self.update_idletasks()
@@ -227,6 +228,94 @@ class Messagebox(ctk.CTkToplevel):
         self.grab_release()
         self.destroy()
         self.event = event
+
+
+
+class SplashWinwow (ctk.CTkToplevel):
+    """ Message in different styles - inspired vom CTKMessagebox"""
+
+    ICONS = {
+            "info": None,
+        }
+
+    def __init__(self,                   
+                 width: int = 400,
+                 height: int = 200,
+                 message: str = "This is a Splash!",
+                 button_color: str = "default",
+                 icon: str = "info",             #  "check", "cancel", "info", "question", "warning"
+                 ):
+        
+        super().__init__()
+
+        self.width   = 250 if width<250 else width
+        self.height  = 150 if height<150 else height
+
+
+        self.geometry(f"{self.width}x{self.height}+{600}+{200}")
+
+        self.resizable(width=False, height=False)
+
+
+        self.lift()
+        
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)   
+        self.message = message
+        
+
+        if button_color=="default":
+            self.button_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
+        else:
+            self.button_color = button_color
+                    
+        self.icon = self.load_icon(icon, (25,25)) if icon else None                    
+
+        # ---------------
+
+        self.bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        self.fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+
+        self.frame_middle = ctk.CTkFrame(self, bg_color=self.bg_color, fg_color=self.fg_color)
+        self.frame_middle.grid(row=0, column=0, columnspan=3, sticky="nwes", padx=(0,0), pady=(0,0))
+        self.frame_middle.grid_rowconfigure   (0, weight=1)
+        self.frame_middle.grid_columnconfigure(0, weight=1)
+        self.frame_middle.grid_columnconfigure(1, weight=6)
+        self.frame_middle.grid_columnconfigure(2, weight=1)
+
+        self.message_icon = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=None, 
+                                            fg_color="transparent", hover=False,  image=self.icon)
+        self.message_text = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=self.message,
+                                            fg_color="transparent", text_color=cl_styles ['Normal'], hover=False,  image=None)
+        self.message_text._text_label.configure(wraplength=self.width *0.8, justify="center")
+        self.message_icon.grid(row=0, column=0, columnspan=1, sticky="nes")
+        self.message_text.grid(row=0, column=1, columnspan=2, sticky="nwes")
+        
+        # #todo - not the real solution ... Title bar isn't painted ...
+        self.wm_overrideredirect(True)  
+        # self.deiconify()
+        self.update()
+
+        # if self.winfo_exists():
+        #     self.grab_set()
+
+
+    def load_icon(self, icon, icon_size):
+            if icon not in self.ICONS or self.ICONS[icon] is None:
+                image_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon + '.png')
+                if icon_size:
+                    size_height = icon_size[1] if icon_size[1] <= self.height - 100 else self.height - 100
+                    size = (icon_size[0], size_height)
+                else:
+                    size = (self.height / 4, self.height / 4)
+                self.ICONS[icon] = ctk.CTkImage(Image.open(image_path), size=size)
+            return self.ICONS[icon]         
+
+
+    def closeIt (self): 
+        """close self from outside """
+        self.grab_release()
+        self.destroy()
 
 
 
@@ -538,6 +627,7 @@ class Base_Widget():
     def str_basedOnVal (self, val, valType, limits, decimals):
         """converts val to a string for ctk entry based on type of val 
         """
+
         if   val is None or val =="" :
             s = "" 
         elif valType == bool:
@@ -556,7 +646,10 @@ class Base_Widget():
                 minVal, maxVal = limits
                 val2 = max (float(minVal), float(val))
                 val  = min (float(maxVal), val2)
-            s = "%0.*f" %(decimals,val)
+            if decimals:
+                s = "%0.*f" %(decimals,val)
+            else: 
+                s = "%f" % val
         else:
             s = '???'
         return s
@@ -842,7 +935,7 @@ class Field_Widget(Base_Widget):
         spin -- Boolean if entry field should have a spinner       :)
         step -- integer step size              :)
     """
-    def __init__(self, *args, padx=None, lab_width= None, columnspan=None, justify=None, **kwargs):
+    def __init__(self, *args, padx=None, pady=None, lab_width= None, columnspan=None, justify=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         column = self.column
@@ -858,12 +951,14 @@ class Field_Widget(Base_Widget):
                 width = lab_width
             else:
                 width= 95
-            if padx is None:
+            if padx is None: 
                 padx= (5, 5)
+            if pady is None: 
+                padx= 0
 
             label_ctk = ctk.CTkLabel (self.parent, width= width, text=self.label,  
                                       justify='left', anchor='w')
-            label_ctk.grid (row=self.row, column=column, padx=padx, pady=0, sticky='w')
+            label_ctk.grid (row=self.row, column=column, padx=padx, pady=pady, sticky='w')
             column += 1
 
         if self.spinner:

@@ -67,7 +67,7 @@ def interpolate(x1, x2, y1, y2, x):
 # Dictonary handling
 #------------------------------------------------------------------------------
 
-def fromDict(dict, key, default='no default', msg=True):
+def fromDict(dict : dict, key, default='no default', msg=True):
     """
     returns a value from dict. If ky is not in the dict and there is no default value an error
     will be raised 
@@ -106,7 +106,8 @@ def fromDict(dict, key, default='no default', msg=True):
                 NoteMsg('Parameter \'%s\' not specified, using default-value \'%s\'' % (key, str(value)))
     return value
 
-def toDict(dict, key, value):
+
+def toDict(dict : dict, key, value):
     """
     writes t0 the parameter dictionary. If 'value' is None the key is not written 
     """
@@ -115,6 +116,9 @@ def toDict(dict, key, value):
         if isinstance  (value, float):
             value = round (value,6)
         dict [key] = value
+    else: 
+        # remove key from dictionary  - so default values will be used 
+        dict.pop(key, None)
 
         
 #------------------------------------------------------------------------------
@@ -165,7 +169,7 @@ class Parameters ():
         try:
             json.dump(aDict, paramFile, indent=2, separators=(',', ':'))
             paramFile.close()
-            InfoMsg ("%s saved to '%s'" % (dataName, self._paramFilePath))
+            InfoMsg ("%s saved to %s" % (dataName, self._paramFilePath))
             return True
 
         except ValueError as e:
@@ -177,26 +181,43 @@ class Parameters ():
 class Settings (Parameters):
     """ Handles a named setting file with a json structure representing a dictionary of paramteres""" 
 
+    settingsFilePath = None                     # the filePath of the settings
+
     def __init__ (self, appName='', nameExtension='', fileExtension= '.json', msg=False):
         """ 
-        Setting object to handle i/o of settings parameters <appName + nameExtension>.json
+        object to handle i/o of settings parameters 
+        
+        Settings file is defined with class method 'belongsTo'
+        """
 
+        super().__init__(self.settingsFilePath)
+
+
+    @classmethod
+    def belongTo (cls, belongsToPath, nameExtension='', fileExtension= '.json', msg=False):
+        """ static set of the file the settings will belong to 
+        
         Args:
-            :appName: the name of parent app self belongs to  \n
+            :belongsToPath: file path of the python module self will belong to 
             :nameExtension: ... will be appended to appName - default '_settings'       \n
+            :fileExtension: ... of the settings file - default 'json'       \n
             :msg: True -an info message will be printed        \n
         """
 
+        appName = os.path.splitext(os.path.basename(belongsToPath))[0]
 
         if nameExtension:
-            paramFilePath = appName + nameExtension + fileExtension
+            paramFile = appName + nameExtension + fileExtension
         else:
-            paramFilePath = appName + '_settings' + fileExtension
+            paramFile = appName + '_settings' + fileExtension
+
+        # get directory where 'belongTo' is located
+        script_dir  = os.path.dirname(os.path.realpath(belongsToPath))
+
+        cls.settingsFilePath = os.path.join(script_dir, paramFile)
 
         if msg: 
-            InfoMsg ("Reading settings from '%s'" % paramFilePath)
-
-        super().__init__(paramFilePath)
+            InfoMsg ("Reading settings from %s" % cls.settingsFilePath)
 
 
     @property
@@ -265,7 +286,7 @@ class PathHandler():
 
     @property 
     def workingDir (self):
-        return self._workingDir 
+        return self._workingDir if (not self._workingDir is None) else ''
     
     @workingDir.setter
     def workingDir (self, newDir):

@@ -44,9 +44,9 @@ class Example_Airfoil (Airfoil):
 
 
 class Root_Example (Example_Airfoil):
-    """ An example airfoil for root"""
+    """ An example airfoil for root - JX-GT-15v2"""
 
-    name = 'JX-GT-15v2'
+    name = 'Root_Example'
 
     def _getCoordinates (self):
         """ returns the coordinates of exmaple as a list of lines"""
@@ -262,9 +262,9 @@ class Root_Example (Example_Airfoil):
 
 
 class Tip_Example (Example_Airfoil):
-    """ An example airfoil for tip"""
+    """ An example airfoil for tip - JX-GT-05v2"""
 
-    name = 'JX-GT-05v2'
+    name = 'Tip_Example'
 
     def _getCoordinates (self):
         """ returns the coordinates of exmaple as a list of lines"""

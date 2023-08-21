@@ -42,7 +42,10 @@ from airfoil            import *
 from airfoil_examples   import Root_Example
 from widgets            import *
 from artist             import Plot_Toolbar
+from ui_base            import Dialog_Abstract, Edit_Abstract, set_initialWindowSize
 from airfoil_artists    import *
+
+from spline_of_airfoil  import Bezier, UPPER, LOWER
 
 
 #------------------------------------------------
@@ -64,56 +67,42 @@ def fireEvent(ctk_root : ctk.CTkToplevel, eventType):
     """ fire event for the current ctk_root toplevel widget """
     if not ctk_root is None: 
         ctk_root.event_generate (eventType) 
+        print ("Event ", eventType)
 
 
 #-------------------------------------------------------------------------------
 # Edit Frames    
 #-------------------------------------------------------------------------------
 
-class Edit_Abstract (ctk.CTkFrame):
+class Edit_Abstract_Airfoil (Edit_Abstract):
     """ 
-    Abstract superclass for all the edit like frames
+    Abstract superclass for all the edit airfoil like frames
     """
 
     def __init__(self, master, airfoilFn, *args, myApp=None, **kwargs):
-        super().__init__(master, *args, **kwargs)
 
         self._airfoilFn = airfoilFn               # the function to the wing (indirect because of new wing could be set)
-        self.widgets = []
-        self.myApp = myApp
-
-        # root for change events (widgets will have the same toplevel as root)
-        self.ctk_root = self.winfo_toplevel()
+ 
+        super().__init__(master, *args, myApp=myApp, **kwargs)
 
         self.ctk_root.bind(AIRFOIL_CHANGED,          self.changed_airfoil, add='+')
         self.ctk_root.bind(AIRFOIL_NEW,              self.changed_airfoil, add='+')
 
+
+        self.init()
+    
+   
         self.init()
     
     def airfoil(self) -> Airfoil:
         # it's a method - not a property to exchange the wing 
         return self._airfoilFn()
     
-    def init(self):
-        # main method - to be overloaded by sub class
-        pass
-
-    def add (self, aWidget): 
-        # kepp track of the widgets of self to be able to refresh them
-        self.widgets.append (aWidget)
-
-    def refresh(self):
-        # refresh typically based on changed events 
-        for widget in self.widgets:
-            if isinstance(widget, Base_Widget): widget.refresh()
-
-    def changed_airfoil(self, dummy): 
-        """ Eventhandler for changes of airfoil"""
-        self.refresh()      
-
+    def changed_airfoil (self, dummy): 
+        self.refresh()
 #-------------------------------------------
 
-class Edit_Airfoil_Data(Edit_Abstract):
+class Edit_Airfoil_Data(Edit_Abstract_Airfoil):
     """ 
     Frame to edit main data of the airfoil like thickness. This is just the header
     """
@@ -157,7 +146,7 @@ class Edit_Airfoil_Data(Edit_Abstract):
             self.myApp.add_toAirfoilFiles (dialog.return_newAirfoilPathFileName)
 
 
-class Edit_Curvature(Edit_Abstract):
+class Edit_Curvature(Edit_Abstract_Airfoil):
     """ 
     Frame to edit main data of the airfoil like thickness. This is just the header
     """
@@ -218,7 +207,7 @@ class Edit_Curvature(Edit_Abstract):
 
 
 
-class Edit_Panels(Edit_Abstract):
+class Edit_Panels(Edit_Abstract_Airfoil):
     """ 
     Frame to edit main data of the airfoil like thickness. This is just the header
     """
@@ -302,7 +291,7 @@ class Edit_Panels(Edit_Abstract):
 
 
 
-class Edit_Coordinates(Edit_Abstract):
+class Edit_Coordinates(Edit_Abstract_Airfoil):
     """ 
     Frame to edit main data of the airfoil like thickness. This is just the header
     """
@@ -568,6 +557,9 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.camberArtist    = Thickness_Artist (self.ax1,     [self._airfoilFn], show=False)
         self.curvatureArtist = Curvature_Artist (self.ax2,     [self._airfoilFn], show=True)
 
+        # test 
+        self.bezierArtist    = Bezier_Artist (self.ax1, Airfoil_Bezier(), show=True)
+
 
     def setup_Switches(self, r=0, c=0):
         """ define on/off switches for this plot type"""
@@ -641,6 +633,8 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.airfoilArtist.refresh ()  
         self.camberArtist.refresh ()  
         self.curvatureArtist.refresh ()  
+
+        self.bezierArtist.refresh()
 
         self.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
@@ -822,7 +816,7 @@ class Diagram_Curvature_Mini (Diagram_Abstract):
 
 
 
-class Edit_File_Menu(Edit_Abstract):
+class Edit_File_Menu(Edit_Abstract_Airfoil):
     """ 
     Frame for the high level commands like load, save, ...
     The parent is the App itself
@@ -852,8 +846,6 @@ class Edit_File_Menu(Edit_Abstract):
                                     width=120, pady=4, sticky = 'ew', set=self.myApp.ok_return))
             r +=1 
             self.add(Button_Widget (self,r,c, lab='Cancel', width=120, pady=4, sticky = 'ew', set=self.myApp.cancel))
-            r +=1 
-            Blank_Widget (self,5,0,  height= 40)
  
         r +=1 
         Blank_Widget (self,r,c,  height= 50)
@@ -891,81 +883,6 @@ class Edit_File_Menu(Edit_Abstract):
 #-------------------------------------------------------------------------------
 # Dialogs for smaller tasks   
 #-------------------------------------------------------------------------------
-
-
-class Dialog_Abstract (ctk.CTkToplevel):
-    """ 
-    Abstract superclass for windows dialogs 
-
-    self.return_OK is True if user conformed 'ok' 
-    """
-    width  = 500
-    height = 400
-    titleText  = "My little title"
-
-    def __init__(self, master, workingDir=None, *args, **kwargs):
-        super().__init__(master, *args, **kwargs)
-
-        # the default directory for file activities
-        self.workingDir = workingDir
-
-        # the attribute for return ok
-        self.return_OK = False
-
-        xPos, yPos = self.centerPosition(self.width, self.height)
-        self.geometry("%sx%s+%s+%s" %(self.width, self.height, xPos, yPos))
-
-        self.title (self.titleText)
-        self.resizable(False, False)                        # width, height
-        self.transient(master)
-
-        # make dialog modal 
-        self.focus_force() 
-        self.grab_set()
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
-
-        # root for change events (widgets will have the same toplevel as root)
-        self.ctk_root = self.winfo_toplevel()
-
-        self.edit_frame    = ctk.CTkFrame (self) 
-        self.grid_rowconfigure    (0, weight=1)
-        self.grid_columnconfigure (0, weight=1)
-        self.edit_frame.grid    (row=0, column=0, pady=5, padx=5, sticky="nesw")
-
-        self.widgets = []                                   # for refresh logic  
-
-
-    def ok (self):
-        # to over load and do ok actions
-        self.return_OK = True
-        self.editFrame = None                                
-        self.widgets = []                                   # ensure no widgets bound anymore 
-        self.destroy()
-
-    def cancel (self): 
-        # to over load and do cancel actions
-        self.editFrame = None                                
-        self.widgets = []                                   # ensure no widgets bound anymore 
-        self.destroy()
-
-    def add (self, aWidget): 
-        self.widgets.append (aWidget)
-
-    def refresh(self):
-        for widget in self.widgets:
-            if isinstance(widget, Base_Widget): widget.refresh()
-
-    def centerPosition(self, width=None, height=None):
-        """ get center of a tkinter window
-        """
-        self.update_idletasks()
-
-        if width is None:  width  = self.winfo_width()
-        if height is None: height = self.winfo_height()
-
-        x = self.winfo_screenwidth() // 2 - width // 2
-        y = self.winfo_screenheight() // 2 - int (height / 1.7)
-        return x, y
 
 
 class Dialog_Airfoil_Abstract (Dialog_Abstract):
@@ -1682,29 +1599,29 @@ class AirfoilEditor ():
         self.ctk_root  = None                       # will be set later 
         self.main      = None                       # the topLevel widget 
         self.isModal   = not self.parentApp is None
-        self.return_OK = False
+        self.return_OK = True
+
 
         # create windows 
 
         if self.isModal: 
             # modal - inherit ctk mode from parent
             main = ctk.CTkToplevel (parentApp)
-            self.set_initialWindowSize(master=main, widthFrac=0.88, heightFrac=0.7)
-            main.geometry("1450x750")
+            set_initialWindowSize (main, widthFrac=0.70, heightFrac=0.65)
             main.transient (parentApp)
-            main.resizable(False, False)                # width, height
-            main.focus_force() 
-            main.grab_set()
             self.return_newAirfoilPathFileName = None   # return value for parent
             self.return_newAirfoilName         = None   # return value for parent
 
         else: 
             main = ctk.CTk()  
-            self.set_initialWindowSize(master=main, widthFrac=0.9, heightFrac=0.75)
+            set_initialWindowSize(main, widthFrac=0.80, heightFrac=0.75)
 
         self.main = main 
-        main.protocol("WM_DELETE_WINDOW", self.onExit)  # intercept app close by user 
-        self.ctk_root = main          
+        self.ctk_root = main        
+
+        # self.main.withdraw()
+        # splash = SplashWinwow()
+
 
         # check and load the passed airfoil(s)
 
@@ -1719,15 +1636,16 @@ class AirfoilEditor ():
                 self.airfoilFiles= self._getAirfoilFiles_sameDir (airfoilFile)
             else:
                 ErrorMsg ("'%s' does not exist. AirfoilEditor aborted." % airfoilFile) 
+                self.return_OK = False
                 self.cancel()
                 return
-        self.loadNewAirfoil (airfoilFile)
+        self.loadNewAirfoil (airfoilFile, initial=True)
 
         # create main frames        
 
         switches_frame = ctk.CTkFrame     (main, height=350)
         diagram_frame  = Diagram_Airfoil  (main, self.curAirfoil, fg_color= cl_background[1], view_frame=switches_frame)
-        edit_frame     = ctk.CTkFrame     (main, height=350, fg_color= 'transparent')
+        edit_frame     = ctk.CTkFrame     (main, height=300, fg_color= 'transparent')
         file_frame     = Edit_File_Menu   (main, self.curAirfoil, myApp=self)
 
         # maingrid 2 x 2 - diagram on top, file and edit on bottom
@@ -1757,9 +1675,18 @@ class AirfoilEditor ():
 
 
         # start App - run mainloop if self is not modal otherise control is at parent
+
+        # splash.closeIt()
+        # main.deiconify()
         
         if not self.isModal: 
-            main.mainloop()       
+            main.protocol("WM_DELETE_WINDOW", self.onExit)  # intercept app close by user 
+            main.mainloop() 
+        else:
+            main.protocol("WM_DELETE_WINDOW", self.cancel)  # intercept app close by user 
+            main.focus_force() 
+            main.grab_set()
+      
 
     # ------------------
 
@@ -1768,12 +1695,13 @@ class AirfoilEditor ():
         to enable a new airfoil to be set """
         return self._curAirfoil
 
-    def set_curAirfoil (self, aNew):
+    def set_curAirfoil (self, aNew, initial=False):
         """ encapsulates current airfoil. Childs should acces only via this function
         to enable a new airfoil to be set """
         self._curAirfoil = aNew
         # mega alarm - inform everything
-        fireEvent (self.ctk_root, AIRFOIL_NEW)
+        if not initial: 
+            fireEvent (self.ctk_root, AIRFOIL_NEW)
 
     def add_toAirfoilFiles (self, aPathFileName):
         """ inserts a new airfoilPathFileName to the list right after current airfoil"""
@@ -1805,24 +1733,6 @@ class AirfoilEditor ():
         self.main.title (AppName + "  v" + str(AppVersion) + "  [" + self.curAirfoil().name + "]")
 
 
-    def set_initialWindowSize(self, master=None, widthFrac=0.9, heightFrac=0.8):
-        """ set size and position of tkinter window  """
-
-        if master is None: 
-            master = self
-
-        width  = int (master.winfo_screenwidth()  * widthFrac)
-        height = int (master.winfo_screenheight() * heightFrac) 
-
-        master.minsize(int(width*0.9), int(height*0.8))
-        master.geometry("%dx%d" %(width, height))
-
-        x = master.winfo_screenwidth()  // 2 - width // 2
-        y = (master.winfo_screenheight() // 2 - height // 2) // 2
-
-        master.geometry("+%d+%d" %(x, y))
-
-
 
     #------- file functions ----------------
 
@@ -1843,7 +1753,7 @@ class AirfoilEditor ():
             self.loadNewAirfoil (newPathFilenames[0])
 
 
-    def loadNewAirfoil(self, pathFilename, airfoil= None):
+    def loadNewAirfoil(self, pathFilename, airfoil= None, initial=False):
         """loads and sets a new airfoil - updates title """
 
         if airfoil is None: 
@@ -1855,7 +1765,7 @@ class AirfoilEditor ():
 
         self.curAirfoilFile = airfoil.pathFileName
         if self.main:                               # during startup there is no main 
-            self.set_curAirfoil (airfoil)
+            self.set_curAirfoil (airfoil, initial=initial)
             self._set_title()
 
 
@@ -1889,6 +1799,19 @@ if __name__ == "__main__":
     # init colorama
     just_fix_windows_console()
 
+    # set ctk application settings prior to init 
+
+    Settings.belongTo (__file__, msg=True)
+
+    ctk.set_appearance_mode    (Settings().get('appearance_mode', default='System'))   # Modes:  "System" (standard), "Dark", "Light"
+    ctk.set_default_color_theme(Settings().get('color_theme', default='blue'))         # Themes: "blue" (standard), "green", "dark-blue"
+    scaling = Settings().get('widget_scaling', default=1.0)
+    if scaling != 1.0: 
+        ctk.set_widget_scaling(scaling)  # widget dimensions and text size
+        NoteMsg ("The App is scaled to %.2f" %scaling)
+
+    # command line arguments? 
+    
     parser = argparse.ArgumentParser(prog=AppName, description='View and edit an airfoil')
     parser.add_argument("airfoil", nargs='*', help="Airfoil .dat file to show")
     args = parser.parse_args()
