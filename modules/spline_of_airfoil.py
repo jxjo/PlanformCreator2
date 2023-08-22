@@ -581,16 +581,17 @@ class SideOfAirfoil:
 
 
     @property
-    def x (self):
-        return self._x
+    def x (self): return self._x
     
     @property
-    def y (self): 
-        return self._y
+    def y (self): return self._y
+    def set_y (self, anArr): 
+        self._y = anArr
     
     @property
-    def name (self): 
-        return self._name
+    def name (self): return self._name
+    def set_name (self,aName): 
+        self._name = aName
     
     @property 
     def spline (self) -> Spline1D:
@@ -743,7 +744,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
         self._name      = name 
         self._bezier    = None                  # the bezier curve 
-        self._u         = None                  # bezier paramters 0..1
+        self._u         = np.linspace (0, 1, 100) # bezier paramters 0..1
         self._curveType = curveType             
 
         self._maximum   = None                  # the highpoint of the spline line
@@ -761,22 +762,33 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
                 y = [   0,  0.04,  0.1,   0]    
             else: 
                 x = [   0,   0.0,  0.25,   1]
-                y = [   0, -0.03, -0.08,   0]    
+                y = [   0, -0.02, -0.04,   0]    
 
             self._bezier = Bezier(x,y)
         return self._bezier 
 
     @property
-    def x (self):
-        return self.bezier.eval(self._u)[0]
+    def controlPoints (self): return self.bezier.points
+
+    @property
+    def nPoints (self): return len(self.bezier.points)
+
+    @property
+    def x (self):return self.bezier.eval(self._u)[0]
     
     @property
-    def y (self): 
-        return self.bezier.eval(self._u)[1]
-    
+    def y (self): return self.bezier.eval(self._u)[1]
+
     @property
-    def name (self): 
-        return self._name
+    def curvature (self): 
+        """returns a SideOfAirfoil with curvature in y """
+        return SideOfAirfoil (self.x, self.bezier.curvature(self._u), name='curvature')
+
+    @property
+    def name (self): return self._name
+
+    @property
+    def curveType (self): return self._curveType
     
     @property
     def threshold (self):   return self._threshold 
@@ -861,6 +873,16 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         self.bezier.set_point (index, x,y) 
 
         return x, y 
+
+    @property
+    def te_gap (self):
+        """ returns y value of the last bezier control point which is half the te gap"""
+        return self.bezier.points_y[-1]
+    
+    def set_te_gap (self, y): 
+        """ set te Bezier control point to y to change te gap """
+        px = self.bezier.points_x
+        self.bezier.set_point (-1, px[-1], y) 
 
 
     def reversals (self, xStart= 0.1):

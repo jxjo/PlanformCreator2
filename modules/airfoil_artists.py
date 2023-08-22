@@ -182,19 +182,25 @@ class Curvature_Artist (Airfoil_Line_Artist):
         airfoil: Airfoil
         for airfoil in airfoilList:
             if (airfoil.isLoaded):
-                color = self._nextColor()
+                if airfoil.isEdited:
+                    color = cl_editing
+                else: 
+                    color = self._nextColor()
                 linewidth=0.8
 
                 if self.upper: 
-                    line = airfoil.spline.curv_upper 
+                    line = airfoil.curv_upper 
                     p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=line.name, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
                     self._plot_marker (line, color, upper=True)
 
-                color = self._nextColor()
+                if airfoil.isEdited:
+                    color = cl_editing_lower
+                else: 
+                    color = self._nextColor()
                 if self.lower: 
-                    line = airfoil.spline.curv_lower 
+                    line = airfoil.curv_lower 
                     p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=line.name, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
@@ -293,7 +299,7 @@ class Curvature_Smooth_Artist (Airfoil_Line_Artist):
                 linewidth=0.8
 
                 if self.upper: 
-                    line = airfoil.spline.curv_upper 
+                    line = airfoil.curv_upper 
                     if airfoil.isEdited:
                         color = cl_editing
                     else:
@@ -526,153 +532,212 @@ class Bezier_Artist (Artist):
 
         self._points = False                    # show point marker 
 
-        # show mouse helper / allow drag of points 
-        self.points_artist    = []            # the artists of opPoints in this view
-        self.bezier_artist    = None
+        self.points_upper_artist   = []            # the artists of bezier control points
+        self.points_lower_artist   = []            
+        self.bezier_upper_artist   = None          # the artist to draw bezier curve
+        self.bezier_lower_artist   = None
 
-        self.set_showLegend(False)  
+        self.ciddraw               = None
 
-        # connect to draw event for initial plot of the animated artists all together
-        self.ciddraw    = self.ax.figure.canvas.mpl_connect('draw_event', self.on_draw)
+        self.set_showLegend(True)  
 
     def _deleteMyPlots(self):
         super()._deleteMyPlots()
         # clear up 
         self.ax.relim()                       # make sure all the data fits
-        self.points_artist    = []            # the artists of opPoints in this view
-        self.bezier_artist     = None
+        self.points_upper_artist   = []            # the artists of bezier control points
+        self.points_lower_artist   = []            
+        self.bezier_upper_artist   = None          # the artist to draw bezier curve
+        self.bezier_lower_artist   = None
+
+        if self.ciddraw is not None: 
+            self.ax.figure.canvas.mpl_disconnect(self.ciddraw)
+
 
     @property
-    def sideBezier (self) -> SideOfAirfoil_Bezier:  return self.model.upper
-   
+    def sideBezier_upper (self) -> SideOfAirfoil_Bezier:  return self.model.upper
     @property
-    def u(self): 
-        return np.linspace (0, 1, 100)
+    def sideBezier_lower (self) -> SideOfAirfoil_Bezier:  return self.model.lower
 
 
     def _plot (self): 
         """ do plot of bezier control points and bezier curve 
         """
 
-        # plot opPoint bezier control points 
+        # plot bezier control points for upper and lower side
 
-        for ipoint, cpoint in enumerate (self.sideBezier.bezier.points):
+        for sideBezier in [self.sideBezier_upper, self.sideBezier_lower]:
 
-            if ipoint == 0 or ipoint == (len(self.sideBezier.bezier.points)-1):
-                markerstyle = '.'
-            else:
-                markerstyle = 'o'
-            p = self.ax.plot (*cpoint, marker=markerstyle, color=cl_userHint, markersize=5, animated=True) 
-            self._add(p)
-            self.points_artist.append (p[0])
+            side = sideBezier.curveType
+            points_artist = []
 
+            for ipoint, cpoint in enumerate (sideBezier.controlPoints):
+
+                if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
+                    markerstyle = 's'
+                    markersize = 3
+                elif ipoint == 1 :
+                    if side == UPPER:
+                        markerstyle = 6
+                    else: 
+                        markerstyle = 7
+                    markersize = 7
+                else:
+                    markerstyle = 'o'
+                    markersize = 4
+                p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, 
+                                  color=cl_userHint, animated=True) 
+                self._add(p)
+                points_artist.append (p[0])
            
-        # plot  bezier curve points 
-        
-        x, y = self.sideBezier.bezier.eval(self.u)
+            # plot  bezier curve points 
+            label = "Bezier" if side== UPPER else ''
 
-        p = self.ax.plot (x,y , '-', linewidth=0.8, color= 'red', animated=True) 
-        self._add(p)
-        (self.bezier_artist,) = p 
+            p = self.ax.plot (sideBezier.x, sideBezier.y, '-', linewidth=0.8, color= cl_editing, 
+                              animated=True, label = label ) 
+            self._add(p)
+            (bezier_artist,)  = p 
 
-        # activate dragManager 
-        self._dragManagers.append (DragManager (self.ax, self.points_artist, 
-                            callback_draw_animated = self.handle_point_moving,
-                            callback_shiftCtrlClick = self.handle_shiftCtrlClick,
-                            callback_on_moved=None)) # self._moveCallback
+            # remind artist - activate dragManager per side 
+            if side == UPPER:
+                self.points_upper_artist = points_artist
+                self.bezier_upper_artist = bezier_artist 
+            else: 
+                self.points_lower_artist = points_artist
+                self.bezier_lower_artist = bezier_artist 
+                
+            self._dragManagers.append (DragManager (self.ax, points_artist,
+                                typeTag = side, draw_event=False, 
+                                callback_draw_static    = self.draw_static_all,
+                                callback_draw_animated  = self.draw_animated_point,
+                                callback_shiftCtrlClick = self.handle_shiftCtrlClick,
+                                callback_on_moved       = self._moveCallback)) 
 
+        # connect to draw event for initial plot of the animated artists all together
+        self.ciddraw    = self.ax.figure.canvas.mpl_connect('draw_event', self.on_draw)
 
 
     def on_draw (self, event): 
         """ call back of draw event when self will be drawn"""
 
+        # the initial draw of the points is not done by DragManager because
+        # there are 2 DragMans and we need the background *without* any point 
         canvas = self.ax.figure.canvas
         if event is not None:
             if event.canvas != canvas: raise RuntimeError
 
-        # get the current (empty) background of axes
+        # get the current (empty) background of axes with the points
         background = canvas.copy_from_bbox(self.ax.bbox)
         dragMan: DragManager
         for dragMan in self._dragManagers:
             # provide the dragManagers with an empty background image 
             dragMan.set_background(background)
-            # do initial draw of all artists of dragMan  
-            dragMan.on_draw
-
-        # fix scaling as it would conflict the background image
-        self.ax.autoscale(enable=False, axis='both')
-
-    def draw_point_static (self, iArtist): 
-        """ call back to draw point when it's ot moving"""
-        if iArtist is None: 
-            self.bezier_artist.set_linestyle('-')
-            self.ax.draw_artist (self.bezier_artist)
-        else: 
-            self.ax.draw_artist (self.points_artist[iArtist])
+            dragMan.on_draw (None)                  # now draw points 
 
 
-    def handle_point_moving(self, duringMove=False, iArtist = None ): 
+    def draw_static_all (self, artist_onMove=None, typeTag=None, *_): 
+        """ call back to draw all animated artists in static mode excluding artist  onMove"""
+
+        # drwa all artists excluding the one which is on move 
+        for artist in self.points_upper_artist + self.points_lower_artist:
+            if artist != artist_onMove: 
+                self.ax.draw_artist (artist)
+        
+        # draw static bezier if there is no move 
+        if artist_onMove is None:
+            self.bezier_upper_artist.set_linestyle('-')
+            self.ax.draw_artist (self.bezier_upper_artist)
+            self.bezier_lower_artist.set_linestyle('-')
+            self.ax.draw_artist (self.bezier_lower_artist)
+        else:                                   # do not draw Bezier which is currently changed
+            if typeTag == UPPER:
+                self.bezier_lower_artist.set_linestyle('-')
+                self.ax.draw_artist (self.bezier_lower_artist)
+            else:
+                self.bezier_upper_artist.set_linestyle('-')
+                self.ax.draw_artist (self.bezier_upper_artist)
+
+
+    def draw_animated_point (self, artist_onMove=None, iArtist = None , typeTag=None): 
         """ call back when point is moving - draw and update Bezier """
 
-        # just draw if no move 
-        if not duringMove:
-            if iArtist is None: 
-                self.bezier_artist.set_linestyle('-')
-                self.ax.draw_artist (self.bezier_artist)
+        if artist_onMove is not None and iArtist is not None: 
+
+            if typeTag == UPPER:
+                bezier_artist = self.bezier_upper_artist
+                sideBezier   = self.sideBezier_upper
+            elif typeTag == LOWER: 
+                bezier_artist = self.bezier_lower_artist
+                sideBezier   = self.sideBezier_lower
             else: 
-                self.ax.draw_artist (self.points_artist[iArtist])
-            return
+                return
+            
+            # get new coordinates (when dragged) and try to move control point 
+            x_try, y_try = artist_onMove.get_xydata()[0]
 
-        # get new coordinates (when dragged) and try to move control point 
-        x_try, y_try = self.points_artist[iArtist].get_xydata()[0]
+            iPoint = iArtist
+            # set new bezier points  - will be checked for valid x,y 
+            x, y = sideBezier.move_controlPoint_to(iPoint, x_try, y_try)
+            
+            # draw marker and get new coordinates (when dragged) 
+            artist_onMove.set_xdata(x)
+            artist_onMove.set_ydata(y)
+            self.ax.draw_artist (artist_onMove)
 
-        x, y = self.sideBezier.move_controlPoint_to(iArtist, x_try, y_try)
-        
-        # draw marker and get new coordinates (when dragged) 
-        self.points_artist[iArtist].set_xdata(x)
-        self.points_artist[iArtist].set_ydata(y)
-        self.ax.draw_artist (self.points_artist[iArtist])
-
-        # draw new Bezier 
-        x,y = self.sideBezier.bezier.eval(self.u)
-        self.bezier_artist.set_xdata(x)
-        self.bezier_artist.set_ydata(y)
-        self.bezier_artist.set_linestyle('--')
-        self.ax.draw_artist (self.bezier_artist)
+            # draw new Bezier 
+            bezier_artist.set_xdata(sideBezier.x)
+            bezier_artist.set_ydata(sideBezier.y)
+            bezier_artist.set_linestyle('--')
+            self.ax.draw_artist (bezier_artist)
 
 
-    def handle_shiftCtrlClick (self, iArtist=None, event=None):
+    def handle_shiftCtrlClick (self, iArtist=None, typeTag=None, event=None):
         """handle shift or control click - if posssible insert new opPoint at eventxy
                                - or remove if shift click  
         """
         if not event: return 
 
         updateBezier = False 
+        if typeTag == UPPER:
+            points_artist = self.points_upper_artist
+            bezier_artist = self.bezier_upper_artist
+            sideBezier    = self.sideBezier_upper
+        elif typeTag == LOWER: 
+            points_artist = self.points_lower_artist
+            bezier_artist = self.bezier_lower_artist
+            sideBezier   = self.sideBezier_lower
+        else: 
+            return
 
         if event.key == 'control' and iArtist is None:                     # no new opPoint on an exiysting point
 
+            # is tnew point for upper points or lower points? 
+            # simple check: +y --> upper, -y --> lower 
+            if (event.ydata > 0.0 and typeTag == LOWER) or \
+               (event.ydata < 0.0 and typeTag == UPPER): 
+                return
+            
             # new control point - insert according x-coordinate, x,y will be checked
-            i_insert, x, y = self.sideBezier.insert_controlPoint_at (event.xdata, event.ydata)
+            i_insert, x, y = sideBezier.insert_controlPoint_at (event.xdata, event.ydata)
             if not i_insert is None: 
                 # create artist for the new point 
                 p = self.ax.plot (x, y, marker='o', color=cl_userHint, 
                                   markersize=5, animated=True) 
                 self._add(p)
-                self.points_artist.insert (i_insert, p[0])
+                points_artist.insert (i_insert, p[0])
                 updateBezier = True 
 
         elif event.key == 'shift' and iArtist:
 
             # remove control Point on which shift-click was made
-            i_delete = self.sideBezier.delete_controlPoint_at (index = iArtist)
+            i_delete = sideBezier.delete_controlPoint_at (index = iArtist)
             if not i_delete is None:
-                self.points_artist [iArtist].remove()       # matplotlib remove 
-                del self.points_artist [iArtist]
+                points_artist [iArtist].remove()       # matplotlib remove 
+                del points_artist [iArtist]
                 updateBezier = True 
 
         if updateBezier: 
             # update Bezier now, so redraw wil use the new curve 
-            x,y = self.sideBezier.bezier.eval(self.u)
-            self.bezier_artist.set_xdata(x)
-            self.bezier_artist.set_ydata(y)
+            bezier_artist.set_xdata(sideBezier.x)
+            bezier_artist.set_ydata(sideBezier.y)
 

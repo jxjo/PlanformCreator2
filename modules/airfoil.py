@@ -367,6 +367,16 @@ class Airfoil:
         else: 
             return None
 
+    @property
+    def curv_upper (self): 
+        """ SideOfAirfoil with curvature on the upper side"""
+        return self.spline.curv_upper
+    
+    @property
+    def curv_lower (self): 
+        """ SideOfAirfoil with curvature on the lower side"""
+        return self.spline.curv_lower
+    
 
     @property
     def nPanelsNew (self): 
@@ -769,6 +779,13 @@ class Airfoil_Bezier(Airfoil):
         self._upper          = None             # upper side as SideOfAirfoil_Bezier object
         self._lower          = None             # lower side 
 
+    @property
+    def isNormalized (self): return True 
+        #overloaded
+
+    @property
+    def isLoaded (self): return True
+        #overloaded
 
     @property
     def upper(self) -> SideOfAirfoil_Bezier : 
@@ -785,6 +802,52 @@ class Airfoil_Bezier(Airfoil):
         if self._lower is None: 
             self._lower = SideOfAirfoil_Bezier (curveType=LOWER)
         return self._lower 
+
+
+    @property
+    def curv_upper (self): 
+        """ SideOfAirfoil with curvature on the upper side"""
+        curv = self.upper.curvature
+        curv.set_y (-curv.y)                        # curvature should be positive 
+        curv.set_name ('curvature upper')
+        return curv
+    
+    @property
+    def curv_lower (self): 
+        """ SideOfAirfoil with curvature on the lower side"""
+        curv = self.lower.curvature
+        curv.set_name ('curvature lower')
+        return curv
+    
+    @property
+    def x (self):
+        # overloaded  - take from bezier 
+        return np.concatenate ((np.flip(self.upper.x), self.lower.x[1:]))
+    @property
+    def y (self):
+        # overloaded  - take from bezier 
+        return np.concatenate ((np.flip(self.upper.y), self.lower.y[1:]))
+
+    # -----------------
+
+    def normalize (self, highPrec = False):
+        # overlaoded - Bezier doesn't have to be normalized 
+        pass 
+
+    @property
+    def teGap (self): 
+        """ trailing edge gap in %"""
+        #overloaded to get data from Bezier curves
+        return  (self.upper.te_gap - self.lower.te_gap) * 100
+    
+    def set_teGap (self, newGap): 
+        """ set trailing edge gap to new value which is in %"""
+        #overloaded to directly manipulate Bezier
+        newGap = max(0.0, newGap)
+        newGap = min(5.0, newGap)
+        self.upper.set_te_gap (  (newGap / 100) / 2)
+        self.lower.set_te_gap (- (newGap / 100) / 2)
+
 
 # ------------ test functions - to activate  -----------------------------------
 
@@ -815,8 +878,8 @@ def test_strak():
     #     airStrak.do_strak (air1, air2, blendBy)
     #     ax1.plot(airStrak.x, airStrak.y, label="Blend %.2f" % blendBy)
     #     print(i, airStrak.le)
-    #     ax2.plot (airStrak.spline.curv_upper.x, airStrak.spline.curv_upper.y, label="Blend %.2f" % blendBy)
-    #     ax2.plot (airStrak.spline.curv_lower.x, - airStrak.spline.curv_lower.y, label="Blend %.2f" % blendBy)
+    #     ax2.plot (airStrak.curv_upper.x, airStrak.curv_upper.y, label="Blend %.2f" % blendBy)
+    #     ax2.plot (airStrak.curv_lower.x, - airStrak.curv_lower.y, label="Blend %.2f" % blendBy)
     
     # ax1.legend()
     # plt.show()

@@ -103,7 +103,11 @@ class Artist():
         if isinstance(self._modelFn, list): 
             objectList = []
             for objectFn in self._modelFn:
-                objectList.append (objectFn())
+                try: 
+                    modelObject = objectFn()
+                except:
+                    modelObject = objectFn
+                objectList.append (modelObject)
             return objectList
         else: 
             try: 
@@ -431,7 +435,10 @@ class DragManager:
     An artist is typically a Line2D object like a line or point
     """
 
-    def __init__(self, ax, animated_artists, bounds=None, draw_event=True, 
+    def __init__(self, ax, animated_artists, bounds=None, 
+                 draw_event=True, 
+                 typeTag = None, 
+                 callback_draw_static = None, 
                  callback_draw_animated = None, 
                  callback_shiftCtrlClick = None, 
                  callback_on_moved=None):
@@ -445,16 +452,22 @@ class DragManager:
         bounds :            [(x1,x2),(y1,y2)] - bounds for movement of the artist - either scalar or array
         draw_event :      = False: self does not listen to draw_eevent. The initial draw of artists
                             must be initialized from 'outside' - also the background image must be provided 
+        typeTag :           optional free form tag to identy DragManager in callBacks
+        callback_draw_static : - optional external method to draw the artist when it's not moved
         callback_draw_animated : function - optional external method to draw the artist (and do other thinsg)
         callback_shiftCtrlClick : function - call with coordinates during double click
         callback_on_moved : function - call with final coordinates after movement
              
         """
         self.ax = ax
+        self._typeTag = typeTag
+        self._draw_event = draw_event
         self.canvas = ax.figure.canvas
         self._callback_on_moved = callback_on_moved
+        self._callback_draw_static = callback_draw_static
         self._callback_draw_animated = callback_draw_animated
         self._callback_shiftCtrlClick = callback_shiftCtrlClick
+        self._shiftCtrlClick = False                # was shift or ctrl press down made?
 
         # bounds for movements
         if bounds: 
@@ -484,33 +497,25 @@ class DragManager:
         self.cidmotion  = self.canvas.mpl_connect('motion_notify_event', self.on_motion)
         self.cid_enter  = self.canvas.mpl_connect('axes_enter_event', self.on_enter_event)
 
+
     def _draw_animated(self, duringMove=False, iArtMoved=None):
-        """Draw the animated artists."""
- 
-        for iArt, art in enumerate(self._artists):
+        """Draw the animated artists either via callback for static and animated"""
 
-            # use user calback if provided 
-            if self._callback_draw_animated: 
-                if len(self._artists) > 1:                  # list of artists
-
-                    if duringMove: 
-                        if iArt == iArtMoved:               # on move - draw on move only current
-                            self._callback_draw_animated(duringMove=True, iArtist= iArt)
-                        else: 
-                            self._callback_draw_animated(duringMove=False, iArtist= iArt)
-                    else:                                   # not moved - redraw all 
-                       self._callback_draw_animated(duringMove=False, iArtist= iArt)
-
-                else:                                       # compatibility mode with single artist
-                    self._callback_draw_animated(duringMove=duringMove)
+        if self._callback_draw_static:
+            if duringMove:                # on move - draw on move only current
+                artistMoved = self._artists[iArtMoved]
+                # draw and handle all the animated stuff 
+                self._callback_draw_animated(artist_onMove=artistMoved, 
+                                             iArtist= iArtMoved, typeTag= self._typeTag)
+                # in case there are many artists - allow the others to draw static 
+                if len(self._artists) > 1: 
+                    self._callback_draw_static  (artist_onMove=artistMoved, typeTag= self._typeTag)
             else: 
-                self.ax.draw_artist (art)
+                self._callback_draw_static  (typeTag= self._typeTag)
 
-        # finally maybe draw dependand artists in callback if now move
-        if len(self._artists) > 1 and not duringMove:
-            self._callback_draw_animated(duringMove=False, iArtist= None)
+        else: 
+            raise ValueError ("DragManager: callback for static draw is missing")
 
-        # print('Artist: ', self._artists[iArtist], '  during: ', duringMove)
 
     def on_enter_event(self, event): 
         """Callback to register with 'motion_notify_even' which is fired when entering axes"""
@@ -531,8 +536,11 @@ class DragManager:
             if event.canvas != self.canvas: raise RuntimeError
 
         # save background without my artists - can also be provided from outside 
-        if self._bg is None:
+        if self._draw_event:                    # self takes care of background itself
             self._bg = self.canvas.copy_from_bbox(self.ax.bbox)
+        else: 
+            if self._bg is None: 
+                raise ("Dragmanager: background not set by parent")
 
         # initial draw 
         self._draw_animated()
@@ -564,12 +572,13 @@ class DragManager:
             if self._callback_shiftCtrlClick:
 
                 #call back into parent 
-                self._callback_shiftCtrlClick(iArtist=iArt, event=event )
+                self._callback_shiftCtrlClick(iArtist=iArt, typeTag= self._typeTag, event=event)
 
                 # refresh  - maybe point deleted / inserted 
                 self.canvas.restore_region(self._bg)
                 self._draw_animated()
                 self.canvas.blit(self.ax.bbox)
+                self._shiftCtrlClick = True
                 return 
 
         if not myArtistHit: return
@@ -625,15 +634,12 @@ class DragManager:
         if event.button != 1:
             return
 
-        # does the released button belong to self? 
+        # does the released button belong to self motion? 
         if self._press_xy: 
-            self._press_xy = None
 
             # callback when move is finished - before redraw - parent could change points
             if not self._callback_on_moved is None:
                 self._callback_on_moved() 
-
-            # self.canvas.draw()
 
             self.canvas.restore_region(self._bg)
 
@@ -641,7 +647,16 @@ class DragManager:
             self._draw_animated()
 
             self.canvas.blit(self.ax.bbox)
-            # self._bg = None 
+
+        elif self._shiftCtrlClick:
+
+            # callback when shiftCtrlClick is finished 
+            if not self._callback_on_moved is None:
+                self._callback_on_moved() 
+
+        # reset state variable         
+        self._shiftCtrlClick = False
+        self._press_xy = None
 
 
     def disconnect(self):

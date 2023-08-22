@@ -118,11 +118,11 @@ class CurrentSection_Artist (Artist):
 
             # make section points draggable - install callback when move is finished
             self._dragManagers.append (DragManager (self.ax, self.chord_marker_artist, 
-                                        bounds=[None,None], 
+                                        callback_draw_static   = self.draw_static_byChord,
                                         callback_draw_animated = self.draw_animated_byChord,
                                         callback_on_moved=self._moveCallback))
             self._dragManagers.append (DragManager (self.ax, self.pos_marker_artist, 
-                                        bounds=[None,None], 
+                                        callback_draw_static   = self.draw_static_byPos,
                                         callback_draw_animated = self.draw_animated_byPos,
                                         callback_on_moved=self._moveCallback))
             
@@ -175,15 +175,15 @@ class CurrentSection_Artist (Artist):
         self.pos_marker_anno = p 
 
 
-    def draw_animated_byPos(self, duringMove=False): 
-        """ call back when point for new position was moved"""
-
+    def draw_static_byPos (self, **_):
+        """ call back when point has to be painted not moved"""
         # just draw marker if no move 
-        if not duringMove:
-            self.ax.draw_artist (self.pos_marker_artist)
-            self.ax.draw_artist (self.pos_marker_anno)
-            return
+        self.ax.draw_artist (self.pos_marker_artist)
+        self.ax.draw_artist (self.pos_marker_anno)
 
+
+    def draw_animated_byPos(self, **_ ): 
+        """ call back when point for new position was moved"""
         # get new coordinates (when dragged) 
         xm,ym = self.pos_marker_artist.get_xydata()[0]
 
@@ -220,15 +220,14 @@ class CurrentSection_Artist (Artist):
         self.ax.draw_artist (self.pos_marker_anno)
 
 
+    def draw_static_byChord (self, **_):
+        """ call back when point has to be painted not moved"""
+        # just draw artist and marker if no move 
+        self.ax.draw_artist (self.chord_marker_artist)
+        self.ax.draw_artist (self.chord_marker_anno)
 
-    def draw_animated_byChord(self, duringMove=False): 
+    def draw_animated_byChord(self, **_): 
         """ call back when point for new chord length was moved"""
-
-        # just draw marker if no move 
-        if not duringMove:
-            self.ax.draw_artist (self.chord_marker_artist)
-            self.ax.draw_artist (self.chord_marker_anno)
-            return
 
         # get new coordinates (when dragged) 
         xm,ym = self.chord_marker_artist.get_xydata()[0]
@@ -336,6 +335,7 @@ class Planform_Artist (Artist):
             bounds_y = (self.planform.rootchord/10, self.planform.rootchord * 4)
             self._dragManagers.append (DragManager (self.ax, self.root_marker_artist, 
                                         bounds=[(0,0), bounds_y], 
+                                        callback_draw_static   = self.draw_static_root,
                                         callback_draw_animated = self.draw_animated_root,
                                         callback_on_moved=self._moveCallback))
 
@@ -344,12 +344,14 @@ class Planform_Artist (Artist):
             bounds_y = (self.planform.rootchord/3, self.planform.rootchord * 0.95)
             self._dragManagers.append (DragManager (self.ax, self.flap_marker_artist, 
                                         bounds=[(0,0), bounds_y], 
+                                        callback_draw_static   = self.draw_static_flap,
                                         callback_draw_animated = self.draw_animated_flap,
                                         callback_on_moved=self._moveCallback))
 
             # plot hinge line helper
             self.show_mouseHelper_hinge(self.planform)
             self._dragManagers.append (DragManager (self.ax, self.hinge_marker_artist, 
+                                        callback_draw_static   = self.draw_static_hinge,
                                         callback_draw_animated = self.draw_animated_hinge,
                                         callback_on_moved=self._moveCallback))
 
@@ -362,6 +364,8 @@ class Planform_Artist (Artist):
                 bounds_y = (-0.2 * self.planform.rootchord,    0.2 * self.planform.rootchord)
                 self._dragManagers.append (DragManager (self.ax, self.p1_marker_artist, 
                                             bounds=[bounds_x, bounds_y], 
+                                            typeTag = 'banana', 
+                                            callback_draw_static   = self.draw_static_banana,
                                             callback_draw_animated = self.draw_animated_banana,
                                             callback_on_moved=self._moveCallback))
                 
@@ -448,16 +452,15 @@ class Planform_Artist (Artist):
         self._add(p)
         self.hinge_marker_anno = p 
 
+    #-----------------
 
-    def draw_animated_root(self, duringMove=False): 
-        """ call back when bezier point 1 was moved"""
+    def draw_static_root(self, **_): 
+        """ call back when root point not moved"""
+        self.ax.draw_artist (self.root_marker_anno)
+        self.ax.draw_artist (self.root_marker_artist)
 
-        # just draw planform if no move 
-        if not duringMove:
-            self.ax.draw_artist (self.root_marker_anno)
-            self.ax.draw_artist (self.root_marker_artist)
-            return
-
+    def draw_animated_root(self, **_): 
+        """ call back when root point was moved"""
         # draw marker and get new coordinates (when dragged) 
         self.ax.draw_artist (self.root_marker_artist)
         x1,y1 = self.root_marker_artist.get_xydata()[0]
@@ -479,15 +482,13 @@ class Planform_Artist (Artist):
         self.ax.draw_artist (self.root_marker_anno)
 
 
-    def draw_animated_flap(self, duringMove=False): 
+    def draw_static_flap(self, **_): 
+        """ call back when flap marker was not moved"""
+        self.ax.draw_artist (self.flap_marker_anno)
+        self.ax.draw_artist (self.flap_marker_artist)
+
+    def draw_animated_flap(self, **_): 
         """ call back when flap marker was moved"""
-
-        # just draw planform if no move 
-        if not duringMove:
-            self.ax.draw_artist (self.flap_marker_anno)
-            self.ax.draw_artist (self.flap_marker_artist)
-            return
-
         # draw marker and get new coordinates (when dragged) 
         self.ax.draw_artist (self.flap_marker_artist)
         x1,y1 = self.flap_marker_artist.get_xydata()[0]
@@ -516,15 +517,13 @@ class Planform_Artist (Artist):
         self.ax.draw_artist (self.flap_marker_anno)
 
 
-    def draw_animated_hinge(self, duringMove=False): 
-        """ call back when bezier point 1 was moved"""
+    def draw_static_hinge(self, **_): 
+        """ call back when hinge point was not moved"""
+        self.ax.draw_artist (self.hinge_marker_anno)
+        self.ax.draw_artist (self.hinge_marker_artist)
 
-        # just draw planform if no move 
-        if not duringMove:
-            self.ax.draw_artist (self.hinge_marker_anno)
-            self.ax.draw_artist (self.hinge_marker_artist)
-            return
-
+    def draw_animated_hinge(self, **_): 
+        """ call back when hinge point was moved"""
         # draw marker and get new coordinates (when dragged) 
         self.ax.draw_artist (self.hinge_marker_artist)
         x1,y1 = self.hinge_marker_artist.get_xydata()[0]
@@ -565,15 +564,15 @@ class Planform_Artist (Artist):
         self.ax.draw_artist (self.hinge_marker_anno)
 
 
-    def draw_animated_banana(self, duringMove=False): 
-        """ call back when bezier point 1 was moved"""
+    def draw_static_banana(self, **_): 
+        """ call back when bezier point 1 was not moved"""
 
-        # just draw planform if no move 
-        if not duringMove:
-            self.ax.draw_artist (self.p1_marker_artist)
-            self.ax.draw_artist (self.p1_marker_anno)
-            self.ax.draw_artist (self.banana_line_artist)
-            return
+        self.ax.draw_artist (self.p1_marker_artist)
+        self.ax.draw_artist (self.p1_marker_anno)
+        self.ax.draw_artist (self.banana_line_artist)
+
+    def draw_animated_banana(self, **_): 
+        """ call back when bezier point 1 was moved"""
 
         # draw marker and get new coordinates (when dragged) 
         self.ax.draw_artist (self.p1_marker_artist)
@@ -892,13 +891,14 @@ class Chord_Artist (Artist):
             # make p1,2 of Bezier draggable - install callback when move is finished
             self._dragManagers.append (DragManager (self.ax, self.p1_marker_artist, 
                                         bounds=[(0.1, 0.95),(0.6, 1.0)], 
+                                        callback_draw_static   = self.draw_static_all,
                                         callback_draw_animated = self.draw_animated_p1,
-                                        callback_on_moved=self._moveCallback))
+                                        callback_on_moved      = self._moveCallback))
             self._dragManagers.append (DragManager (self.ax, self.p2_marker_artist, 
                                         bounds=[(1, 1),(0.05, 0.95)], 
+                                        callback_draw_static   = self.draw_static_all,
                                         callback_draw_animated = self.draw_animated_p2,
-                                        callback_on_moved=self._moveCallback))
-
+                                        callback_on_moved      = self._moveCallback))
         # set ticks 
         self._add_xticks ([0, 1])
         self._add_yticks ([0, 1])
@@ -944,11 +944,25 @@ class Chord_Artist (Artist):
         self.p2_marker_anno = p 
 
 
+    def draw_static_all (self, artist_onMove=None, **_): 
+        """ call back to draw all animated artists in static mode """
 
-    def draw_animated_p1(self, duringMove=False): 
+        self.ax.draw_artist (self.p1_marker_artist)
+        self.p1_marker_anno.set ( text='root tangent')
+        self.ax.draw_artist (self.p1_marker_anno)
+        self.ax.draw_artist (self.p1_line_artist)
+
+        self.ax.draw_artist (self.p2_marker_artist)
+        self.p2_marker_anno.set ( text='tip tangent')
+        self.ax.draw_artist (self.p2_marker_anno)
+        self.ax.draw_artist (self.p2_line_artist)
+
+        self.chord_line_artist.set_linestyle('-')
+
+
+    def draw_animated_p1(self, **_): 
         """ call back when bezier point 1 was moved"""
 
-        self.planform : Planform_Bezier
         # draw marker and get new coordinates (when dragged) 
         self.ax.draw_artist (self.p1_marker_artist)
         x1,y1 = self.p1_marker_artist.get_xydata()[0]
@@ -963,20 +977,20 @@ class Chord_Artist (Artist):
         self.ax.draw_artist (self.p1_line_artist)
 
         # update planform - ! wing coordinate system
+        self.planform : Planform_Bezier
         self.planform.set_p1x (y1)  
         self.planform.set_p1y (x1)  
-        self.draw_animated_chord(duringMove=duringMove)  
+        self.draw_animated_chord()  
 
         # update annotation
-        if duringMove: 
-            angle  = self.planform.tangentAngle_root
-            length = self.planform.tangentLength_root
-            self.p1_marker_anno.xy =  (x1,y1)
-            self.p1_marker_anno.set ( text="angle %.1f  length %.2f" % (angle, length))
+        angle  = self.planform.tangentAngle_root
+        length = self.planform.tangentLength_root
+        self.p1_marker_anno.xy =  (x1,y1)
+        self.p1_marker_anno.set ( text="angle %.1f  length %.2f" % (angle, length))
         self.ax.draw_artist (self.p1_marker_anno)
 
 
-    def draw_animated_p2(self, duringMove=False): 
+    def draw_animated_p2(self, **_): 
         """ call back when bezier point 2 was moved"""
 
         # draw marker and get new coordinates (when dragged) 
@@ -994,29 +1008,25 @@ class Chord_Artist (Artist):
 
         # update planform - ! wing coordinate system
         self.planform.set_p2x (y2)
-        self.draw_animated_chord(duringMove=duringMove)  
+        self.draw_animated_chord()  
 
         # update annotation
-        if duringMove: 
-            angle  = self.planform.tangentAngle_tip
-            length = self.planform.tangentLength_tip
-            self.p2_marker_anno.xy =  (x2,y2)
-            self.p2_marker_anno.set ( text="angle %.1f  length %.2f" % (angle, length))
+        angle  = self.planform.tangentAngle_tip
+        length = self.planform.tangentLength_tip
+        self.p2_marker_anno.xy =  (x2,y2)
+        self.p2_marker_anno.set ( text="angle %.1f  length %.2f" % (angle, length))
         self.ax.draw_artist (self.p2_marker_anno)
 
 
-    def draw_animated_chord (self, duringMove=False):
+    def draw_animated_chord (self):
 
+        # provide artist  with actual data...
         y, chord = self.chord_line ()
 
-        # because of animate=True the artist has to be provided with actual data...
         self.chord_line_artist.set_xdata(y)
         self.chord_line_artist.set_ydata(chord)
-        if duringMove:
-            self.chord_line_artist.set_linestyle(':')
-        else:
-            self.chord_line_artist.set_linestyle('-')
-        # and plotted with special command
+        self.chord_line_artist.set_linestyle(':')
+
         self.ax.draw_artist (self.chord_line_artist)
 
 

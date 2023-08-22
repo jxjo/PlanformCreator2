@@ -83,8 +83,6 @@ def fireEvent(ctk_root : ctk.CTkToplevel, eventType):
     """ fire event for the current ctk_root toplevel widget """
     if not ctk_root is None: 
         ctk_root.event_generate (eventType) 
-        print ("Event ", eventType)
-
 
 
 #-------------------------------------------------------------------------------

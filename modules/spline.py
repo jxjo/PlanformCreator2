@@ -608,6 +608,7 @@ class Bezier:
 
         Parameters
         ----------
+        iPoint:  index of point 
         px, py:  x and y coordinates of the bezier control point at iPoint (at least 3)
           or
         p : array_like - point tuple with x,y coordinates of the n  control points    
@@ -766,6 +767,8 @@ class Bezier:
         #   u:    Scalar or an array of normed arc length 0..1 at which to return bezier value
         #   der:  optional derivative - either 0,1 or 2 
 
+        if u is None or (np.isscalar(u) and (u > 1.0 or u < 0.0)):
+            raise ValueError ("Bezier: parameter u = %s not valid " %u)
         npoints = np.size(pxy)
 
         # n dependand on derivative - the order is lowered 
