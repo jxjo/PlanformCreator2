@@ -88,7 +88,7 @@ class Dialog_Abstract (ctk.CTkToplevel):
     def add (self, aWidget): 
         self.widgets.append (aWidget)
 
-    def refresh(self):
+    def refresh(self, *_):
         for widget in self.widgets:
             if isinstance(widget, Base_Widget): widget.refresh()
 

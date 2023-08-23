@@ -776,8 +776,10 @@ class Airfoil_Bezier(Airfoil):
         """
         super().__init__( name = name, workingDir= workingDir)
 
-        self._upper          = None             # upper side as SideOfAirfoil_Bezier object
-        self._lower          = None             # lower side 
+        self._upper      = None                 # upper side as SideOfAirfoil_Bezier object
+        self._lower      = None                 # lower side 
+        self._thickness  = None                 # thickness distribution
+        self._camber     = None                 # camber line
 
     @property
     def isNormalized (self): return True 
@@ -792,7 +794,10 @@ class Airfoil_Bezier(Airfoil):
         """upper side as SideOfAirfoil_Bezier object"""
         # overloaded
         if self._upper is None: 
-            self._upper = SideOfAirfoil_Bezier (curveType=UPPER)
+            # default side
+            px = [   0,   0.0,  0.3,   1]
+            py = [   0,  0.04,  0.1,   0]    
+            self._upper = SideOfAirfoil_Bezier (px, py, curveType=UPPER)
         return self._upper 
 
     @property
@@ -800,7 +805,10 @@ class Airfoil_Bezier(Airfoil):
         """upper side as SideOfAirfoil_Bezier object"""
         # overloaded
         if self._lower is None: 
-            self._lower = SideOfAirfoil_Bezier (curveType=LOWER)
+            # default side 
+            px = [   0,   0.0,  0.25,   1]
+            py = [   0, -0.02, -0.04,   0]    
+            self._lower = SideOfAirfoil_Bezier (px, py, curveType=LOWER)
         return self._lower 
 
 
@@ -818,7 +826,13 @@ class Airfoil_Bezier(Airfoil):
         curv = self.lower.curvature
         curv.set_name ('curvature lower')
         return curv
-    
+
+    @property 
+    def spline (self) -> SplineOfAirfoil:
+        """ spline representation  of self - to show curvature, etc. """
+        print ("Bezier spline get")
+        return super().spline
+
     @property
     def x (self):
         # overloaded  - take from bezier 
@@ -828,7 +842,70 @@ class Airfoil_Bezier(Airfoil):
         # overloaded  - take from bezier 
         return np.concatenate ((np.flip(self.upper.y), self.lower.y[1:]))
 
+
+    @property
+    def camber (self) -> 'SideOfAirfoil': 
+        """ camber line as Line object"""
+        # overloaded  - take from bezier 
+        if self._camber is None: 
+            self._get_thickness_camber()
+        return self._camber
+
+    @property
+    def thickness (self) -> 'SideOfAirfoil': 
+        """ thickness distribution as Line object """
+        # overloaded  - take from bezier 
+        if self._thickness is None: 
+            self._get_thickness_camber()
+        return self._thickness
+    
+    @property
+    def maxThickness (self): 
+        """ max thickness in %"""
+        # overlaoded for bezier 
+        return self.thickness.maximum[1] * 100
+    def set_maxThickness(self,newVal): 
+        # overlaoded for bezier - not supported
+        pass
+
+    @property
+    def maxThicknessX (self): 
+        """ max thickness x-position in %"""
+        # overlaoded for bezier 
+        return self.thickness.maximum[0] * 100
+    def set_maxThicknessX(self,newVal): 
+        # overlaoded for bezier - not supported
+        pass
+
+
+    @property
+    def maxCamber (self): 
+        """ max camber in %"""
+        # overlaoded for bezier 
+        return self.camber.maximum[1] * 100
+    def set_maxCamber(self,newVal): 
+        """ set max camber in %"""
+        # overlaoded for bezier - not supported
+        pass
+
+    @property
+    def maxCamberX (self): 
+        """ max camber x-position in %"""
+        return self.camber.maximum[0] * 100
+    def set_maxCamberX(self,newVal): 
+        # overlaoded for bezier - not supported
+        pass
+
+
     # -----------------
+
+    def reset (self): 
+        """ resets dependand objects like thickness, spline ... (when bezier was changed)"""
+
+        self._thickness  = None                 # thickness distribution
+        self._camber     = None                 # camber line
+        self._spline     = None
+
 
     def normalize (self, highPrec = False):
         # overlaoded - Bezier doesn't have to be normalized 
@@ -848,6 +925,47 @@ class Airfoil_Bezier(Airfoil):
         self.upper.set_te_gap (  (newGap / 100) / 2)
         self.lower.set_te_gap (- (newGap / 100) / 2)
 
+
+    def _get_thickness_camber (self): 
+        """
+        evalutes thickness and camber distribution as SideOfAirfoil objects
+        with a x-distribution of the upper side.
+        
+        Note: It's an approximation as thickness is just the sum of y_upper(x) and y_lower(x)
+              and camber is just the mean value y_upper(x) and y_lower(x)
+        """
+        # evaluate the corresponding y-values on lower side 
+
+        temp_u = np.linspace (0, 1, 25)      # reduced bezier paramters 0..1 for speed
+        x_upper = np.zeros (len(temp_u))
+        y_upper = np.zeros (len(temp_u))
+        x_lower = np.zeros (len(temp_u)) 
+        y_lower = np.zeros (len(temp_u))
+
+        for i, u in enumerate(temp_u):
+            x_upper[i], y_upper[i] = self.upper.bezier.eval(u) 
+        x_lower = x_upper 
+        for i, x in enumerate(x_lower): 
+            y_lower[i] = self.lower.bezier.eval_y_on_x (x)  
+
+        # x_upper = self.upper.x
+        # y_upper = self.upper.y
+        # x_lower = x_upper 
+        # y_lower = np.zeros (len(x_lower))
+        # for i, x in enumerate(x_lower): 
+        #     y_lower[i] = self.lower.bezier.eval_y_on_x (x) 
+
+        # thickness and camber can now easily calculated 
+        thickness = SideOfAirfoil (x_upper,  y_upper - y_lower,        name='Thickness distribution')
+        camber    = SideOfAirfoil (x_upper, (y_lower + y_upper) / 2.0, name='Camber line')
+
+        # for symmetric airfoil with unclean data set camber line to 0 
+        if np.max(camber.y) < 0.00001: 
+            camber.y = np.zeros (len(x_lower))
+
+        self._thickness = thickness
+        self._camber = camber 
+        return 
 
 # ------------ test functions - to activate  -----------------------------------
 

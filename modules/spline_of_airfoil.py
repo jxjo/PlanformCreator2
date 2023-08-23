@@ -721,7 +721,7 @@ class SideOfAirfoil:
 
 
     def yFn (self,x):
-        """ returns interpolated y values based on new x-distribution"""
+        """ returns interpolated y values based on a x-value"""
                 
         return self.spline.eval (x)
 
@@ -740,61 +740,55 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
     """
 
-    def __init__ (self, name=None, curveType=UPPER):
+    def __init__ (self, px, py, name=None, curveType=UPPER):
+        """
+        1D line of an airfoil like upper, lower side based on a Bezier curve with x 0..1
 
-        self._name      = name 
-        self._bezier    = None                  # the bezier curve 
-        self._u         = np.linspace (0, 1, 100) # bezier paramters 0..1
+        Parameters
+        ----------
+        px, py : array of control point coordinates 
+        curveType= : either 'upper' or 'lower'
+             
+        """
+        self._name      = curveType 
+        self._bezier    = Bezier(px,py)             # the bezier curve 
+        self._u         = np.linspace (0, 1, 100)   # bezier paramters 0..1
         self._curveType = curveType             
-
-        self._maximum   = None                  # the highpoint of the spline line
-        self._threshold = 0.001                 # threshold for reversal dectection 
 
 
     @property
     def bezier(self) -> Bezier:
         """ returns the bezier object of self"""
-
-        if self._bezier is None: 
-            # start with dummy Bezier
-            if self._curveType == UPPER: 
-                x = [   0,   0.0,  0.3,   1]
-                y = [   0,  0.04,  0.1,   0]    
-            else: 
-                x = [   0,   0.0,  0.25,   1]
-                y = [   0, -0.02, -0.04,   0]    
-
-            self._bezier = Bezier(x,y)
         return self._bezier 
 
     @property
-    def controlPoints (self): return self.bezier.points
+    def controlPoints (self): 
+        """ bezier control points """
+        return self.bezier.points
 
     @property
-    def nPoints (self): return len(self.bezier.points)
+    def nPoints (self): 
+        """ number of bezier control points """
+        return len(self.bezier.points)
 
     @property
-    def x (self):return self.bezier.eval(self._u)[0]
+    def x (self):
+        # overloaded bezier caches values
+        return self.bezier.eval(self._u)[0]
     
     @property
-    def y (self): return self.bezier.eval(self._u)[1]
+    def y (self): 
+        # overloaded bezier caches values
+        return self.bezier.eval(self._u)[1]
 
     @property
     def curvature (self): 
-        """returns a SideOfAirfoil with curvature in y """
+        """returns a SideOfAirfoil with curvature in .y """
         return SideOfAirfoil (self.x, self.bezier.curvature(self._u), name='curvature')
-
-    @property
-    def name (self): return self._name
 
     @property
     def curveType (self): return self._curveType
     
-    @property
-    def threshold (self):   return self._threshold 
-    def set_threshold (self, aVal): 
-        self._threshold =aVal 
-
 
     # ------------------
 
@@ -884,66 +878,6 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         px = self.bezier.points_x
         self.bezier.set_point (-1, px[-1], y) 
 
-
-    def reversals (self, xStart= 0.1):
-        """ 
-        returns a list of reversals (change of curvature sign equals curvature = 0 )
-        A reversal is a tuple (x,y) indicating the reversal on self. 
-        Reversal detect starts at xStart - to exclude turbulent leading area... 
-        """
-        # algorithm from Xoptfoil where a change of sign of y[i] is detected 
-        x = self.x
-        y = self.y
-
-        iToDetect = np.nonzero (x >= xStart)[0]
-
-        reversals = []
-        yold    = y[iToDetect[0]]
-        for i in iToDetect:
-            if abs(y[i]) >= self.threshold:                # outside threshold range
-                if (y[i] * yold < 0.0):                     # yes - changed + - 
-                    reversals.append((round(x[i],10),round(y[i],10))) 
-                yold = y[i]
-        return reversals 
-    
-
-    @property
-    def maximum (self): 
-        """ 
-        returns the x,y position of the maximum y value of self
-        """
-        if self._maximum is None: 
-            if np.max(self.y) == 0.0: 
-                xmax = 0.0 
-                ymax = 0.0 
-            else:
-                t_at_ymax = findMax (self.bezier.eval_y , 0.3, bounds=(0.0,1.0))
-                xmax, ymax = self.bezier.eval (t_at_ymax)
-            self._maximum = (xmax, ymax)
-        return self._maximum 
-
-
-    def set_maximum (self, newX=None, newY=None): 
-        """ 
-        set x,y of the mx point of self 
-        """
-        # if e.g. camber is already = 0.0, a new camber line cannot be build
-
-        raise ValueError ("set maximum for Bezier not implmented")
-        
-
-    def _reset_spline (self):
-        """ reinit self spline data if x,y has changed""" 
-        self._spline     = None
-        self._maximum    = None                     # the highpoint of the line 
-
-
-
-    def yFn (self,x):
-        """ returns interpolated y values based on new x-distribution"""
-
-        raise ValueError ("yFn for Bezier not implmented")    
-        # return self.bezier.eval (x)
 
 
 

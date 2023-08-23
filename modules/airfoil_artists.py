@@ -210,6 +210,7 @@ class Curvature_Artist (Airfoil_Line_Artist):
             p = self.ax.plot ([], [], ' ', label="R: reversals")
             self._add(p)
 
+
     def _plot_marker (self, line : SideOfAirfoil, color, upper=True):
         # annotate reversals of curvature  ... 
 
@@ -530,16 +531,24 @@ class Bezier_Artist (Artist):
     def __init__ (self, axes, modelFn, **kwargs):
         super().__init__ (axes, modelFn, **kwargs)
 
-        self._points = False                    # show point marker 
+        self._points = False                       # show point marker 
+        self._camber = False                       # show camber and thcikness
 
         self.points_upper_artist   = []            # the artists of bezier control points
         self.points_lower_artist   = []            
         self.bezier_upper_artist   = None          # the artist to draw bezier curve
         self.bezier_lower_artist   = None
 
+        self.thickness_artist      = None
+        self.camber_artist         = None
+        
         self.ciddraw               = None
 
         self.set_showLegend(True)  
+
+    def set_points (self, aBool): self._points = aBool 
+
+    def set_camber (self, aBool): self._camber = aBool 
 
     def _deleteMyPlots(self):
         super()._deleteMyPlots()
@@ -549,15 +558,19 @@ class Bezier_Artist (Artist):
         self.points_lower_artist   = []            
         self.bezier_upper_artist   = None          # the artist to draw bezier curve
         self.bezier_lower_artist   = None
+        self.thickness_artist      = None
+        self.camber_artist         = None
 
         if self.ciddraw is not None: 
             self.ax.figure.canvas.mpl_disconnect(self.ciddraw)
 
+    @property
+    def airfoil (self) -> Airfoil_Bezier: return self.model[0]
 
     @property
-    def sideBezier_upper (self) -> SideOfAirfoil_Bezier:  return self.model.upper
+    def sideBezier_upper (self) -> SideOfAirfoil_Bezier:  return self.airfoil.upper
     @property
-    def sideBezier_lower (self) -> SideOfAirfoil_Bezier:  return self.model.lower
+    def sideBezier_lower (self) -> SideOfAirfoil_Bezier:  return self.airfoil.lower
 
 
     def _plot (self): 
@@ -591,10 +604,19 @@ class Bezier_Artist (Artist):
                 points_artist.append (p[0])
            
             # plot  bezier curve points 
+
             label = "Bezier" if side== UPPER else ''
 
-            p = self.ax.plot (sideBezier.x, sideBezier.y, '-', linewidth=0.8, color= cl_editing, 
-                              animated=True, label = label ) 
+            # the marker style to show points
+            if self._points:
+                _marker_style = ms_points
+                linewidth=0.4
+            else:  
+                _marker_style = dict()
+                linewidth=1.0
+
+            p = self.ax.plot (sideBezier.x, sideBezier.y, '-', linewidth=linewidth, 
+                              color=cl_editing, **_marker_style, animated=True, label=label ) 
             self._add(p)
             (bezier_artist,)  = p 
 
@@ -613,8 +635,33 @@ class Bezier_Artist (Artist):
                                 callback_shiftCtrlClick = self.handle_shiftCtrlClick,
                                 callback_on_moved       = self._moveCallback)) 
 
+            
+        #  thickness and camber line 
+        if self._camber:
+            camb  = self.airfoil.camber 
+            thick = self.airfoil.thickness 
+            p = self.ax.plot (thick.x, thick.y, '--', linewidth=0.8, color=cl_editing_lower, 
+                                animated=True, label = thick.name ) 
+            self._add(p)
+            (self.thickness_artist,)  = p 
+            p = self.ax.plot (camb.x, camb.y, ':', linewidth=0.8, color=cl_editing_lower, 
+                                animated=True, label = camb.name ) 
+            self._add(p)
+            (self.camber_artist,)  = p 
+
+
         # connect to draw event for initial plot of the animated artists all together
         self.ciddraw    = self.ax.figure.canvas.mpl_connect('draw_event', self.on_draw)
+
+        self.show_mouseHelper ()
+
+
+    def show_mouseHelper (self):
+        # show info for section select #
+        text = 'ctrl+click to add, shift+click to remove point'
+        p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
+                    transform=self.ax.transAxes, horizontalalignment='center', verticalalignment='bottom')
+        self._add(p)
 
 
     def on_draw (self, event): 
@@ -649,6 +696,15 @@ class Bezier_Artist (Artist):
             self.ax.draw_artist (self.bezier_upper_artist)
             self.bezier_lower_artist.set_linestyle('-')
             self.ax.draw_artist (self.bezier_lower_artist)
+
+            if self._camber:
+                camb  = self.airfoil.camber 
+                thick = self.airfoil.thickness 
+                self.thickness_artist.set (xdata=thick.x, ydata=thick.y)
+                self.camber_artist.set    (xdata=camb.x,  ydata=camb.y)
+                self.ax.draw_artist (self.thickness_artist)
+                self.ax.draw_artist (self.camber_artist)
+
         else:                                   # do not draw Bezier which is currently changed
             if typeTag == UPPER:
                 self.bezier_lower_artist.set_linestyle('-')

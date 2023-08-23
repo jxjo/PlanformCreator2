@@ -269,7 +269,10 @@ def nelder_mead_1D (f, x_start,
         # expansion
         if rscore < res[0][1]:
             xe = x0 + gamma*(x0 - res[-1][0])
-            escore = f(xe) + penalty(xe, bounds)
+            if penalty(xe, bounds):
+                escore = penalty(xe, bounds)
+            else:
+                escore = f(xe) + penalty(xe, bounds)
             if escore < rscore:
                 del res[-1]
                 res.append((xe, escore))

@@ -552,6 +552,8 @@ class Bezier:
         self._y  = None
         self._u  = None                         # cached parameter u 
 
+        self.basisFn = None                     # stored Bezier basis function for test 
+
         self.set_points(px_or_p, py)
         return
 
@@ -778,9 +780,9 @@ class Bezier:
         elif der == 1:                          # derivative 1 - lower 1 order 
             n = npoints - 2
             points = np.ediff1d(pxy)            # the differecne between points is new weight
-        elif der == 2:                          # derivative 1 - lower 2 order 
+        elif der == 2:                          # derivative 2 - lower 2 order 
             n = npoints - 3
-            points = np.ediff1d(pxy)            # the differecne of dirfference between points                                      
+            points = np.ediff1d(pxy)            # the differecne of difference between points                                      
             points = np.ediff1d(points)         #     is new weight 
 
         # init result (array)
@@ -789,11 +791,12 @@ class Bezier:
         else: 
             bezier = np.zeros (np.size(u))
 
+        # test 
+        self.basisFn = []
         for i in range (0, len(points)):
             
             # collect bernstein Polynomial
-            # b.append (basisFunction(n, i, t))
-            # print (n, i, u, basisFunction(n, i, u))
+            self.basisFn.append (basisFunction(n, i, u))
 
             bezier += basisFunction(n, i, u) * points[i] 
 
@@ -990,8 +993,10 @@ def test_Bezier ():
     
     import matplotlib.pyplot as plt
 
-    px = [   0,  0.0, 0.3,   0.7, 1]
-    py = [   0, 0.08, 0.12, 0.08, 0]
+    px = [   0,  0.0, 0.3,   1]
+    py = [   0, 0.04, 0.12,  0]
+    # px = [   0,  0.0, 0.3,   0.7, 1]
+    # py = [   0, 0.08, 0.12, 0.08, 0]
     # px = [  0,  0.8,  1.0,  2.0]  
     # py = [  1,  1.0,  0.5,  0.0]  
 
@@ -1000,14 +1005,23 @@ def test_Bezier ():
     bez = Bezier (px, py)
     x,y = bez.eval(u)
     
-    # plt.subplots(1)
-    # plt.plot(px, py, "or", label="Points")    
-    # plt.plot(x, y, label="Bezier")
+    plt.subplots(1)
+    plt.plot(px, py, "or", label="Points")    
+    plt.plot(x, y, label="Bezier")
 
-    # plt.plot(u, x, "b", label="x(u)")
-    # plt.plot(u, y, "g", label="y(u)")
-    # plt.grid(True)
-    # plt.legend()
+    plt.plot(u, x, "b", label="x(u)")
+    plt.plot(u, y, "g", label="y(u)")
+    plt.grid(True)
+    plt.legend()
+
+    # bezier basis functions 
+    plt.subplots(1)
+    for i, line in enumerate (bez.basisFn):
+        plt.plot (u,line, label="bezier basis %d" %i) 
+    plt.grid(True)
+    plt.legend()
+
+
 
     # # curvature 
     # plt.subplots(1)
@@ -1023,44 +1037,57 @@ def test_Bezier ():
     # plt.legend()
 
     # der 1 
-    # plt.subplots(1)
-    # dx, dy = bez.eval(u, der=1)
-    # plt.plot(u, dy/dx,  "-r", label="der 1")
-    # plt.grid(True)
-    # plt.legend()
+    plt.subplots(1)
+    dx, dy = bez.eval(u, der=1)
+    plt.plot(u, dy/dx,  "-r", label="der 1")
+    plt.grid(True)
+    plt.legend()
 
-    # # der 2 
-    # plt.subplots(1)
-    # ddx, ddy = bez.eval(u, der=2)
-    # deriv2 = dx * ddy - dy * ddx
-    # plt.plot(u, deriv2,  "-r", label="der 2")
-    # plt.grid(True)
-    # plt.legend()
+    # bezier basis functions 
+    plt.subplots(1)
+    for i, line in enumerate (bez.basisFn):
+        plt.plot (u,line, label="der 1 basis %d" %i) 
+    plt.legend()
 
+    # der 2 
+    plt.subplots(1)
+    dx, dy = bez.eval(u, der=1)
+    ddx, ddy = bez.eval(u, der=2)
+    deriv2 = dx * ddy - dy * ddx
 
-
-    # px = [  0,  0.9,  1.0]  
-    # py = [  0,  0.1,  0.0]  
-    # spl = Spline1D (px, py, boundary='natural')
-    # x = np.linspace( 0, 1 , 200)
-    # y = spl.eval(x)
-    # plt.plot(px, py, "og", label="Points Spline")    
-    # plt.plot(x, y, "g", label="Spline")
-
-    y1val = 0.02
-    for i in range (10): 
-        py[1] = y1val 
+    py2_list=  [0.08, 0.12, 0.16]
+    for py2 in py2_list:
+        py[2] = py2
         bez = Bezier (px, py)
-        dx, dy   = bez.eval(0.0, der=1)
-        ddx, ddy = bez.eval(0.0, der=2)
+        dx, dy = bez.eval(u, der=1)
+        ddx, ddy = bez.eval(u, der=2)
         deriv2 = dx * ddy - dy * ddx
-        curv = bez.curvature(0.0)
-        print ("%.2f   %.3f   %.2f" %(y1val, deriv2, curv))
-        y1val += 0.02
 
-    # plt.grid(True)
-    # plt.legend()
-    # plt.show()
+        plt.plot(u, deriv2,  "-r", label="der 2 %f" %py2)
+    plt.grid(True)
+    plt.legend()
+
+    # bezier basis functions 
+    plt.subplots(1)
+    for i, line in enumerate (bez.basisFn):
+        plt.plot (u,line, label="der 2 basis %d" %i) 
+
+
+
+    # y1val = 0.02
+    # for i in range (10): 
+    #     py[1] = y1val 
+    #     bez = Bezier (px, py)
+    #     dx, dy   = bez.eval(0.0, der=1)
+    #     ddx, ddy = bez.eval(0.0, der=2)
+    #     deriv2 = dx * ddy - dy * ddx
+    #     curv = bez.curvature(0.0)
+    #     print ("%.2f   %.3f   %.2f" %(y1val, deriv2, curv))
+    #     y1val += 0.02
+
+    plt.grid(True)
+    plt.legend()
+    plt.show()
 
 
 # def test_spline1D (): 
