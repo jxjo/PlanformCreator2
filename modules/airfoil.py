@@ -969,11 +969,32 @@ class Airfoil_Bezier(Airfoil):
 
 # ------------ test functions - to activate  -----------------------------------
 
+def test_deriv_curvature_bezier (): 
 
-def test_strak(): 
+    air = Airfoil_Bezier ()
 
-    import matplotlib.pyplot as plt
-    from airfoil_examples import Root_Example, Tip_Example
+    air.upper.set_te_gap(0.03)
+    xy = air.upper.bezier.eval(0.0)
+    dx, dy = deriv1 = air.upper.bezier.eval(0.001, der=1)
+    deriv1 = dy/dx
+    deriv2 = air.upper.bezier.eval(0, der=2)
+    curv = air.upper.bezier.curvature(0.001)
+    
+    uLe = air.spline.uLe
+    xy_s = air.spline.spline.eval(uLe)
+    dx, dy = air.spline.spline.eval(uLe, der=1)
+    deriv1_s = dy /dx
+    deriv2_s = air.spline.spline.eval(uLe, der=2)
+    curv_s = air.spline.spline.curvature(uLe)
+
+    # uLe = air.spline.uLe
+    # curv_s_le = air.spline.spline.curvature(uLe)
+    pass
+
+# def test_strak(): 
+
+#     import matplotlib.pyplot as plt
+#     from airfoil_examples import Root_Example, Tip_Example
 
     # fig, axa = plt.subplots(2, 1, figsize=(16,8))
     # ax1 = axa[0]
@@ -1004,27 +1025,32 @@ def test_strak():
 
     # #----
 
-    fig, ax1 = plt.subplots(1, 1, figsize=(16,6))
-    ax1.grid(True)
-    ax1.axis("equal")
+# def test_set_maxCamberX(): 
 
-    air1 = Root_Example()
-    maxT  = air1.maxThickness
-    maxTx = air1.maxThicknessX
-    maxCx = air1.maxCamberX
-    for i, fac in enumerate (np.linspace (0.5,1.5, 20)):
-        # air1.set_maxThickness (maxT * fac)
-        # air1.set_maxThicknessX (maxTx * fac) 
-        air1.set_maxCamberX (maxCx * fac) 
-        ax1.plot(air1.x, air1.y, label="Fac %.2f" % fac)
-        print (i)
-    ax1.legend()
-    plt.show()
+#     import matplotlib.pyplot as plt
+#     from airfoil_examples import Root_Example, Tip_Example
+#     fig, ax1 = plt.subplots(1, 1, figsize=(16,6))
+#     ax1.grid(True)
+#     ax1.axis("equal")
+
+#     air1 = Root_Example()
+#     maxT  = air1.maxThickness
+#     maxTx = air1.maxThicknessX
+#     maxCx = air1.maxCamberX
+#     for i, fac in enumerate (np.linspace (0.5,1.5, 20)):
+#         # air1.set_maxThickness (maxT * fac)
+#         # air1.set_maxThicknessX (maxTx * fac) 
+#         air1.set_maxCamberX (maxCx * fac) 
+#         ax1.plot(air1.x, air1.y, label="Fac %.2f" % fac)
+#         print (i)
+#     ax1.legend()
+#     plt.show()
 
 
 if __name__ == "__main__":
 
-
-    test_strak() 
+    # test_set_maxCamberX
+    # test_strak() 
+    test_deriv_curvature_bezier ()
      
     pass  

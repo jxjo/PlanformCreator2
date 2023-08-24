@@ -105,7 +105,7 @@ class Airfoil_Artist (Artist):
                     linewidth=0.5
                 else:  
                     _marker_style = dict()
-                    linewidth=1.0
+                    linewidth=0.8
 
                 # plot airfoil 
                 p = self.ax.plot (airfoil.x, airfoil.y, '-', color = color, label="%s" % (airfoil.name), 
@@ -587,14 +587,14 @@ class Bezier_Artist (Artist):
             for ipoint, cpoint in enumerate (sideBezier.controlPoints):
 
                 if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
-                    markerstyle = 's'
+                    markerstyle = '.'
                     markersize = 3
                 elif ipoint == 1 :
                     if side == UPPER:
                         markerstyle = 6
                     else: 
                         markerstyle = 7
-                    markersize = 7
+                    markersize = 5
                 else:
                     markerstyle = 'o'
                     markersize = 4
@@ -610,10 +610,10 @@ class Bezier_Artist (Artist):
             # the marker style to show points
             if self._points:
                 _marker_style = ms_points
-                linewidth=0.4
+                linewidth= 0.4
             else:  
                 _marker_style = dict()
-                linewidth=1.0
+                linewidth= 0.8
 
             p = self.ax.plot (sideBezier.x, sideBezier.y, '-', linewidth=linewidth, 
                               color=cl_editing, **_marker_style, animated=True, label=label ) 
@@ -635,7 +635,7 @@ class Bezier_Artist (Artist):
                                 callback_shiftCtrlClick = self.handle_shiftCtrlClick,
                                 callback_on_moved       = self._moveCallback)) 
 
-            
+
         #  thickness and camber line 
         if self._camber:
             camb  = self.airfoil.camber 
@@ -778,7 +778,7 @@ class Bezier_Artist (Artist):
             if not i_insert is None: 
                 # create artist for the new point 
                 p = self.ax.plot (x, y, marker='o', color=cl_userHint, 
-                                  markersize=5, animated=True) 
+                                  markersize=4, animated=True) 
                 self._add(p)
                 points_artist.insert (i_insert, p[0])
                 updateBezier = True 
