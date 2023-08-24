@@ -167,7 +167,7 @@ class Airfoil_Line_Artist (Artist):
 
 
 
-class Curvature_Artist (Airfoil_Line_Artist):
+class Curvature_Artist_sav (Airfoil_Line_Artist):
     """Plot curvature (top or bottom) of an airfoil
     """
     
@@ -205,6 +205,64 @@ class Curvature_Artist (Airfoil_Line_Artist):
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
                     self._plot_marker (line, color, upper=False)
+                p = self.ax.plot (airfoil.spline.x, airfoil.spline.curvature, ls_curvature, color = "green", label=line.name, 
+                                    linewidth= linewidth, **self._marker_style)
+
+
+        if self._myPlots:                     # something plotted? 
+            p = self.ax.plot ([], [], ' ', label="R: reversals")
+            self._add(p)
+
+
+    def _plot_marker (self, line : SideOfAirfoil, color, upper=True):
+        # annotate reversals of curvature  ... 
+
+        reversals = line.reversals()
+        if reversals:
+            for i, point in enumerate(reversals): 
+                text = "R"
+                marker_x = point[0]
+                if point[1] < 0.0:
+                    marker_y = point[1] - 0.5
+                    va = 'bottom'
+                else: 
+                    marker_y = point[1] + 0.5
+                    va = 'top'
+
+                p = self.ax.text (marker_x, marker_y, text, va=va, ha='center', color = color )
+                self._add (p) 
+                
+
+
+class Curvature_Artist (Airfoil_Line_Artist):
+    """Plot deriv2 (top or bottom) of an airfoil
+    """
+    
+    def _plot (self): 
+
+        if not len(self.airfoils) : return 
+        # create cycled colors 
+        self._set_colorcycle (10 , colormap="Paired")         
+
+        airfoilList = self.airfoils
+
+        airfoil: Airfoil
+        for airfoil in airfoilList:
+            if (airfoil.isLoaded):
+                color = "green"
+                linewidth=0.8
+
+                x = airfoil.x
+                y = airfoil.deriv2
+                p = self.ax.plot (x, y, ls_curvature, color = color, label='derivative 2', 
+                                      linewidth= linewidth, **self._marker_style)
+                self._add(p)
+                y = airfoil.spline.curvature
+                p = self.ax.plot (x, y, ls_curvature, color = "yellow", label='curvature', 
+                                      linewidth= linewidth, **self._marker_style)
+                self._add(p)
+                # self._plot_marker (line, color, upper=False)
+
 
         if self._myPlots:                     # something plotted? 
             p = self.ax.plot ([], [], ' ', label="R: reversals")

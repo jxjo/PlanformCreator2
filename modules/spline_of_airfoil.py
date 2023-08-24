@@ -182,6 +182,18 @@ class SplineOfAirfoil:
         #  derivative 1 (gradient) is dy/dx = dy/du / dx/du
         return dy/dx
 
+
+    @property
+    def deriv2 (self): 
+        """ derivate 2 of spline at knots"""
+
+        u = self.spline.u
+        dx, dy   = self.spline.eval (u, der=1)
+        ddx, ddy = self.spline.eval (u, der=2)
+        deriv2 = ddy * dx - ddx * dy
+        #  derivative 1 (gradient) is dy/dx = dy/du / dx/du
+        return deriv2
+
     @property
     def angle (self): 
         """ return the angle in degrees at knots"""
@@ -785,6 +797,15 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
     def curvature (self): 
         """returns a SideOfAirfoil with curvature in .y """
         return SideOfAirfoil (self.x, self.bezier.curvature(self._u), name='curvature')
+
+    @property
+    def deriv2 (self): 
+        """returns a SideOfAirfoil with deriv2 in .y """
+        
+        dx, dy   = self.bezier.eval (self._u, der=1) 
+        ddx, ddy = self.bezier.eval (self._u, der=2) 
+        deriv2 = ddx * dy - ddy * dx
+        return SideOfAirfoil (self.x, deriv2, name='derivative 2')
 
     @property
     def curveType (self): return self._curveType

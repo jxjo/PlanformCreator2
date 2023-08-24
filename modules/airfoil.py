@@ -377,6 +377,10 @@ class Airfoil:
         """ SideOfAirfoil with curvature on the lower side"""
         return self.spline.curv_lower
     
+    @property
+    def deriv2 (self):
+        """ derivative 2 at self.x"""
+        return self.spline.deriv2
 
     @property
     def nPanelsNew (self): 
@@ -795,8 +799,8 @@ class Airfoil_Bezier(Airfoil):
         # overloaded
         if self._upper is None: 
             # default side
-            px = [   0,   0.0,  0.3,   1]
-            py = [   0,  0.04,  0.1,   0]    
+            px = [   0,    0.0,   0.33,  1]
+            py = [   0, 0.0469, 0.0936,  0]    
             self._upper = SideOfAirfoil_Bezier (px, py, curveType=UPPER)
         return self._upper 
 
@@ -896,7 +900,10 @@ class Airfoil_Bezier(Airfoil):
         # overlaoded for bezier - not supported
         pass
 
-
+    @property
+    def deriv2 (self):
+        """ derivative 2 at self.x"""
+        return np.concatenate ((np.flip(self.upper.deriv2.y), self.lower.deriv2.y[1:]))
     # -----------------
 
     def reset (self): 
@@ -969,22 +976,49 @@ class Airfoil_Bezier(Airfoil):
 
 # ------------ test functions - to activate  -----------------------------------
 
+def curv_y1 (side_bez: SideOfAirfoil_Bezier,y1):
+
+    x,y = side_bez.move_controlPoint_to (1,0,y1)
+    curv_1 = side_bez.bezier.curvature(0)
+    return -curv_1
+
+def thick_y2 (side_bez: SideOfAirfoil_Bezier,y2):
+
+    x2 = 0.3
+    x,y = side_bez.move_controlPoint_to (2,x2,y2)
+    thick_2 = side_bez.bezier.eval_y_on_x(x2)
+    return thick_2
+
 def test_deriv_curvature_bezier (): 
 
     air = Airfoil_Bezier ()
 
-    air.upper.set_te_gap(0.03)
+
+    # find y1 for curvature 
+
+    curv_target = 100
+    y1 = findRoot (lambda y: curv_y1(air.upper, y)- curv_target, 0.1, bounds=(0.01,0.2, ))
+    print ("New y1: %.4f for curvature: %.0f  and x2: 0.33" %(y1,curv_target ))
+
+    thick_target = 0.054
+    y2 = findRoot (lambda y: thick_y2(air.upper, y)- thick_target, 0.05, bounds=(0.01,0.5, ))
+    print ("New y2: %.4f for thickness: %.3f  and x2: 0.33" %(y2,thick_target ))
+
+    # air.upper.set_te_gap(0.03)
     xy = air.upper.bezier.eval(0.0)
-    dx, dy = deriv1 = air.upper.bezier.eval(0.001, der=1)
-    deriv1 = dy/dx
-    deriv2 = air.upper.bezier.eval(0, der=2)
-    curv = air.upper.bezier.curvature(0.001)
-    
+    dx, dy = deriv1 = air.upper.bezier.eval(0.0, der=1)
+    # deriv1 = dy/dx
+    # ddx, ddy = air.upper.bezier.eval(0, der=2)
+    # deriv2 = ddy * dx - ddx * dy
+    curv = air.upper.bezier.curvature(0)
+
     uLe = air.spline.uLe
+    uLe = uLe * 0.998
     xy_s = air.spline.spline.eval(uLe)
     dx, dy = air.spline.spline.eval(uLe, der=1)
     deriv1_s = dy /dx
-    deriv2_s = air.spline.spline.eval(uLe, der=2)
+    ddx, ddy = air.spline.spline.eval(uLe, der=2)
+    deriv2_s = ddy * dx - ddx * dy
     curv_s = air.spline.spline.curvature(uLe)
 
     # uLe = air.spline.uLe
