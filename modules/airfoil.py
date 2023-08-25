@@ -800,7 +800,7 @@ class Airfoil_Bezier(Airfoil):
         if self._upper is None: 
             # default side
             px = [   0,    0.0,   0.33,  1]
-            py = [   0, 0.0469, 0.0936,  0]    
+            py = [   0, 0.06, 0.12,  0]    
             self._upper = SideOfAirfoil_Bezier (px, py, curveType=UPPER)
         return self._upper 
 
@@ -811,7 +811,7 @@ class Airfoil_Bezier(Airfoil):
         if self._lower is None: 
             # default side 
             px = [   0,   0.0,  0.25,   1]
-            py = [   0, -0.02, -0.04,   0]    
+            py = [   0, -0.04, -0.07,   0]    
             self._lower = SideOfAirfoil_Bezier (px, py, curveType=LOWER)
         return self._lower 
 
@@ -955,20 +955,13 @@ class Airfoil_Bezier(Airfoil):
         for i, x in enumerate(x_lower): 
             y_lower[i] = self.lower.bezier.eval_y_on_x (x)  
 
-        # x_upper = self.upper.x
-        # y_upper = self.upper.y
-        # x_lower = x_upper 
-        # y_lower = np.zeros (len(x_lower))
-        # for i, x in enumerate(x_lower): 
-        #     y_lower[i] = self.lower.bezier.eval_y_on_x (x) 
-
         # thickness and camber can now easily calculated 
         thickness = SideOfAirfoil (x_upper,  y_upper - y_lower,        name='Thickness distribution')
         camber    = SideOfAirfoil (x_upper, (y_lower + y_upper) / 2.0, name='Camber line')
 
         # for symmetric airfoil with unclean data set camber line to 0 
         if np.max(camber.y) < 0.00001: 
-            camber.y = np.zeros (len(x_lower))
+            camber._y = np.zeros (len(x_lower))
 
         self._thickness = thickness
         self._camber = camber 
@@ -976,54 +969,101 @@ class Airfoil_Bezier(Airfoil):
 
 # ------------ test functions - to activate  -----------------------------------
 
-def curv_y1 (side_bez: SideOfAirfoil_Bezier,y1):
+def test_adapt_bezier (): 
 
-    x,y = side_bez.move_controlPoint_to (1,0,y1)
-    curv_1 = side_bez.bezier.curvature(0)
-    return -curv_1
+    def match_yFn(target1_x, target1_y, target2_x, target2_y,  
+                  side_bez: SideOfAirfoil_Bezier, py): 
 
-def thick_y2 (side_bez: SideOfAirfoil_Bezier,y2):
+        x1,y1 = side_bez.move_controlPoint_to (1,0,py[0])
+        x2,y2 = side_bez.move_controlPoint_to (2,target2_x ,py[1])
 
-    x2 = 0.3
-    x,y = side_bez.move_controlPoint_to (2,x2,y2)
-    thick_2 = side_bez.bezier.eval_y_on_x(x2)
-    return thick_2
+        new1_y = side_bez.bezier.eval_y_on_x(target1_x)
+        new2_y = side_bez.bezier.eval_y_on_x(target2_x)
 
-def test_deriv_curvature_bezier (): 
+        dist = abs(new1_y - target1_y) + abs(new2_y - target2_y) 
+        return dist 
+
+
+    import matplotlib.pyplot as plt
+    from airfoil_examples import Root_Example, Tip_Example
+
+    fig, ax1 = plt.subplots(1, 1, figsize=(16,6))
+    ax1.grid(True)
+    ax1.axis("equal")
 
     air = Airfoil_Bezier ()
+    air_org = Airfoil_Bezier ()
+    air_seed  = Root_Example()
 
+    # upper side 
 
-    # find y1 for curvature 
+    air_side = air.upper
+    air_seed_side = air_seed.upper
+    bounds  = [(0.01, 0.3), (0.01, 0.5)]
+    y_start = [0.05, 0.15]
 
-    curv_target = 100
-    y1 = findRoot (lambda y: curv_y1(air.upper, y)- curv_target, 0.1, bounds=(0.01,0.2, ))
-    print ("New y1: %.4f for curvature: %.0f  and x2: 0.33" %(y1,curv_target ))
+    y_maxthick = air_seed_side.maximum [1]
+    x_maxthick = air_seed_side.maximum [0]
+    x_leArea = round(x_maxthick / 8,3)
 
-    thick_target = 0.054
-    y2 = findRoot (lambda y: thick_y2(air.upper, y)- thick_target, 0.05, bounds=(0.01,0.5, ))
-    print ("New y2: %.4f for thickness: %.3f  and x2: 0.33" %(y2,thick_target ))
+    for x_leArea in [x_leArea] :    # np.linspace (0.05, 0.05, 1)
 
-    # air.upper.set_te_gap(0.03)
-    xy = air.upper.bezier.eval(0.0)
-    dx, dy = deriv1 = air.upper.bezier.eval(0.0, der=1)
-    # deriv1 = dy/dx
-    # ddx, ddy = air.upper.bezier.eval(0, der=2)
-    # deriv2 = ddy * dx - ddx * dy
-    curv = air.upper.bezier.curvature(0)
+        y_leArea = air_seed_side.yFn (x_leArea)   
 
-    uLe = air.spline.uLe
-    uLe = uLe * 0.998
-    xy_s = air.spline.spline.eval(uLe)
-    dx, dy = air.spline.spline.eval(uLe, der=1)
-    deriv1_s = dy /dx
-    ddx, ddy = air.spline.spline.eval(uLe, der=2)
-    deriv2_s = ddy * dx - ddx * dy
-    curv_s = air.spline.spline.curvature(uLe)
+        f= lambda y : match_yFn(x_leArea, y_leArea, x_maxthick, y_maxthick,  
+                                air_side, y)
 
-    # uLe = air.spline.uLe
-    # curv_s_le = air.spline.spline.curvature(uLe)
+        res, niter = nelder_mead (f, y_start,
+                    step=0.01, no_improve_thr=10e-5,                # for scalar product
+                    no_improv_break=5, max_iter=50,
+                    bounds = bounds)
+
+        new_py = res[0]
+        print ("x_leArea: %.4f" %x_leArea, "  Result y1: %.4f y2: %.4f" %( new_py[0], new_py[1]),
+               "  Score: %.6f" % res[1], "   niter: ", niter)
+
+        air_side.move_controlPoint_to (1, None, new_py[0])
+        air_side.move_controlPoint_to (2, x_maxthick, new_py[1])
+
+    # lower side 
+    
+    air_side = air.lower
+    air_seed_side = air_seed.lower
+    bounds  = [(-0.01, -0.3), (-0.01, -0.5)]
+    y_start = [-0.05, -0.15]
+
+    y_maxthick = air_seed_side.maximum [1]
+    x_maxthick = air_seed_side.maximum [0]
+    x_leArea = round(x_maxthick/7 ,3)
+
+    for x_leArea in [x_leArea] :    # np.linspace (0.05, 0.05, 1)
+
+        y_leArea = air_seed_side.yFn (x_leArea)   
+
+        f= lambda y : match_yFn(x_leArea, y_leArea, x_maxthick, y_maxthick,  
+                                air_side, y)
+
+        res, niter = nelder_mead (f, y_start,
+                    step=0.01, no_improve_thr=10e-5,                # for scalar product
+                    no_improv_break=5, max_iter=50,
+                    bounds = bounds)
+
+        new_py = res[0]
+        print ("x_leArea: %.4f" %x_leArea, "  Result y1: %.4f y2: %.4f" %( new_py[0], new_py[1]),
+               "  Score: %.6f" % res[1], "   niter: ", niter)
+
+        air_side.move_controlPoint_to (1, None, new_py[0])
+        air_side.move_controlPoint_to (2, x_maxthick, new_py[1])
+
+    ax1.plot(air.x,      air.y,      label="Bezier optimized for x=%.4f" %x_leArea)
+    ax1.plot(air_seed.x, air_seed.y, label=air_seed.name)
+    ax1.plot(air_org.x,  air_org.y,  label="Bezier default")
+
+    ax1.legend()
+    plt.show()
+
     pass
+
 
 # def test_strak(): 
 
@@ -1085,6 +1125,5 @@ if __name__ == "__main__":
 
     # test_set_maxCamberX
     # test_strak() 
-    test_deriv_curvature_bezier ()
-     
+    test_adapt_bezier()
     pass  

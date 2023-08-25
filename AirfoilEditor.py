@@ -668,7 +668,7 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
         gs = GridSpec(2, 1, height_ratios=[5, 4])
         self.ax1 : plt.Axes = self.figure.add_subplot(gs[0])
         self.ax2 : plt.Axes = self.figure.add_subplot(gs[1])
-        self.figure.subplots_adjust(left=0.04, bottom=0.07, right=0.96, top=0.97, wspace=None, hspace=0.15)
+        self.figure.subplots_adjust(left=0.04, bottom=0.07, right=0.98, top=0.97, wspace=None, hspace=0.15)
 
     
     def setup_axes(self, show_logScale=True):

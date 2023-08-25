@@ -231,18 +231,6 @@ class SplineOfAirfoil:
         return self._curv_lower 
     
 
-    @property
-    def scalarProduct (self): 
-        """ return the scalar product of a vector from TE to u and the tangent at knots 0..npoints
-        Used for finding LE where this value is 0.0at u"""
-
-        dot = np.zeros (len(self.spline.u))
-
-        for i, u in enumerate(self.spline.u):
-            dot[i] = self.scalarProductFn (u)
-
-        return dot
-
     #-----------
 
     def _reset (self):
@@ -358,7 +346,11 @@ class SplineOfAirfoil:
 
         iLeGuess = np.argmin (self._x)          # first guess for Le point 
         # exact determination of root  = scalar product = 0.0 
-        uLe = findRoot (self.scalarProductFn, self.spline.u[iLeGuess-1] , bounds=(0.3, 0.7)) 
+        try: 
+            uLe = findRoot (self.scalarProductFn, self.spline.u[iLeGuess-1] , bounds=(0.3, 0.7)) 
+        except: 
+            uLe = self.spline.u [iLeGuess]
+            print ("Warn: Le not found - taking geometric Le")
 
         return uLe
 
@@ -648,11 +640,17 @@ class SideOfAirfoil:
         returns the x,y position of the maximum y value of self
         """
         if self._maximum is None: 
-            if np.max(self.y) == 0.0: 
+            max_y = abs(np.max(self.y))
+            min_y = abs(np.min(self.y))
+            
+            if max_y == 0.0 and min_y == 0.0:                        # optimize 
                 xmax = 0.0 
                 ymax = 0.0 
             else:
-                xmax = findMax (self.yFn, 0.3, bounds=(0.0,1.0))
+                if max_y > min_y:                   # upper side 
+                    xmax = findMax (self.yFn, 0.3, bounds=(0.0,1.0))
+                else:                               # lower side
+                    xmax = findMin (self.yFn, 0.3, bounds=(0.0,1.0))
                 ymax = self.yFn (xmax)
             self._maximum = (xmax, ymax)
         return self._maximum 
@@ -864,11 +862,17 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
 
     def move_controlPoint_to (self, index, x, y): 
-        """ move Bezier control point to x,y - taking care of order of points 
+        """ move Bezier control point to x,y - taking care of order of points.
+
+        If x OR y is None, the coordinate is not changed
+
         Returns x, y of new (corrected) position """
 
         px = self.bezier.points_x
         py = self.bezier.points_y
+
+        if x is None: x = px[index]
+        if y is None: x = py[index]
 
         if index == 0:                          # fixed
             x, y = 0.0, 0.0 

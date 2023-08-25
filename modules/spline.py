@@ -629,13 +629,14 @@ class Bezier:
         if iPoint > n-1:
             raise ValueError('Bezier: Point %d is outside of control point array' % iPoint)
 
-        self._px[iPoint] = px
-        self._py[iPoint] = py
-            
-        # reset already evaluated values 
-        self._x  = None
-        self._y  = None
-        self._u =  None
+        if self._px[iPoint] != px or self._py[iPoint] != py:
+            self._px[iPoint] = px
+            self._py[iPoint] = py
+                
+            # reset already evaluated values 
+            self._x  = None
+            self._y  = None
+            self._u =  None
 
 
 

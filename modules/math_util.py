@@ -177,13 +177,17 @@ def newton(f,Df,x0,epsilon,max_iter):
 # Pure Python/Numpy implementation of the Nelder-Mead optimization algorithm
 # to determine the minimum of a fuction - replaces fmin and brentq from scipy
 
+
 def nelder_mead_1D (f, x_start,
+                    
                 step=0.1, no_improve_thr=10e-10,                # for scalar product - org: no_improve_thr=10e-8,
                 no_improv_break=12, max_iter=50,
                 bounds = None,                                  # extension 
                 alpha=1., gamma=2., rho=-0.5, sigma=0.5):
     '''
         1D Nelder-Mead optimization algorithm to determine the minimum of a fuction
+
+        1D version for speed optimization in simple cases 
 
         Parameters
         ----------
@@ -202,14 +206,25 @@ def nelder_mead_1D (f, x_start,
         """
 
     '''
+
     def penalty (x, bounds):
-        "jx-extension: returns a penalty of 1 if x is outside bounds"
-        if bounds is None: 
-            return 0.0 
-        elif x < bounds[0] or x > bounds[1]: 
-            return 999.0 
+        if bounds is None: return 0.0
+        
+        if x < bounds[0] or x > bounds[1]:
+            return 99999.9
+        else:
+            return 0.0
+
+    def fn_penalty (f, x, bounds):
+        # return function value - if x outside bounds return penality value 
+        if bounds is None: return f(x)
+        
+        if penalty (x, bounds): 
+            fn = penalty (x, bounds)  
         else: 
-            return 0.0 
+            fn = f(x)
+        return fn
+
 
     # init
     prev_best = f(x_start)
@@ -222,7 +237,7 @@ def nelder_mead_1D (f, x_start,
     else: 
         x = x_start + step
 
-    score = f(x) + penalty(x, bounds)
+    score = fn_penalty (f, x, bounds) 
     res.append((x, score))
 
     # simplex iter
@@ -256,10 +271,7 @@ def nelder_mead_1D (f, x_start,
 
         # reflection
         xr = x0 + alpha*(x0 - res[-1][0])
-        if penalty(xr, bounds):
-            rscore = penalty(xr, bounds)                    # xr out of bounds 
-        else: 
-            rscore = f(xr) + penalty(xr, bounds)
+        rscore = fn_penalty (f, xr, bounds)
 
         if res[0][1] <= rscore < res[-2][1]:
             del res[-1]
@@ -269,10 +281,8 @@ def nelder_mead_1D (f, x_start,
         # expansion
         if rscore < res[0][1]:
             xe = x0 + gamma*(x0 - res[-1][0])
-            if penalty(xe, bounds):
-                escore = penalty(xe, bounds)
-            else:
-                escore = f(xe) + penalty(xe, bounds)
+            escore = fn_penalty (f, xe, bounds)
+
             if escore < rscore:
                 del res[-1]
                 res.append((xe, escore))
@@ -284,7 +294,7 @@ def nelder_mead_1D (f, x_start,
 
         # contraction
         xc = x0 + rho*(x0 - res[-1][0])
-        cscore = f(xc) + penalty(xc, bounds)
+        cscore = fn_penalty (f, xc, bounds)
         if cscore < res[-1][1]:
             del res[-1]
             res.append((xc, cscore))
@@ -295,8 +305,150 @@ def nelder_mead_1D (f, x_start,
         nres = []
         for tup in res:
             redx = x1 + sigma*(tup[0] - x1)
-            score = f(redx) + penalty(redx, bounds)
+            score = fn_penalty (f, redx, bounds)
             nres.append((redx, score))
+        res = nres
+
+
+
+
+def nelder_mead (f, x_start,
+                step=0.1, no_improve_thr=10e-10,                # for scalar product
+                no_improv_break=12, max_iter=50,
+                bounds = None,                                  # extension 
+                alpha=1., gamma=2., rho=-0.5, sigma=0.5):
+    '''
+        Nelder-Mead optimization algorithm to determine the minimum of a fuction
+
+        Allows multi dimensional optimization of scalar function f. 
+        For 1D use 'nelder_mead_1D' which should be faster  
+
+        Parameters
+        ----------
+        f : function to optimize, must return a scalar score
+        x_start : np array - initial position
+        step    : float - look-around radius in initial step
+        no_improv_thr: float - an improvement lower than no_improv_thr
+        no_improv_break : int -break after no_improv_break iterations 
+        bounds : list of tuple(float) - (min, max) pair for boundary of x. None - no boundary. 
+        max_iter : int - always break after this number of iterations.
+        alpha, gamma, rho, sigma (floats): parameters of the algorithm
+            (see Wikipedia page for reference)
+             
+        Returns
+        -------
+        (xbest,score) : np array tuple - x of minimum  , best score 
+        niter : int - iterations needed 
+        """
+
+    '''
+    def penalty (x, bounds):
+        if bounds is None: return 0.0
+        
+        if bounds[0] < 0: 
+            if x < bounds[1] or x > bounds[0]:
+                return 999.9
+            else:
+                return 0.0
+        else: 
+            if x < bounds[0] or x > bounds[1]:
+                return 999.9
+            else:
+                return 0.0
+
+    def fn_penalty (f, x, bounds):
+        # return function value - if x outside bounds return penality value 
+        if bounds is None: return f(x)
+        
+        for i in range (len(x)): 
+            if penalty (x[i], bounds[i]): 
+                return penalty (x[i], bounds[i])
+            
+        return f(x)
+
+
+    # init
+    dim = len(x_start)
+    prev_best = f(x_start)
+    no_improv = 0
+    res = [[np.copy(x_start), prev_best]]
+
+    for i in range(dim):
+        x = np.copy(x_start)
+        if penalty (x[i] + step, bounds[i]):
+            x[i] = x[i] - step
+        else:
+            x[i] = x[i] + step
+        score = fn_penalty (f, x, bounds) 
+        res.append([x, score])
+
+    # simplex iter
+    iters = 0
+    while 1:
+        # order
+        res.sort(key=lambda x: x[1])
+        best = res[0][1]
+
+        # break after max_iter
+        if max_iter and iters >= max_iter:
+            return res[0], iters
+        iters += 1
+
+        # break after no_improv_break iterations with no improvement
+        # print ('...best so far:', best)
+
+        if abs(best - prev_best) < no_improve_thr:
+            no_improv += 1
+        else:
+            no_improv = 0
+            prev_best = best
+
+        if no_improv >= no_improv_break:
+            return res[0], iters
+
+        # centroid
+        x0 = [0.0] * dim 
+        for tup in res[:-1]:
+            for i, c in enumerate(tup[0]):
+                x0 [i] += c / (len(res)-1)
+
+        # reflection
+        xr = x0 + alpha*(x0 - res[-1][0])
+        rscore = fn_penalty (f, xr, bounds) 
+
+        if res[0][1] <= rscore < res[-2][1]:
+            del res[-1]
+            res.append([xr, rscore])
+            continue
+
+        # expansion
+        if rscore < res[0][1]:
+            xe = x0 + gamma*(x0 - res[-1][0])
+            escore = fn_penalty (f, xe, bounds) 
+            if escore < rscore:
+                del res[-1]
+                res.append([xe, escore])
+                continue
+            else:
+                del res[-1]
+                res.append([xr, rscore])
+                continue
+
+        # contraction
+        xc = x0 + rho*(x0 - res[-1][0])
+        cscore = fn_penalty (f, xc, bounds) 
+        if cscore < res[-1][1]:
+            del res[-1]
+            res.append([xc, cscore])
+            continue
+
+        # reduction
+        x1 = res[0][0]
+        nres = []
+        for tup in res:
+            redx = x1 + sigma*(tup[0] - x1)
+            score = fn_penalty (f, redx, bounds) 
+            nres.append([redx, score])
         res = nres
 
 
@@ -312,7 +464,7 @@ def nelder_mead_wrap  (fn, xStart,
             raise ValueError ("nelder-mead: Start value %.46f outside bounds" % xStart)
 
     
-    xmin, score, niters =  nelder_mead_1D(fn, xStart, 
+    xmin, score, niters =  nelder_mead_1D(fn, xStart, step= 0.051,
                                           no_improve_thr=no_improve_thr, 
                                           no_improv_break=no_improv_break, max_iter=max_iter,  
                                           bounds=bounds)    
@@ -326,7 +478,7 @@ def nelder_mead_wrap  (fn, xStart,
         else: 
             xStart = xStart *  1.012
         # print ("nelder_mead bug:   ", xmin, score, niters)
-        xmin, score, niters =  nelder_mead_1D(fn, xStart, 
+        xmin, score, niters =  nelder_mead_1D(fn, xStart, step=0.021, 
                                             no_improve_thr=no_improve_thr, 
                                             no_improv_break=no_improv_break, max_iter=max_iter,  
                                             bounds=bounds)    
