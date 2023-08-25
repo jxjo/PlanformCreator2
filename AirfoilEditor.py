@@ -1756,13 +1756,19 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,  lab="Upper points", 
                                 obj=self.airfoil.upper, get='nPoints', 
-                                spin=True, step=1, disable=True, width=90, lab_width=90))
+                                spin=True, step=1, disable=True, width=90, lab_width=100))
+        self.add (Button_Widget (self.input_frame,r,c+3, lab='Smart adjust', width=90, padx=0, anchor='left',
+                                 set=lambda: self.adapt_bezier(UPPER), disable=lambda: self.adapt_bezier_disabled(UPPER)))
+
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,  lab="Lower points", 
                                 obj=self.airfoil.lower, get='nPoints', 
-                                spin=True, step=1, disable=True, width=90, lab_width=90))
+                                spin=True, step=1, disable=True, width=90, lab_width=100))
+        self.add (Button_Widget (self.input_frame,r,c+3, lab='Smart adjust', width=90, padx=0, anchor='left',
+                                 set=lambda: self.adapt_bezier(LOWER), disable=lambda: self.adapt_bezier_disabled(LOWER)))
 
 
+        self.input_frame.grid_columnconfigure (7, weight=1)
         c = 8
         r = 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="Thickness", obj=self.airfoil, 
@@ -1778,6 +1784,9 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
                                 get='maxCamberX',   
                                 disable=True, width=65,  unit="%", dec=2))
+
+        self.input_frame.grid_columnconfigure (15, weight=2)
+
         r += 1
         c = 0 
         self.add (Field_Widget  (self.input_frame,r,c,   lab="TE gap", obj=self.airfoil, 
@@ -1788,6 +1797,25 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         # ---- buttons are in super class
 
+    def adapt_bezier (self, curveType): 
+        # adapt bezier curve to original airfoil
+
+        if curveType == UPPER: 
+            self.airfoil.upper.adapt_bezier_to (self.airfoilOrg.upper)
+        else:
+            self.airfoil.lower.adapt_bezier_to (self.airfoilOrg.lower)
+        # make splined curves like thickness invalid 
+        self.airfoil.reset()     
+        fireEvent  (self.ctk_root, AIRFOIL_CHANGED)              # update diagram 
+        self.refresh()
+
+    def adapt_bezier_disabled (self, curveType): 
+        # adapt bezier only for 4 and 5 point bezier 
+        if curveType == UPPER: 
+            return not (self.airfoil.upper.nPoints == 4 or self.airfoil.upper.nPoints == 5)
+        else:
+            return not (self.airfoil.lower.nPoints == 4 or self.airfoil.lower.nPoints == 5)
+
 
     def changed_te_gap (self):
         # callback when te gap was changed in entry field 
@@ -1795,7 +1823,6 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         # make splined curves like thickness invalid 
         self.airfoil.reset()     
         fireEvent  (self.ctk_root, AIRFOIL_CHANGED)              # update diagram 
-      
         self.refresh()
 
 

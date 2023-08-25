@@ -683,7 +683,7 @@ class Bezier:
         return self._eval (self._py, u, der=der)
 
 
-    def eval_y_on_x (self, x, fast=True):
+    def eval_y_on_x (self, x, fast=True, no_improve_thr=10e-10):
         """
         Evaluate the y value based on x 
 
@@ -706,7 +706,7 @@ class Bezier:
             # evaluate y from u 
             return self._eval (self._py, u)
         else: 
-            u = findMin (lambda u: abs(self._eval(self._px,u) - x), 0.5, bounds=(0, 1)) 
+            u = findMin (lambda u: abs(self._eval(self._px,u) - x), 0.5, bounds=(0, 1), no_improve_thr=no_improve_thr) 
             y =  self._eval (self._py, u)
             # print ("x: ",x, "  y evaluated ", y)
             return y

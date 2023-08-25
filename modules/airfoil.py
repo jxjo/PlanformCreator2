@@ -6,6 +6,7 @@
 
 """
 import os
+import copy
 from pathlib import Path
 import numpy as np
 from math_util import * 
@@ -971,19 +972,6 @@ class Airfoil_Bezier(Airfoil):
 
 def test_adapt_bezier (): 
 
-    def match_yFn(target1_x, target1_y, target2_x, target2_y,  
-                  side_bez: SideOfAirfoil_Bezier, py): 
-
-        x1,y1 = side_bez.move_controlPoint_to (1,0,py[0])
-        x2,y2 = side_bez.move_controlPoint_to (2,target2_x ,py[1])
-
-        new1_y = side_bez.bezier.eval_y_on_x(target1_x)
-        new2_y = side_bez.bezier.eval_y_on_x(target2_x)
-
-        dist = abs(new1_y - target1_y) + abs(new2_y - target2_y) 
-        return dist 
-
-
     import matplotlib.pyplot as plt
     from airfoil_examples import Root_Example, Tip_Example
 
@@ -991,71 +979,14 @@ def test_adapt_bezier ():
     ax1.grid(True)
     ax1.axis("equal")
 
-    air = Airfoil_Bezier ()
-    air_org = Airfoil_Bezier ()
-    air_seed  = Root_Example()
+    air      = Airfoil_Bezier ()
+    air_org  = Airfoil_Bezier ()
+    air_seed = Root_Example()
 
-    # upper side 
+    air.upper.adapt_bezier_to (air_seed.upper)
+    air.lower.adapt_bezier_to (air_seed.lower)
 
-    air_side = air.upper
-    air_seed_side = air_seed.upper
-    bounds  = [(0.01, 0.3), (0.01, 0.5)]
-    y_start = [0.05, 0.15]
-
-    y_maxthick = air_seed_side.maximum [1]
-    x_maxthick = air_seed_side.maximum [0]
-    x_leArea = round(x_maxthick / 8,3)
-
-    for x_leArea in [x_leArea] :    # np.linspace (0.05, 0.05, 1)
-
-        y_leArea = air_seed_side.yFn (x_leArea)   
-
-        f= lambda y : match_yFn(x_leArea, y_leArea, x_maxthick, y_maxthick,  
-                                air_side, y)
-
-        res, niter = nelder_mead (f, y_start,
-                    step=0.01, no_improve_thr=10e-5,                # for scalar product
-                    no_improv_break=5, max_iter=50,
-                    bounds = bounds)
-
-        new_py = res[0]
-        print ("x_leArea: %.4f" %x_leArea, "  Result y1: %.4f y2: %.4f" %( new_py[0], new_py[1]),
-               "  Score: %.6f" % res[1], "   niter: ", niter)
-
-        air_side.move_controlPoint_to (1, None, new_py[0])
-        air_side.move_controlPoint_to (2, x_maxthick, new_py[1])
-
-    # lower side 
-    
-    air_side = air.lower
-    air_seed_side = air_seed.lower
-    bounds  = [(-0.01, -0.3), (-0.01, -0.5)]
-    y_start = [-0.05, -0.15]
-
-    y_maxthick = air_seed_side.maximum [1]
-    x_maxthick = air_seed_side.maximum [0]
-    x_leArea = round(x_maxthick/7 ,3)
-
-    for x_leArea in [x_leArea] :    # np.linspace (0.05, 0.05, 1)
-
-        y_leArea = air_seed_side.yFn (x_leArea)   
-
-        f= lambda y : match_yFn(x_leArea, y_leArea, x_maxthick, y_maxthick,  
-                                air_side, y)
-
-        res, niter = nelder_mead (f, y_start,
-                    step=0.01, no_improve_thr=10e-5,                # for scalar product
-                    no_improv_break=5, max_iter=50,
-                    bounds = bounds)
-
-        new_py = res[0]
-        print ("x_leArea: %.4f" %x_leArea, "  Result y1: %.4f y2: %.4f" %( new_py[0], new_py[1]),
-               "  Score: %.6f" % res[1], "   niter: ", niter)
-
-        air_side.move_controlPoint_to (1, None, new_py[0])
-        air_side.move_controlPoint_to (2, x_maxthick, new_py[1])
-
-    ax1.plot(air.x,      air.y,      label="Bezier optimized for x=%.4f" %x_leArea)
+    ax1.plot(air.x,      air.y,      label="Bezier optimized")
     ax1.plot(air_seed.x, air_seed.y, label=air_seed.name)
     ax1.plot(air_org.x,  air_org.y,  label="Bezier default")
 
