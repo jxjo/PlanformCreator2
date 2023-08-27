@@ -664,10 +664,6 @@ class Bezier:
             self._u = u 
             self._x = x
             self._y = y
-        # elif der > 0: 
-        #     norm = np.sqrt(x**2 + y**2)
-        #     x = x/ norm
-        #     y = y / norm 
         return x, y
 
 

@@ -9,7 +9,7 @@
 
 import numpy as np
 from math_util import * 
-from copy import deepcopy
+from copy import copy, deepcopy
 from spline import Spline1D, Spline2D, Bezier
 
 
@@ -636,25 +636,39 @@ class SideOfAirfoil:
     
 
     @property
-    def maximum (self): 
+    def maximum (self, fast=False): 
         """ 
         returns the x,y position of the maximum y value of self
         """
         if self._maximum is None: 
-            max_y = abs(np.max(self.y))
-            min_y = abs(np.min(self.y))
-            
-            if max_y == 0.0 and min_y == 0.0:                        # optimize 
-                xmax = 0.0 
-                ymax = 0.0 
-            else:
-                if max_y > min_y:                   # upper side 
-                    xmax = findMax (self.yFn, 0.3, bounds=(0.0,1.0))
-                else:                               # lower side
-                    xmax = findMin (self.yFn, 0.3, bounds=(0.0,1.0))
-                ymax = self.yFn (xmax)
-            self._maximum = (xmax, ymax)
+            self._maximum = self.get_maximum()
         return self._maximum 
+
+
+    def get_maximum (self, fast=False): 
+        """ 
+        calculates and returns the x,y position of the maximum y value of self
+        """
+        max_y = abs(np.max(self.y))
+        min_y = abs(np.min(self.y))
+        
+        if max_y == 0.0 and min_y == 0.0:              # optimize 
+            xmax = 0.0 
+            ymax = 0.0 
+        elif fast: 
+            if max_y > min_y:                   # upper side 
+                imax = np.argmax(self.y)
+            else:                               # lower side
+                imax = np.argmin(self.y)
+            xmax = self.x[imax]
+            ymax = self.y[imax]
+        else:
+            if max_y > min_y:                   # upper side 
+                xmax = findMax (self.yFn, 0.3, bounds=(0.0,1.0))
+            else:                               # lower side
+                xmax = findMin (self.yFn, 0.3, bounds=(0.0,1.0))
+            ymax = self.yFn (xmax)
+        return xmax, ymax
 
 
     def set_maximum (self, newX=None, newY=None): 
@@ -763,8 +777,23 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         """
         self._name      = curveType 
         self._bezier    = Bezier(px,py)             # the bezier curve 
-        self._u         = np.linspace (0, 1, 100)   # bezier paramters 0..1
         self._curveType = curveType             
+
+        # Bezier needs a special u cosinus distribution as the ponts are bunched
+        # by bezier if there is high curvature ... 
+        beta = np.linspace(0.15 ,0.90 , 101) * np.pi   
+        u = (1 - np.cos(beta)) * 0.5
+
+        # normalize to 0..1
+        umin = np.amin(u)
+        umax = np.amax(u) 
+        u = (u - umin) / (umax-umin)
+
+        # ensure 0.0 and 1.0 
+        u[0]  = u[0].round(10)
+        u[-1] = u[-1].round(10)
+
+        self._u = u
 
 
     @property
@@ -905,82 +934,91 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         self.bezier.set_point (-1, px[-1], y) 
 
 
-    def adapt_bezier_to (self, anotherSide: SideOfAirfoil):
+    def adapt_bezier_to (self, targetSide: SideOfAirfoil):
         """ 
         Optimizes self bezier to best fit to another airfoil side
         uses nelder meat root finding
+
+        Rerturns: 
+        nvar:   number of optimization variables 
+        score:  y-deviation at target points 
+        niter:  number of iterations needed
+        max_reached: max number of iterations reached 
         """
 
-        cpoints  =  deepcopy(self.bezier.points)
-        ncpoints = len(self.bezier.points)
+        cp  = copy(self.bezier.points)
+        ncp = len(self.bezier.points)
 
-        if  ncpoints == 4 or ncpoints == 5 :                  #  bezier with 4 or 5 control points 
+        if  ncp > 3 and  ncp < 7 :                              # bezier with 4 or 5 control points 
 
-            # define target x,y which should fit best 
-            x_maxthick = anotherSide.maximum [0]
-            x_leArea   = round(x_maxthick / 8,3)
-            targ_x = [x_leArea, x_maxthick]
+            # define targets x,y which should fit best 
+            targ_x = [0.015, 0.08]                               # target position for point 1 = close to LE
+            for p in cp[2:-1]:                                  # target position 2..n-1 - x-value of control point
+                targ_x.append (p[0])
             targ_y = []
-            for x in targ_x: targ_y.append(anotherSide.yFn (x))
+            for x in targ_x:
+                targ_y.append(targetSide.yFn (x))               # target value for these = y from targetSide
 
-            # ensure point2 is at max thickness
-            self.move_controlPoint_to (2,x_maxthick, None)    # y remains unchanged
+            # tag the variable control point coordinates 
+            cp_x = np.zeros(ncp)
+            cp_y = np.zeros(ncp)
+            for ip in range(ncp):                               # all y-values of cpoint 1..n-1
+                if ip > 0 and ip < (ncp-1):
+                    cp_y [ip] = True
 
-            # mark the variable control point coordinates as None 
-            cPoints_x = np.zeros(ncpoints)
-            cPoints_y = np.zeros(ncpoints)
-            cPoints_y [1] = True
-            cPoints_y [2] = True
-
-            # start value of variables and boundaries for optimization 
+            # start value of variable control point and their boundaries for optimization 
+            nvar = ncp - 2
             if self.curveType == UPPER:
-                var_start = [0.1, 0.1]
-                bounds    = [(0.01, 0.2), (0.02, 0.3)]
+                var_start  = [0.1] * nvar
+                var_bounds = [(0.02, 0.3)] * nvar
             else:
-                var_start = [-0.05, -0.15]
-                bounds  =   [(-0.01, -0.3), (-0.01, -0.5)]
+                var_start = [-0.1] * nvar
+                var_bounds = [(-0.3, -0.02)] * nvar
 
-            if ncpoints == 5: 
+            # point 1 (LE) special treatment 
+            if self.curveType == UPPER:
+                var_start[0]  = 0.04
+                var_bounds[0] = (0.01, 0.1)
+            else:
+                var_start[0]  = -0.04
+                var_bounds[0] = (-0.1, -0.01)
 
-                # ensure point3 must be between 2 & 4
-                if not (cpoints[2][0] < cpoints[3][0] < cpoints[4][0]): 
-                    self.move_controlPoint_to (3,0.75, None)    # move towards te
-                cPoints_y [3] = True
-
-                targ_x.append (self.bezier.points_x[3])
-                targ_y.append (anotherSide.yFn (self.bezier.points_x[3]))
-
-                # add start value of variables and boundaries for optimization 
+            # point n-1 may become negative 
+            if nvar > 2: 
                 if self.curveType == UPPER:
-                    var_start.append (0.05)
-                    bounds.append    ((0.0002, 0.2))
+                    var_bounds[-1] = (-0.05, 0.2)
                 else:
-                    var_start.append (-0.05)
-                    bounds.append    ((-0.0002, -0.2))
+                    var_bounds[-1] = (-0.2, 0.05)
+
         else:
             return 
 
-        # objective function
-        f = lambda vars : \
-                   self._match_y_objectiveFn (targ_x, targ_y, cPoints_x, cPoints_y, vars) 
+        # ----- objective function
 
-        # nelder mead find minimum 
+        f = lambda vars : self._match_y_objectiveFn (targ_x, targ_y, cp_x, cp_y, vars) 
+
+        # ----- nelder mead find minimum --------
+
+        max_iter = 100 if nvar < 4 else 150
         res, niter = nelder_mead (f, var_start,
-                    step=0.01, no_improve_thr=1e-4,              
-                    no_improv_break=5, max_iter=50,
-                    bounds = bounds)
+                    step=0.02, no_improve_thr=1e-4,             
+                    no_improv_break=20, max_iter=max_iter,
+                    bounds = var_bounds)
 
-        var_result = res[0]
-        print ("Nelder mead score %s : %.6f" %(self.curveType, res[1]))
+
+        # print ("Nelder mead with %d variables - score: %.6f with %d iterations" %(len(var_start), score, niter))
 
         # set the final results in bezier control points 
 
-        self.move_controlPoint_to (1,None, var_result[0])    # x remains unchanged
-        self.move_controlPoint_to (2,None, var_result[1])    # x remains unchanged
+        var_result = res[0]
+        score = res[1]
+        ivar = 0 
+        for ip, point in enumerate (cp):
+            if point[1] == True:                                          # 'True'-tag for optimization 
+                self.move_controlPoint_to (ip ,None, var_result[ivar])    # x remains unchanged
+                ivar += 1
 
-        if ncpoints == 5 :                           #  bezier with 5 control points 
-            self.move_controlPoint_to (3,None, var_result[2])    # x remains unchanged
-
+        return nvar, score, niter, niter >= max_iter
 
     # ----------
 

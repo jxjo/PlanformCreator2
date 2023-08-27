@@ -527,6 +527,8 @@ class Airfoil:
             newPathFileName from dir and destName 
         """        
 
+        if not self.isLoaded: self.load()
+
         # adjust te gap if requested
         if teGap is not None: 
             x, y = self.with_TEGap (teGap)
@@ -559,17 +561,20 @@ class Airfoil:
             newPathFileName = destName + '.dat'
 
         # write header and coordinates
-
-        if not self.isLoaded: self.load()
+        self._write_toFile (newPathFileName, destName, x ,y )
         
-        with open(newPathFileName, 'w+') as file:
+        return newPathFileName
+    
+    def _write_toFile (self, pathFileName, destName, x ,y ):
+        # writes x,y to file in .dat-format. Directory in pathFileName must exist"
+
+        # write header and coordinates
+        with open(pathFileName, 'w+') as file:
             file.write("%s\n" % destName)
             for i in range (len(x)):
                 file.write("%.7f %.7f\n" %(x[i], y[i]))
             file.close()
 
-        return newPathFileName
-    
 
     def with_TEGap (self, newGap, xBlend = 0.8):
         """ returns self x,y coordinates with a new te gap.
@@ -635,7 +640,7 @@ class Airfoil:
         If 'highPrec' is set, the leading edge of the spline will also be at 0,0.
 
         Returns: 
-            hasbeen_normalized:   True/False if normalizaing was done
+            hasbeen_normalized:   True/False if normalizing was done
         """
 
         # when high precision, normalizing will be done with the spline 
@@ -816,6 +821,14 @@ class Airfoil_Bezier(Airfoil):
             self._lower = SideOfAirfoil_Bezier (px, py, curveType=LOWER)
         return self._lower 
 
+    def set_newSide_for (self, curveType, px,py): 
+        """vcreates either a new upper or lower side in self"""
+        if px and py:
+            if curveType == UPPER: 
+                self._upper = SideOfAirfoil_Bezier (px, py, curveType=UPPER)
+            elif curveType == LOWER:
+                self._lower = SideOfAirfoil_Bezier (px, py, curveType=LOWER)
+            self.reset()
 
     @property
     def curv_upper (self): 
@@ -934,6 +947,65 @@ class Airfoil_Bezier(Airfoil):
         self.lower.set_te_gap (- (newGap / 100) / 2)
 
 
+    def load_bezier (self, fromPath):
+        """
+        Loads bezier deinition from file. 
+        pathFileName must be set before or fromPath must be defined.
+        Load doesn't change self pathFileName
+        """    
+
+        with open(fromPath, 'r') as file:            
+
+            file_lines = file.readlines()
+
+        
+        # format of bezier airfoil file 
+
+        # Top Start
+        # 0.0000000000000000 0.0000000000000000
+        # ...
+        # 1.0000000000000000 0.0000000000000000
+        # Top End
+        # Bottom Start
+        # ...
+        # Bottom End
+        new_name = 'Bezier_Airfoil'                         # defalut name 
+
+        try: 
+            px, py = [], []
+            for i, line in enumerate(file_lines):
+                line = line.lower()
+                if i == 0:
+                    new_name = line.strip()
+                else: 
+                    if "start" in line:
+                        if "top" in line: 
+                            curveType = UPPER
+                        else:
+                            curveType = LOWER 
+                        px, py = [], []
+                    elif "end" in line:
+                        if not px : raise ValueError("Start line missing")
+                        if "top"    in line and curveType == LOWER: raise ValueError ("Missing 'Bottom End'")  
+                        if "bottom" in line and curveType == UPPER: raise ValueError ("Missing 'Bottom Top'") 
+                        self.set_newSide_for (curveType, px,py)
+                    else:     
+                        splitline = line.strip().split(" ",1)
+                        if len(splitline) == 1:                        # couldn't split line - try tab as separator
+                            splitline = line.strip().split("\t",1)
+                        if len(splitline) >= 2:                     
+                            px.append (float(splitline[0].strip()))
+                            py.append (float(splitline[1].strip()))
+        except ValueError as e:
+            ErrorMsg ("While reading Bezier file '%s': %s " %(fromPath,e )) 
+            return 0 
+         
+        self._name = new_name
+        return True  
+
+        
+
+
     def _get_thickness_camber (self): 
         """
         evalutes thickness and camber distribution as SideOfAirfoil objects
@@ -967,6 +1039,38 @@ class Airfoil_Bezier(Airfoil):
         self._thickness = thickness
         self._camber = camber 
         return 
+
+    def _write_toFile (self, pathFileName, airfoilName, x ,y ):
+        # writes x,y to file in 
+
+        #  .dat-format (normal airfoil write 
+        super()._write_toFile (pathFileName, airfoilName, x ,y )
+
+        #  .bez-format for CAD etc and 
+
+        # filename - remove .dat - add .bez 
+        bez_pathFileName = os.path.splitext(pathFileName)[0] + ".bez"
+        with open(bez_pathFileName, 'w+') as file:
+
+            # airfoil name 
+            file.write("%s\n" % airfoilName)
+
+            file.write("Top Start\n" )
+            for p in self.upper.controlPoints:
+                file.write("%13.10f %13.10f\n" %(p[0], p[1]))
+            file.write("Top End\n" )
+
+            file.write("Bottom Start\n" )
+            for p in self.lower.controlPoints:
+                file.write("%13.10f %13.10f\n" %(p[0], p[1]))
+            file.write("Bottom End\n" )
+
+            file.close()
+
+
+
+
+
 
 # ------------ test functions - to activate  -----------------------------------
 

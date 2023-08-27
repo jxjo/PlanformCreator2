@@ -134,14 +134,14 @@ class CurrentSection_Artist (Artist):
         # highlight section
 
         p = self.ax.plot (y_sec, x_sec, '--', linewidth=0.5, color= cl_wingSection_fix, animated=True) 
-        self._add(p)
-        (self.section_line_artist,) = p 
+        
+        self.section_line_artist = self._add(p) 
 
         # upper marker at le - move "chord"
         p = self.ax.plot(y_sec [0], x_sec[0],  markersize=6, clip_on=False, 
                          marker='o', color = cl_userHint, animated=True, pickradius=10)
-        self._add(p)
-        (self.chord_marker_artist,) = p 
+        
+        self.chord_marker_artist= self._add(p) 
 
         p = self.ax.annotate('move by chord', color=cl_userHint, backgroundcolor= cl_background,
                         xy=(y_sec [0], x_sec[0]), ha='left', va= 'top', fontsize = 'small',
@@ -164,15 +164,13 @@ class CurrentSection_Artist (Artist):
 
         p = self.ax.plot(x, y,  markersize=6, clip_on=False, 
                          marker='o', color = cl_userHint, 
-                         animated=True, pickradius=10)
-        self._add(p)
-        (self.pos_marker_artist,) = p 
+                         animated=True, pickradius=10)   
+        self.pos_marker_artist = self._add(p)
 
         p = self.ax.annotate('move by pos', color=cl_userHint, backgroundcolor= cl_background,
                         xy=(x, y), ha=ha, va= va, fontsize = 'small', annotation_clip=False,
                         xytext=xytext, textcoords='offset points', animated=True)
-        self._add(p)
-        self.pos_marker_anno = p 
+        self.pos_marker_anno = self._add(p)
 
 
     def draw_static_byPos (self, **_):
@@ -316,8 +314,7 @@ class Planform_Artist (Artist):
         # planform outline 
         y, x = self.planform.linesPolygon()
         p = self.ax.plot(y, x,  '-', color=cl_planform, label= "Planform")  
-        self._add (p)
-        (self.planform_line_artist,) = p 
+        self.planform_line_artist = self._add (p)
 
         p = self.ax.fill(y, x, linewidth=0.8, color=cl_planform, alpha=0.1)    
         self._add(p)
@@ -325,8 +322,7 @@ class Planform_Artist (Artist):
         # hinge line
         yh, hinge = self.planform.hingeLine()
         p = self.ax.plot(yh, hinge,  '-', linewidth=0.8, label="Hinge line", color='springgreen')
-        self._add (p)
-        (self.hinge_line_artist,) = p 
+        self.hinge_line_artist = self._add (p) 
 
         if self.mouseActive: 
 
@@ -382,21 +378,18 @@ class Planform_Artist (Artist):
         # ! animated=True must be set for all artists moving around !
         x, y = planform.banana_line()
         p = self.ax.plot (x,y , '--', linewidth=0.5, color= cl_userHint, animated=True) 
-        self._add(p)
-        (self.banana_line_artist,) = p 
+        self.banana_line_artist = self._add(p) 
 
         # drag marker 
         x = planform.banana_p1y * planform.halfwingspan
         y = planform.banana_p1x * planform.rootchord
         p = self.ax.plot (x, y, marker='o', color=cl_userHint, markersize=6, animated=True )
-        self._add(p)
-        (self.p1_marker_artist,) = p 
+        self.p1_marker_artist = self._add(p) 
 
         p = self.ax.annotate('banana', color=cl_userHint, backgroundcolor= cl_background, fontsize = 'small',
                             xy=(x, y), ha='left', va= 'bottom',
                             xytext=(7, 3), textcoords='offset points', animated=True)
-        self._add(p)
-        self.p1_marker_anno = p 
+        self.p1_marker_anno = self._add(p) 
 
 
     def show_mouseHelper_root (self, planform: Planform_Bezier): 
@@ -406,15 +399,13 @@ class Planform_Artist (Artist):
         x = 0
         y = planform.rootchord
         p = self.ax.plot (x, y, marker='o', color=cl_userHint, markersize=6, animated=True )
-        self._add(p)
-        (self.root_marker_artist,) = p 
+        self.root_marker_artist = self._add(p) 
 
         # ... and its annotation 
         p = self.ax.annotate('chord', color=cl_userHint, backgroundcolor= cl_background, fontsize = 'small',
                             xy=(x, y), ha='right', va= 'top', multialignment='left',
                             xytext=(-6, -3), textcoords='offset points', animated=True)
-        self._add(p)
-        self.root_marker_anno = p 
+        self.root_marker_anno = self._add(p)
 
 
     def show_mouseHelper_flap (self, planform: Planform_Bezier): 
@@ -424,15 +415,13 @@ class Planform_Artist (Artist):
         x = 0
         y = planform.rootchord * (1 - planform.flapDepthRoot / 100.0)
         p = self.ax.plot (x, y, marker='o', color=cl_userHint, markersize=6, animated=True )
-        self._add(p)
-        (self.flap_marker_artist,) = p 
+        self.flap_marker_artist = self._add(p) 
 
         # ... and its annotation 
         p = self.ax.annotate('flap', color=cl_userHint, backgroundcolor= cl_background, fontsize = 'small',
                             xy=(x, y), ha='right', va= 'top', multialignment='left',
                             xytext=(-6, -3), textcoords='offset points', animated=True)
-        self._add(p)
-        self.flap_marker_anno = p 
+        self.flap_marker_anno = self._add(p) 
 
 
     def show_mouseHelper_hinge (self, planform: Planform_Bezier): 
@@ -443,14 +432,12 @@ class Planform_Artist (Artist):
         x = xl[1]
         y = yl[1]
         p = self.ax.plot (x, y, marker='o', color=cl_userHint, markersize=6, animated=True )
-        self._add(p)
-        (self.hinge_marker_artist,) = p 
+        self.hinge_marker_artist = self._add(p) 
 
         p = self.ax.annotate('hinge\nspan', color=cl_userHint, backgroundcolor= cl_background, fontsize = 'small',
                             xy=(x, y), ha='right', va= 'top', multialignment='left',
                             xytext=(-4, -6), textcoords='offset points', animated=True)
-        self._add(p)
-        self.hinge_marker_anno = p 
+        self.hinge_marker_anno = self._add(p) 
 
     #-----------------
 
@@ -881,8 +868,7 @@ class Chord_Artist (Artist):
         y, chord = self.chord_line ()
 
         p = self.ax.plot(y, chord, '-', color=self.color, label=self.label())
-        self._add(p)
-        (self.chord_line_artist,) = p 
+        self.chord_line_artist = self._add(p) 
 
         if self.mouseActive and isinstance(self.planform, Planform_Bezier): 
 
@@ -911,37 +897,31 @@ class Chord_Artist (Artist):
 
         # Bezier p1 tangent line
         p = self.ax.plot (planform._py[0:2], planform._px[0:2], '--', linewidth=0.5, color= cl_userHint, animated=True) 
-        self._add(p)
-        (self.p1_line_artist,) = p 
+        self.p1_line_artist = self._add(p) 
         p = self.ax.plot (planform._py[0]+0.002, planform._px[0], marker=(3, 0, 0), fillstyle='none', color=cl_userHint, markersize=8 )
         self._add(p)
 
         # Bezier p1 marker and annotation
         p = self.ax.plot (planform._py[1], planform._px[1], marker='o', color=cl_userHint, markersize=6, animated=True )
-        self._add(p)
-        (self.p1_marker_artist,) = p 
+        self.p1_marker_artist = self._add(p) 
         p = self.ax.annotate('root tangent', color=cl_userHint, fontsize='small',
                             xy=(planform._py[1], planform._px[1]), ha='left', va='center',
                             xytext=(8, 0), textcoords='offset points', animated=True)
-        self._add(p)
-        self.p1_marker_anno = p 
+        self.p1_marker_anno = self._add(p) 
 
         # Bezier p2 tangent line
         p = self.ax.plot (planform._py[2:], planform._px[2:], '--', linewidth=0.5, color= cl_userHint)    
-        self._add(p)
-        (self.p2_line_artist,) = p 
+        self.p2_line_artist = self._add(p) 
         p = self.ax.plot (planform._py[3], planform._px[3],marker=(3, 0, 0), fillstyle='none', color=cl_userHint, markersize=8 )
         self._add(p)
 
         # Bezier p2 marker and annotation
         p = self.ax.plot (planform._py[2], planform._px[2], marker='o', color=cl_userHint, markersize=6)
-        self._add(p)
-        (self.p2_marker_artist,) = p 
+        self.p2_marker_artist = self._add(p) 
         p = self.ax.annotate('tip tangent', color=cl_userHint, fontsize='small',
                             xy=(planform._py[2], planform._px[2]), ha='center', va= 'bottom',
                             xytext=(0, 5), textcoords='offset points', animated=True)
-        self._add(p)
-        self.p2_marker_anno = p 
+        self.p2_marker_anno = self._add(p) 
 
 
     def draw_static_all (self, artist_onMove=None, **_): 

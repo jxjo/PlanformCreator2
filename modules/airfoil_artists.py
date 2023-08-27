@@ -503,14 +503,14 @@ class Thickness_Artist (Airfoil_Line_Artist):
                     self._add(p)
                     self._nextColor()                       # in colorycle are pairs 
 
-                    self._plot_max_val(airfoil.maxThicknessX, airfoil.maxThickness, airfoil.isModified, color)
-                    self._plot_max_val(airfoil.maxCamberX,    airfoil.maxCamber,    airfoil.isModified, color)
+                    self._plot_max_val(airfoil.thickness, airfoil.isModified, color)
+                    self._plot_max_val(airfoil.camber,    airfoil.isModified, color)
 
 
-    def _plot_max_val (self, x, y, isNew, color):
-
-        x, y = x /100 , y / 100
-        if isNew:
+    def _plot_max_val (self, airfoilLine: SideOfAirfoil, isModified, color):
+        # indicate max. value of camber or thickness line 
+        x, y = airfoilLine.maximum
+        if isModified:
             text = "New "
             color = cl_helperLine
         else:
@@ -519,7 +519,7 @@ class Thickness_Artist (Airfoil_Line_Artist):
         p = self.ax.plot (x, y, color=color, **ms_point)
         self._add(p)
 
-        if isNew:
+        if isModified:
             p = self.ax.annotate(text + "%.2f%% at %.2f%%" % (y * 100, x *100), (x, y), 
                                 xytext=(3, 3), textcoords='offset points', color = cl_helperLine)
             self._add (p)   
@@ -601,8 +601,7 @@ class Bezier_Artist (Artist):
                     markersize = 4
                 p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, 
                                   color=cl_userHint, animated=True) 
-                self._add(p)
-                points_artist.append (p[0])
+                points_artist.append (self._add(p))
            
             # plot  bezier curve points 
 
@@ -618,8 +617,7 @@ class Bezier_Artist (Artist):
 
             p = self.ax.plot (sideBezier.x, sideBezier.y, '-', linewidth=linewidth, 
                               color=cl_editing, **_marker_style, animated=True, label=label ) 
-            self._add(p)
-            (bezier_artist,)  = p 
+            bezier_artist  = self._add(p) 
 
             # remind artist - activate dragManager per side 
             if side == UPPER:
@@ -643,12 +641,11 @@ class Bezier_Artist (Artist):
             thick = self.airfoil.thickness 
             p = self.ax.plot (thick.x, thick.y, '--', linewidth=0.8, color=cl_editing_lower, 
                                 animated=True, label = thick.name ) 
-            self._add(p)
-            (self.thickness_artist,)  = p 
+            self.thickness_artist = self._add(p) 
+
             p = self.ax.plot (camb.x, camb.y, ':', linewidth=0.8, color=cl_editing_lower, 
                                 animated=True, label = camb.name ) 
-            self._add(p)
-            (self.camber_artist,)  = p 
+            self.camber_artist  = self._add(p) 
 
 
         # connect to draw event for initial plot of the animated artists all together
@@ -788,9 +785,11 @@ class Bezier_Artist (Artist):
 
             # remove control Point on which shift-click was made
             i_delete = sideBezier.delete_controlPoint_at (index = iArtist)
-            if not i_delete is None:
-                points_artist [iArtist].remove()       # matplotlib remove 
-                del points_artist [iArtist]
+            if i_delete is not None:
+                artist = points_artist [iArtist]
+                self._myPlots.remove(artist)                # remove from my lists 
+                points_artist.remove(artist)
+                artist.remove()                             # finally matplotlib remove 
                 updateBezier = True 
 
         if updateBezier: 

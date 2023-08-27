@@ -231,7 +231,7 @@ class Messagebox(ctk.CTkToplevel):
 
 
 
-class SplashWinwow (ctk.CTkToplevel):
+class SplashWindow (ctk.CTkToplevel):
     """ Message in different styles - inspired vom CTKMessagebox"""
 
     ICONS = {

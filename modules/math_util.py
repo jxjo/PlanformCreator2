@@ -211,7 +211,7 @@ def nelder_mead_1D (f, x_start,
         if bounds is None: return 0.0
         
         if x < bounds[0] or x > bounds[1]:
-            return 99999.9
+            return 9999.9
         else:
             return 0.0
 
@@ -345,16 +345,10 @@ def nelder_mead (f, x_start,
     def penalty (x, bounds):
         if bounds is None: return 0.0
         
-        if bounds[0] < 0: 
-            if x < bounds[1] or x > bounds[0]:
-                return 999.9
-            else:
-                return 0.0
-        else: 
-            if x < bounds[0] or x > bounds[1]:
-                return 999.9
-            else:
-                return 0.0
+        if x < bounds[0] or x > bounds[1]:
+            return 9999.9
+        else:
+            return 0.0
 
     def fn_penalty (f, x, bounds):
         # return function value - if x outside bounds return penality value 
@@ -369,6 +363,9 @@ def nelder_mead (f, x_start,
 
     # init
     dim = len(x_start)
+    if bounds is None: 
+        bounds = [None] * dim                         # dummy bounds for all x
+
     prev_best = f(x_start)
     no_improv = 0
     res = [[np.copy(x_start), prev_best]]

@@ -216,8 +216,8 @@ class Artist():
             art = aPlot [0]
         else:
             art = aPlot
-
         self._myPlots.append(art)
+        return art
 
     def _plotLegend(self):
         """ shows the legend """

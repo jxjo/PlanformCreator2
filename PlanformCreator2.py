@@ -57,7 +57,7 @@ from wing_artists       import *
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "0.8.4"
+AppVersion = "0.9.0"
 
 #------------------------------------------------
 
@@ -1509,10 +1509,13 @@ class Diagram_Airfoils (Diagram_Abstract):
     def airfoilPicked (self, aAirfoilLabel):
         # call method - the user pciked a wing section in the plot
         self.airfoilArtist.set_current (aAirfoilLabel, figureUpdate=True)  
-        sectionName = aAirfoilLabel.split(":")[0]
-        myApp : App = self.winfo_toplevel()
-        myApp.set_curWingSectionName(sectionName)
-        fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
+        sectionName = aAirfoilLabel.split("@")[1].strip()
+        if sectionName: 
+            myApp : App = self.winfo_toplevel()
+            myApp.set_curWingSectionName(sectionName)
+            fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
+        else: 
+            ErrorMsg ("Missing section name in airfoil label")
 
 
 #-------------------------------------------------------------------------------
