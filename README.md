@@ -45,6 +45,12 @@ Operations like repaneling, normalizing and changing geometry parameters make ex
 
 ![PC2](images/AirfoilEditor_Repanel.png "Screenshot of Repaneling within AirfoilEditor")
 
+
+A new airfoil may be designed based on two Bezier curves for upper and lower side. The control points of the Bezier curve can be automatically adapted for a best fit to a seed airfoil. 
+
+![PC2](images/AirfoilEditor_bezier.png "Screenshot of Bezier curve definition")
+
+
 ###  Install
 
 A pre-build Windows-Exe is available in the releases section https://github.com/jxjo/PlanformCreator2/releases  
