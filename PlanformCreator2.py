@@ -57,7 +57,7 @@ from wing_artists       import *
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "0.9.0"
+AppVersion = "0.9.1"
 
 #------------------------------------------------
 
@@ -2047,10 +2047,11 @@ class Edit_File_Menu(Edit_Abstract_Wing):
 
     def init (self):
 
+        self.myApp : App
+        
         self.grid_columnconfigure   (0, weight=1)
         Header_Widget (self,0,0, lab=self.name, width=80)
-        Button_Widget (self,0,0, lab='Settings', width=60, padx=(100,10), sticky = 'e', style=SUPTLE,
-                       set=self.myApp.edit_settings)
+        Button_Widget (self,0,0, icon_name='settings', padx=(120,0), style=ICON, set=self.myApp.edit_settings)
 
         Button_Widget (self,1,0, lab='New',         width=100, padx=30, pady=4, sticky = '', set=self.myApp.new)
         Button_Widget (self,2,0, lab='Open',        width=100, pady=4, sticky = '', set=self.myApp.open)

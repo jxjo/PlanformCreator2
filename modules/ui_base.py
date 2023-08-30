@@ -41,6 +41,9 @@ class Dialog_Abstract (ctk.CTkToplevel):
 
         self.transient(master)
 
+        # buf fix titlebar color https://github.com/TomSchimansky/CustomTkinter/issues/1930
+        self.after(20, lambda: self._windows_set_titlebar_color(self._get_appearance_mode()))
+
         # the default directory for file activities
         self.workingDir = workingDir
 
@@ -66,6 +69,7 @@ class Dialog_Abstract (ctk.CTkToplevel):
         # self.resizable(False, False)                        # width, height
         # self.deiconify()
         # self.wait_visibility()
+
         self.grab_set()
         self.focus_set()
         self.protocol("WM_DELETE_WINDOW", self.destroy)
@@ -165,12 +169,15 @@ class Dialog_Settings (Dialog_Abstract):
     width  = 500
     height = 400
 
-    def __init__(self, master,  *args, **kwargs):
+    def __init__(self, master,  name= None, *args, **kwargs):
         super().__init__(master, *args,  **kwargs)
 
         # ! see Dialog_Airfoil_Abstract for init of airfoil !
 
-        self.title ("Edit settings  [" + self.master.name + "]")
+        if name is None: 
+            name = self.master.name
+
+        self.title ("Edit settings  [" + name + "]")
 
 
         # Header 

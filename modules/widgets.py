@@ -34,6 +34,7 @@ def_width           = 105                         # base width in px for entry f
 PRIMARY             = 1                           # buttonstyle for highlighted button 
 SECONDARY           = 2                           # buttonstyle for normal action
 SUPTLE              = 3                           # buttonstyle for subtle appearance 
+ICON                = 4                           # buttonstyle for icon only button 
 
 #-------------------------------------------------------------------------------
 # Pretty Messagebox   
@@ -49,8 +50,7 @@ class MessageWindow ():
 
         msg.deiconify()
         msg.after(100)
-        msg.update_idletasks()
-        msg.after(100)
+        # try self._windows_set_titlebar_color(self._get_appearance_mode())
         msg.update_idletasks()
 
         functionFn ()
@@ -195,12 +195,8 @@ class Messagebox(ctk.CTkToplevel):
     def load_icon(self, icon, icon_size):
             if icon not in self.ICONS or self.ICONS[icon] is None:
                 image_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon + '.png')
-                if icon_size:
-                    size_height = icon_size[1] if icon_size[1] <= self.height - 100 else self.height - 100
-                    size = (icon_size[0], size_height)
-                else:
-                    size = (self.height / 4, self.height / 4)
-                self.ICONS[icon] = ctk.CTkImage(Image.open(image_path), size=size)
+                if not icon_size: icon_size = (25,25) 
+                self.ICONS[icon] = ctk.CTkImage(Image.open(image_path), size=icon_size)
             return self.ICONS[icon]         
 
 
@@ -255,9 +251,6 @@ class SplashWindow (ctk.CTkToplevel):
         self.geometry(f"{self.width}x{self.height}+{600}+{200}")
 
         self.resizable(width=False, height=False)
-
-
-        self.lift()
         
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)   
@@ -292,9 +285,13 @@ class SplashWindow (ctk.CTkToplevel):
         self.message_text.grid(row=0, column=1, columnspan=2, sticky="nwes")
         
         # #todo - not the real solution ... Title bar isn't painted ...
-        self.wm_overrideredirect(True)  
-        # self.deiconify()
+        # self.wm_overrideredirect(True)  
+        self.deiconify()
+        self.lift()
+        self.after (50)
         self.update()
+        # try self._windows_set_titlebar_color(self._get_appearance_mode())
+        # self.update_idletasks()
 
         # if self.winfo_exists():
         #     self.grab_set()
@@ -789,13 +786,20 @@ class Button_Widget(Base_Widget):
         set -- access path setter when button is pressed             :)
         style -- button appearance - either PRIMARY, SECONDARY or SUPTLE
     """
+
+    ICONS = {
+        "settings": None,
+        }
+    
+
     def __init__(self, *args, 
                  style=SECONDARY, 
                  sticky= None, anchor=None, 
+                 icon_name: str = None,             #  "settings"
                  pady= None, padx=None, columnspan = 1, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if sticky is None: sticky = 'w'
+        icon_size = None 
         if anchor is None: anchor = 'center'
         if padx   is None: padx = 10
         if pady   is None: pady = 0
@@ -806,17 +810,24 @@ class Button_Widget(Base_Widget):
         elif style == SUPTLE:
             self.fg_color = cl_spin
             self.style = style
+        elif style == ICON:
+            self.fg_color = "transparent"
+            self.width = 25
+            self.style = style
+            icon_size= (20,20)
+            icon_name = icon_name if icon_name is not None else "settings"
         else:
             self.fg_color = cl_button_secondary
             self.style = SECONDARY
 
-        if self.getter:                         # either 'get' or 'lab' can be used
-            text = self.val
-        else: 
-            text=self.label 
+        sticky = 'w' if sticky is None else sticky
+        text = self.val if self.getter else self.label      # either 'get' or 'lab' can be used
+
+        icon = self.load_icon (icon_name, icon_size=icon_size) if icon_name else None 
+
 
         self.mainCTk = ctk.CTkButton(self.parent, text=text, height=self.height, width=self.width, 
-                                     anchor=anchor, command=self.CTk_callback)
+                                     anchor=anchor, image=icon, command=self.CTk_callback)
         self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky=sticky)
      
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
@@ -851,6 +862,17 @@ class Button_Widget(Base_Widget):
                 # for buttons always color of Dark mode
                 widgetCTk.configure (text_color = self._text_color()[1])
             widgetCTk.configure (fg_color =self.fg_color )
+
+
+    def load_icon(self, icon_name, icon_size= (20,20)):
+            if icon_name not in self.ICONS or self.ICONS[icon_name] is None:
+                dirname = os.path.dirname(os.path.realpath(__file__))
+                image_path_light = os.path.join(dirname, 'icons', icon_name + '_light'+ '.png')
+                image_path_dark  = os.path.join(dirname, 'icons', icon_name + '_dark'+ '.png')
+                self.ICONS[icon_name] = ctk.CTkImage(light_image=Image.open(image_path_light), 
+                                                     dark_image =Image.open(image_path_dark), 
+                                                     size=icon_size)
+            return self.ICONS[icon_name]       
 
 
     def refresh(self):

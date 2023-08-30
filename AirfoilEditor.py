@@ -42,7 +42,7 @@ from airfoil            import *
 from airfoil_examples   import Root_Example
 from widgets            import *
 from artist             import Plot_Toolbar
-from ui_base            import Dialog_Abstract, Edit_Abstract, set_initialWindowSize
+from ui_base            import Dialog_Abstract, Edit_Abstract, Dialog_Settings, set_initialWindowSize
 from airfoil_artists    import *
 
 from spline_of_airfoil  import Bezier, UPPER, LOWER
@@ -51,7 +51,7 @@ from spline_of_airfoil  import Bezier, UPPER, LOWER
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "0.9.0"
+AppVersion = "0.9.1"
 
 #------------------------------------------------
 
@@ -241,13 +241,13 @@ class Edit_Panels(Edit_Abstract_Airfoil):
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="Angle at LE", get=lambda: self.airfoil().panelAngle_le, 
                                  width=50,   lab_width=80, unit="°", dec=0, text_style=lambda: self.style('le_angle')))
-        self.add(Label_Widget   (self,r,c+3, columnspan=2, padx= 0,  
+        self.add(Label_Widget   (self,r,c+3, columnspan=2, padx= 0,  width=80, 
                                  lab= lambda: "at index %d" % self.airfoil().iLe))
 
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="Angle min", get=lambda: self.airfoil().panelAngle_min[0], 
                                  width=50,   lab_width=80, unit="°", dec=0, text_style=lambda: self.style('min_angle')))
-        self.add(Label_Widget   (self,r,c+3, columnspan=2, padx= 0,  
+        self.add(Label_Widget   (self,r,c+3, columnspan=2, padx= 0, width=80, 
                                  lab= lambda: "at index %d" % self.airfoil().panelAngle_min[1]))
         r += 1
         Blank_Widget (self, r,c)
@@ -665,7 +665,7 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
 
         from matplotlib.gridspec import GridSpec
 
-        gs = GridSpec(2, 1, height_ratios=[5, 4])
+        gs = GridSpec(2, 1, height_ratios=[6, 4])
         self.ax1 : plt.Axes = self.figure.add_subplot(gs[0])
         self.ax2 : plt.Axes = self.figure.add_subplot(gs[1])
         self.figure.subplots_adjust(left=0.04, bottom=0.07, right=0.98, top=0.97, wspace=None, hspace=0.15)
@@ -964,10 +964,14 @@ class Edit_File_Menu(Edit_Abstract_Airfoil):
 
     def init (self):
 
+        self.myApp : AirfoilEditor
+
         self.grid_columnconfigure   (0, weight=1)
 
         r,c = 0,0 
-        self.add (Header_Widget (self,r,c, lab=self.name, width=80))
+        Header_Widget (self,r,c, lab=self.name, width=80)
+        Button_Widget (self,r,c, icon_name='settings', sticky="e",  style=ICON, 
+                       set=self.myApp.edit_settings)
 
         # if AirfoilEditor called stand alone offer combobox with input files
         if not self.myApp.isModal:
@@ -1013,7 +1017,7 @@ class Edit_File_Menu(Edit_Abstract_Airfoil):
         for aPathFileName in self.myApp.airfoilFiles:
             if newFileName == os.path.basename(aPathFileName):
 
-                if os.path.isfile (aPathFileName):                  # maybe it was deleted in meantime 
+                if os.path.isfile (aPathFileName) or newFileName == 'Root_Example':   # maybe it was deleted in meantime 
                     self.myApp.loadNewAirfoil (aPathFileName)
                 self.refresh()
                 break
@@ -1088,7 +1092,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
                                  obj=lambda: self.airfoil, get='name', set='set_name',
                                  lab_width=130, width=220, justify='left')
         c += 2
-        Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, width=90)
+        Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, style=SUPTLE, width=90)
         c += 1 
         Button_Widget (self.button_frame,r,c, lab='Ok', set=self.ok, style=PRIMARY, width=90)
         c += 1 
@@ -1478,7 +1482,8 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
 
         self.title ("Normalize airfoil  [" + self.airfoil.name + "]")
 
-        self.diagram_frame.grid_remove()                # not neeeded here
+        self.diagram_frame.grid_remove()                 # not neeeded here
+        self.switches_frame.grid_remove()                # not neeeded here
 
         # Header 
         c = 0 
@@ -1737,9 +1742,11 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         # overwrite
 
         if not self.airfoilOrg.isNormalized_highPrec:               # also LE of spline at 0,0? 
+            pathFileName = self.airfoilOrg.pathFileName
             self.airfoilOrg  = Airfoil.asCopy (self.airfoilOrg, nameExt='_norm') 
             self.airfoilOrg.normalize (highPrec = True)             # ensure exact le based on spline
             self.airfoilOrg.set_isModified (False)                  # do not plot as modified airfoil
+            self.airfoilOrg.set_pathFileName (pathFileName)         # asCopy doesn't copy - needed for save
         self.airfoilOrg_upper = self.airfoilOrg.upper               # cache sides 
         self.airfoilOrg_lower = self.airfoilOrg.lower               # cache sides 
 
@@ -1751,7 +1758,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         # react on changes in diagram made by mouse drag 
         self.ctk_root.bind(BEZIER_CHANGED, self.refresh, add='+')
-        self.adjust_running = False                                 # is optimization runnning?
+        self._adapt_running = None                                  # is optimization runnning?
 
 
         # ----------- setup frames  ----------------
@@ -1791,7 +1798,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                                  get=lambda: self.airfoil.upper.nPoints, 
                                  spin=True, step=1, disable=True, width=90, lab_width=100))
         self.add (Button_Widget (self.input_frame,r,c+3, width=90, padx=0, 
-                                 get=lambda: 'Auto adjust' if not self.adjust_running else '.. running ..',
+                                 get=lambda: 'Auto adjust' if not self.adapt_running(UPPER) else '.. running ..',
                                  set=lambda: self.adapt_bezier(UPPER), 
                                  disable=lambda: self.adapt_bezier_disabled(UPPER)))
 
@@ -1800,7 +1807,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                                  get=lambda: self.airfoil.lower.nPoints, 
                                 spin=True, step=1, disable=True, width=90, lab_width=100))
         self.add (Button_Widget (self.input_frame,r,c+3, width=90, padx=0, 
-                                 get=lambda: 'Auto adjust' if not self.adjust_running else '.. running ..',
+                                 get=lambda: 'Auto adjust' if not self.adapt_running(LOWER) else '.. running ..',
                                  set=lambda: self.adapt_bezier(LOWER), 
                                  disable=lambda: self.adapt_bezier_disabled(LOWER)))
 
@@ -1841,57 +1848,103 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
 
     def adapt_bezier (self, curveType): 
-        # adapt bezier curve to original airfoil
+        """ adapt bezier curve to 'original' airfoil """
 
-        self.adjust_running = True                              # update button text, disable 
+        self.set_adapt_running(curveType)                         # update button text, disable 
         self.refresh()
         self.update()
 
         if curveType == UPPER: 
             airfoil_side = self.airfoil.upper
-            airfoilOrg_side = self.airfoilOrg_upper
+            airfoil_side_target = self.airfoilOrg_upper
         else:
             airfoil_side = self.airfoil.lower
-            airfoilOrg_side = self.airfoilOrg_lower
-            self.airfoil.lower.adapt_bezier_to (self.airfoilOrg_lower)
+            airfoil_side_target = self.airfoilOrg_lower
 
-        # run optimization 
+        #-- adapt TE gap - last control point is fix 
+         
+        airfoil_side.set_te_gap (airfoil_side_target.y[-1])                 
 
-        nVars, deviation, niter, max_reached = airfoil_side.adapt_bezier_to (airfoilOrg_side)
+        #---------- run optimization with nelder mead ---------------------
 
-        # make splined curves like thickness invalid 
-        self.airfoil.reset()     
-        fireEvent  (self.ctk_root, AIRFOIL_CHANGED)              # update diagram 
+        cp_adapt, ncp_adapt, nVars = self._cPoints_to_adapt (airfoil_side)
+
+        deviation, niter, max_reached = airfoil_side.adapt_bezier_to (airfoil_side_target, cp_adapt)
+
+        # update diagram                                        
+
+        self.airfoil.reset()                                    # make splined curves like thickness invalid 
+        fireEvent  (self.ctk_root, AIRFOIL_CHANGED)             # update diagram 
 
         # user info 
-        title = "Auto adjust %s side" %(curveType)
-        if not max_reached and deviation < 0.001:
-            text = "Optimization for %d control points succesful. \n\n" %(nVars) + \
-                "y-deviation of these points: %.5f \n\n" %deviation + \
-                "Iterations needed: %d" %niter
-            icon = "check"
-        else:
-            text = "Optimization for %d control points not too good. \n\n" %(nVars) + \
-                "y-deviation of these points: %.5f \n\n" %deviation + \
-                "Maximum number of iterations (%d) exceeded." %niter
-            icon = "info"
+        self._adapt_result_info (airfoil_side, ncp_adapt, nVars, deviation, niter, max_reached)
 
-        msg = Messagebox (self, title=title, message=text, icon=icon, option_1="Ok")
-
-        msg.get()
-        self.adjust_running = False                             # update button text 
+        self.set_adapt_running(None)                            # update button text, disable 
         self.refresh()
 
 
+    def _cPoints_to_adapt (self, airfoil_side: SideOfAirfoil_Bezier):
+        # returns the control points of airfoil_side to optimize as list of tuples
+
+        ncp = len(airfoil_side.bezier.points)
+        cp_adapt = [(False, False)] * ncp 
+
+        nVars = 0 
+        ncp_adapt = 0 
+        for ip in range(ncp):                               # all y-values of cpoint 1..n-1
+            if ip > 0 and ip < (ncp-1):                     # exclude LE and TE
+                x_adapt = False
+                y_adapt = False
+                if not ip==1:                               # point 1 only y 
+                    x_adapt = True                            # the others also x coord
+                    nVars +=1
+                y_adapt = True                                # all y coord
+                nVars +=1
+                ncp_adapt += 1
+                cp_adapt[ip] = (x_adapt, y_adapt)
+
+        return cp_adapt, ncp_adapt, nVars 
+ 
+
+    def _adapt_result_info (self, airfoil_side: SideOfAirfoil_Bezier, ncp, nVars, deviation, niter, max_reached):
+        # info message for user 
+
+        title = "Auto adjust %s side" %(airfoil_side.curveType)
+        if not max_reached and deviation < 0.02:         # 0.001
+            text = "Optimization of %d control points with %d variables successful. \n\n" %(ncp, nVars) + \
+                "y-deviation at check points: %.5f \n\n" %deviation + \
+                "Iterations needed: %d" %niter
+            icon = "check"
+        else:
+            text = "Optimization with %d variables not too good. \n\n" %(nVars) + \
+                "y-deviation at check points: %.5f \n\n" %deviation 
+            if max_reached:
+                text = text + "Maximum number of iterations (%d) exceeded." %niter
+            else: 
+                text = text + "Iterations needed: %d" %niter
+            icon = "info"
+
+        msg = Messagebox (self, title=title, message=text, icon=icon, option_1="Ok")
+        msg.get()
+
+
+    def adapt_running(self, curveType): 
+        # is a optimization for curveType running? 
+        return self._adapt_running == curveType
+    def set_adapt_running(self, curveType):
+        self._adapt_running = curveType 
+    
 
     def adapt_bezier_disabled (self, curveType): 
         # adapt bezier only for 4 and 5 point bezier 
 
-        if self.adjust_running: return True 
         if curveType == UPPER: 
-            return self.airfoil.upper.nPoints < 4 or self.airfoil.upper.nPoints > 6
+            return self.airfoil.upper.nPoints < 4 or self.airfoil.upper.nPoints > 7 or \
+                   self.adapt_running(UPPER)
         else:
-            return self.airfoil.lower.nPoints < 4 or self.airfoil.lower.nPoints > 6
+            return self.airfoil.lower.nPoints < 4 or self.airfoil.lower.nPoints > 7 or \
+                   self.adapt_running(LOWER)
+
 
 
     def open_bez(self): 
@@ -2087,6 +2140,11 @@ class AirfoilEditor ():
         """ sets window title of self """
         self.main.title (AppName + "  v" + str(AppVersion) + "  [" + self.curAirfoil().name + "]")
 
+
+    def edit_settings (self):
+        """ file menu edit settings """
+
+        Dialog_Settings(self.main, name=self.name)
 
 
     #------- file functions ----------------

@@ -261,6 +261,9 @@ def nelder_mead_1D (f, x_start,
             no_improv = 0
             prev_best = best
 
+        # if iters % 20 == 0: 
+        #     print("NelderMead  - %3d(%d) score: %.5f  no_improv: %2d thresh: %.5f" %(iters, max_iter, best, no_improv, no_improve_thr))
+
         if no_improv >= no_improv_break:
             return res[0][0], res[0][1], iters
 
@@ -394,6 +397,10 @@ def nelder_mead (f, x_start,
         # break after no_improv_break iterations with no improvement
         # print ('...best so far:', best)
 
+        if iters % 5 == 0: 
+            print("  NelderMead-d%d %3d(%d):  Score %.5f  no_improv: %2d(%d)" 
+                  %(dim, iters, max_iter, best, no_improv, no_improv_break))
+
         if abs(best - prev_best) < no_improve_thr:
             no_improv += 1
         else:
@@ -477,7 +484,7 @@ def nelder_mead_wrap  (fn, xStart,
             xStart = xStart *  1.012
             step   = 0.011
         # try longer 
-        no_improv_break = no_improv_break * 3
+        no_improv_break = no_improv_break * 4
         # print ("nelder_mead bug:   ", xmin, score, niters, xStart, step)
         xmin, score, niters =  nelder_mead_1D(fn, xStart, step=step, 
                                             no_improve_thr=no_improve_thr, 

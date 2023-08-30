@@ -1074,30 +1074,30 @@ class Airfoil_Bezier(Airfoil):
 
 # ------------ test functions - to activate  -----------------------------------
 
-def test_adapt_bezier (): 
+# def test_adapt_bezier (): 
 
-    import matplotlib.pyplot as plt
-    from airfoil_examples import Root_Example, Tip_Example
+#     import matplotlib.pyplot as plt
+#     from airfoil_examples import Root_Example, Tip_Example
 
-    fig, ax1 = plt.subplots(1, 1, figsize=(16,6))
-    ax1.grid(True)
-    ax1.axis("equal")
+#     fig, ax1 = plt.subplots(1, 1, figsize=(16,6))
+#     ax1.grid(True)
+#     ax1.axis("equal")
 
-    air      = Airfoil_Bezier ()
-    air_org  = Airfoil_Bezier ()
-    air_seed = Root_Example()
+#     air      = Airfoil_Bezier ()
+#     air_org  = Airfoil_Bezier ()
+#     air_seed = Root_Example()
 
-    air.upper.adapt_bezier_to (air_seed.upper)
-    air.lower.adapt_bezier_to (air_seed.lower)
+#     air.upper.adapt_bezier_to (air_seed.upper)
+#     air.lower.adapt_bezier_to (air_seed.lower)
 
-    ax1.plot(air.x,      air.y,      label="Bezier optimized")
-    ax1.plot(air_seed.x, air_seed.y, label=air_seed.name)
-    ax1.plot(air_org.x,  air_org.y,  label="Bezier default")
+#     ax1.plot(air.x,      air.y,      label="Bezier optimized")
+#     ax1.plot(air_seed.x, air_seed.y, label=air_seed.name)
+#     ax1.plot(air_org.x,  air_org.y,  label="Bezier default")
 
-    ax1.legend()
-    plt.show()
+#     ax1.legend()
+#     plt.show()
 
-    pass
+#     pass
 
 
 # def test_strak(): 
@@ -1160,5 +1160,5 @@ if __name__ == "__main__":
 
     # test_set_maxCamberX
     # test_strak() 
-    test_adapt_bezier()
+    # test_adapt_bezier()
     pass  

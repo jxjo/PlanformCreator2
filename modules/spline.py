@@ -800,288 +800,80 @@ class Bezier:
         return bezier
 
 
-# class BezierCubic: 
-#     """Build a cubic Bezier curve defined by 4 points """
 
-
-#     def __init__ (self, px, py):
-#         """
-#         Build a cubic Bezier curve defined by 4 points.
-
-#         Parameters
-#         ----------
-#         x,y : array_like - coordinates of the 4 points 
-             
-#         """
-#         self._px = None                         # definition points
-#         self._py = None
-
-#         self._x  = None                         # cached x,y results
-#         self._y  = None
-#         self._u  = None                         # cached parameter u 
-
-#         self.set_points(px, py)
-
-#         return
-
-#     def eval (self, u, der=0):
-#         """
-#         Evaluate self or its derivatives.
-
-#         Parameters
-#         ----------
-#         u :   Scalar or an array of normed arc length 0..1 at which to return 
-#               the value of the spline or its derivatives. 
-#         der : int, optional - The order of derivative of the spline to compute.
-
-#         Returns
-#         -------
-#         x,y : Scalar or an array representing the spline function evaluated at
-#               the points in ``s``.  .  eg. x,y  or  dx,dy  or  ddx, ddy
-#         """
-
-#         if not np.array_equal (u, self._u): 
-#             self._u = u 
-#             self._x = self._eval (self._px, u, der)
-#             self._y = self._eval (self._py, u, der)
-#         return self._x, self._y
-    
-
-#     def eval_y_on_x (self, x, fast=True):
-#         """
-#         Evaluate the y value based on x 
-
-#         A interpolation is made to find u(x) - either linear (fast=True) or based on the curve
-
-#         Parameters
-#         ----------
-#         x :   Scalar - x-value 
-#         fast : bool, optional - only a linear interpolation of u is made .
-
-#         Returns
-#         -------
-#         y : Scalar - y evaluated at x 
-#         """
-
-#         if fast and (not self._x is None) and (x >= self._x[0] and x <= self._x[-1]):
-#             i = min(bisect.bisect(self._x, x)-1, len(self._x) -2)
-#             # interpolate u 
-#             u = ((self._u[i+1]-self._u[i])/(self._x[i+1]-self._x[i])) * (x - self._x[i]) + self._u[i]
-#             # evaluate y from u 
-#             return self._eval (self._py, u)
-#         else: 
-#             u = findMin (lambda u: abs(self._eval(self._px,u) - x), 0.5, bounds=(0, 1)) 
-#             y =  self._eval (self._py, u)
-#             # print ("x: ",x, "  y evaluated ", y)
-#             return y
-#             # raise ValueError ("Bezier: evaluation of y from x = %f not implemented" %x)
-        
-
-
-#     def eval_x_on_y (self, y, fast=True):
-#         """
-#         Evaluate the x value based on y 
-
-#         A interpolation is made to find u(y) - either linear (fast=True) or based on the curve
-
-#         Parameters
-#         ----------
-#         y :   Scalar - y-value 
-#         fast : bool, optional - only a linear interpolation of u is made .
-
-#         Returns
-#         -------
-#         x : Scalar - x evaluated at y 
-#         """
-
-#         if fast and (not self._y is None) and (y <= self._y[0] and y >= self._y[-1]):
-#             i = min(bisect.bisect(self._y, y)-1, len(self._y) -2)
-#             # interpolate u 
-#             u = ((self._u[i+1]-self._u[i])/(self._y[i+1]-self._y[i])) * (y - self._y[i]) + self._u[i]
-#             # evaluate y from u 
-#             return self._eval (self._px, u)
-#         else: 
-#             u = findMin (lambda u: abs(self._eval(self._py,u) - y), 0.5, bounds=(0, 1)) 
-#             x =  self._eval (self._px, u)
-#             # print ("y: ",y, "  x evaluated ", x)
-#             return x
-        
-
-#     def set_points(self, px, py):
-#         """ (re) sets the definition points of the Bezier curve"""
-
-#         n = len(px)
-#         if n != 4:
-#             raise ValueError('Cubic Bezier: Must have 4 points')
-#         elif n != len(py): 
-#             raise ValueError('Spline: Length of x,y is different')
-
-#         self._px = np.copy(px)
-#         self._py = np.copy(py)
-
-#         # reset already evaluated values 
-#         self._x  = None
-#         self._y  = None
-#         self._u =  None
-
-
-#     def _eval (self, pxy, u, der=0):
-#         """ evaluates self at u for coordinate xory
-
-#         Parameters
-#         ----------
-#         xy:   either x or y coordinates of the bezier definition points
-#         u :   Scalar or an array of normed arc length 0..1 at which to return 
-#               the value of the spline or its derivatives. 
-#         der : int, optional - The order of derivative of the spline to compute.
-#         """
-#         if der == 0: 
-#             f =   (1-u)**3       *pxy[0] + \
-#                 3*(1-u)**2 *u    *pxy[1] + \
-#                 3*(1-u)    *u**2 *pxy[2] + \
-#                             u**3 *pxy[3]
-#         else:
-#             raise ValueError('Cubic Bezier: Derivatives currently not implemented')
-
-#         return f 
 
 
 # ------------ test functions - to activate  -----------------------------------
 
 
-
-# def test_BezierCubic (): 
+# def test_Bezier (): 
     
 #     import matplotlib.pyplot as plt
 
-#     px = [  0,  0.8,  1.0,  1.0]  
-#     py = [  1,  1.0,  0.5,  0.0]  
+#     px = [   0,  0.0, 0.3,   1]
+#     py = [   0, 0.06, 0.12,  0]
 
 #     u = np.linspace( 0, 1 , 200)
 
-#     bez = BezierCubic (px, py)
+#     bez = Bezier (px, py)
 #     x,y = bez.eval(u)
     
+#     plt.subplots(1)
 #     plt.plot(px, py, "or", label="Points")    
 #     plt.plot(x, y, label="Bezier")
 
 #     plt.plot(u, x, "b", label="x(u)")
 #     plt.plot(u, y, "g", label="y(u)")
-
-
-
-#     # px = [  0,  0.9,  1.0]  
-#     # py = [  0,  0.1,  0.0]  
-#     # spl = Spline1D (px, py, boundary='natural')
-#     # x = np.linspace( 0, 1 , 200)
-#     # y = spl.eval(x)
-#     # plt.plot(px, py, "og", label="Points Spline")    
-#     # plt.plot(x, y, "g", label="Spline")
-
-
 #     plt.grid(True)
-
 #     plt.legend()
+
+#     # bezier basis functions 
+#     # plt.subplots(1)
+#     # for i, line in enumerate (bez.basisFn):
+#     #     plt.plot (u,line, label="bezier basis %d" %i) 
+#     # plt.grid(True)
+#     # plt.legend()
+
+#     # curvature 
+#     plt.subplots(1)
+#     curv = bez.curvature (u)
+#     plt.plot(u, -curv,  "-r", label="curvature")
+#     plt.grid(True)
+#     plt.legend()
+
+#     # radius 
+#     # plt.subplots(1)
+#     # curv = bez.curvature (u)
+#     # plt.plot(u, 1/-curv,  "-r", label="radius")
+#     # plt.grid(True)
+#     # plt.legend()
+
+#     # der 1 
+#     plt.subplots(1)
+#     dx, dy = bez.eval(u, der=1)
+#     plt.plot(x, dy/dx,  "-r", label="der 1")
+#     plt.grid(True)
+#     plt.legend()
+
+#     # der 2 
+#     plt.subplots(1)
+#     dx, dy = bez.eval(u, der=1)
+#     ddx, ddy = bez.eval(u, der=2)
+#     deriv2 = dx * ddy - dy * ddx
+
+#     py2_list=  [0.08, 0.12, 0.16]
+#     for py2 in py2_list:
+#         py[2] = py2
+#         bez = Bezier (px, py)
+#         dx, dy   = bez.eval(u, der=1)
+#         ddx, ddy = bez.eval(u, der=2)
+#         deriv2 = dx * ddy - dy * ddx
+
+#         plt.plot(x, deriv2,  "-r", label="der 2 %f" %py2)
+#     plt.grid(True)
+#     plt.legend()
+
 #     plt.show()
-
-
-def test_Bezier (): 
-    
-    import matplotlib.pyplot as plt
-
-    px = [   0,  0.0, 0.3,   1]
-    py = [   0, 0.06, 0.12,  0]
-    # px = [   0,  0.0, 0.3,   0.7, 1]
-    # py = [   0, 0.08, 0.12, 0.08, 0]
-    # px = [  0,  0.8,  1.0,  2.0]  
-    # py = [  1,  1.0,  0.5,  0.0]  
-
-    u = np.linspace( 0, 1 , 200)
-
-    bez = Bezier (px, py)
-    x,y = bez.eval(u)
-    
-    plt.subplots(1)
-    plt.plot(px, py, "or", label="Points")    
-    plt.plot(x, y, label="Bezier")
-
-    plt.plot(u, x, "b", label="x(u)")
-    plt.plot(u, y, "g", label="y(u)")
-    plt.grid(True)
-    plt.legend()
-
-    # bezier basis functions 
-    # plt.subplots(1)
-    # for i, line in enumerate (bez.basisFn):
-    #     plt.plot (u,line, label="bezier basis %d" %i) 
-    # plt.grid(True)
-    # plt.legend()
-
-
-    # curvature 
-    plt.subplots(1)
-    curv = bez.curvature (u)
-    plt.plot(u, -curv,  "-r", label="curvature")
-    plt.grid(True)
-    plt.legend()
-
-    # radius 
-    # plt.subplots(1)
-    # curv = bez.curvature (u)
-    # plt.plot(u, 1/-curv,  "-r", label="radius")
-    # plt.grid(True)
-    # plt.legend()
-
-    # der 1 
-    plt.subplots(1)
-    dx, dy = bez.eval(u, der=1)
-    plt.plot(x, dy/dx,  "-r", label="der 1")
-    plt.grid(True)
-    plt.legend()
-
-    # # bezier basis functions 
-    # plt.subplots(1)
-    # for i, line in enumerate (bez.basisFn):
-    #     plt.plot (u,line, label="der 1 basis %d" %i) 
-    # plt.legend()
-
-    # der 2 
-    plt.subplots(1)
-    dx, dy = bez.eval(u, der=1)
-    ddx, ddy = bez.eval(u, der=2)
-    deriv2 = dx * ddy - dy * ddx
-
-    py2_list=  [0.08, 0.12, 0.16]
-    for py2 in py2_list:
-        py[2] = py2
-        bez = Bezier (px, py)
-        dx, dy   = bez.eval(u, der=1)
-        ddx, ddy = bez.eval(u, der=2)
-        deriv2 = dx * ddy - dy * ddx
-
-        plt.plot(x, deriv2,  "-r", label="der 2 %f" %py2)
-    plt.grid(True)
-    plt.legend()
-
-    # # bezier basis functions 
-    # plt.subplots(1)
-    # for i, line in enumerate (bez.basisFn):
-    #     plt.plot (u,line, label="der 2 basis %d" %i) 
-
-    # y1val = 0.02
-    # for i in range (10): 
-    #     py[1] = y1val 
-    #     bez = Bezier (px, py)
-    #     dx, dy   = bez.eval(0.0, der=1)
-    #     ddx, ddy = bez.eval(0.0, der=2)
-    #     deriv2 = dx * ddy - dy * ddx
-    #     curv = bez.curvature(0.0)
-    #     print ("%.2f   %.3f   %.2f" %(y1val, deriv2, curv))
-    #     y1val += 0.02
-
-    plt.grid(True)
-    plt.legend()
-    plt.show()
 
 
 # def test_spline1D (): 
@@ -1159,7 +951,7 @@ def test_Bezier ():
 if __name__ == '__main__':
     
     # test_BezierCubic () 
-    test_Bezier () 
+    # test_Bezier () 
     # test_spline1D ()
     # test_spline2D ()
     pass

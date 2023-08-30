@@ -906,15 +906,17 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
         if index == 0:                          # fixed
             x, y = 0.0, 0.0 
+        elif index == len(px) - 2:              # not too close to TE   
+            x = min (x, 0.95)       
         elif index == 1:                        # only vertical move
             x = 0.0 
             if py[index] > 0: 
-                y = max (y, 0.01)
+                y = max (y,  0.006)             # LE not too sharp
             else: 
-                y = min (y, - 0.01)
+                y = min (y, -0.006)
         elif index == len(px) - 1:              # do not move TE gap   
             x = 1.0 
-            y = px[index]                       
+            y = py[index]                       
         else:                                   # not too close to neighbour 
             x = min (x, px[index+1] - 0.01)
             x = max (x, px[index-1] + 0.01)
@@ -934,123 +936,156 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         self.bezier.set_point (-1, px[-1], y) 
 
 
-    def adapt_bezier_to (self, targetSide: SideOfAirfoil):
+    def adapt_bezier_to (self, targetSide: SideOfAirfoil, cp_opt: list) :
         """ 
         Optimizes self bezier to best fit to another airfoil side
         uses nelder meat root finding
 
-        Rerturns: 
-        nvar:   number of optimization variables 
+        Returns: 
+        :nvar:   number of optimization variables 
         score:  y-deviation at target points 
         niter:  number of iterations needed
         max_reached: max number of iterations reached 
         """
 
-        cp  = copy(self.bezier.points)
-        ncp = len(self.bezier.points)
+        #-- define targets x,y which should fit best 
 
-        if  ncp > 3 and  ncp < 7 :                              # bezier with 4 or 5 control points 
+        targ_x =[0.02, 0.05, 0.12, 0.21, 0.31, 0.42, 0.53, 0.64, 0.75, 0.85, 0.95]
+        targ_y = []
+        for x in targ_x:
+            targ_y.append(targetSide.yFn (x))               # target value for these = y from targetSide
 
-            # define targets x,y which should fit best 
-            targ_x = [0.015, 0.08]                               # target position for point 1 = close to LE
-            for p in cp[2:-1]:                                  # target position 2..n-1 - x-value of control point
-                targ_x.append (p[0])
-            targ_y = []
-            for x in targ_x:
-                targ_y.append(targetSide.yFn (x))               # target value for these = y from targetSide
+        #-- (start) x-position of control points 
 
-            # tag the variable control point coordinates 
-            cp_x = np.zeros(ncp)
-            cp_y = np.zeros(ncp)
-            for ip in range(ncp):                               # all y-values of cpoint 1..n-1
-                if ip > 0 and ip < (ncp-1):
-                    cp_y [ip] = True
+        ncp = len(cp_opt)
+        cp_x_start = [0] * ncp
+        cp_x_start [0]   = 0.0                                  # LE and TE fix pos 
+        cp_x_start [1]   = 0.0 
+        cp_x_start [-1]  = 1.0
 
-            # start value of variable control point and their boundaries for optimization 
-            nvar = ncp - 2
-            if self.curveType == UPPER:
-                var_start  = [0.1] * nvar
-                var_bounds = [(0.02, 0.3)] * nvar
-            else:
-                var_start = [-0.1] * nvar
-                var_bounds = [(-0.3, -0.02)] * nvar
+        np_between =  ncp - 3                                   # equal distribution between                         
+        dx = 1 / (np_between + 1)
+        x = 0.0 
+        for ib in range(np_between): 
+            icp = 2 + ib
+            x += dx
+            cp_x_start [icp] = x
+      
+        #-- map control point x,y to optimization variable 
 
-            # point 1 (LE) special treatment 
-            if self.curveType == UPPER:
-                var_start[0]  = 0.04
-                var_bounds[0] = (0.01, 0.1)
-            else:
-                var_start[0]  = -0.04
-                var_bounds[0] = (-0.1, -0.01)
+        vars = []
+        for icp, cp_in in enumerate (cp_opt): 
 
-            # point n-1 may become negative 
-            if nvar > 2: 
-                if self.curveType == UPPER:
-                    var_bounds[-1] = (-0.05, 0.2)
-                else:
-                    var_bounds[-1] = (-0.2, 0.05)
+            var_dict = {}
+            if cp_in[0]:
+                var_dict['icp']    = icp
+                var_dict['coord']  = 'x'                
+                var_dict['start']  = round(cp_x_start[icp],6) 
+                if icp == ncp-2:                        # special case: last point not too close to TE 
+                    var_dict['bounds'] = (0.5, 0.95)
+                else: 
+                    var_dict['bounds'] =  None                
+                vars.append(copy(var_dict))
+            if cp_in[1]:
+                var_dict['icp']    = icp
+                var_dict['coord']  = 'y'  
+                if icp == 1:                            # special case y-start value of point 1
+                    x = 0.1                             #       take y-coord near LE
+                else: 
+                    x = cp_x_start[icp]           
+                var_dict['start']  = round(targetSide.yFn (x), 6)                 
+                var_dict['bounds'] = None                
+                vars.append(copy(var_dict))
 
-        else:
-            return 
+        nVars = len(vars)
+        if nVars == 0: return 0.0, 0, False
+
+        #-- direct initial population of bezier (old values could hurt move_point during melder nead)
+
+        bezier_tmp = deepcopy (self)                # optimizer will work with this copy 
+
+        for i, var in enumerate (vars): 
+            (px, py) = bezier_tmp.bezier.points[var['icp']]
+            if var['coord'] == 'x':  px = var['start']
+            else:                    py = var['start']
+            bezier_tmp.bezier.set_point (var['icp'], px, py)
+
+        #-- map vars to nelder mead vars 
+
+        var_start  = [0] * nVars 
+        var_bounds = [None] * nVars 
+        for i, var in enumerate (vars): 
+            var_start[i]  = var['start']
+            var_bounds[i] = var ['bounds']
 
         # ----- objective function
 
-        f = lambda vars : self._match_y_objectiveFn (targ_x, targ_y, cp_x, cp_y, vars) 
+        f = lambda vars_value : _match_y_objectiveFn (bezier_tmp, targ_x, targ_y, vars, vars_value) 
 
         # ----- nelder mead find minimum --------
 
-        max_iter = 100 if nvar < 4 else 150
+        max_iter = nVars * 70 
+
         res, niter = nelder_mead (f, var_start,
                     step=0.02, no_improve_thr=1e-4,             
-                    no_improv_break=20, max_iter=max_iter,
+                    no_improv_break=25, max_iter=max_iter,
                     bounds = var_bounds)
-
-
-        # print ("Nelder mead with %d variables - score: %.6f with %d iterations" %(len(var_start), score, niter))
-
-        # set the final results in bezier control points 
 
         var_result = res[0]
         score = res[1]
-        ivar = 0 
-        for ip, point in enumerate (cp):
-            if point[1] == True:                                          # 'True'-tag for optimization 
-                self.move_controlPoint_to (ip ,None, var_result[ivar])    # x remains unchanged
-                ivar += 1
 
-        return nvar, score, niter, niter >= max_iter
+        #-- write back result in var_dict for convinience 
 
-    # ----------
+        for i, var in enumerate (vars): 
+            var['result'] = var_result[i]
 
-    def _match_y_objectiveFn (self, targets_x, targets_y,  cPoints_x, cPoints_y, vars):  
-        """ returns norm2 value of y deviations of self to target y at x
+        #-- finally move control points to their new position 
+
+        for i, var in enumerate (vars): 
+            if var['coord'] == 'x':
+                self.move_controlPoint_to (var['icp'] , var['result'], None)    # y remains unchanged
+            else: 
+                self.move_controlPoint_to (var['icp'] , None, var['result'])    # x remains unchanged
+
+        #--
+        return score, niter, niter >= max_iter
+
+
+def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier, 
+                          targets_x, targets_y, vars_def, vars_value ):  
+    """ returns norm2 value of y deviations of self to target y at x """
         
-        All x,y values of controlPoints_var array with a None value will 
-        be variable of the objective function and are indexed in vars in 
-        ascending order"""
-        
-        # set the new control point coordinates in Bezier (=None - do not change) 
-        iVar = 0 
-        for ip in range(len(cPoints_x)):
-            optx, opty = cPoints_x[ip], cPoints_y[ip]
-            if optx : 
-                px = vars [iVar]
-                self.move_controlPoint_to (ip,px, None)
-                iVar += 1
-            if opty : 
-                py = vars [iVar]
-                self.move_controlPoint_to (ip,None,py)
-                iVar += 1
+    # the objective function is *not* in class Side_Bezier to ensure no side effects
 
-        # evaluate the new y values on Bezier for the target x-coordinate
-        y_new = np.zeros (len(targets_x))
-        for i, target_x in enumerate(targets_x) :
-            y_new[i] = self.bezier.eval_y_on_x(target_x, no_improve_thr=1e-6)
 
-        # calculate norm2 of the deviations 
-        norm2 = np.linalg.norm (y_new - targets_y)
- 
-        return norm2 
+    # set the new control point coordinates in Bezier (=None - do not change) 
+    for i, var in enumerate (vars_def): 
+        if var['coord'] == 'x':
+            new_value, _ = bezier_tmp.move_controlPoint_to (var['icp'] , vars_value [i], None)    # y remains unchanged
+        else: 
+            _, new_value = bezier_tmp.move_controlPoint_to (var['icp'] , None, vars_value [i])    # x remains unchanged
+
+        if vars_value [i] != new_value:                 # value hurted move constraint 
+            print ("   Var %d bounds rejection: %.5F - corrected to: %.5f" %(i, vars_value [i], new_value))
+            return 9999                                 # penalty 
+
+    # evaluate the new y values on Bezier for the target x-coordinate
+    y_new = np.zeros (len(targets_x))
+    for i, target_x in enumerate(targets_x) :
+        y_new[i] = bezier_tmp.bezier.eval_y_on_x(target_x, no_improve_thr=1e-7)
+
+
+    # calculate norm2 of the *relative* deviations 
+    devi = np.abs((y_new - targets_y))
+    base = np.abs(targets_y)
+
+    # move base so targets with a small base (at TE) don't become overweighted 
+    max_base = np.max (base)
+    base = base + max_base / 4
+    
+    norm2 = np.linalg.norm (devi / base)
+
+    return norm2 
 
 
 
