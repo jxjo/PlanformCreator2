@@ -1151,6 +1151,10 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
         super().cancel()
 
 
+    def _save_fileTypes (self):
+        # returns the fileTypes for save message
+        return "'.dat'" 
+
     def ok(self): 
         """ saves modified airfoil and returns to parent with filename of the new, modified airfoil"""
 
@@ -1169,7 +1173,8 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
 
             try: 
                 self.airfoil.saveAs (dir = airfoilDir)
-                message = "Airfoil '%s'\n\nsaved to\n\n%s" % (self.airfoil.name, airfoilDirMSG )
+                message = "Airfoil '%s'\n\nsaved %s to\n\n%s" \
+                           % (self.airfoil.name, self._save_fileTypes(), airfoilDirMSG )
                 msg = Messagebox (self, title="Save", message=message, icon="check", option_1="Ok")
             except: 
                 message = "Airfoil name not valid.\n\nAirfoil could not be saved"
@@ -1948,7 +1953,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
 
     def open_bez(self): 
-        # open & load a bzier curves deinition from file 
+        # open & load a bezier curves deinition from file 
 
         filetypes  = [('Airfoil bezier files', '*.bez')]
         newPathFilename = filedialog.askopenfilename(
@@ -1967,6 +1972,19 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             self.title ("Design Bezier airfoil  [" + self.airfoil.name + "]")
             self.nameWidget.refresh()
             self.refresh()
+
+
+    def _save_fileTypes (self):
+        # returns the fileTypes for save message
+        return "'.dat' and '.bez'" 
+
+
+    def save(self): 
+        """ save modified airfoil to file """
+        
+        # overloaded to ensure isModified (color in curvature) 
+        super().save()
+        self.airfoil.set_isEdited (True)                            # will indicate airfoil when plotted 
 
 
     def changed_te_gap (self):
@@ -2238,6 +2256,7 @@ if __name__ == "__main__":
         if os.path.isdir(".\\test_airfoils"):
             airfoil_dir   =".\\test_airfoils"
             airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
+            airfoil_files = [f for f in airfoil_files if f.endswith('.dat')]       
             airfoil_files = sorted (airfoil_files)
             airfoil_file = airfoil_files[0]
             NoteMsg ("No airfoil file as argument. Showing example airfoils in '%s'" %airfoil_dir)
