@@ -918,8 +918,8 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
             x = 1.0 
             y = py[index]                       
         else:                                   # not too close to neighbour 
-            x = min (x, px[index+1] - 0.01)
-            x = max (x, px[index-1] + 0.01)
+            x = min (x, px[index+1] - 0.02)
+            x = max (x, px[index-1] + 0.02)
 
         self.bezier.set_point (index, x,y) 
 
@@ -1027,7 +1027,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         max_iter = nVars * 70 
 
         res, niter = nelder_mead (f, var_start,
-                    step=0.02, no_improve_thr=1e-4,             
+                    step=0.05, no_improve_thr=1e-5,             
                     no_improv_break=25, max_iter=max_iter,
                     bounds = var_bounds)
 
@@ -1057,6 +1057,7 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
         
     # the objective function is *not* in class Side_Bezier to ensure no side effects
 
+    penalty = 0.0
 
     # set the new control point coordinates in Bezier (=None - do not change) 
     for i, var in enumerate (vars_def): 
@@ -1066,13 +1067,14 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
             _, new_value = bezier_tmp.move_controlPoint_to (var['icp'] , None, vars_value [i])    # x remains unchanged
 
         if vars_value [i] != new_value:                 # value hurted move constraint 
-            print ("   Var %d bounds rejection: %.5F - corrected to: %.5f" %(i, vars_value [i], new_value))
-            return 9999                                 # penalty 
+            # print ("   Var %d bounds rejection: %.5F - corrected to: %.5f" %(i, vars_value [i], new_value))
+            penalty += 0.1   
+
 
     # evaluate the new y values on Bezier for the target x-coordinate
     y_new = np.zeros (len(targets_x))
     for i, target_x in enumerate(targets_x) :
-        y_new[i] = bezier_tmp.bezier.eval_y_on_x(target_x, no_improve_thr=1e-7)
+        y_new[i] = bezier_tmp.bezier.eval_y_on_x(target_x, fast=False, no_improve_thr=1e-7)
 
 
     # calculate norm2 of the *relative* deviations 
@@ -1085,7 +1087,7 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
     
     norm2 = np.linalg.norm (devi / base)
 
-    return norm2 
+    return norm2 + penalty * norm2
 
 
 

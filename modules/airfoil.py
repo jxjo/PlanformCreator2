@@ -1026,7 +1026,7 @@ class Airfoil_Bezier(Airfoil):
             x_upper[i], y_upper[i] = self.upper.bezier.eval(u) 
         x_lower = x_upper 
         for i, x in enumerate(x_lower): 
-            y_lower[i] = self.lower.bezier.eval_y_on_x (x)  
+            y_lower[i] = self.lower.bezier.eval_y_on_x (x, fast=True)  
 
         # thickness and camber can now easily calculated 
         thickness = SideOfAirfoil (x_upper,  y_upper - y_lower,        name='Thickness distribution')

@@ -10,7 +10,7 @@ import bisect
 import numpy as np
 from copy import deepcopy
 import math
-from math_util import findMin 
+from math_util import findMin, newton
 
 
 #------------ Helper -----------------------------------
@@ -702,11 +702,25 @@ class Bezier:
             # evaluate y from u 
             return self._eval (self._py, u)
         else: 
-            u = findMin (lambda u: abs(self._eval(self._px,u) - x), 0.5, bounds=(0, 1), no_improve_thr=no_improve_thr) 
+
+            # nelder mead
+            # u = findMin (lambda u: abs(self._eval(self._px,u) - x), 0.5, bounds=(0, 1), \
+            #              no_improve_thr=no_improve_thr) 
+
+            if x < 0.05:                    # good start value für newton iteration 
+                u0 = 0.05
+            elif x > 0.95:
+                u0 = 0.95
+            else: 
+                u0 = x 
+
+            u, niter  = newton (lambda u: self._eval(self._px,u) - x,
+                        lambda u: self._eval(self._px,u, der=1) , u0, 
+                        epsilon=no_improve_thr, max_iter=20, bounds=(0.0,1.0))
+            # print ("delta x  %12.9f   niter: %d" %(self._eval(self._px,u) - x, niter))
+
             y =  self._eval (self._py, u)
-            # print ("x: ",x, "  y evaluated ", y)
             return y
-            # raise ValueError ("Bezier: evaluation of y from x = %f not implemented" %x)
         
 
 

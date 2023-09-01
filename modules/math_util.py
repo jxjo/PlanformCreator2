@@ -129,10 +129,16 @@ def bisection(f,a,b,N, tolerance=None):
 
 #------------ Newton iteration - find Root  -----------------------------------
 
-def newton(f,Df,x0,epsilon,max_iter):
+def newton(f,Df,x0,epsilon = 10e-8 , max_iter= 50, bounds=None):
     '''Approximate solution of f(x)=0 by Newton's method.
 
-    Parameters
+        Implement Newton's method: compute the linear approximation
+        of f(x) at xn and find x intercept by the formula
+            x = xn - f(xn)/Df(xn)
+        Continue until abs(f(xn)) < epsilon and return xn.
+        If Df(xn) == 0, raise Error .
+
+            Parameters
     ----------
     f : function
         Function for which we are searching for a solution f(x)=0.
@@ -144,32 +150,38 @@ def newton(f,Df,x0,epsilon,max_iter):
         Stopping criteria is abs(f(x)) < epsilon.
     max_iter : integer
         Maximum number of iterations of Newton's method.
+    bounds : optional - tuple of lower and upper bound of x
 
     Returns
     -------
     xn : number
-        Implement Newton's method: compute the linear approximation
-        of f(x) at xn and find x intercept by the formula
-            x = xn - f(xn)/Df(xn)
-        Continue until abs(f(xn)) < epsilon and return xn.
-        If Df(xn) == 0, return None. If the number of iterations
-        exceeds max_iter, then return None.
+    niter : iterations needed 
     '''
     # from https://patrickwalls.github.io/mathematicalpython/root-finding/root-finding/
 
     xn = x0
     for n in range(0,max_iter):
+
+        if bounds is not None: 
+            if   xn > bounds[1]: xn = bounds[1]
+            elif xn < bounds[0]: xn = bounds[0]
+
         fxn = f(xn)
+
         if abs(fxn) < epsilon:
-            print('Found solution after',n,'iterations.')
-            return xn
+            break
+
         Dfxn = Df(xn)
         if Dfxn == 0:
-            print('Zero derivative. No solution found.')
-            return None
+            if xn == 0.0:                       # special case at LE 
+                break
+            else: 
+                raise ValueError ("Newton iteration: Zero derivative. No solution found.")
         xn = xn - fxn/Dfxn
-    print('Exceeded maximum iterations. No solution found.')
-    return None
+
+    return xn, n
+
+
 
 # ---------------------------------------------------------------------------
 # (c) https://github.com/fchollet/nelder-mead 
@@ -384,8 +396,10 @@ def nelder_mead (f, x_start,
 
     # simplex iter
     iters = 0
+    # xr, xe, xc = 0, 0, 0 
     while 1:
         # order
+        # print ("Iter: ", iters, xr, xe,xc)
         res.sort(key=lambda x: x[1])
         best = res[0][1]
 
@@ -397,7 +411,7 @@ def nelder_mead (f, x_start,
         # break after no_improv_break iterations with no improvement
         # print ('...best so far:', best)
 
-        if iters % 5 == 0: 
+        if iters % 20 == 0: 
             print("  NelderMead-d%d %3d(%d):  Score %.5f  no_improv: %2d(%d)" 
                   %(dim, iters, max_iter, best, no_improv, no_improv_break))
 
@@ -415,7 +429,9 @@ def nelder_mead (f, x_start,
         for tup in res[:-1]:
             for i, c in enumerate(tup[0]):
                 x0 [i] += c / (len(res)-1)
-
+        # print ("Centroid ", iters, x0)
+        # for i, tup in enumerate(res):
+        #     print ("res ", i, tup[0])
         # reflection
         xr = x0 + alpha*(x0 - res[-1][0])
         rscore = fn_penalty (f, xr, bounds) 

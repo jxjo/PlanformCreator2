@@ -1161,7 +1161,7 @@ class Planform_Bezier(Planform):
                 self._banana = Bezier (self._banana_py, self._banana_px)
                 x,y = self._banana.eval (self._norm_u_points ())
 
-            banana_x = self._banana.eval_y_on_x (y_norm)            # wing coordinate system 
+            banana_x = self._banana.eval_y_on_x (y_norm, fast=True)            # wing coordinate system 
  
         return banana_x       
 
