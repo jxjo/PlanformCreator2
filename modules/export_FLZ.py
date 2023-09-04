@@ -84,7 +84,7 @@ class Export_FLZ:
         FLUGZEUG (self.wing, self.paneledPlanform).write(fileStream)
         fileStream.close()
 
-        InfoMsg("FLZ_vortex file successfully written to %s." % pathFileName)
+        InfoMsg("FLZ_vortex file written to %s." % pathFileName)
         message = "'"+ self.wing.name + "'\n\n exported to \n\n\'" + pathFileName + "'"      
 
         return message

@@ -79,10 +79,10 @@ class Export_Xflr5:
 
         nAirfoils = len(self.wing.do_export_airfoils (targetDir, useNick=self.useNick))
 
-        InfoMsg("Xflr5 data written to %s." % pathFileName)
+        InfoMsg("Xflr5 wing data written to %s." % pathFileName)
         message = "'%s' and %d airfoils written to \n\n" %(self.fileName, nAirfoils) + \
                   "'%s'\n\n" %(targetDir) + \
-                  "Import wing as xml into Xflr5"   
+                  "Note: In Xflr5 import this wing in 'Define Wing' as xml file"   
         return message
 
 

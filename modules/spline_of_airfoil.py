@@ -765,23 +765,31 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
     """
 
-    def __init__ (self, px, py, name=None, curveType=UPPER):
+    def __init__ (self, px, py, curveType=UPPER, nPoints = 101):
         """
         1D line of an airfoil like upper, lower side based on a Bezier curve with x 0..1
 
         Parameters
         ----------
         px, py : array of control point coordinates 
-        curveType= : either 'upper' or 'lower'
+        nPoints : number of points 
+        curveType : either 'upper' or 'lower'
              
         """
         self._name      = curveType 
         self._bezier    = Bezier(px,py)             # the bezier curve 
         self._curveType = curveType             
 
-        # Bezier needs a special u cosinus distribution as the ponts are bunched
+        # Bezier needs a special u cosinus distribution as the points are bunched
         # by bezier if there is high curvature ... 
-        beta = np.linspace(0.15 ,0.90 , 101) * np.pi   
+
+        self._u = self._cosinus_distribution_bezier (nPoints)
+
+
+    def _cosinus_distribution_bezier (self, nPoints):
+        # a special distribution for Bezier curve to achieve a similar bunching to splined airfoils
+
+        beta = np.linspace(0.15 ,0.90 , nPoints) * np.pi   
         u = (1 - np.cos(beta)) * 0.5
 
         # normalize to 0..1
@@ -792,8 +800,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         # ensure 0.0 and 1.0 
         u[0]  = u[0].round(10)
         u[-1] = u[-1].round(10)
-
-        self._u = u
+        return u 
 
 
     @property
@@ -891,8 +898,9 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
             return None    
 
 
-    def move_controlPoint_to (self, index, x, y): 
-        """ move Bezier control point to x,y - taking care of order of points.
+    def move_controlPoint_to (self, index, x, y, allow_overtook=False): 
+        """ move Bezier control point to x,y - taking care of order of points. If 'allow_overtook' the new point
+        may overtook its neighbour. 
 
         If x OR y is None, the coordinate is not changed
 
@@ -917,7 +925,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         elif index == len(px) - 1:              # do not move TE gap   
             x = 1.0 
             y = py[index]                       
-        else:                                   # not too close to neighbour 
+        elif not allow_overtook:                      # not too close to neighbour, do not allow to swap position  
             x = min (x, px[index+1] - 0.02)
             x = max (x, px[index-1] + 0.02)
 
@@ -1042,8 +1050,8 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         #-- finally move control points to their new position 
 
         for i, var in enumerate (vars): 
-            if var['coord'] == 'x':
-                self.move_controlPoint_to (var['icp'] , var['result'], None)    # y remains unchanged
+            if var['coord'] == 'x':             # allow that a point overtooks its neighbour
+                self.move_controlPoint_to (var['icp'] , var['result'], None, allow_overtook=True)    
             else: 
                 self.move_controlPoint_to (var['icp'] , None, var['result'])    # x remains unchanged
 
@@ -1062,19 +1070,19 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
     # set the new control point coordinates in Bezier (=None - do not change) 
     for i, var in enumerate (vars_def): 
         if var['coord'] == 'x':
-            new_value, _ = bezier_tmp.move_controlPoint_to (var['icp'] , vars_value [i], None)    # y remains unchanged
+            new_value, _ = bezier_tmp.move_controlPoint_to (var['icp'] , vars_value [i], None, allow_overtook=True)    # y remains unchanged
         else: 
             _, new_value = bezier_tmp.move_controlPoint_to (var['icp'] , None, vars_value [i])    # x remains unchanged
 
         if vars_value [i] != new_value:                 # value hurted move constraint 
-            # print ("   Var %d bounds rejection: %.5F - corrected to: %.5f" %(i, vars_value [i], new_value))
+            print ("   Var %d bounds rejection: %.5F - corrected to: %.5f" %(i, vars_value [i], new_value))
             penalty += 0.1   
 
 
     # evaluate the new y values on Bezier for the target x-coordinate
     y_new = np.zeros (len(targets_x))
     for i, target_x in enumerate(targets_x) :
-        y_new[i] = bezier_tmp.bezier.eval_y_on_x(target_x, fast=False, no_improve_thr=1e-7)
+        y_new[i] = bezier_tmp.bezier.eval_y_on_x(target_x, fast=False, epsilon=1e-7)
 
 
     # calculate norm2 of the *relative* deviations 
@@ -1092,6 +1100,19 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
 
 
 # ------------ test functions - to activate  -----------------------------------
+
+# def bezierTest (): 
+
+#     from spline import print_array_compact
+
+#     px = [   0,  0.0, 0.3,   1]
+#     py = [   0, 0.06, 0.12,  0]
+
+#     bezSide = SideOfAirfoil_Bezier (px, py, nPoints=10) 
+#     u = bezSide._u
+#     checksum = np.sum(u) 
+#     print_array_compact (u, header="u")
+#     print ("checksum: %10.6f" %checksum)
 
 
 # def splineCompare ():
@@ -1185,21 +1206,6 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
 
 #     plt.show()
 
-
-# def symlog_bug():
-
-#     import warnings
-#     warnings.filterwarnings("ignore", message = "All values for SymLogScale")
-
-#     import matplotlib.pyplot as plt
-#     ax = plt.figure().add_subplot()
-
-#     if self == None
-#     ax.set_yscale('symlog')
-#     x = np.linspace(-100,100,200)
-#     ax.plot(x, x)
-
-#     plt.show()
 
 
 # def lineTest ():
@@ -1401,11 +1407,11 @@ if __name__ == "__main__":
 
     # ---- Test -----
 
+    # bezierTest()
     # splineCompare()
     # blendTest()
     # cubicSplineTest()
     # lineTest()
-    # symlog_bug()
     # curvatureTest()
     # u_fxy_Test()
 

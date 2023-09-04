@@ -494,14 +494,14 @@ def nelder_mead_wrap  (fn, xStart,
 
     if niters < max_iter and score > no_improve_thr:
         if not bounds is None: 
-            xStart = (xStart + bounds[0]) / 2.01
-            step = (bounds[1] - bounds[0]) / 5.01 # 10.01
+            xStart = (xStart + bounds[0])  / 1.8
+            step = (bounds[1] - bounds[0]) / 10.01 # 5.01 
         else: 
             xStart = xStart *  1.012
             step   = 0.011
         # try longer 
         no_improv_break = no_improv_break * 4
-        # print ("nelder_mead bug:   ", xmin, score, niters, xStart, step)
+        # print ("nelder_mead bug:   ", xmin, score, niters, xStart, step, bounds)
         xmin, score, niters =  nelder_mead_1D(fn, xStart, step=step, 
                                             no_improve_thr=no_improve_thr, 
                                             no_improv_break=no_improv_break, max_iter=max_iter,  

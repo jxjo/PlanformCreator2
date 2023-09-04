@@ -82,6 +82,14 @@ def print_array1D (aArr,header=None):
         print ("%6.2f" % val)
     print()
 
+def print_array_compact (aArr,header=None):
+
+    if not header is None: 
+        print (header,": ", end=" ")
+    for i, val in enumerate (aArr):
+        print ("%8.4f" % val, end=" ")
+    print()
+
 
 
 #------------ Spline 1D -----------------------------------
@@ -657,8 +665,8 @@ class Bezier:
             x = self._x                             # old u array - use cache 
             y = self._y 
         else: 
-            x = self._eval (self._px, u, der=der)   # recalc 
-            y = self._eval (self._py, u, der=der)
+            x = self._eval_1D (self._px, u, der=der)   # recalc 
+            y = self._eval_1D (self._py, u, der=der)
 
         if not np.isscalar(u) and der == 0:         # cache result for der=0 if u is array
             self._u = u 
@@ -676,10 +684,10 @@ class Bezier:
         y : Scalar y representing the evaluated values
         """
 
-        return self._eval (self._py, u, der=der)
+        return self._eval_1D (self._py, u, der=der)
 
 
-    def eval_y_on_x (self, x, fast=True, no_improve_thr=10e-10):
+    def eval_y_on_x (self, x, fast=True, epsilon=10e-10):
         """
         Evaluate the y value based on x 
 
@@ -700,7 +708,7 @@ class Bezier:
             # interpolate u 
             u = ((self._u[i+1]-self._u[i])/(self._x[i+1]-self._x[i])) * (x - self._x[i]) + self._u[i]
             # evaluate y from u 
-            return self._eval (self._py, u)
+            return self._eval_1D (self._py, u)
         else: 
 
             # nelder mead
@@ -714,12 +722,12 @@ class Bezier:
             else: 
                 u0 = x 
 
-            u, niter  = newton (lambda u: self._eval(self._px,u) - x,
-                        lambda u: self._eval(self._px,u, der=1) , u0, 
-                        epsilon=no_improve_thr, max_iter=20, bounds=(0.0,1.0))
+            u, niter  = newton (lambda u: self._eval_1D(self._px,u) - x,
+                        lambda u: self._eval_1D(self._px,u, der=1) , u0, 
+                        epsilon=epsilon, max_iter=20, bounds=(0.0,1.0))
             # print ("delta x  %12.9f   niter: %d" %(self._eval(self._px,u) - x, niter))
 
-            y =  self._eval (self._py, u)
+            y =  self._eval_1D (self._py, u)
             return y
         
 
@@ -745,10 +753,10 @@ class Bezier:
             # interpolate u 
             u = ((self._u[i+1]-self._u[i])/(self._y[i+1]-self._y[i])) * (y - self._y[i]) + self._u[i]
             # evaluate y from u 
-            return self._eval (self._px, u)
+            return self._eval_1D (self._px, u)
         else: 
-            u = findMin (lambda u: abs(self._eval(self._py,u) - y), 0.5, bounds=(0, 1)) 
-            x =  self._eval (self._px, u)
+            u = findMin (lambda u: abs(self._eval_1D(self._py,u) - y), 0.5, bounds=(0, 1)) 
+            x =  self._eval_1D (self._px, u)
             # print ("y: ",y, "  x evaluated ", x)
             return x
  
@@ -774,7 +782,7 @@ class Bezier:
     # -------------  end public --------------------
 
 
-    def _eval (self, pxy, u, der=0):
+    def _eval_1D (self, pxy, u, der=0):
         #
         #                    Bezier Core
         #
@@ -818,6 +826,55 @@ class Bezier:
 
 
 # ------------ test functions - to activate  -----------------------------------
+
+
+# def test_Bezier_for_Fortran (): 
+    
+#     # to compare with fortran bezier implementation 
+#     px = [   0,  0.0, 0.3,   1]
+#     py = [   0, 0.06, 0.12,  0]
+#     u  = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
+    
+#     # u = np.linspace( 0, 1 , 200)
+
+#     bez = Bezier (px, py)
+#     x,y = bez.eval(u)
+#     checksum = np.sum(x) + np.sum(y) 
+#     print_array_compact (u, header="u")
+#     print_array_compact (x, header="x")
+#     print_array_compact (y, header="y")
+#     print ("checksum: %10.6f" %checksum)
+#     print ()
+
+#     print ("1st derivative")
+#     dx,dy = bez.eval(u, der=1)
+#     checksum = np.sum(dx) + np.sum(dy) 
+#     print_array_compact (dx, header="dx")
+#     print_array_compact (dy, header="dy")
+#     print ("checksum: %10.6f" %checksum)
+
+#     print ("eval_y_on_x")
+#     x = np.linspace( 0, 1 , 10)
+#     y = np.zeros (len(x))
+#     for i,xi in enumerate (x):
+#         y[i] = bez.eval_y_on_x (xi)
+#     print_array_compact (x, header="x fast")
+#     print_array_compact (y, header="y fast")
+#     for i,xi in enumerate (x):
+#         y[i] = bez.eval_y_on_x (xi, fast=False)
+#     print_array_compact (x, header="x exct")
+#     print_array_compact (y, header="y exct")
+#     checksum = np.sum(x) + np.sum(y) 
+#     print ("checksum: %10.6f" %checksum)
+
+#     from timeit import default_timer as timer
+#     start = timer()
+#     x = np.linspace( 0, 1 , 1000)
+#     y = np.zeros (len(x))
+#     for i,xi in enumerate (x):
+#         y[i] = bez.eval_y_on_x (xi)
+#     end = timer()
+#     print("Time ", end - start)  
 
 
 # def test_Bezier (): 
@@ -964,6 +1021,7 @@ class Bezier:
 
 if __name__ == '__main__':
     
+    # test_Bezier_for_Fortran()
     # test_BezierCubic () 
     # test_Bezier () 
     # test_spline1D ()

@@ -57,7 +57,7 @@ from wing_artists       import *
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "0.9.2"
+AppVersion = "0.9.3"
 
 #------------------------------------------------
 
@@ -264,10 +264,10 @@ class Edit_Wing_Data (Edit_Abstract_Wing):
                                  event=WING_CHANGED, lim=(100,20000), dec=1, spin= True, step=10, unit=unit))
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Chord at root", obj=self.wing, get='rootchord', set='set_rootchord',
-                                 event=WING_CHANGED, lim=(10,500), dec=1, spin=True, step=1, unit=unit))
+                                 event=WING_CHANGED, lim=(10,1000), dec=1, spin=True, step=1, unit=unit))
         self.add (Field_Widget  (self,r,3, lab="Chord at tip",  obj=self.wing, get='tipchord', set='set_tipchord',
                                  event=CHORD_CHANGED,               
-                                 lim=(1,500), dec=1, spin=True, step=1, unit=unit))
+                                 lim=(1,800), dec=1, spin=True, step=1, unit=unit))
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Flap at root",  obj=self.wing, get='flapDepthRoot', set='set_flapDepthRoot',
                                  event=PLANFORM_CHANGED, lim=(0,50), dec=1, spin=True, step=0.1, unit='%'))
