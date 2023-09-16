@@ -411,9 +411,9 @@ def nelder_mead (f, x_start,
         # break after no_improv_break iterations with no improvement
         # print ('...best so far:', best)
 
-        if iters % 20 == 0: 
-            print("  NelderMead-d%d %3d(%d):  Score %.5f  no_improv: %2d(%d)" 
-                  %(dim, iters, max_iter, best, no_improv, no_improv_break))
+        # if iters % 20 == 0: 
+        #     print("  NelderMead-d%d %3d(%d):  Score %.5f  no_improv: %2d(%d)" 
+        #           %(dim, iters, max_iter, best, no_improv, no_improv_break))
 
         if abs(best - prev_best) < no_improve_thr:
             no_improv += 1

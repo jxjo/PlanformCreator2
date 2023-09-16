@@ -681,14 +681,16 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
     def setup_artists(self):
         """ setup axes, axis, artists for this plot type """
 
-        self.bezierArtist     = Bezier_Artist    (self.ax1, [self._airfoilBezier], show=True, 
-                                                 onMove=self.changed_bezier)
-        self.curvatureArtist  = Curvature_Artist (self.ax2, [self._airfoilBezier], show=True)
+        self.bezierArtist     = Bezier_Artist     (self.ax1, [self._airfoilBezier], show=True, 
+                                                   onMove=self.changed_bezier)
+        self.curvatureArtist  = Curvature_Artist  (self.ax2, [self._airfoilBezier], show=True)
 
         
-        self.airfoilOrgArtist = Airfoil_Artist   (self.ax1, [self._airfoilFn], show=True)
-        self.curvOrgArtist    = Curvature_Artist (self.ax2, [self._airfoilFn], show=True)
-        self.camberArtist     = Thickness_Artist (self.ax1, [self._airfoilFn], show=False)
+        self.airfoilOrgArtist = Airfoil_Artist    (self.ax1, [self._airfoilFn], show=True)
+        self.curvOrgArtist    = Curvature_Artist  (self.ax2, [self._airfoilFn], show=True)
+        self.camberArtist     = Thickness_Artist  (self.ax1, [self._airfoilFn], show=False)
+        self.diffArtist       = Difference_Artist (self.ax1, [self._airfoilFn, self._airfoilBezier], 
+                                                                                show=False)
 
 
     def setup_Switches(self, r=0, c=0):
@@ -703,6 +705,9 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
         r += 1
         Switch_Widget (self.view_frame,r,c, padx=10, lab='Camber', 
                        get=lambda: self.camberArtist.show,     set=self._set_camber)
+        r += 1
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Difference * 10 ', 
+                       get=lambda: self.diffArtist.show,     set=self.diffArtist.set_show)
         r += 1
         Blank_Widget (self.view_frame,r,c)
         self.view_frame.grid_rowconfigure(r, weight=1)
@@ -763,7 +768,8 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
     
     def changed_bezier(self):
         # call back from diagram 
-        self.curvatureArtist.refresh ()  
+        self.curvatureArtist.refresh () 
+        self.diffArtist.refresh() 
         self.figure.canvas.set_cursor = lambda cursor: None     # matplotlib hack: suppress busy cursor
         self.figure.canvas.draw()
 
@@ -782,6 +788,7 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
 
         self.airfoilOrgArtist.refresh ()
         self.curvOrgArtist.refresh ()
+        self.diffArtist.refresh ()
 
         self.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 

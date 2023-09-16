@@ -20,6 +20,7 @@ cl_editing          = 'deeppink'
 cl_editing_lower    = 'orchid'
 cl_helperLine       = 'orange'
 ls_curvature        = '-'
+ls_difference       = '-.'
 ls_camber           = '--'
 ls_thickness        = ':'
 ms_points           = dict(marker='o', fillstyle='none'    , markersize=4)   # marker style for points
@@ -350,6 +351,61 @@ class Curvature_Smooth_Artist (Airfoil_Line_Artist):
             self._makeObjectPickable (p)
 
                 
+
+class Difference_Artist (Airfoil_Line_Artist):
+    """Plot the y-difference of two airfoils 
+
+        2nd airfoil is Bezier based airfoil 
+        1st is reference or original airfoil from where x-stations are taken  
+    """
+
+    @property
+    def airfoil (self) -> Airfoil_Bezier: 
+        return self.airfoils[1] 
+    
+    @property
+    def ref_airfoil (self) -> Airfoil : 
+        return self.airfoils[0] 
+    
+
+    def _get_difference (self, side_ref: SideOfAirfoil, side_actual: SideOfAirfoil_Bezier):
+        # calculate difference at y-stations of reference airfoil 
+        diff  = np.zeros (len(side_ref.x))
+        for i, x in enumerate(side_ref.x):
+            diff [i] = side_actual.bezier.eval_y_on_x (x, fast=False) - side_ref.y[i]
+        return diff 
+
+    def _plot (self): 
+
+        if len(self.airfoils) != 2 : return 
+
+        # create cycled colors 
+        self._set_colorcycle (10 , colormap="Paired")         
+
+        linewidth=0.8
+
+        if self.upper:
+            if self.airfoil.isEdited:
+                color = cl_editing
+            else: 
+                color = self._nextColor()
+            x = self.ref_airfoil.upper.x
+            y = 10 * self._get_difference (self.ref_airfoil.upper, self.airfoil.upper )
+            p = self.ax.plot (x, y, ls_difference, color = color, label="diff upper * 10", 
+                            linewidth= linewidth, **self._marker_style)
+            self._add(p)
+
+        if self.lower:
+            if self.airfoil.isEdited:
+                color = cl_editing_lower
+            else: 
+                color = self._nextColor()
+            x = self.ref_airfoil.lower.x
+            y = 10 * self._get_difference (self.ref_airfoil.lower, self.airfoil.lower ) 
+            p = self.ax.plot (x, y, ls_difference, color = color, label="diff lower * 10", 
+                            linewidth= linewidth, **self._marker_style)
+            self._add(p)
+
 
 
 class Le_Artist (Artist):

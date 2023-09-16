@@ -11,7 +11,7 @@ import numpy as np
 from math_util import * 
 from copy import copy, deepcopy
 from spline import Spline1D, Spline2D, Bezier
-
+from spline import print_array_compact
 
 
 
@@ -963,6 +963,8 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         for x in targ_x:
             targ_y.append(targetSide.yFn (x))               # target value for these = y from targetSide
 
+        # print_array_compact (targ_y, header="targ_y")
+
         #-- (start) x-position of control points 
 
         ncp = len(cp_opt)
@@ -985,7 +987,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         for icp, cp_in in enumerate (cp_opt): 
 
             var_dict = {}
-            if cp_in[0]:
+            if cp_in[0]:                                # x coord of control point
                 var_dict['icp']    = icp
                 var_dict['coord']  = 'x'                
                 var_dict['start']  = round(cp_x_start[icp],6) 
@@ -994,7 +996,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
                 else: 
                     var_dict['bounds'] =  None                
                 vars.append(copy(var_dict))
-            if cp_in[1]:
+            if cp_in[1]:                                # y coord of control point
                 var_dict['icp']    = icp
                 var_dict['coord']  = 'y'  
                 if icp == 1:                            # special case y-start value of point 1
@@ -1026,6 +1028,8 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
             var_start[i]  = var['start']
             var_bounds[i] = var ['bounds']
 
+        # print_array_compact (var_start, header="var_start")
+
         # ----- objective function
 
         f = lambda vars_value : _match_y_objectiveFn (bezier_tmp, targ_x, targ_y, vars, vars_value) 
@@ -1048,6 +1052,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
             var['result'] = var_result[i]
 
         #-- finally move control points to their new position 
+        #   print_array_compact (var_result, header="vars")
 
         for i, var in enumerate (vars): 
             if var['coord'] == 'x':             # allow that a point overtooks its neighbour
@@ -1055,8 +1060,19 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
             else: 
                 self.move_controlPoint_to (var['icp'] , None, var['result'])    # x remains unchanged
 
-        #--
-        return score, niter, niter >= max_iter
+
+        #-- evaluate the new y values on Bezier for the target x-coordinate
+        y_new = np.zeros (len(targ_x))
+        for i, target_x in enumerate(targ_x) :
+            y_new[i] = self.bezier.eval_y_on_x(target_x, fast=False, epsilon=1e-7)
+
+        devi = np.abs((y_new - targ_y))        
+        norm2 = np.linalg.norm (devi)           # calc the 'real' norm2 (objFun uses another) 
+
+        return norm2, niter, niter >= max_iter
+
+
+# ------------ end SideOfAirfoil_Bezier  -----------------------------------
 
 
 def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier, 
@@ -1075,7 +1091,7 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
             _, new_value = bezier_tmp.move_controlPoint_to (var['icp'] , None, vars_value [i])    # x remains unchanged
 
         if vars_value [i] != new_value:                 # value hurted move constraint 
-            print ("   Var %d bounds rejection: %.5F - corrected to: %.5f" %(i, vars_value [i], new_value))
+            # print ("   Var %d bounds rejection: %.5F - corrected to: %.5f" %(i, vars_value [i], new_value))
             penalty += 0.1   
 
 

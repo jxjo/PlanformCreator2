@@ -87,7 +87,8 @@ def print_array_compact (aArr,header=None):
     if not header is None: 
         print (header,": ", end=" ")
     for i, val in enumerate (aArr):
-        print ("%8.4f" % val, end=" ")
+        #print ("%8.4f" % val, end=" ")
+        print ("%8.5f" % val, end=",")
     print()
 
 
