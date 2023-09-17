@@ -643,18 +643,17 @@ class Bezier_Artist (Artist):
 
             for ipoint, cpoint in enumerate (sideBezier.controlPoints):
 
+                markersize = 6
                 if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
                     markerstyle = '.'
                     markersize = 3
-                elif ipoint == 1 :
-                    if side == UPPER:
-                        markerstyle = 6
-                    else: 
-                        markerstyle = 7
-                    markersize = 5
-                else:
-                    markerstyle = 'o'
-                    markersize = 4
+                elif side == UPPER:
+                    markerstyle = 6
+                else: 
+                    markerstyle = 7
+                # else:
+                #     markerstyle = 'o'
+                #     markersize = 4
                 p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, 
                                   color=cl_userHint, animated=True) 
                 points_artist.append (self._add(p))
