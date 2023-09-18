@@ -783,24 +783,55 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         # Bezier needs a special u cosinus distribution as the points are bunched
         # by bezier if there is high curvature ... 
 
-        self._u = self._cosinus_distribution_bezier (nPoints)
+        self._u = self._u_distribution_bezier(nPoints)
 
 
-    def _cosinus_distribution_bezier (self, nPoints):
+    def _u_distribution_bezier (self, nPoints):
         # a special distribution for Bezier curve to achieve a similar bunching to splined airfoils
 
-        beta = np.linspace(0.15 ,0.90 , nPoints) * np.pi   
-        u = (1 - np.cos(beta)) * 0.5
+        # for a constant du the resulting arc length of a curve section is proportional the 
+        # reverse of the curvature, so it fits naturally the need of airfoil paneling especially
+        # at LE. For TE a little bunching is done ...
 
-        # normalize to 0..1
-        umin = np.amin(u)
-        umax = np.amax(u) 
-        u = (u - umin) / (umax-umin)
+        te_du_fraction = 0.5                        # size of last du compared to linear du
+        te_du_growth = 1.4                         # how fast panel size will grow 
 
-        # ensure 0.0 and 1.0 
-        u[0]  = u[0].round(10)
-        u[-1] = u[-1].round(10)
+        nPanels = nPoints - 1
+        u = np.zeros(nPoints)
+
+        # run from TE forward - increasing du 
+        te_du = te_du_fraction
+        ip = 1
+        while te_du < 1.0:
+            u[-1-ip] = te_du + u[-ip]
+            ip += 1
+            te_du *= te_du_growth
+
+        # reached du = 1 - proceed to LE 
+        while ip <= nPanels: 
+            u[-1-ip] = 1.0 + u[-ip]
+            ip += 1
+
+        # normalize to 0..1 
+        u = abs((u / u[0]) - 1.0)
         return u 
+
+
+    # def _cosinus_distribution_bezier (self, nPoints):
+    #     # a special distribution for Bezier curve to achieve a similar bunching to splined airfoils
+
+    #     beta = np.linspace(0.15 ,0.90 , nPoints) * np.pi   
+    #     u = (1 - np.cos(beta)) * 0.5
+
+    #     # normalize to 0..1
+    #     umin = np.amin(u)
+    #     umax = np.amax(u) 
+    #     u = (u - umin) / (umax-umin)
+
+    #     # ensure 0.0 and 1.0 
+    #     u[0]  = u[0].round(10)
+    #     u[-1] = u[-1].round(10)
+    #     return u 
 
 
     @property
