@@ -789,31 +789,41 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
     def _u_distribution_bezier (self, nPoints):
         # a special distribution for Bezier curve to achieve a similar bunching to splined airfoils
 
-        # for a constant du the resulting arc length of a curve section is proportional the 
+        # for a constant du the resulting arc length of a curve section (panel) is proportional the 
         # reverse of the curvature, so it fits naturally the need of airfoil paneling especially
-        # at LE. For TE a little bunching is done ...
+        # at LE. For LE and TE a little extra bunching is done ...
 
-        te_du_fraction = 0.5                        # size of last du compared to linear du
-        te_du_growth = 1.4                         # how fast panel size will grow 
+        te_du_end = 0.5                             # size of last du compared to linear du
+        te_du_growth = 1.4                          # how fast panel size will grow 
+
+        le_du_start = 0.7                           # size of first du compared to linear du
+        le_du_growth = 1.1                          # how fast panel size will grow 
 
         nPanels = nPoints - 1
-        u = np.zeros(nPoints)
+        u  = np.zeros(nPoints)
+        du = np.ones(nPanels)
+
+        # start from LE backward - increasing du 
+        du_ip = le_du_start 
+        ip = 0
+        while du_ip < 1.0:
+            du[ip] = du_ip
+            ip += 1
+            du_ip *= le_du_growth
 
         # run from TE forward - increasing du 
-        te_du = te_du_fraction
-        ip = 1
-        while te_du < 1.0:
-            u[-1-ip] = te_du + u[-ip]
-            ip += 1
-            te_du *= te_du_growth
+        du_ip = te_du_end
+        ip = len(du) - 1
+        while du_ip < 1.0:
+            du[ip] = du_ip
+            ip -= 1
+            du_ip *= te_du_growth
 
-        # reached du = 1 - proceed to LE 
-        while ip <= nPanels: 
-            u[-1-ip] = 1.0 + u[-ip]
-            ip += 1
+        # build u array and normalized to 0..1
+        for ip, du_ip in enumerate(du):
+            u[ip+1] = u[ip] + du_ip 
 
-        # normalize to 0..1 
-        u = abs((u / u[0]) - 1.0)
+        u = u / u[-1]
         return u 
 
 
@@ -989,10 +999,17 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
         #-- define targets x,y which should fit best 
 
-        targ_x =[0.02, 0.05, 0.12, 0.21, 0.31, 0.42, 0.53, 0.64, 0.75, 0.85, 0.95]
+        i = 1
+        if len(targetSide.x)> 80:
+            step = 4
+        else: 
+            step = 3
+        targ_x = []
         targ_y = []
-        for x in targ_x:
-            targ_y.append(targetSide.yFn (x))               # target value for these = y from targetSide
+        while i < (len(targetSide.x) -1):
+            targ_x.append(targetSide.x[i])
+            targ_y.append(targetSide.y[i])
+            i += step
 
         # print_array_compact (targ_y, header="targ_y")
 
@@ -1137,10 +1154,9 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
     base = np.abs(targets_y)
 
     # move base so targets with a small base (at TE) don't become overweighted 
-    max_base = np.max (base)
-    base = base + max_base / 4
-    
-    norm2 = np.linalg.norm (devi / base)
+    shift = np.max (base) * 0.4
+  
+    norm2 = np.linalg.norm (devi / (base+shift))
 
     return norm2 + penalty * norm2
 
