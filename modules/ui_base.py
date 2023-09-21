@@ -7,6 +7,7 @@ Highlevel abstract base classes for UI like Dialog oder EditFrame
 """
 import customtkinter as ctk
 from widgets            import *
+from common_utils       import fromDict, toDict
 
 
 #------------------------------------------------
@@ -32,8 +33,8 @@ class Dialog_Abstract (ctk.CTkToplevel):
 
     self.return_OK is True if user conformed 'ok' 
     """
-    width  = 500
-    height = 400
+    widthFrac  = 0.75
+    heightFrac = 0.70
     titleText  = "My little title"
 
     def __init__(self, master, workingDir=None, *args, **kwargs):
@@ -50,8 +51,9 @@ class Dialog_Abstract (ctk.CTkToplevel):
         # the attribute for return ok
         self.return_OK = False
 
-        xPos, yPos = self.leftTopPosition(self.width, self.height)
-        self.geometry("%sx%s+%s+%s" %(self.width, self.height, xPos, yPos))
+        #xPos, yPos = self.leftTopPosition(self.width, self.height)
+        # self.geometry("%sx%s+%s+%s" %(self.width, self.height, xPos, yPos))
+        set_initialWindowSize (self, widthFrac=self.widthFrac, heightFrac=self.heightFrac)
 
         self.title (self.titleText)
 
@@ -179,6 +181,8 @@ class Dialog_Settings (Dialog_Abstract):
 
         self.title ("Edit settings  [" + name + "]")
 
+        self.settings_dict = Settings().get_dataDict()
+
 
         # Header 
         c = 0 
@@ -202,16 +206,16 @@ class Dialog_Settings (Dialog_Abstract):
         r += 1
         self.edit_frame.grid_rowconfigure (r, weight=1)
         r += 1
-        Button_Widget (self.edit_frame,r,c, lab='Close', set=self.cancel, 
+        Button_Widget (self.edit_frame,r,c, lab='Close', set=self.ok, 
                        columnspan=2, width=100, sticky="w", pady=20, padx=(200,0))
 
 
     @property
     def appearance_mode (self):
-        return Settings().get('appearance_mode', default='System')
+        return fromDict (self.settings_dict, 'appearance_mode', default='System')
     def set_appearance_mode (self, aMode):
         if aMode in self.appearance_modes (): 
-            Settings().set('appearance_mode', aMode)
+            toDict(self.settings_dict, 'appearance_mode', aMode)
         self.refresh()
     def appearance_modes (self):
         return ["System", "Dark", "Light"]
@@ -219,13 +223,13 @@ class Dialog_Settings (Dialog_Abstract):
 
     @property
     def widget_scaling (self):
-        return Settings().get('widget_scaling', default=1.0)
+        return fromDict (self.settings_dict, 'widget_scaling', default=1.0)
     def set_widget_scaling (self, aVal):
         if not aVal: aVal = 1.0
         aVal = max (0.49, aVal)
         aVal = min (1.51, aVal)
-        Settings().set('widget_scaling', aVal)
-        Settings().set('window_scaling', aVal)        
+        toDict(self.settings_dict, 'widget_scaling', aVal)
+        toDict(self.settings_dict, 'window_scaling', aVal)        
         self.refresh()
 
     # ctk.set_appearance_mode    (Settings().get('appearance_mode', default='System'))   # Modes:  "System" (standard), "Dark", "Light"
@@ -235,4 +239,9 @@ class Dialog_Settings (Dialog_Abstract):
     #     ctk.set_widget_scaling(scaling)  # widget dimensions and text size
     #     NoteMsg ("The App is scaled to %.2f" %scaling)
 
-
+    def ok (self):
+        # to over load and do ok actions
+        for widget in self.widgets:
+            widget.force_set()
+        Settings().write_dataDict (self.settings_dict, dataName='Settings')
+        super().ok()                               

@@ -240,13 +240,13 @@ class Edit_Panels(Edit_Abstract_Airfoil):
                                  width=50, lab_width=0, dec=0, text_style=lambda: self.style('no')))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="Angle at LE", get=lambda: self.airfoil().panelAngle_le, 
-                                 width=50,   lab_width=80, unit="°", dec=0, text_style=lambda: self.style('le_angle')))
+                                 width=50,   lab_width=80, unit="°", dec=1, text_style=lambda: self.style('le_angle')))
         self.add(Label_Widget   (self,r,c+3, columnspan=2, padx= 0,  width=80, 
                                  lab= lambda: "at index %d" % self.airfoil().iLe))
 
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="Angle min", get=lambda: self.airfoil().panelAngle_min[0], 
-                                 width=50,   lab_width=80, unit="°", dec=0, text_style=lambda: self.style('min_angle')))
+                                 width=50,   lab_width=80, unit="°", dec=1, text_style=lambda: self.style('min_angle')))
         self.add(Label_Widget   (self,r,c+3, columnspan=2, padx= 0, width=80, 
                                  lab= lambda: "at index %d" % self.airfoil().panelAngle_min[1]))
         r += 1
@@ -1205,11 +1205,11 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
     Dialog to repanel airfoil  
     """
 
-    width  = 1380
-    height = 630
+    widthFrac  = 0.85
+    heightFrac = 0.55
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, airfoilFn, *args, nameExt='-repan', height=self.height/2, **kwargs)
+        super().__init__(master, airfoilFn, *args, nameExt='-repan', **kwargs)
 
         # start with a repaneld airfoil  using default values 
         self.airfoil.repanel()               
@@ -1597,8 +1597,6 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
     Dialog to change thickness, camber or TE gap of airfoil  
     """
 
-    width  = 1170
-    height = 770
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
         super().__init__(master, airfoilFn, *args, nameExt='-mod', height=self.height/2, **kwargs)
@@ -1646,10 +1644,10 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
         r = 0 
         c = 0 
         if self.hasbeen_normalized: 
-            Label_Widget (self.input_frame,r,c, padx=5, lab= "Working copy normalized for higher precision", columnspan = 3,
+            Label_Widget (self.input_frame,r,c, padx=0, lab= "Working copy normalized for higher precision", columnspan = 3,
                           text_style="Warning")
         else:
-            Label_Widget (self.input_frame,r,c, padx=5, lab= "Working copy", columnspan = 2)
+            Label_Widget (self.input_frame,r,c, padx=0, lab= "Working copy", columnspan = 2)
 
         r += 1
         Blank_Widget (self.input_frame, r,10, height=5)
@@ -1683,7 +1681,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
         c = 8 
         Label_Widget  (self.input_frame,r,c , padx=5, lab= "... with a chord length of", columnspan = 3)
         self.add (Field_Widget  (self.input_frame,r,c+4, obj=self, get='chord', set='set_chord', 
-                                width=50, unit="mm", dec=0))
+                                width=50, unit="mm", dec=1))
         r += 1
         Blank_Widget (self.input_frame, r,10, height=5)
         r += 1
@@ -2047,7 +2045,7 @@ class AirfoilEditor ():
 
         else: 
             main = ctk.CTk()  
-            set_initialWindowSize(main, widthFrac=0.80, heightFrac=0.75)
+            set_initialWindowSize(main, widthFrac=0.85, heightFrac=0.75)
 
         self.main = main 
         self.ctk_root = main        
