@@ -1529,8 +1529,8 @@ class Dialog_Load_DXF (Dialog_Abstract):
 
     Returns in self.dxf_pathFilename if the user selected a valid file 
     """
-    width  = 1000
-    height = 450
+    widthFrac  = 0.60
+    heightFrac = 0.40
     titleText  = "Import dxf file"
 
     def __init__(self, master, *args, wingFn = None, dxf_Path= None, ref:bool = False, **kwargs):
@@ -1559,19 +1559,20 @@ class Dialog_Load_DXF (Dialog_Abstract):
         Blank_Widget  (frame,r,0)
 
         r +=1  
-        self.add(Field_Widget  (frame,r,0, lab='  DXF file', columnspan=2, width= 220, get= self.tmpPlanform.dxf_filename))
-        self.add(Button_Widget (frame,r,3, lab='Select', width=90, set=self.open_dxf_file ))
-        self.add(Button_Widget (frame,r,4, lab='Remove', width=70, set=self.remove_dxf_file, 
+        self.add(Field_Widget  (frame,r,0, lab='DXF file', padx=(10,0),width= 220, lab_width=180,
+                                columnspan=2, get= self.tmpPlanform.dxf_filename))
+        self.add(Button_Widget (frame,r,4, lab='Select', width=90, set=self.open_dxf_file ))
+        self.add(Button_Widget (frame,r,5, lab='Remove', width=70, set=self.remove_dxf_file, 
                                 disable=self.remove_dxf_disable ))
 
         r +=1  
-        Blank_Widget (frame,r,0)
+        Blank_Widget  (frame,r,0)
         r +=1  
-        self.add(Label_Widget (frame,r,0, lab=lambda: self.tmpPlanform.infoText, columnspan=2, sticky = "ew" ))
+        self.add(Label_Widget (frame,r,0, lab=lambda: self.tmpPlanform.infoText, columnspan=2, width=180, sticky = "ew" ))
 
         # show a little dxf preview
         self.diagram_frame = Diagram_Planform_Mini (frame,  wingFn, size=(4.5,2.5))
-        self.diagram_frame.grid(row=r, column=2, columnspan= 4, padx=(0,15))
+        self.diagram_frame.grid(row=r, column=1, columnspan= 5, padx=(0,15))
         self.diagram_ax    = self.diagram_frame.ax
         self.planformArtist = RefPlanform_DXF_Artist (self.diagram_ax, wingFn(), show=True, showDetail=True, 
                                                       showMarker=False, planform=self.tmpPlanform)
@@ -1584,9 +1585,9 @@ class Dialog_Load_DXF (Dialog_Abstract):
         frame.grid_rowconfigure (r, weight=1)
 
         r +=1  
-        self.add(Button_Widget (frame,r,2, lab='Ok', style=PRIMARY, set=self.ok, width=100,
+        self.add(Button_Widget (frame,r,1, lab='Ok', style=PRIMARY, set=self.ok, width=100, padx= 0, 
                                 disable= self.ok_disable ))
-        self.add(Button_Widget (frame,r,3, lab='Cancel',set=self.cancel, width= 100))
+        self.add(Button_Widget (frame,r,2, lab='Cancel',set=self.cancel, width= 100))
 
         r +=1  
         Blank_Widget  (frame,r,3)
@@ -1640,12 +1641,13 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
     Export planform as paneled for Xflr5 oder FLZ 
 
     """
-    width  = 1100
-    height = 500
+    widthFrac  = 0.70
+    heightFrac = 0.50
+
     titleText  = "Export to ..."
 
     def __init__(self, master, wingFn, Xflr5=False, Flz=False, *args, **kwargs):
-        super().__init__(master, *args, height=self.height/2, **kwargs)
+        super().__init__(master, *args, **kwargs)
 
         self.wing : Wing = wingFn()
 
@@ -1661,7 +1663,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
 
         # main grid 3 x 1  (preview + edit + buttons) 
 
-        self.diagram_frame = Diagram_Planform_Mini (self.edit_frame, wingFn, size=(4,2.8))
+        self.diagram_frame = Diagram_Planform_Mini (self.edit_frame, wingFn, size=(4.2,3.2))
         self.diagram_frame.grid(row=0, column=0, sticky="nwe")
 
         self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
@@ -1821,12 +1823,12 @@ class Dialog_Export_Dxf (Dialog_Abstract):
     Export wing / planform as dxf to file  
 
     """
-    width  = 650
-    height = 320
+    widthFrac  = 0.40
+    heightFrac = 0.30
     titleText  = "Export DXF"
 
     def __init__(self, master, *args, wingFn = None,  **kwargs):
-        super().__init__(master, *args, height=self.height/2, **kwargs)
+        super().__init__(master, *args, **kwargs)
 
         self.wing : Wing = wingFn()
         self.exporter = self.wing.exporterDxf
@@ -1858,8 +1860,8 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         r = 0 
         c = 0 
         self.add(Field_Widget  (self.input_frame,r,c, lab="Dxf directory", obj=self.exporter, get='baseAndExportDir', set='',
-                                width=180, disable=True))
-        self.add(Button_Widget (self.input_frame,r,c+2, lab='Select', width=60, sticky='w', set=self.select_dir ))
+                                width=280, columnspan=2, disable=True))
+        self.add(Button_Widget (self.input_frame,r,c+3, lab='Select', width=60, sticky='w', set=self.select_dir ))
 
 
         r += 1 
@@ -1944,12 +1946,13 @@ class Dialog_Export_Airfoils (Dialog_Abstract):
     Export wing / planform as dxf to file  
 
     """
-    width  = 600
-    height = 280
+    widthFrac  = 0.40
+    heightFrac = 0.25
+
     titleText  = "Export Airfoils"
 
     def __init__(self, master, *args, wingFn = None,  **kwargs):
-        super().__init__(master, *args, height=self.height/2, **kwargs)
+        super().__init__(master, *args, **kwargs)
 
         self.wing : Wing = wingFn()
         self.exporter = self.wing.exporterAirfoils
@@ -1981,8 +1984,8 @@ class Dialog_Export_Airfoils (Dialog_Abstract):
         r = 0 
         c = 0 
         self.add(Field_Widget  (self.input_frame,r,c, lab="Airfoils directory", obj=self.exporter, get='baseAndExportDir', set='',
-                                lab_width=105, width=180, disable=True))
-        self.add(Button_Widget (self.input_frame,r,c+2, lab='Select', width=60, sticky='w', set=self.select_dir ))
+                                lab_width=105, width=380, columnspan=4, disable=True))
+        self.add(Button_Widget (self.input_frame,r,c+5, lab='Select', width=60, sticky='w', set=self.select_dir ))
 
         r += 1 
         Blank_Widget           (self.input_frame,r,c, width=50) 
@@ -2326,8 +2329,11 @@ if __name__ == "__main__":
     scaling = Settings().get('widget_scaling', default=1.0)
     if scaling != 1.0: 
         ctk.set_widget_scaling(scaling)  # widget dimensions and text size
+        NoteMsg ("Font size is scaled to %.2f" %scaling)
+    scaling = Settings().get('window_scaling', default=1.0)
+    if scaling != 1.0: 
         ctk.set_window_scaling(scaling)  # scaling of window
-        NoteMsg ("The App is scaled to %.2f" %scaling)
+        NoteMsg ("Window size is scaled to %.2f" %scaling)
 
     # paramter file as argument?  
 

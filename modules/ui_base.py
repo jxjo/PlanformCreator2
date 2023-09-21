@@ -168,8 +168,8 @@ class Dialog_Settings (Dialog_Abstract):
     Dialog to edit app settings
     """
 
-    width  = 500
-    height = 400
+    widthFrac  = 0.30
+    heightFrac = 0.40
 
     def __init__(self, master,  name= None, *args, **kwargs):
         super().__init__(master, *args,  **kwargs)
@@ -198,8 +198,12 @@ class Dialog_Settings (Dialog_Abstract):
                                  obj=self, get='appearance_mode', set="set_appearance_mode",
                                  options=self.appearance_modes()))
         r += 1
-        self.add (Field_Widget  (self.edit_frame,r,c, lab="Scaling of App", lab_width=100, width=80, padx= 50, pady=5,
+        self.add (Field_Widget  (self.edit_frame,r,c, lab="Scaling of font size", lab_width=100, width=80, padx= 50, pady=5,
                                  obj=self, get='widget_scaling', set="set_widget_scaling", dec=2))
+
+        r += 1
+        self.add (Field_Widget  (self.edit_frame,r,c, lab="Scaling of App size", lab_width=100, width=80, padx= 50, pady=5,
+                                 obj=self, get='window_scaling', set="set_window_scaling", dec=2))
 
 
         # close  
@@ -212,7 +216,7 @@ class Dialog_Settings (Dialog_Abstract):
 
     @property
     def appearance_mode (self):
-        return fromDict (self.settings_dict, 'appearance_mode', default='System')
+        return fromDict (self.settings_dict, 'appearance_mode', default='System', msg=False)
     def set_appearance_mode (self, aMode):
         if aMode in self.appearance_modes (): 
             toDict(self.settings_dict, 'appearance_mode', aMode)
@@ -223,12 +227,21 @@ class Dialog_Settings (Dialog_Abstract):
 
     @property
     def widget_scaling (self):
-        return fromDict (self.settings_dict, 'widget_scaling', default=1.0)
+        return fromDict (self.settings_dict, 'widget_scaling', default=1.0, msg=False)
     def set_widget_scaling (self, aVal):
         if not aVal: aVal = 1.0
         aVal = max (0.49, aVal)
         aVal = min (1.51, aVal)
         toDict(self.settings_dict, 'widget_scaling', aVal)
+        self.refresh()
+
+    @property
+    def window_scaling (self):
+        return fromDict (self.settings_dict, 'window_scaling', default=1.0, msg=False)
+    def set_window_scaling (self, aVal):
+        if not aVal: aVal = 1.0
+        aVal = max (0.49, aVal)
+        aVal = min (1.51, aVal)
         toDict(self.settings_dict, 'window_scaling', aVal)        
         self.refresh()
 

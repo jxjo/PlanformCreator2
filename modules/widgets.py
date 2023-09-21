@@ -976,7 +976,7 @@ class Field_Widget(Base_Widget):
             if padx is None: 
                 padx= (5, 5)
             if pady is None: 
-                padx= 0
+                pady= 0
 
             label_ctk = ctk.CTkLabel (self.parent, width= width, text=self.label,  
                                       justify='left', anchor='w')

@@ -1330,7 +1330,7 @@ class Dialog_Smooth (Dialog_Airfoil_Abstract):
     height = 630
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, airfoilFn, *args, nameExt='-smoothed', height=self.height/2, **kwargs)
+        super().__init__(master, airfoilFn, *args, nameExt='-smoothed', **kwargs)
 
         # start with a repaneld airfoil  using default values 
         self.airfoil_before  = Airfoil.asCopy (self.airfoilOrg, nameExt='-before') 
@@ -1484,11 +1484,11 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
     Dialog to normalize airfoil
     """
 
-    width  = 900
-    height = 370
+    widthFrac  = 0.5
+    heightFrac = 0.35
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, airfoilFn, *args, nameExt='-norm', height=self.height/2, **kwargs)
+        super().__init__(master, airfoilFn, *args, nameExt='-norm', **kwargs)
 
         # ! see Dialog_Airfoil_Abstract for init of airfoil !
 
@@ -1599,7 +1599,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
 
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, airfoilFn, *args, nameExt='-mod', height=self.height/2, **kwargs)
+        super().__init__(master, airfoilFn, *args, nameExt='-mod', **kwargs)
 
         self.airfoil.set_isEdited (True)            # will indicate airfoil when plotted 
 
@@ -1742,11 +1742,11 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     Dialog to change thickness, camber or TE gap of airfoil  
     """
 
-    width  = 1600
-    height = 870
+    widthFrac  = 0.92
+    heightFrac = 0.72
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, airfoilFn, *args, nameExt='-bezier', height=self.height/2, **kwargs)
+        super().__init__(master, airfoilFn, *args, nameExt='-bezier', **kwargs)
 
         # ! see Dialog_Airfoil_Abstract for init of airfoil !
         # overwrite
@@ -2244,7 +2244,11 @@ if __name__ == "__main__":
     scaling = Settings().get('widget_scaling', default=1.0)
     if scaling != 1.0: 
         ctk.set_widget_scaling(scaling)  # widget dimensions and text size
-        NoteMsg ("The App is scaled to %.2f" %scaling)
+        NoteMsg ("Font size is scaled to %.2f" %scaling)
+    scaling = Settings().get('window_scaling', default=1.0)
+    if scaling != 1.0: 
+        ctk.set_window_scaling(scaling)  # scaling of window
+        NoteMsg ("Window size is scaled to %.2f" %scaling)
 
     # command line arguments? 
     

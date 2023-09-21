@@ -709,7 +709,7 @@ class RefPlanform_DXF_Artist (Planform_Artist):
         # is there a DXF planform? 
         if (self.refPlanform_DXF): 
             y, leadingEdge, trailingEdge = self.refPlanform_DXF.lines ()
-            if y != []: 
+            if len(y) > 0: 
 
                 # leading edge 
                 color = self._nextColor()
@@ -736,7 +736,7 @@ class RefPlanform_DXF_Artist (Planform_Artist):
                 # hinge line? 
                 yh, xh = self.refPlanform_DXF.hingeLine_dxf()
                 if self._showDetail:    label='Hinge line'
-                if yh != []:
+                if len(yh) > 0:
                     color = self._nextColor()
                     p = self.ax.plot(yh, xh,  label=label, color=color)
                     self._add (p)              

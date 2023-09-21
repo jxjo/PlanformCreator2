@@ -56,7 +56,7 @@ class Wing:
         """
 
         dataDict = Parameters (paramFilePath).get_dataDict()
-        if dataDict is None:
+        if not dataDict:
             NoteMsg ('No input data - a default wing will be created')
             wingExists = False
             self.paramFilePath = None

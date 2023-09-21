@@ -136,7 +136,7 @@ class Parameters ():
         """
         returns the complete dataDict of self
         """
-        dataDict = None
+        dataDict = {}
         if self._paramFilePath:
             try:
                 paramFile = open(self._paramFilePath)
@@ -146,7 +146,7 @@ class Parameters ():
                 except ValueError as e:
                     ErrorMsg("Invalid json expression '%s' in parameter file '%s'" % (e, self._paramFilePath))
                     paramFile.close()
-                    dataDict = None
+                    dataDict = {}
             except:
                 if msg: 
                     NoteMsg ("Paramter file %s not found" % self._paramFilePath)
@@ -245,7 +245,6 @@ class Settings (Parameters):
             :msg: if True a log message will be printed when a value is missing 
         """
         dataDict = self.get_dataDict ()
-        if dataDict is None: dataDict = {}              # init new dataDict 
 
         toDict(dataDict, key, value)
         self.write_dataDict (dataDict, dataName='Settings')
