@@ -853,6 +853,9 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
     def controlPoints (self): 
         """ bezier control points """
         return self.bezier.points
+    def set_controilPoints(self, cp_x, cp_y):
+        """ set the bezier control points"""
+        self._bezier.set_points (cp_x, cp_y)
 
     @property
     def nPoints (self): 
@@ -967,8 +970,8 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
             x = 1.0 
             y = py[index]                       
         elif not allow_overtook:                      # not too close to neighbour, do not allow to swap position  
-            x = min (x, px[index+1] - 0.02)
-            x = max (x, px[index-1] + 0.02)
+            x = min (x, px[index+1] - 0.03)
+            x = max (x, px[index-1] + 0.03)
 
         self.bezier.set_point (index, x,y) 
 
@@ -1000,7 +1003,9 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         #-- define targets x,y which should fit best 
 
         i = 1
-        if len(targetSide.x)> 80:
+        if   len(targetSide.x) > 120:
+            step = 5
+        elif len(targetSide.x) > 80:
             step = 4
         else: 
             step = 3
@@ -1010,24 +1015,12 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
             targ_x.append(targetSide.x[i])
             targ_y.append(targetSide.y[i])
             i += step
-
         # print_array_compact (targ_y, header="targ_y")
 
-        #-- (start) x-position of control points 
+        #-- (start) position of control points 
 
         ncp = len(cp_opt)
-        cp_x_start = [0] * ncp
-        cp_x_start [0]   = 0.0                                  # LE and TE fix pos 
-        cp_x_start [1]   = 0.0 
-        cp_x_start [-1]  = 1.0
-
-        np_between =  ncp - 3                                   # equal distribution between                         
-        dx = 1 / (np_between + 1)
-        x = 0.0 
-        for ib in range(np_between): 
-            icp = 2 + ib
-            x += dx
-            cp_x_start [icp] = x
+        cp_x_start, cp_y_start = self.get_initial_bezier(targetSide, ncp)
       
         #-- map control point x,y to optimization variable 
 
@@ -1039,7 +1032,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
                 var_dict['icp']    = icp
                 var_dict['coord']  = 'x'                
                 var_dict['start']  = round(cp_x_start[icp],6) 
-                if icp == ncp-2:                        # special case: last point not too close to TE 
+                if ncp > 3 and icp == ncp-2:                        # special case: last point not too close to TE 
                     var_dict['bounds'] = (0.5, 0.95)
                 else: 
                     var_dict['bounds'] =  None                
@@ -1047,11 +1040,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
             if cp_in[1]:                                # y coord of control point
                 var_dict['icp']    = icp
                 var_dict['coord']  = 'y'  
-                if icp == 1:                            # special case y-start value of point 1
-                    x = 0.1                             #       take y-coord near LE
-                else: 
-                    x = cp_x_start[icp]           
-                var_dict['start']  = round(targetSide.yFn (x), 6)                 
+                var_dict['start']  = round(cp_y_start[icp],6)                
                 var_dict['bounds'] = None                
                 vars.append(copy(var_dict))
 
@@ -1120,6 +1109,35 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         return norm2, niter, niter >= max_iter
 
 
+    def get_initial_bezier (self, targetSide: SideOfAirfoil, ncp):
+        """ returns inital coordinates of control points """
+
+        cp_x, cp_y = np.zeros(ncp), np.zeros(ncp)
+
+        # initial x values 
+        cp_x[0]   = 0.0                                 # LE and TE fix pos 
+        cp_x[1]   = 0.0 
+        cp_x[-1]  = 1.0
+
+        np_between =  ncp - 3                           # equal distribution between                         
+        dx = 1.0 / (np_between + 1)
+        x = 0.0 
+        for ib in range(np_between): 
+            icp = 2 + ib
+            x += dx
+            cp_x[icp] = x
+
+        # initial y values 
+        for icp, xi in enumerate (cp_x): 
+            if icp == 1:                                # special case y-start value of point 1
+                x = 0.1                                 #       take y-coord near LE
+            else: 
+                x = xi          
+            cp_y[icp]  = round(targetSide.yFn (x), 6)                 
+
+        return cp_x, cp_y
+    
+
 # ------------ end SideOfAirfoil_Bezier  -----------------------------------
 
 
@@ -1134,7 +1152,7 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
     # set the new control point coordinates in Bezier (=None - do not change) 
     for i, var in enumerate (vars_def): 
         if var['coord'] == 'x':
-            new_value, _ = bezier_tmp.move_controlPoint_to (var['icp'] , vars_value [i], None, allow_overtook=True)    # y remains unchanged
+            new_value, _ = bezier_tmp.move_controlPoint_to (var['icp'] , vars_value [i], None, allow_overtook=False)    # y remains unchanged
         else: 
             _, new_value = bezier_tmp.move_controlPoint_to (var['icp'] , None, vars_value [i])    # x remains unchanged
 

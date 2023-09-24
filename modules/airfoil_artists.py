@@ -372,7 +372,7 @@ class Difference_Artist (Airfoil_Line_Artist):
         # calculate difference at y-stations of reference airfoil 
         diff  = np.zeros (len(side_ref.x))
         for i, x in enumerate(side_ref.x):
-            diff [i] = side_actual.bezier.eval_y_on_x (x, fast=False) - side_ref.y[i]
+            diff [i] = side_actual.bezier.eval_y_on_x (x, fast=True) - side_ref.y[i]
         return diff 
 
     def _plot (self): 

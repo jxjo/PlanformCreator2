@@ -1806,7 +1806,8 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,  lab="Upper points", 
                                  get=lambda: self.airfoil.upper.nPoints, 
-                                 spin=True, step=1, disable=True, width=90, lab_width=100))
+                                 set=self.set_nPoints, objId = UPPER,
+                                 spin=True, step=1, lim=(3,10), width=90, lab_width=100))
         self.add (Button_Widget (self.input_frame,r,c+3, width=90, padx=0, 
                                  get=lambda: 'Auto adjust' if not self.adapt_running(UPPER) else '.. running ..',
                                  set=lambda: self.adapt_bezier(UPPER), 
@@ -1815,7 +1816,8 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,  lab="Lower points", 
                                  get=lambda: self.airfoil.lower.nPoints, 
-                                spin=True, step=1, disable=True, width=90, lab_width=100))
+                                 set=self.set_nPoints, objId = LOWER,
+                                 spin=True, step=1, lim=(3,10), width=90, lab_width=100))
         self.add (Button_Widget (self.input_frame,r,c+3, width=90, padx=0, 
                                  get=lambda: 'Auto adjust' if not self.adapt_running(LOWER) else '.. running ..',
                                  set=lambda: self.adapt_bezier(LOWER), 
@@ -1855,6 +1857,28 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         r,c = 0,0 
         Button_Widget (self.button_frame,r,c, lab='Open .bez', set=self.open_bez, style=SECONDARY, 
                        padx=(0,50), width=90)
+
+    def set_nPoints(self, nPoints, objId):
+        """ set number of control points from entry field"""
+
+        if nPoints < 3 or nPoints > 10: return 
+
+        curveType = objId
+        if curveType == UPPER: 
+            airfoil_side = self.airfoil.upper
+            airfoil_side_target = self.airfoilOrg_upper
+        else:
+            airfoil_side = self.airfoil.lower
+            airfoil_side_target = self.airfoilOrg_lower
+
+        cp_x, cp_y, = airfoil_side.get_initial_bezier(airfoil_side_target, nPoints)
+        airfoil_side.set_controilPoints (cp_x, cp_y)
+
+        # update diagram                                        
+        self.airfoil.reset()                                    # make splined curves like thickness invalid 
+        fireEvent  (self.ctk_root, AIRFOIL_CHANGED)             # update diagram 
+
+        self.refresh()
 
 
     def adapt_bezier (self, curveType): 
@@ -1920,7 +1944,15 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         # info message for user 
 
         title = "Auto adjust %s side" %(airfoil_side.curveType)
-        if not max_reached and deviation < 0.02:         # 0.001
+
+        if   nVars >= 7:
+            good_deviation = 0.001
+        elif nVars >= 5:
+            good_deviation = 0.005
+        else: 
+            good_deviation = 0.01
+
+        if not max_reached and deviation < good_deviation:         # 0.001
             text = "Optimization of %d control points with %d variables successful. \n\n" %(ncp, nVars) + \
                 "y-deviation at check points: %.5f \n\n" %deviation + \
                 "Iterations needed: %d" %niter
