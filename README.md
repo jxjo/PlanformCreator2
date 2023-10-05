@@ -26,7 +26,7 @@ The project was inspired and is partially based on the 'Planform Creator' being 
 
 The idea behind Planform Creator 2 is to have a tool to design a new wing with a more graphical, 'playful' approach. It tries to fill the gap between CAD based design and aerodynamic analysis tools like Xflr5.
 
-![PC2](images/PC2_usecase.png "PC2 use case")
+<img src="./images/PC2_usecase.png" width="500" />
 
 Within the early design process of a wing Planform Creator 2 is the master of 'truth'. It provides the data for the aerodynamic analysis. The findings in the analysis can be used to modify the planform. 
 
@@ -69,7 +69,8 @@ The hinge line is the main 'construction line' of PC2. By determining flap depth
 ### Everything banana?
 A little speciality is the so called "banana function". It allows to bent the wing in spanwise direction like a banana without changing the chord distribution. The function does not actually serve to visually embellish the wing, but it allows the normally linear flap depth distribution to be modified flexibly to finetune lift distribution when flaps are set. 
 
-![PC2](images/Banana_function.png "Banana function")
+<img src="./images/Banana_function.png" width="700" />
+
 <sup>Modifying the flap depth distribution with the 'banana function'</sup>
 </p>
 
@@ -111,12 +112,13 @@ A spin off from this project is the  [Airfoil Editor](README_AirfoilEditor.md) w
 One of the most important functions of PC2 is the export of the designed wing to FLZ_vortex or Xflr5 for aerodynamic calculation. In each case, the wing definition is prepared "bite-sized" for the respective program. 
 Both programs idealize an airfoil by trapezoidal segments. In the case of a strongly curved leading or trailing edge this can lead to considerable geometrical deviations and thus inaccuracies of the calculation. PC2 tries to detect such a deviation which is too high...
 
-![PC2](images/Xflr5_export_warning.png "Xflr5 export warning")
+<img src="./images/Xflr5_export_warning.png" width="700" />
+
 <sup>Export of a wing to Xflr5. Yellow marked are the panel segments, which have a too high deviation from the original planform due to the idealization as trapezoids</sup>
 
 ... whereupon one should create additional wing sections with a few clicks to get a significantly better idealization ...
   
-![PC2](images/Xflr5_export_ok.png "Xflr5 export ok")
+<img src="./images/Xflr5_export_ok.png" width="700" />
 
 <sup>With additional wing sections, the idealization of the wing planform is significantly improved.</sup>
 
