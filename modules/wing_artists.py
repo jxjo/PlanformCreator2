@@ -872,7 +872,7 @@ class Chord_Artist (Artist):
 
         if self.mouseActive and isinstance(self.planform, Planform_Bezier): 
 
-            self.show_mouseHelper_bezier (self.model.planform)
+            self.create_artists_bezier (self.model.planform)
 
             # make p1,2 of Bezier draggable - install callback when move is finished
             self._dragManagers.append (DragManager (self.ax, self.p1_marker_artist, 
@@ -885,12 +885,23 @@ class Chord_Artist (Artist):
                                         callback_draw_static   = self.draw_static_all,
                                         callback_draw_animated = self.draw_animated_p2,
                                         callback_on_moved      = self._moveCallback))
+
+            self.show_mouseHelper ()
+
         # set ticks 
         self._add_xticks ([0, 1])
         self._add_yticks ([0, 1])
 
 
-    def show_mouseHelper_bezier (self, planform: Planform): 
+    def show_mouseHelper (self):
+        # show info for section select #
+        text = 'move bezier control points with the mouse '
+        p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
+                    transform=self.ax.transAxes, horizontalalignment='center', verticalalignment='bottom')
+        self._add(p)
+
+
+    def create_artists_bezier (self, planform: Planform): 
         """ show the helper points and lines for bezier curve definition """
 
         # ! animated=True must be set for all artists moving around !

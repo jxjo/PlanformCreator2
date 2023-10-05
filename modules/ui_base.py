@@ -42,7 +42,7 @@ class Dialog_Abstract (ctk.CTkToplevel):
 
         self.transient(master)
 
-        # buf fix titlebar color https://github.com/TomSchimansky/CustomTkinter/issues/1930
+        # bug fix titlebar color https://github.com/TomSchimansky/CustomTkinter/issues/1930
         self.after(20, lambda: self._windows_set_titlebar_color(self._get_appearance_mode()))
 
         # the default directory for file activities

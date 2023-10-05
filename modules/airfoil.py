@@ -24,6 +24,8 @@ class Airfoil:
     isStrakAirfoil      = False
     isEdited            = False
     isExample           = False                      # vs. Example_Airfoil 
+    isBezierBased       = False
+
 
     def __init__(self, x= None, y = None, pathFileName = None, name = None, workingDir= None):
         """
@@ -478,6 +480,7 @@ class Airfoil:
 
 
     def _loadLines (self, file_lines):
+
         # read the lines of the airfoil file into self x,y
 
         x = []
@@ -487,7 +490,7 @@ class Airfoil:
 
         for i, line in enumerate(file_lines):
             if (i > 0): 
-                splitline = line.strip().split(" ",1)
+                splitline = line.strip().split()               # will remove all extra spaces
                 if len(splitline) == 1:                        # couldn't split line - try tab as separator
                     splitline = line.strip().split("\t",1)
                 if len(splitline) >= 2:                     
@@ -772,9 +775,12 @@ class Airfoil:
 class Airfoil_Bezier(Airfoil):
     """ 
 
-    Airfoil based on Bezier curves for upper and lower sid 
+    Airfoil based on Bezier curves for upper and lower side 
 
     """
+
+    isBezierBased  = True
+
 
     def __init__(self, name = None, workingDir= None):
         """
@@ -822,7 +828,7 @@ class Airfoil_Bezier(Airfoil):
         return self._lower 
 
     def set_newSide_for (self, curveType, px,py): 
-        """vcreates either a new upper or lower side in self"""
+        """creates either a new upper or lower side in self"""
         if px and py:
             if curveType == UPPER: 
                 self._upper = SideOfAirfoil_Bezier (px, py, curveType=UPPER)

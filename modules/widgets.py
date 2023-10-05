@@ -133,11 +133,6 @@ class Messagebox(ctk.CTkToplevel):
             self.button2_color = self.button_color
                     
         self.icon = self.load_icon(icon, (25,25)) if icon else None                    
-        # if icon in ["check", "cancel", "info", "question", "warning"]:
-        #     self.icon = ctk.CTkImage(Image.open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon+'.png')),
-        #                                        size=(25, 25))
-        # else:
-        #     self.icon = ctk.CTkImage(Image.open(icon), size=(25, 25)) if icon else None
 
         # ---------------
 
@@ -1084,6 +1079,56 @@ class Field_Widget(Base_Widget):
                 if widgetCTk == self.mainCTk: 
                     widgetCTk.configure (fg_color = cl_entry)
 
+
+
+class Slider_Widget(Base_Widget):
+    """ Slider to select a Value within 'limits'
+        ... takes 1 column 
+
+        Special arguments :
+            limits:     upper and lower limit of slider 
+            step:       integer step size              
+    """
+    def __init__(self, *args, padx=None, pady=None, columnspan=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        """ New slider 
+        """
+
+        column = self.column
+        if columnspan is None:  columnspan = 1
+        if padx is None: pady = 1 
+        if pady is None: pady = 0 
+
+        minVal, maxVal = self.limits
+        nsteps = (maxVal-minVal) / self.step
+        self.mainCTk = ctk.CTkSlider (self.parent, width=self.width, height=self.height, border_width=1,
+                                      from_=minVal, to=maxVal, number_of_steps=nsteps,
+                                      command=self.CTk_callback, fg_color=cl_entry)
+
+        self.mainCTk.grid(row=self.row, column=column, columnspan= columnspan, 
+                          padx=padx, pady=pady, sticky='w')
+
+        self.set_CTkControl()
+        self.set_CTkControl_state()
+
+    def set_CTkControl (self):
+        """sets val into the final CTk control 
+        """
+        # overwritten to allow '-1' for the last element of slider 
+        if self.val == -1:
+            self.val = self.limits[1]
+        super().set_CTkControl()
+
+
+    def _getFrom_CTkControl (self):
+        return self.mainCTk.get()
+
+    def _set_CTkControl (self, widgetCTk, newValStr: str):
+        """sets val into the final CTk control 
+        """
+        # to overwrite by sub class 
+        if newValStr: 
+            widgetCTk.set (eval(newValStr))
 
 
 class Option_Widget(Base_Widget):

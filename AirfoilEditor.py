@@ -51,7 +51,7 @@ from spline_of_airfoil  import Bezier, UPPER, LOWER
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "0.9.4"
+AppVersion = "0.9.5"
 
 #------------------------------------------------
 
@@ -681,7 +681,7 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
     def setup_artists(self):
         """ setup axes, axis, artists for this plot type """
 
-        self.bezierArtist     = Bezier_Artist     (self.ax1, [self._airfoilBezier], show=True, 
+        self.bezierArtist     = Bezier_Edit_Artist (self.ax1, [self._airfoilBezier], show=True, 
                                                    onMove=self.changed_bezier)
         self.curvatureArtist  = Curvature_Artist  (self.ax2, [self._airfoilBezier], show=True)
 
@@ -1743,7 +1743,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     """
 
     widthFrac  = 0.92
-    heightFrac = 0.72
+    heightFrac = 0.80
 
     def __init__(self, master, airfoilFn, *args, **kwargs):
         super().__init__(master, airfoilFn, *args, nameExt='-bezier', **kwargs)
@@ -2070,8 +2070,11 @@ class AirfoilEditor ():
         if self.isModal: 
             # modal - inherit ctk mode from parent
             main = ctk.CTkToplevel (parentApp)
-            set_initialWindowSize (main, widthFrac=0.70, heightFrac=0.65)
+            set_initialWindowSize (main, widthFrac=0.75, heightFrac=0.75)
             main.transient (parentApp)
+            # bug fix titlebar color https://github.com/TomSchimansky/CustomTkinter/issues/1930
+            main.after(20, lambda: main._windows_set_titlebar_color(main._get_appearance_mode()))
+
             self.return_newAirfoilPathFileName = None   # return value for parent
             self.return_newAirfoilName         = None   # return value for parent
 
@@ -2081,10 +2084,6 @@ class AirfoilEditor ():
 
         self.main = main 
         self.ctk_root = main        
-
-        # self.main.withdraw()
-        # splash = SplashWinwow()
-
 
         # check and load the passed airfoil(s)
 

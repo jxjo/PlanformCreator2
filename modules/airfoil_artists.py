@@ -113,6 +113,9 @@ class Airfoil_Artist (Artist):
                                   linewidth= linewidth, **_marker_style)
                 self._add(p)
 
+                if airfoil.isBezierBased: 
+                    self.draw_controlPoints (airfoil, color)
+
                 self._nextColor()                       # in colorycle are pairs 
 
                 if self._pickActive: 
@@ -120,6 +123,24 @@ class Airfoil_Artist (Artist):
 
         # activate event for clicking on line 
         if self._pickActive: self._connectPickEvent ()
+
+
+    def draw_controlPoints(self, airfoil: Airfoil_Bezier, color):
+        """ draw Bezier control Points of airfoil """
+
+        for sideBezier in [airfoil.upper, airfoil.lower]:
+            for ipoint, cpoint in enumerate (sideBezier.controlPoints):
+
+                markersize = 6
+                if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
+                    markerstyle = '.'
+                    markersize = 3
+                elif sideBezier.curveType == UPPER:
+                    markerstyle = 6
+                else: 
+                    markerstyle = 7
+                p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, color=color) 
+                self._add(p)
 
 
 
@@ -582,7 +603,7 @@ class Thickness_Artist (Airfoil_Line_Artist):
 
 
 
-class Bezier_Artist (Artist):
+class Bezier_Edit_Artist (Artist):
     """Plot upper and lower Bezier curve - drag control points with mouse    """
 
     def __init__ (self, axes, modelFn, **kwargs):

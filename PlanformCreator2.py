@@ -57,7 +57,7 @@ from wing_artists       import *
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "0.9.4"
+AppVersion = "0.9.5"
 
 #------------------------------------------------
 
