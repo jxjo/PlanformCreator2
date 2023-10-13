@@ -544,6 +544,10 @@ class Base_Widget():
         """sets val into the final CTk control 
         """
         self.val_asString = self.str_basedOnVal (self.val, self.valType, self.limits, self.decimals)
+
+        # re-convert to val so rounding will not lead to an update (write back)   
+        self.val = self.val_basedOnStr (self.val, self.valType, self.val_asString, self.limits)
+
         # to overwrite by sub class for CTk specific setting
         self._set_CTkControl       (self.mainCTk, self.val_asString)
 
@@ -1018,6 +1022,8 @@ class Field_Widget(Base_Widget):
             unit_ctk.grid (row=self.row, column=column, padx=(2,5),  pady=0, sticky='w')
 
         self.mainCTk.bind('<Return>', self.CTk_callback)
+        self.mainCTk.bind('<FocusOut>', self.CTk_callback)
+
         self.set_CTkControl()
         self.set_CTkControl_state()
 
@@ -1309,6 +1315,8 @@ class Combo_Widget(Base_Widget):
         self.set_CTkControl_state()
 
         self.mainCTk.bind('<Return>', self.CTk_callback)
+        self.mainCTk.bind('<FocusOut>', self.CTk_callback)
+
 
 
     def _getFrom_CTkControl (self):
