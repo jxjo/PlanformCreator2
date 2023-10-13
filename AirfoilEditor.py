@@ -1046,17 +1046,25 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
         button_frame    - with default buttons SaveAs, Ok, Cancel 
 
     """
-    def __init__(self, master, airfoilFn, workingDir=None, nameExt='-mod', *args, **kwargs):
-        super().__init__(master, *args, **kwargs)
+    name       = "Modify airfoil"
+    nameExt    = '-mod'                                     # default extension for new airfoil 
+
+    def __init__(self, master, airfoilFn, workingDir=None, *args, **kwargs):
 
         self.airfoilOrg : Airfoil = airfoilFn()             # keep the original airfoil 
-
-        self.airfoil  = Airfoil.asCopy (self.airfoilOrg, nameExt=nameExt) 
+        self.airfoil  = Airfoil.asCopy (self.airfoilOrg, nameExt=self.nameExt) 
         self.hasbeen_normalized = False
 
         if not self.airfoil.isNormalized_highPrec:          # also LE of spline at 0,0? 
             self.hasbeen_normalized = self.airfoil.normalize (highPrec = True)        # ensure exact le based on spline
 
+        title  = self.name +"   [" + self.airfoil.name + "]"
+
+        super().__init__(master, workingDir=workingDir, title=title, *args, **kwargs)
+
+
+    def init (self):
+        # init UI ...
 
         # input field will fire this event when data is changed
         self.change_event = AIRFOIL_CHANGED
@@ -1204,17 +1212,18 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
     """ 
     Dialog to repanel airfoil  
     """
+    name       = "Repanel airfoil"
+    nameExt    ='-repan'
+    widthFrac  = 0.80
+    heightFrac = 0.60
 
-    widthFrac  = 0.85
-    heightFrac = 0.55
-
-    def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, airfoilFn, *args, nameExt='-repan', **kwargs)
+    def init (self):
+        # init UI ...
+        super().init()                          # basic airfoil layout in super 
 
         # start with a repaneld airfoil  using default values 
         self.airfoil.repanel()               
 
-        self.title ("Repanel airfoil  [" + self.airfoil.name + "]")
         self.showRepaneled = True 
 
         # set specific diagram frame for this dialog 
@@ -1325,18 +1334,18 @@ class Dialog_Smooth (Dialog_Airfoil_Abstract):
     """ 
     Dialog to repanel airfoil  
     """
+    name    ='Smooth Airfoil'
+    nameExt ='-smoothed'
+    width   = 1380
+    height  = 630
 
-    width  = 1380
-    height = 630
-
-    def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, airfoilFn, *args, nameExt='-smoothed', **kwargs)
+    def init (self):
+        # init UI ...
+        super().init()                          # basic airfoil layout in super 
 
         # start with a repaneld airfoil  using default values 
         self.airfoil_before  = Airfoil.asCopy (self.airfoilOrg, nameExt='-before') 
         self.airfoil.set_isEdited(True)               
-
-        self.title ("Smooth airfoil  [" + self.airfoil.name + "]")
 
         # set specific diagram frame for this dialog 
         self.diagram_frame = Diagram_Curvature_Mini (self.edit_frame, self.airfoilListFn, size=(7.0,4.0))
@@ -1483,16 +1492,14 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
     """ 
     Dialog to normalize airfoil
     """
+    name        ='Normalize airfoil'
+    nameExt     ='-norm'
+    widthFrac   = 0.5
+    heightFrac  = 0.35
 
-    widthFrac  = 0.5
-    heightFrac = 0.35
-
-    def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, airfoilFn, *args, nameExt='-norm', **kwargs)
-
-        # ! see Dialog_Airfoil_Abstract for init of airfoil !
-
-        self.title ("Normalize airfoil  [" + self.airfoil.name + "]")
+    def init (self):
+        # init UI ...
+        super().init()                          # basic airfoil layout in super 
 
         self.diagram_frame.grid_remove()                 # not neeeded here
         self.switches_frame.grid_remove()                # not neeeded here
@@ -1596,16 +1603,18 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
     """ 
     Dialog to change thickness, camber or TE gap of airfoil  
     """
+    name        ='Modify airfoil'
+    nameExt     ='-mod'
+    widthFrac   = 0.80
+    heightFrac  = 0.70
 
-
-    def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, airfoilFn, *args, nameExt='-mod', **kwargs)
+    def init (self):
+        # init UI ...
+        super().init()                              # basic airfoil layout in super 
 
         self.airfoil.set_isEdited (True)            # will indicate airfoil when plotted 
 
         # ! see Dialog_Airfoil_Abstract for init of airfoil !
-
-        self.title ("Modify airfoil  [" + self.airfoil.name + "]")
 
         self.showModified = True 
         self._chord = 200.0                         # sample chord length for showing airfoil parms
@@ -1620,7 +1629,6 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
 
         self.thickArtist   = Thickness_Artist (self.diagram_frame.ax2, self.airfoilListFn, show=True)
         self.thickArtist.refresh(figureUpdate=True)
-
 
         # Header 
         c = 0 
@@ -1741,14 +1749,16 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     """ 
     Dialog to change thickness, camber or TE gap of airfoil  
     """
+    name        ='Design Bezier airfoil'
+    nameExt     ='-bezier'
 
     widthFrac  = 0.92
     heightFrac = 0.80
 
-    def __init__(self, master, airfoilFn, *args, **kwargs):
-        super().__init__(master, airfoilFn, *args, nameExt='-bezier', **kwargs)
+    def init (self):
+        # init UI ...
+        super().init()                          # basic airfoil layout in super 
 
-        # ! see Dialog_Airfoil_Abstract for init of airfoil !
         # overwrite
 
         if not self.airfoilOrg.isNormalized_highPrec:               # also LE of spline at 0,0? 
@@ -1763,7 +1773,6 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         self.airfoil    = Airfoil_Bezier (name=self.airfoil.name) 
         self.airfoil.set_isEdited (True)                            # will indicate airfoil when plotted 
 
-        self.title ("Design Bezier airfoil  [" + self.airfoil.name + "]")
         self.showOrg = True 
 
         # react on changes in diagram made by mouse drag 

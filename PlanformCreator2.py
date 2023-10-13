@@ -438,34 +438,6 @@ class Edit_Planform_Bezier(Edit_Abstract_Wing):
         self.add (Field_Widget  (self,r,3, lab="position", lab_width=60, obj=self.planform, 
                                     get='banana_p1y', set='set_banana_p1y',
                                     event=CHORD_CHANGED, lim=(0.1,0.9), dec=2, spin=True, step=0.01))
-
-        
-
-
-# class Edit_Planform_Elliptical(Edit_Abstract):
-#     """ 
-#     Frame to edit the parameters of a elliptical planform
-#     """
-#     name = Planform_Elliptical.planformType
-
-#     def planform(self) -> Planform_Elliptical:
-#         return self.wing().planform
-
-#     def init(self):
-
-#         self.grid_columnconfigure   (0, weight=0)
-#         self.grid_rowconfigure      (6, weight=1)
-
-#         self.add (Field_Widget  (self,0,0, lab="Tip belly",       obj=self.planform, get='ellipseTipBelly', set='set_ellipseTipBelly',
-#                                     event=CHORD_CHANGED, lim=(0,1), dec=2, spin=True, step=0.05))
-#         self.add (Field_Widget  (self,1,0, lab="Tip belly width", obj=self.planform, get='ellipseBellyWidth', set='set_ellipseBellyWidth',
-#                                     event=CHORD_CHANGED, lim=(0,1), dec=2, spin=True, step=0.05))
-#         self.add (Field_Widget  (self,2,0, lab="Ellipse shift",   obj=self.planform,  get='ellipseShift', set='set_ellipseShift',
-#                                     event=CHORD_CHANGED, lim=(0,0.5), dec=2, spin=True, step=0.05))
-#         self.add (Field_Widget  (self,3,0, lab="Ellipse correction",obj=self.planform, get='ellipseCorrection', set='set_ellipseCorrection',
-#                                     event=CHORD_CHANGED, lim=(-1,1), dec=2, spin=True, step=0.05))
-#         self.add (Field_Widget  (self,4,0, lab="LE correction",   obj=self.planform, get='leCorrection', set='set_leCorrection',
-#                                     event=PLANFORM_CHANGED, lim=(-1,1), dec=2, spin=True, step=0.05))
         
 
 
@@ -1529,17 +1501,23 @@ class Dialog_Load_DXF (Dialog_Abstract):
 
     Returns in self.dxf_pathFilename if the user selected a valid file 
     """
+    name  = "Import dxf file"
     widthFrac  = 0.60
     heightFrac = 0.40
-    titleText  = "Import dxf file"
 
     def __init__(self, master, *args, wingFn = None, dxf_Path= None, ref:bool = False, **kwargs):
+
+        self.wingFn = wingFn
+        self.wing : Wing = wingFn()
+        self.dxf_pathFilename = None                    # the return value 
+        self.tmpPlanform = Planform_DXF( self.wing, dxf_Path= dxf_Path, ref = ref)
+        self.tmpPlanform.adaptHingeAngle = False        # show the original hinge angle 
+
         super().__init__(master, *args, **kwargs)
 
-        frame = self.edit_frame
-        self.dxf_pathFilename = None                    # the return value 
-        self.tmpPlanform = Planform_DXF( wingFn(), dxf_Path= dxf_Path, ref = ref)
-        self.tmpPlanform.adaptHingeAngle = False        # show the original hinge angle 
+
+    def init (self):
+        # init UI 
 
         if self.tmpPlanform.dxf_isReference:
             shortDescription = "The wing contour in the dxf file will be used as " +\
@@ -1549,6 +1527,7 @@ class Dialog_Load_DXF (Dialog_Abstract):
             shortDescription = "The chord distribution of the dxf wing will be the base of the current planform." 
             headerText = "DXF chord distribution for planform"
 
+        frame = self.edit_frame
         frame.grid_columnconfigure (5, weight=1)
 
         r = 0 
@@ -1571,10 +1550,10 @@ class Dialog_Load_DXF (Dialog_Abstract):
         self.add(Label_Widget (frame,r,0, lab=lambda: self.tmpPlanform.infoText, columnspan=2, width=180, sticky = "ew" ))
 
         # show a little dxf preview
-        self.diagram_frame = Diagram_Planform_Mini (frame,  wingFn, size=(4.5,2.5))
+        self.diagram_frame = Diagram_Planform_Mini (frame, self.wingFn, size=(4.5,2.5))
         self.diagram_frame.grid(row=r, column=1, columnspan= 5, padx=(0,15))
         self.diagram_ax    = self.diagram_frame.ax
-        self.planformArtist = RefPlanform_DXF_Artist (self.diagram_ax, wingFn(), show=True, showDetail=True, 
+        self.planformArtist = RefPlanform_DXF_Artist (self.diagram_ax, self.wingFn, show=True, showDetail=True, 
                                                       showMarker=False, planform=self.tmpPlanform)
         frame.grid_columnconfigure (5, weight=1)
 
@@ -1634,21 +1613,19 @@ class Dialog_Load_DXF (Dialog_Abstract):
         super().cancel()
 
 
-#-------------------------------------------
 
 class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
     """ 
     Export planform as paneled for Xflr5 oder FLZ 
 
     """
+    name       = "Export to ..."
     widthFrac  = 0.70
-    heightFrac = 0.50
-
-    titleText  = "Export to ..."
+    heightFrac = 0.55
 
     def __init__(self, master, wingFn, Xflr5=False, Flz=False, *args, **kwargs):
-        super().__init__(master, *args, **kwargs)
 
+        self.wingFn = wingFn
         self.wing : Wing = wingFn()
 
         if Xflr5:
@@ -1661,9 +1638,15 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
             return  
         self.paneledPlanform = self.exporter.paneledPlanform
 
+        super().__init__(master, *args, **kwargs)
+
+
+    def init (self):
+        # init UI 
+
         # main grid 3 x 1  (preview + edit + buttons) 
 
-        self.diagram_frame = Diagram_Planform_Mini (self.edit_frame, wingFn, size=(4.2,3.2))
+        self.diagram_frame = Diagram_Planform_Mini (self.edit_frame, self.wingFn, size=(4.2,3.2))
         self.diagram_frame.grid(row=0, column=0, sticky="nwe")
 
         self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
@@ -1679,7 +1662,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         # artists for preview
         self.diagram_ax  = self.diagram_frame.ax
         self.panelArtist = PaneledPlanform_Artist (self.diagram_ax, 
-                                wingFn, self.paneledPlanform, show=True)
+                                self.wingFn, self.paneledPlanform, show=True)
         self.panelArtist.refresh(figureUpdate=True)
 
         # header with hints 
@@ -1738,7 +1721,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         r = 0 
         c = 1 
         self.add(Button_Widget (self.button_frame,r,c, lab='Export', set=self.ok, style=PRIMARY, width=100))
-        if Flz: 
+        if self.mode == "FLZ_vortex": 
             c += 1 
             self.add(Button_Widget (self.button_frame,r,c, lab='Launch FLZ', set=self.launch_Flz, width=100,
                                     disable=self.launch_Flz_disabled))
@@ -1818,20 +1801,27 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         super().ok()
 
 
+
 class Dialog_Export_Dxf (Dialog_Abstract):
     """ 
     Export wing / planform as dxf to file  
 
     """
+    name       = "Export DXF"
     widthFrac  = 0.40
     heightFrac = 0.30
-    titleText  = "Export DXF"
 
     def __init__(self, master, *args, wingFn = None,  **kwargs):
-        super().__init__(master, *args, **kwargs)
 
+        self.wingFn = wingFn
         self.wing : Wing = wingFn()
         self.exporter = self.wing.exporterDxf
+
+        super().__init__(master, *args, **kwargs)
+
+
+    def init (self):
+        # init UI 
 
         # main grid 3 x 1  (header + edit + buttons) 
         self.header_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
@@ -1932,7 +1922,7 @@ class Dialog_Export_Dxf (Dialog_Abstract):
 
         # do the export 
         message = self.exporter.doIt()
-        msg = Messagebox (self, title=self.titleText, message=message, icon="check", option_1="Ok")
+        msg = Messagebox (self, title=self.name, message=message, icon="check", option_1="Ok")
         msg.get()                               # wait until pressed ok
 
         # release changed bindings
@@ -1946,15 +1936,20 @@ class Dialog_Export_Airfoils (Dialog_Abstract):
     Export wing / planform as dxf to file  
 
     """
+    name       = "Export Airfoils"
     widthFrac  = 0.40
     heightFrac = 0.25
 
-    titleText  = "Export Airfoils"
-
     def __init__(self, master, *args, wingFn = None,  **kwargs):
+
+        self.wingFn = wingFn
+        self.wing : Wing = wingFn()
+
         super().__init__(master, *args, **kwargs)
 
-        self.wing : Wing = wingFn()
+
+    def init (self):
+        # init UI 
         self.exporter = self.wing.exporterAirfoils
 
         # main grid 3 x 1  (header + edit + buttons) 
@@ -2032,7 +2027,7 @@ class Dialog_Export_Airfoils (Dialog_Abstract):
 
         # do the export 
         message = self.exporter.doIt()
-        msg = Messagebox (self, title=self.titleText, message=message, icon="check", option_1="Ok")
+        msg = Messagebox (self, title=self.name, message=message, icon="check", option_1="Ok")
         msg.get()                               # wait until pressed ok
 
         # release changed bindings

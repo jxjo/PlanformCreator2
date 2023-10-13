@@ -33,50 +33,49 @@ class Dialog_Abstract (ctk.CTkToplevel):
 
     self.return_OK is True if user conformed 'ok' 
     """
+    name       = "My little title"
     widthFrac  = 0.75
     heightFrac = 0.70
-    titleText  = "My little title"
 
-    def __init__(self, master, workingDir=None, *args, **kwargs):
+    def __init__(self, master, workingDir=None, title=None, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
 
         self.transient(master)
 
         # bug fix titlebar color https://github.com/TomSchimansky/CustomTkinter/issues/1930
-        self.after(20, lambda: self._windows_set_titlebar_color(self._get_appearance_mode()))
-
-        # the default directory for file activities
-        self.workingDir = workingDir
-
-        # the attribute for return ok
-        self.return_OK = False
-
-        #xPos, yPos = self.leftTopPosition(self.width, self.height)
-        # self.geometry("%sx%s+%s+%s" %(self.width, self.height, xPos, yPos))
+        self.after(10, lambda: self._windows_set_titlebar_color(self._get_appearance_mode()))
         set_initialWindowSize (self, widthFrac=self.widthFrac, heightFrac=self.heightFrac)
 
-        self.title (self.titleText)
+        self.title (title if title else self.name)
 
-        # root for change events (widgets will have the same toplevel as root)
-        self.ctk_root = self.winfo_toplevel()
+        # master edit frame for dialog 
 
-        self.edit_frame    = ctk.CTkFrame (self) 
+        self.edit_frame    = ctk.CTkFrame (self)            
         self.grid_rowconfigure    (0, weight=1)
         self.grid_columnconfigure (0, weight=1)
         self.edit_frame.grid    (row=0, column=0, pady=5, padx=5, sticky="nesw")
 
         self.widgets = []                                   # for refresh logic  
+        self.return_OK = False                              # the attribute for return ok
+        self.workingDir = workingDir                        # the default directory for file activities
+        self.ctk_root = self.winfo_toplevel()               # root for change events
 
-        # make dialog modal 
-        # self.resizable(False, False)                        # width, height
-        # self.deiconify()
-        # self.wait_visibility()
+        # Init UI, widgets, grid
 
+        self.init()
+
+        # Focus on self, grap all user input
+
+        self.wait_visibility()                              # Linux needs window to grap !
         self.grab_set()
+        # self.resizable(False, False)                        
         self.focus_set()
         self.protocol("WM_DELETE_WINDOW", self.destroy)
 
 
+    def init (self):
+        """ init UI, widgets, grid - to be overloaded"""
+        pass
 
     def ok (self):
         # to over load and do ok actions
@@ -149,7 +148,7 @@ class Edit_Abstract (ctk.CTkFrame):
         # kepp track of the widgets of self to be able to refresh them
         self.widgets.append (aWidget)
 
-    def refresh(self):
+    def refresh(self, *_):
         # refresh typically based on changed events 
         for widget in self.widgets:
             if isinstance(widget, Base_Widget): widget.refresh()
@@ -167,22 +166,19 @@ class Dialog_Settings (Dialog_Abstract):
     """ 
     Dialog to edit app settings
     """
-
+    name       = "Edit settings"
     widthFrac  = 0.30
     heightFrac = 0.40
 
     def __init__(self, master,  name= None, *args, **kwargs):
-        super().__init__(master, *args,  **kwargs)
 
-        # ! see Dialog_Airfoil_Abstract for init of airfoil !
+        title = self.name + "  [" + (name if name else master.name) + "]"
 
-        if name is None: 
-            name = self.master.name
+        super().__init__(master, *args, title=title, **kwargs)
 
-        self.title ("Edit settings  [" + name + "]")
+    def init (self):
 
         self.settings_dict = Settings().get_dataDict()
-
 
         # Header 
         c = 0 
@@ -204,7 +200,6 @@ class Dialog_Settings (Dialog_Abstract):
         r += 1
         self.add (Field_Widget  (self.edit_frame,r,c, lab="Scaling of App size", lab_width=100, width=80, padx= 50, pady=5,
                                  obj=self, get='window_scaling', set="set_window_scaling", dec=2))
-
 
         # close  
         r += 1

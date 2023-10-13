@@ -91,8 +91,24 @@ class Airfoil:
         pathFileName  = fromDict(dataDict, "file", None)
         name          = fromDict(dataDict, "name", None)
         return cls(pathFileName = pathFileName, name = name, workingDir=workingDir)
-    
 
+    
+    @classmethod
+    def onDictKey (cls, dataDict, key, workingDir = None):
+        """
+        Alternate constructor for new Airfoil based on data dictionary and key
+        Returns None if key doesn't exist in dataDict 
+
+        Args:
+            :dataDict: dictionary with key
+            :key: key in dataDict
+            :workingDir: home of dictionary (paramter file) 
+        """
+        pathFileName  = fromDict(dataDict, key, None)
+        if pathFileName is not None: 
+            return cls(pathFileName = pathFileName, workingDir=workingDir)
+        else: 
+            return None 
     @classmethod
     def asCopy (cls, sourceAirfoil: 'Airfoil', nameExt="-mod"):
         """
@@ -144,16 +160,17 @@ class Airfoil:
     @property
     def name (self): return self._name 
     def set_name (self, newName):
-        """  Set der name of the airfoil 
+        """  Set name of the airfoil 
         Note:  This will not rename an existing airfoil (file). Use rename instead...
         """
         self._name = newName
         self.set_isModified (True)
 
-    def polarSets (self, onlyActive=True):
-        """ returns  PolarSets of self - onlyActive polarset are default"""
-        if onlyActive:
-            return  [p for p in self._polarSets if p.active]  
+    def polarSets (self):
+        """ returns  PolarSets of self"""
+
+        if self._polarSets is None:
+            return []
         else: 
             return self._polarSets
 
