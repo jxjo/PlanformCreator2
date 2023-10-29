@@ -287,6 +287,11 @@ class PathHandler():
     def workingDir (self):
         return self._workingDir if (not self._workingDir is None) else ''
     
+    @property 
+    def workingDir_name (self): 
+        """ the directory name of workingDir """
+        return os.path.basename(os.path.normpath(self.workingDir))
+    
     @workingDir.setter
     def workingDir (self, newDir):
 

@@ -94,8 +94,10 @@ class Airfoil_Artist (Artist):
                 # line style 
                 if airfoil.isEdited:
                     color = cl_editing
+                    linewidth = 1.0
                 else:
                     color = self._nextColor()
+                    linewidth = 0.8
 
                 # the marker style to show points
                 if self._points and airfoil.isEdited:
@@ -106,7 +108,6 @@ class Airfoil_Artist (Artist):
                     linewidth=0.5
                 else:  
                     _marker_style = dict()
-                    linewidth=0.8
 
                 # plot airfoil 
                 p = self.ax.plot (airfoil.x, airfoil.y, '-', color = color, label="%s" % (airfoil.name), 
@@ -128,19 +129,31 @@ class Airfoil_Artist (Artist):
     def draw_controlPoints(self, airfoil: Airfoil_Bezier, color):
         """ draw Bezier control Points of airfoil """
 
-        for sideBezier in [airfoil.upper, airfoil.lower]:
-            for ipoint, cpoint in enumerate (sideBezier.controlPoints):
+        markersize  = 6
+        linewidth   = 0.7
+        linestyle   = ':'
 
-                markersize = 6
-                if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
-                    markerstyle = '.'
-                    markersize = 3
-                elif sideBezier.curveType == UPPER:
-                    markerstyle = 6
-                else: 
-                    markerstyle = 7
-                p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, color=color) 
-                self._add(p)
+        for sideBezier in [airfoil.upper, airfoil.lower]:
+            if sideBezier.curveType == UPPER:
+                markerstyle = 6
+            else: 
+                markerstyle = 7
+            x = sideBezier.bezier.points_x
+            y = sideBezier.bezier.points_y
+            p = self.ax.plot (x,y, linestyle, linewidth=linewidth, marker=markerstyle, markersize=markersize, color=color) 
+            self._add(p)
+            # for ipoint, cpoint in enumerate (sideBezier.controlPoints):
+
+            #     markersize = 6
+            #     if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
+            #         markerstyle = '.'
+            #         markersize = 3
+            #     elif sideBezier.curveType == UPPER:
+            #         markerstyle = 6
+            #     else: 
+            #         markerstyle = 7
+            #     p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, color=color) 
+            #     self._add(p)
 
 
 
@@ -212,7 +225,8 @@ class Curvature_Artist (Airfoil_Line_Artist):
 
                 if self.upper: 
                     line = airfoil.curv_upper 
-                    p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=line.name, 
+                    label = airfoil.name + " - upper"
+                    p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=label, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
                     self._plot_marker (line, color, upper=True)
@@ -223,11 +237,13 @@ class Curvature_Artist (Airfoil_Line_Artist):
                     color = self._nextColor()
                 if self.lower: 
                     line = airfoil.curv_lower 
-                    p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=line.name, 
+                    label = airfoil.name + " - lower"
+                    p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=label, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
                     self._plot_marker (line, color, upper=False)
 
+        self._plot_title ('Curvature', va='bottom', ha='left')
 
         if self._myPlots:                     # something plotted? 
             p = self.ax.plot ([], [], ' ', label="R: reversals")
@@ -251,7 +267,7 @@ class Curvature_Artist (Airfoil_Line_Artist):
 
                 p = self.ax.text (marker_x, marker_y, text, va=va, ha='center', color = color )
                 self._add (p) 
-                
+            
 
 
 class Curvature_Smooth_Artist (Airfoil_Line_Artist):

@@ -8,6 +8,7 @@
 import os
 import copy
 from pathlib import Path
+import textwrap
 import numpy as np
 from math_util import * 
 from common_utils import * 
@@ -92,7 +93,7 @@ class Airfoil:
         name          = fromDict(dataDict, "name", None)
         return cls(pathFileName = pathFileName, name = name, workingDir=workingDir)
 
-    
+
     @classmethod
     def onDictKey (cls, dataDict, key, workingDir = None):
         """
@@ -166,6 +167,21 @@ class Airfoil:
         self._name = newName
         self.set_isModified (True)
 
+    @property
+    def name_short (self):
+        """ name of airfoil shortend to 25 chars"""
+        return self.name_short_with (width=25)
+
+    def name_short_with (self, width=20):
+        """ name of airfoil shortend to 20 chars"""
+        return textwrap.shorten (self.name,width=width,placeholder='...')
+    
+    @property
+    def hasPolarSets (self):
+        """does self has polarSets (which are set from 'outside')
+        """
+        return self._polarSets is not None
+    
     def polarSets (self):
         """ returns  PolarSets of self"""
 
@@ -446,16 +462,17 @@ class Airfoil:
     #-----------------------------------------------------------
 
 
-    def set_pathFileName (self,fullPath):
+    def set_pathFileName (self,fullPath, noCheck=False):
         """
         Set der fullpaths of airfoils location and file \n
         ! This will not move or copy the airfoil physically - use clone instead
 
         Args:
-            :newName: String like '..\myAirfoils\JX-GT-15.dat'
+            :fullPath: String like '..\myAirfoils\JX-GT-15.dat'
+            :noCheck:  = TRUE - no check if fullpath exists - default FALSE 
         """
 
-        if (os.path.isfile(fullPath)):
+        if noCheck or (os.path.isfile(fullPath)):
             self.pathFileName = fullPath
         else:
             ErrorMsg ("Airfoil \'%s\' does not exist. Couldn\'t be set" % fullPath)
@@ -524,6 +541,15 @@ class Airfoil:
                 self._name = line.strip()
         self._x = np.asarray (x)
         self._y = np.asarray (y)
+
+
+    def save (self):
+        """basic save of self to its pathFileName
+        """
+        if self.isLoaded: 
+            self._write_toFile (self.pathFileName, self.name, self.x ,self.y)
+            self.set_isModified (False)
+            print ("*** save ", self.pathFileName)
 
 
     def saveAs (self, dir = None, destName = None):
@@ -852,6 +878,7 @@ class Airfoil_Bezier(Airfoil):
             elif curveType == LOWER:
                 self._lower = SideOfAirfoil_Bezier (px, py, curveType=LOWER)
             self.reset()
+            self.set_isModified (True)
 
     @property
     def curv_upper (self): 

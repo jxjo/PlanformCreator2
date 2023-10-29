@@ -176,19 +176,19 @@ class Edit_Curvature(Edit_Abstract_Airfoil):
         Blank_Widget (self, r,0)                # left blank column to inset the fields 
         c = 1                                  
         self.add (Field_Widget  (self,r,c,   lab="Reversals upper", get=lambda: len(self.airfoil().curv_upper.reversals()),
-                                width=60, lab_width=100, set='', dec=0, disable= True))
+                                width=50, lab_width=100, set='', dec=0, disable= True))
        
         self.add (Field_Widget  (self,r,c+3, lab="lower", get=lambda: len(self.airfoil().curv_lower.reversals()), 
-                                width=60, lab_width=60, padx=(20,0), set='', dec=0, disable= True))
+                                width=50, lab_width=60, padx=(20,0), set='', dec=0, disable= True))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="... threshold", get=lambda: self.curvature_threshold, 
                                 set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
-                                width=60, lab_width=80, lim=(0,1), dec=2, spin=False, step=0.02))
+                                width=50, lab_width=80, lim=(0,1), dec=2, spin=False, step=0.02))
 
         r += 1
-        self.add (Header_Widget (self,r,0,   width=90, lab='Specials', columnspan= 2))
-        r += 1
-        self.add (Button_Widget (self,r,c, lab='Airfoil Bezier', width=110, padx= (0,0), columnspan=4, sticky='w', 
+        self.add (Header_Widget (self,r,0,   pady=(25,10), width=90, lab='Specials', columnspan= 2))
+        self.add (Button_Widget (self,r,c+3, lab='Airfoil Bezier', width=110, 
+                                 pady=(25,10), padx= (20,0), columnspan=3, sticky='w', 
                                  set=self.airfoil_Bezier ))
 
 

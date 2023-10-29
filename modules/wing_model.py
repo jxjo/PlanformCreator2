@@ -859,7 +859,11 @@ class Planform:
         """
         xHinge   = self.hingePointAt(yPos)
         xLE, xTE = self._planform_function (yPos)
-        return (xTE - xHinge) / (xTE-xLE)
+        flapDepth = (xTE - xHinge) / (xTE-xLE)
+
+        if flapDepth > 0.9:                         # sanity - this should not happen 
+            flapDepth = 0.9                         # hinge end point of Amokka-JX is outside planform
+        return flapDepth
 
     
     def flapLineAt (self, yPos):

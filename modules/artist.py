@@ -110,9 +110,9 @@ class Artist():
                 objectList.append (modelObject)
             return objectList
         else: 
-            try: 
+            if callable(self._modelFn):
                 return self._modelFn()          # modelFn is a bound method to the object
-            except:
+            else:
                 return self._modelFn
     
     @property
@@ -231,6 +231,31 @@ class Artist():
                 leg = self.ax.legend([], [])        # remove legend 
             leg.set_zorder(2)
             leg.get_frame().set_linewidth(0.0)
+
+
+    def _plot_title (self, title: str, va='top', ha='left', wspace=0.08, hspace=0.1 ): 
+        """ plot a title in self axes
+        Args:
+            title: title text 
+            va: vertical alignment 'top' or 'bottom' 
+            ha: horizontal alignment  'left' or 'right' 
+            wspace: width  space 
+            hspace: height space        
+        """
+
+        if va == 'top':
+            y = 1.0 - hspace
+        else:
+            y = hspace 
+        if ha == 'left':
+            x = wspace
+        else:
+            x = 1.0 - wspace 
+
+        p = self.ax.text (x, y, title, color=cl_text , backgroundcolor= cl_background,
+                          fontsize = 'large', transform=self.ax.transAxes, 
+                          horizontalalignment=ha, verticalalignment=va)
+        self._add (p)   
 
 
     def _makeObjectPickable (self, aObject): 
