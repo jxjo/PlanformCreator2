@@ -51,7 +51,7 @@ from spline_of_airfoil  import Bezier, UPPER, LOWER
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "0.9.5"
+AppVersion = "0.9.6"
 
 #------------------------------------------------
 
