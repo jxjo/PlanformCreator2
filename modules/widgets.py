@@ -912,11 +912,11 @@ class Switch_Widget(Base_Widget):
     def __init__(self, *args, padx=None, pady=None, columnspan=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if padx is None: padx = 20
+        if padx is None: padx = (15,10)
         if pady is None: pady = 0
         if columnspan is None: columnspan = 1
 
-        self.mainCTk = ctk.CTkSwitch(self.parent, switch_height=16, switch_width=32, text=self.label, width=self.width, onvalue=1, command=self.CTk_callback)
+        self.mainCTk = ctk.CTkSwitch(self.parent, switch_height=14, switch_width=32, text=self.label, width=self.width, onvalue=1, command=self.CTk_callback)
         self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky="w")
 
         self.set_CTkControl()

@@ -1322,7 +1322,8 @@ class Airfoil_Artist (Artist):
                     x = airfoil.x * section.chord + le 
                     y = airfoil.y * section.chord 
 
-                color = next(self.ax._get_lines.prop_cycler)['color']
+                color = self._cycle_color()
+
                 if self._curLineLabel == label:
                     if not self._norm:                     # for norm it would be too much color confusion
                         p = self.ax.fill (x, y, facecolor=color, alpha=0.1)
@@ -1412,7 +1413,7 @@ class AirfoilName_Artist (Artist):
 
         text = nickname + section.airfoilName()
 
-        color = next(self.ax._get_lines.prop_cycler)['color']
+        color = self._cycle_color()
         p = self.ax.text (marker_x, marker_y, text, color=color, backgroundcolor= cl_background,
                           transform=self.ax.get_xaxis_transform(), fontsize='small',
                           horizontalalignment='center', verticalalignment='top')

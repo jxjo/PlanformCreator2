@@ -476,15 +476,20 @@ def nelder_mead (f, x_start,
 
 def nelder_mead_wrap  (fn, xStart,
                 no_improve_thr=10e-10,               
-                no_improv_break=5, max_iter=50,
+                no_improv_break=10, # 5, 
+                max_iter=50,
                 bounds = None): 
     
     if not bounds is None:
         if xStart < bounds[0] or xStart > bounds[1]:
             raise ValueError ("nelder-mead: Start value %.6f outside bounds" % xStart)
+        
+        step = (bounds[1] - bounds[0]) / 15.01 #**10.01
+    else: 
+        step = 0.051
 
     
-    xmin, score, niters =  nelder_mead_1D(fn, xStart, step= 0.051,
+    xmin, score, niters =  nelder_mead_1D(fn, xStart, step= step,
                                           no_improve_thr=no_improve_thr, 
                                           no_improv_break=no_improv_break, max_iter=max_iter,  
                                           bounds=bounds)    
@@ -494,23 +499,25 @@ def nelder_mead_wrap  (fn, xStart,
 
     if niters < max_iter and score > no_improve_thr:
         if not bounds is None: 
-            xStart_new = (xStart + bounds[0])  / 1.99
-            step = (bounds[1] - bounds[0]) / 10.01 # 5.01 
+            # move start towards bounds0
+            xStart_new =  bounds[0] + (xStart - bounds[0]) * 0.9
+            # old - xStart_new = (xStart + bounds[0])  / 1.8 # airfoil 1.8 # planform 1.99
+            step_new   = (bounds[1] - bounds[0]) / 20.01 # 5.01 
             if xStart_new < bounds[0] or xStart > bounds[1]:
                 raise ValueError ("nelder-mead: Start value %.6f outside bounds" % xStart_new)
         else: 
             xStart_new = xStart *  1.012
-            step   = 0.011
+            step_new   = 0.011
         # try longer 
-        no_improv_break = no_improv_break * 4
+        no_improv_break = no_improv_break * 3
         # print ("nelder_mead bug:   ", xmin, score, niters, xStart, step, bounds)
-        xmin, score, niters =  nelder_mead_1D(fn, xStart_new, step=step, 
+        xmin, score, niters =  nelder_mead_1D(fn, xStart_new, step=step_new, 
                                             no_improve_thr=no_improve_thr, 
                                             no_improv_break=no_improv_break, max_iter=max_iter,  
                                             bounds=bounds)    
         # print ("nelder_mead retry: ", xmin, score, niters)
         if score > no_improve_thr:
-            raise ValueError ("nelder-mead: Minimum not found for xStart = %.4f" % xStart)
+            raise ValueError ("nelder-mead: Minimum not found for xStart = %.4f" % xStart_new)
 
     return xmin
 

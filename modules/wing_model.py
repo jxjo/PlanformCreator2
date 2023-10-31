@@ -1620,15 +1620,19 @@ class Planform_Paneled (Planform_Trapezoidal):
         if chordList[-1] > minTipChord or chordList[-2] < minTipChord: return self.halfwingspan
 
         # find the y position having minTipChord 
-        firstGuess = (yPosList[-1] + yPosList[-2]) / 2        # in the middle 
-        bounds     = (yPosList[-2], yPosList[-1])             # between the last sections 
-        fn         = lambda y : self.wing.planform.chord_function(y) - minTipChord
-        newTipPos = findRoot (fn, firstGuess , no_improve_thr=10e-5, bounds=bounds) 
+        yTip     = yPosList[-1]
+        yLeftTip = yPosList[-2]
 
-        if newTipPos is None: 
-            return self.halfwingspan
-        else: 
-            return newTipPos
+        firstGuess = yLeftTip + (yTip - yLeftTip) * 0.25 
+        bounds     = (yLeftTip, yTip)      
+        fn         = lambda y : self.wing.planform.chord_function(y) - minTipChord
+
+        try: 
+            newTipPos = findRoot (fn, firstGuess , no_improve_thr=10e-5, bounds=bounds) 
+        except:
+            newTipPos = self.halfwingspan
+
+        return newTipPos
 
 
     def _sections_yPos_chord (self):
@@ -2722,7 +2726,7 @@ class Export_Airfoils:
 if __name__ == "__main__":
 
     print ("Current directory: ",os.getcwd())
-    filename = "..\examples\Amokka-JX\Amokka-JX.json"
+    filename = "..\\examples\\Amokka-JX\\Amokka-JX.json"
     # filename = ""
     myWing = Wing (filename)
 

@@ -96,7 +96,7 @@ class Airfoil_Artist (Artist):
                     color = cl_editing
                     linewidth = 1.0
                 else:
-                    color = self._nextColor()
+                    color=None
                     linewidth = 0.8
 
                 # the marker style to show points
@@ -113,11 +113,10 @@ class Airfoil_Artist (Artist):
                 p = self.ax.plot (airfoil.x, airfoil.y, '-', color = color, label="%s" % (airfoil.name), 
                                   linewidth= linewidth, **_marker_style)
                 self._add(p)
-
                 if airfoil.isBezierBased: 
-                    self.draw_controlPoints (airfoil, color)
+                    self.draw_controlPoints (airfoil, self._get_color(p))
 
-                self._nextColor()                       # in colorycle are pairs 
+                self._cycle_color()                             # in colorycle are pairs  - move to next
 
                 if self._pickActive: 
                     self._makeObjectPickable (p)
@@ -220,7 +219,7 @@ class Curvature_Artist (Airfoil_Line_Artist):
                 if airfoil.isEdited:
                     color = cl_editing
                 else: 
-                    color = self._nextColor()
+                    color = None
                 linewidth=0.8
 
                 if self.upper: 
@@ -229,19 +228,19 @@ class Curvature_Artist (Airfoil_Line_Artist):
                     p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=label, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
-                    self._plot_marker (line, color, upper=True)
+                    self._plot_marker (line, self._get_color(p), upper=True)
 
                 if airfoil.isEdited:
                     color = cl_editing_lower
                 else: 
-                    color = self._nextColor()
+                    color = None
                 if self.lower: 
                     line = airfoil.curv_lower 
                     label = airfoil.name + " - lower"
                     p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=label, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
-                    self._plot_marker (line, color, upper=False)
+                    self._plot_marker (line, self._get_color(p), upper=False)
 
         self._plot_title ('Curvature', va='bottom', ha='left')
 
@@ -343,26 +342,26 @@ class Curvature_Smooth_Artist (Airfoil_Line_Artist):
                     if airfoil.isEdited:
                         color = cl_editing
                     else:
-                        color = self._nextColor()
+                        color = None
                     p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=line.name, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
 
                     if airfoil.isEdited:
-                        self._plot_marker (line, color, 'upper')
+                        self._plot_marker (line, self._get_color(p), 'upper')
 
                 if self.lower: 
                     line = airfoil.spline.curv_lower 
                     if airfoil.isEdited:
                         color = cl_editing_lower
                     else:
-                        color = self._nextColor()
+                        color = None
                     p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=line.name, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
 
                     if airfoil.isEdited:
-                        self._plot_marker (line, color, 'lower')
+                        self._plot_marker (line, self._get_color(p), 'lower')
 
         # activate event for clicking on line 
         if self._pickActive: self._connectPickEvent ()
@@ -425,7 +424,7 @@ class Difference_Artist (Airfoil_Line_Artist):
             if self.airfoil.isEdited:
                 color = cl_editing
             else: 
-                color = self._nextColor()
+                color = None
             x = self.ref_airfoil.upper.x
             y = 10 * self._get_difference (self.ref_airfoil.upper, self.airfoil.upper )
             p = self.ax.plot (x, y, ls_difference, color = color, label="diff upper * 10", 
@@ -436,7 +435,7 @@ class Difference_Artist (Airfoil_Line_Artist):
             if self.airfoil.isEdited:
                 color = cl_editing_lower
             else: 
-                color = self._nextColor()
+                color = None
             x = self.ref_airfoil.lower.x
             y = 10 * self._get_difference (self.ref_airfoil.lower, self.airfoil.lower ) 
             p = self.ax.plot (x, y, ls_difference, color = color, label="diff lower * 10", 
@@ -484,10 +483,10 @@ class Le_Artist (Artist):
                 if airfoil.isEdited:
                     color = cl_editing
                 else:
-                    color = self._nextColor()
+                    color = None
 
                 linewidth=0.5
-                self._plot_le (airfoil.le, color)
+                
                 self._plot_le_angle (airfoil)
                 self._plot_le_coordinates (airfoil)
 
@@ -495,7 +494,9 @@ class Le_Artist (Artist):
                                   linewidth= linewidth, **self._marker_style)
                 self._add(p)
 
-                self._nextColor()                       # in colorycle are pairs 
+                self._plot_le (airfoil.le, self._get_color(p))
+
+                self._cycle_color()                       # in colorycle are pairs - move next
 
 
     def _plot_le (self, le, color):
@@ -582,7 +583,7 @@ class Thickness_Artist (Airfoil_Line_Artist):
                     if airfoil.isEdited:
                         color = cl_editing
                     else:
-                        color = self._nextColor()
+                        color = None
                     linewidth=0.8
 
                     # plot camber line
@@ -590,11 +591,13 @@ class Thickness_Artist (Airfoil_Line_Artist):
                                       linewidth= linewidth, **self._marker_style, label="%s" % (airfoil.camber.name))
                     self._add(p)
 
+                    color = self._get_color(p) 
+
                     # plot thickness distribution line
                     p = self.ax.plot (airfoil.thickness.x, airfoil.thickness.y, ls_thickness, color = color, 
                                       linewidth= linewidth, **self._marker_style, label="%s" % (airfoil.thickness.name))
                     self._add(p)
-                    self._nextColor()                       # in colorycle are pairs 
+                    self._cycle_color()                      # in colorycle are pairs 
 
                     self._plot_max_val(airfoil.thickness, airfoil.isModified, color)
                     self._plot_max_val(airfoil.camber,    airfoil.isModified, color)

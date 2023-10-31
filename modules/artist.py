@@ -103,9 +103,9 @@ class Artist():
         if isinstance(self._modelFn, list): 
             objectList = []
             for objectFn in self._modelFn:
-                try: 
-                    modelObject = objectFn()
-                except:
+                if callable(objectFn):
+                    modelObject = objectFn()   # objectFn is a bound method to the object
+                else:
                     modelObject = objectFn
                 objectList.append (modelObject)
             return objectList
@@ -301,10 +301,20 @@ class Artist():
         color_cycler = cycler('color', new_colors)  
         self.ax.set_prop_cycle(color_cycler)
 
+    def _get_color (self, anArtist):
+        """ get color of artist anArtist"""
+        if isinstance (anArtist, list):            # .plot returns list 
+            art = anArtist [0]
+        else:
+            art = anArtist
+        return art.get_color()
 
-    def _nextColor (self):
-        "returns next color in color cycle"
-        return next(self.ax._get_lines.prop_cycler)['color']
+    def _cycle_color (self):
+        """ move cycler to next color and return this color """
+        # https://stackoverflow.com/questions/37890412/increment-matplotlib-color-cycle
+        p = self.ax.plot([], [])
+        return self._get_color(p)
+
     
     def _add_xticks (self, ticks):
         """ add ticks list to the axis"""
