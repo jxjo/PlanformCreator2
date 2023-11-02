@@ -119,7 +119,7 @@ class Artist():
     def show (self): return self._show
 
     def set_show (self, aBool):
-        """ suser switch to diaable ploting the data
+        """ user switch to disable ploting the data
         """
         if (self._show != aBool):               # only when changed do something
             if not aBool:                       # was showed and switched off

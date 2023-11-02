@@ -468,7 +468,7 @@ class Airfoil:
         ! This will not move or copy the airfoil physically - use clone instead
 
         Args:
-            :fullPath: String like '..\myAirfoils\JX-GT-15.dat'
+            :fullPath: String like '..\\myAirfoils\\JX-GT-15.dat'
             :noCheck:  = TRUE - no check if fullpath exists - default FALSE 
         """
 
@@ -635,8 +635,10 @@ class Airfoil:
 
         # currently le must be at 0,0 - te must be at 1,gap/2 (normalized airfoil) 
         if not self.isNormalized: 
-            ErrorMsg ("Airfoil '%s' not normalized. Te gap can't be set." % self.name)
-            return self.x, self.y
+            self.normalize (highPrec = True)
+            if not self.isNormalized: 
+                ErrorMsg ("Airfoil '%s' can't be normalized. Te gap can't be set." % self.name)
+                return self.x, self.y
         
         x = np.copy (self.x) 
         y = np.copy (self.y) 

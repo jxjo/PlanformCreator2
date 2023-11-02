@@ -27,8 +27,7 @@ from pathlib import Path
 import fnmatch 
 
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from tkinter import filedialog, Frame
+from tkinter import filedialog
 import customtkinter as ctk
 
 # let python find the other modules in modules relativ to path of self  
@@ -38,8 +37,8 @@ from common_utils       import *
 from airfoil            import *
 from airfoil_examples   import Root_Example
 from widgets            import *
-from artist             import Plot_Toolbar
-from ui_base            import Dialog_Abstract, Edit_Abstract, Dialog_Settings, set_initialWindowSize
+from ui_base            import Dialog_Abstract, Edit_Abstract, Diagram_Abstract              
+from ui_base            import set_initialWindowSize, Dialog_Settings              
 from airfoil_artists    import *
 
 from spline_of_airfoil  import UPPER, LOWER
@@ -50,9 +49,6 @@ from spline_of_airfoil  import UPPER, LOWER
 AppName    = "Airfoil Editor"
 AppVersion = "1.0.beta.0"
 
-#------------------------------------------------
-
-cl_background               = ('#EBEBEB','#242424')            # background color in diagrams
 
 # tk change events for updating mainly plots or vice versa 
 
@@ -459,160 +455,18 @@ class Edit_Coordinates(Edit_Abstract_Airfoil):
 #-------------------------------------------------------------------------------
 
 
-class Diagram_Abstract(ctk.CTkFrame):
-    """ 
-    Abstract super class of the specific plot frames like "Diagram_Airfoil"
-    """
-    name        = "This is the plot super class"
-    defaultTip  = "Use switches ...."
-
-    cl_text         = "#DCE4EE"
-    cl_labelGrid    = '#B0B0B0'
-
-
-    def __init__(self, master, airfoilFn, *args, view_frame = None, setActive=True, size= None,  **kwargs):
-        super().__init__( master, *args, **kwargs)
-
-        self.view_frame : Frame = view_frame
-        self._airfoilFn = airfoilFn
-
-        self.ctk_root = self.winfo_toplevel()                           # root for change events 
-
-        # one big diagram grid 
-
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-
-        # setup canvas for plt
-        
-        if size:    self.figure : plt.Figure = plt.Figure(figsize=size)
-        else:   	self.figure : plt.Figure = plt.Figure(figsize= [20, 6]) 
-
-        self.canvas = FigureCanvasTkAgg(self.figure, self)              # connect tk and pyplot    
-        self.canvas._tkcanvas.configure(background= cl_background[1])   # take background of dark mode 
-        self.canvas._tkcanvas.grid (row=0, column=0, pady=0, padx=0, sticky="news")
-
-        # first setup view area with switches
-        
-        self.setup_view_frame ()
-
-        # delayed init and show plot axes when all tkinter grid sizing work is done
-
-        self.after (100, self.init_and_show_plot)
-
-        return
-
-
-    def init_and_show_plot (self):
-        """ create and init axes, create artists to plot"""
-
-        # common axes for this diagram
-        self.create_axes()
-        self.setup_axes ()
-
-        # Create the artists for the diagramm
-        self.setup_artists ()
-
-        # and finally show it 
-        # self.after_idle (self.refresh)
-        self.refresh()
-
-        # finally make ready for change events 
-        self.setChangeBindings ()
-
-
-    @property
-    def airfoil(self) -> Airfoil:
-        return self.airfoils()[0]
-
-
-    def airfoils(self):
-        """ list with airfoil(s) self is working on """
-
-        if callable(self._airfoilFn):
-            obj_or_list = self._airfoilFn()
-        else: 
-            obj_or_list = self._airfoilFn
-
-        if isinstance(obj_or_list, list): 
-            return obj_or_list
-        else: 
-            return [obj_or_list]
-
-    # -----  to overlaod
-
-    def setup_view_frame (self):
-        """ create view area with switches etc."""
-
-        if not self.view_frame: return
-
-        r,c = 0,1
-        self.view_frame.grid_columnconfigure(0, weight=1)   # to center switches
-        self.view_frame.grid_columnconfigure(2, weight=1)
-
-        Header_Widget (self.view_frame,r,0, columnspan=3, lab='View')
-
-        r,c = self.setup_Switches (r, c)                       
-
-        self.setup_toolbar (r)
-
-
-    def setup_Switches(self, r=0, c=0):
-        """ to overload - define on/off switches for this plot type"""
-        return r, c 
-
-
-    def setup_toolbar (self, r):
-        """ toolbar for pan and zoom"""
-        r +=1
-        Blank_Widget (self.view_frame,r,0)
-        self.view_frame.grid_rowconfigure(r, weight=1)
-        r +=1
-        Label_Widget (self.view_frame, r, 0, lab='Pan and zoom')
-        r +=1
-        self.toolbar = Plot_Toolbar(self.canvas, self.view_frame, background=ctk.get_appearance_mode())
-        self.toolbar.grid (row=r, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,10))
-
-
-    def create_axes (self):
-        """ setup axes, axis for this plot type """
-        self.ax1 : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
-        self.figure.subplots_adjust(left=0.04, bottom=0.07, right=0.98, top=0.99, wspace=None, hspace=None)
-
-
-    def setup_axes(self):
-        """ to overload - setup axes, axis for this plot type """
-        pass
-
-
-    def setup_artists(self):
-        """ setup artists for this plot type """
-        # overwrite in sub class
-        pass  
-
-
-    def refresh(self, dummy): 
-        """ refresh all artists"""
-        # overwrite in sub class
-        pass  
-
-
-    def setChangeBindings (self):
-        """ bind self to change events from outside"""
-        # overwrite in sub class
-        pass      
-
-
-    # -------- switch call back 
-
-
-
 
 class Diagram_Airfoil (Diagram_Abstract):
     """ 
     plots the airfoil and curvature  of all wing sections
     """
     name = "Airfoils"
+
+
+    def airfoils(self):
+        """ list with airfoil(s) self is working on """
+        return self.mainObjects()
+
 
     def create_axes (self):
         """ setup 2 axes for airfoil and its curvature  """
@@ -669,10 +523,10 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.curvatureArtist = Curvature_Artist (self.ax2,     self.airfoils, show=True)
 
 
-    def setup_Switches(self, r=0, c=0):
+    def setup_switches(self, r=0, c=0):
         """ on/off switches for this plot type"""
 
-        r, c = super().setup_Switches(r, c)
+        r, c = super().setup_switches(r, c)
 
         r += 1 
         Switch_Widget (self.view_frame,r,c, lab='Grid',       val=True,  set=self._set_grid)
@@ -762,12 +616,18 @@ class Diagram_Airfoil_Bezier (Diagram_Abstract):
         super().__init__( master, airfoilOrg, *args, **kwargs)
 
 
-    @property
-    def airfoilBezier (self) -> Airfoil_Bezier: return self._airfoilBezier
+    def airfoilBezier (self) -> Airfoil_Bezier:  
+        return self._airfoilBezier
+
+
+    def airfoils(self):
+        """ list with airfoil(s) self is working on """
+        return self.mainObjects()
+
 
     def airfoils_to_diff (self):
         """ two airfoils to show the difference"""
-        return [self.airfoil, self.airfoilBezier] 
+        return [self.airfoils[0], self.airfoilBezier()] 
 
 
     def create_axes (self):
@@ -820,7 +680,7 @@ class Diagram_Airfoil_Bezier (Diagram_Abstract):
     def setup_artists(self):
         """ setup axes, axis, artists for this plot type """
 
-        self.bezierArtist     = Bezier_Edit_Artist (self.ax1, [self.airfoilBezier], show=True, 
+        self.bezierArtist     = Bezier_Edit_Artist (self.ax1, self.airfoilBezier, show=True, 
                                                    onMove=self.changed_bezier)
         self.curvatureArtist  = Curvature_Artist  (self.ax2, [self.airfoilBezier], show=True)
 
@@ -830,10 +690,10 @@ class Diagram_Airfoil_Bezier (Diagram_Abstract):
         self.diffArtist       = Difference_Artist (self.ax1, self.airfoils_to_diff, show=False)
 
 
-    def setup_Switches(self, r=0, c=0):
+    def setup_switches(self, r=0, c=0):
         """ define on/off switches for this plot type"""
 
-        r, c = super().setup_Switches(r, c)
+        r, c = super().setup_switches(r, c)
 
         r += 1 
         Switch_Widget (self.view_frame,r,c, lab='Grid', val=True, set=self._set_grid)
@@ -918,7 +778,7 @@ class Diagram_Airfoil_Bezier (Diagram_Abstract):
         self.figure.canvas.draw()
 
         # make splined curves like thickness invalid 
-        self.airfoilBezier.reset()  
+        self.airfoilBezier().reset()  
 
         # inform entry fields
         fireEvent  (self.ctk_root, BEZIER_CHANGED)               
@@ -944,6 +804,12 @@ class Diagram_LeTe_Mini (Diagram_Abstract):
     plots the leading edge and the trailing edge area in mini format
     """
     name = "LE and TE"
+
+
+    def airfoils(self):
+        """ list with airfoil(s) self is working on """
+        return self.mainObjects()
+
 
     def create_axes (self):
         """ setup 2 axes for airfoil and its curvature  """
@@ -989,7 +855,7 @@ class Diagram_LeTe_Mini (Diagram_Abstract):
         self.teArtist  = Le_Artist (self.ax3, self.airfoils, show=True)
 
 
-    def setup_Switches(self, r=0, c=0):
+    def setup_switches(self, r=0, c=0):
         """ no switches"""
         return r, c
 
@@ -1011,6 +877,11 @@ class Diagram_Airfoil_Mini (Diagram_Abstract):
     plots the airfoil with two free axes in mini format 
     """
     name = "Thickness and Camber"
+
+    def airfoils(self):
+        """ list with airfoil(s) self is working on """
+        return self.mainObjects()
+
 
     def create_axes (self):
         """ setup 2 axes for airfoil, thickness, curvature etc."""
@@ -1048,7 +919,7 @@ class Diagram_Airfoil_Mini (Diagram_Abstract):
         self.camberArtist    = Thickness_Artist (self.ax2,     self.airfoils, show=True)
 
 
-    def setup_Switches(self, r=0, c=0):
+    def setup_switches(self, r=0, c=0):
         """ no switches"""
         return r, c
 
@@ -1318,7 +1189,6 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
         self.diagram_frame = Diagram_LeTe_Mini (self.edit_frame, self.airfoilList, size=(7.0,4.0))
         self.diagram_frame.grid(row=1, column=1, sticky="nwe")
 
-        # artists for preview in diagram_frame
 
 
     def airfoilList (self):
@@ -1732,7 +1602,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         self.diagram_frame  = Diagram_Airfoil_Bezier (self.edit_frame, 
                                     self.airfoilOrg, self.airfoil, size=(16,6),
-                                    fg_color= cl_background[1], view_frame=self.switches_frame) 
+                                    view_frame=self.switches_frame) 
         self.diagram_frame.grid(row=1, column=1, pady=(5,5), padx=(5,5), sticky="news")
 
  
@@ -1950,7 +1820,7 @@ class AirfoilEditor ():
         if self.isModal: 
             # modal - inherit ctk mode from parent
             main = ctk.CTkToplevel (parentApp)
-            set_initialWindowSize (main, widthFrac=0.75, heightFrac=0.75)
+            set_initialWindowSize (main, widthFrac=0.77, heightFrac=0.75)
             main.transient (parentApp)
             # bug fix titlebar color https://github.com/TomSchimansky/CustomTkinter/issues/1930
             main.after(20, lambda: main._windows_set_titlebar_color(main._get_appearance_mode()))
@@ -2017,7 +1887,7 @@ class AirfoilEditor ():
         edit_Curvature_frame.grid (row=0, column=3, pady=(0,5), padx=(5,5), ipadx=10, sticky="news")
 
 
-        diagram_frame  = Diagram_Airfoil  (main, self.curAirfoil, fg_color= cl_background[1], view_frame=switches_frame)
+        diagram_frame  = Diagram_Airfoil  (main, self.curAirfoil, view_frame=switches_frame, size=[20,8])
         diagram_frame.grid   (row=0, column=1, pady=(5,5), padx=(5,5), sticky="news")
 
         # start App - run mainloop if self is not modal otherise control is at parent

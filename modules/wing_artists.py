@@ -25,24 +25,6 @@ cl_paneled          = 'steelblue'
 # -------- concrete sub classes ------------------------
 
 
-class Grid_Artist (Artist):
-    """shows the grid in the axis
-    """
-    # plot over loaded because different handling with grid
-    def set_show (self, aBool):
-        """ suser switch to diaable ploting the data
-        """
-        self._show = aBool
-        self.plot()
-
-    def plot(self):
-        # todo improved grid depending on scale  
-        self.ax.grid(self.show)
-        self.ax.figure.canvas.draw_idle()
-
-
-# ----------------------------------
-
 
 class CurrentSection_Artist (Artist):
     """Plot a Marker Symbol at the current (selected) wing sections.
@@ -214,7 +196,11 @@ class CurrentSection_Artist (Artist):
         self.ax.draw_artist (self.pos_marker_artist)
 
         self.pos_marker_anno.xy =  (x,y)
-        self.pos_marker_anno.set ( text="%.2f" % x)
+        if self.norm: 
+            text = "%.3f" % x
+        else: 
+            text = "%.1f" % x
+        self.pos_marker_anno.set ( text=text)
         self.ax.draw_artist (self.pos_marker_anno)
 
 
@@ -260,7 +246,7 @@ class CurrentSection_Artist (Artist):
 
         self.chord_marker_anno.xy =  (y_sec[0],x_sec[0])
         if self.norm: 
-            self.chord_marker_anno.set ( text="%.2f" % self.curSection.norm_chord)
+            self.chord_marker_anno.set ( text="%.3f" % self.curSection.norm_chord)
         else:
             self.chord_marker_anno.set ( text="%.1f" % self.curSection.chord)
         self.ax.draw_artist (self.chord_marker_anno)
@@ -699,7 +685,7 @@ class RefPlanform_DXF_Artist (Planform_Artist):
         # overloaded to switch between 'details' and dxf in sinle color  
 
         if self._showDetail: 
-            return super()._nextColor()
+            return self._cycle_color ()
         else: 
             return cl_dxf
               
@@ -1084,7 +1070,7 @@ class Sections_Artist (Artist):
             linewidth= 1.0
             linestyle='solid'
 
-            label = '_' + section.name()        # add '_' to not appear in legend          
+            label = '_' + section.name()                # add '_' to not appear in legend          
 
             # if not (section.isRootOrTip and self._norm): 
             p = self.ax.plot(y, le_to_te, color=color, label=label, linestyle=linestyle, 
@@ -1130,7 +1116,7 @@ class Sections_Artist (Artist):
         # section chord - print along chord
         if self._norm:
             # if section.isRoot: return               # no norm_chord for root
-            text = "%.2f" % (section.norm_chord)
+            text = "%.3f" % (section.norm_chord)
             marker_x = (le_to_te[0] + le_to_te[1]) * 0.40
             marker_y = y[0] + 0.007
         else: 
@@ -1148,6 +1134,11 @@ class Sections_Artist (Artist):
 
         # section pos at bottom  
         if not section.isRootOrTip: 
+
+            # add position as xtick 
+            self._add_xticks ([y[0]])
+
+            # add fixed Position info 
             if self._norm:
                 marker_x = round(y[0],2)                    # in data coordinates
                 marker_y = 0.06                             # in axis coordinates
@@ -1155,10 +1146,6 @@ class Sections_Artist (Artist):
                 marker_x = y[0]                             # in data coordinates
                 marker_y = 0.02                             # in axis coordinates
 
-            # add position as xtick 
-            self._add_xticks ([marker_x])
-
-            # add fixed Position info 
             if sectionFix:
                 p = self.ax.text (marker_x, marker_y, "fix", color=cl_wingSection_fix, backgroundcolor= cl_background, 
                                 transform=self.ax.get_xaxis_transform(), 

@@ -2,12 +2,19 @@
 # -*- coding: utf-8 -*-
 
 """
-Highlevel abstract base classes for UI like Dialog oder EditFrame
+Highlevel abstract base classes for UI like Dialog, Edit frame or DIagram frame
 
 """
+from tkinter import Frame
 import customtkinter as ctk
 from widgets            import *
 from common_utils       import fromDict, toDict
+
+# Diagram abstract 
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
+from artist             import Plot_Toolbar
+
 
 
 #------------------------------------------------
@@ -153,6 +160,190 @@ class Edit_Abstract (ctk.CTkFrame):
         for widget in self.widgets:
             if isinstance(widget, Base_Widget): widget.refresh()
             # print ("  - refresh in ", self.__class__.__name__," for %s widgets" % len(self.widgets))
+
+
+
+#-------------------------------------------------------------------------------
+# Diagram (frame) of an app   
+#-------------------------------------------------------------------------------
+
+
+class Diagram_Abstract(ctk.CTkFrame):
+    """ 
+    Abstract super class of the specific plot frames like "Plot_Planform"
+    """
+
+    name = "This is the diagram super class"
+
+    cl_background  = ('#EBEBEB','#242424')                     # background color in diagrams
+
+
+    def __init__(self, master, objectFn, *args, view_frame = None, setActive=True, size= None,  **kwargs):
+        """Diagramm (frame) - can have different plot and a view frame for diagram switches  
+
+        Args:
+            master: parent frame
+            objectFn: the model object (or list) self is working on - as method
+            view_frame: view frame for the switches of seld .
+            setActive: show diagram after init. Defaults to False.
+            size: size in inch as tuple . Defaults to None.
+        """
+        super().__init__( master, *args, **kwargs)
+
+        self._active    = setActive                             # is active frame? control change events 
+        self._objectFn  = objectFn                              # main data object 
+
+        self.view_frame : Frame = view_frame
+
+        self.ctk_root = self.winfo_toplevel()                    # root for change events 
+
+        self.configure(fg_color= self.cl_background)
+
+        # big diagram grid 
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid(row=0, column=0, sticky="news")
+
+        # setup canvas for plt
+        
+        if size:    self.figure : plt.Figure = plt.Figure(figsize=size)
+        else:   	self.figure : plt.Figure = plt.Figure(figsize= [20, 8]) 
+
+        self.canvas = FigureCanvasTkAgg(self.figure, self)              # connect tk and pyplot    
+        self.canvas._tkcanvas.configure(background= self.cl_background[1])   # take background of dark mode 
+        self.canvas._tkcanvas.grid (row=0, column=0, pady=0, padx=0, sticky="news")
+
+        # first setup view area with switches
+        
+        self.setup_view_frame ()
+
+        # delayed init and show plot axes when all tkinter grid sizing work is done
+
+        if size:                                        # these are mini diagrams --> faster
+            self.after (100, self.init_and_show_plot)
+        else:                                           # the big app diagrams
+            self.after (500, self.init_and_show_plot)
+
+        return
+
+
+    # -----  data objects
+
+    def mainObject(self):
+        " main data object of the diagram"
+
+        # should be encapsulated in sub class 
+        return self._objectFn()
+
+
+    def mainObjects(self):
+        """ list with main dataObjects self is working on """
+
+        if callable(self._objectFn):
+            obj_or_list = self._objectFn()
+        else: 
+            obj_or_list = self._objectFn
+
+        if isinstance(obj_or_list, list): 
+            return obj_or_list
+        else: 
+            return [obj_or_list]
+        
+
+    # ----- setup - partly to overlaod
+
+    def init_and_show_plot (self):
+        """ create and init axes, create artists to plot"""
+
+        # common axes for this diagram
+        self.create_axes()
+        self.setup_axes ()
+
+        # Create the artists for the diagramm
+        self.setup_artists ()
+
+        # make ready for change events 
+        self.setChangeBindings ()
+
+        # and finally show it if self is the first to show 
+        if self._active: 
+            self.after_idle (self.refresh)
+
+
+    def setup_view_frame (self):
+        """ create view area with switches etc."""
+
+        if not self.view_frame: return
+
+        r,c = 0,1
+        self.view_frame.grid_columnconfigure(0, weight=1)   # to center switches
+        self.view_frame.grid_columnconfigure(2, weight=1)
+
+        Header_Widget (self.view_frame,r,0, columnspan=3, lab='View')
+
+        r,c = self.setup_switches (r, c)                       
+
+        self.setup_toolbar (r)
+
+
+    def setup_switches(self, r=0, c=0):
+        """ to overload - define on/off switches for this plot type"""
+        return r, c 
+
+
+    def setup_toolbar (self, r):
+        """ toolbar for pan and zoom"""
+        r +=1
+        Blank_Widget (self.view_frame,r,0)
+        self.view_frame.grid_rowconfigure(r, weight=1)
+        r +=1
+        Label_Widget (self.view_frame, r, 0, lab='Pan and zoom')
+        r +=1
+        self.toolbar = Plot_Toolbar(self.canvas, self.view_frame, background=ctk.get_appearance_mode())
+        self.toolbar.grid (row=r, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,10))
+
+
+    def create_axes (self):
+        """ setup axes, axis for this plot type """
+        self.ax : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
+        self.figure.subplots_adjust(left=0.04, bottom=0.08, right=0.98, top=0.96, wspace=None, hspace=None)
+
+
+    def setup_axes(self):
+        """ to overload - setup axes, axis for this plot type """
+        pass
+
+
+    def setup_artists(self):
+        """ setup artists for this plot type """
+        # overwrite in sub class
+        pass  
+
+
+    def refresh(self, dummy): 
+        """ refresh all artists"""
+        # overwrite in sub class
+        if self._active:
+            pass  
+
+    # ----- general refresh when getting active view again
+
+    def setActive(self, active: bool):
+        """ the Diagram master (Tabview) will activate/deactivate to avoid plot generation
+            if self is not visible """
+        if active: 
+            self._active = True
+            self.refresh()
+        else: 
+            self._active = False
+
+    # ----- change event setup 
+
+    def setChangeBindings (self):
+        """ bind self to change events from outside"""
+        # overwrite in sub class
+        pass      
+
 
 
 

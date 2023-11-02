@@ -662,7 +662,7 @@ class Bezier_Edit_Artist (Artist):
             self.ax.figure.canvas.mpl_disconnect(self.ciddraw)
 
     @property
-    def airfoil (self) -> Airfoil_Bezier: return self.model[0]
+    def airfoil (self) -> Airfoil_Bezier: return self.model
 
     @property
     def sideBezier_upper (self) -> SideOfAirfoil_Bezier:  return self.airfoil.upper

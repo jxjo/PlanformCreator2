@@ -37,9 +37,8 @@ import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib together with tkinter
 
-from tkinter import filedialog, Frame
+from tkinter import filedialog
 import customtkinter as ctk
 
 # let python find the other modules in modules relativ to path of self  
@@ -48,16 +47,16 @@ sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 from common_utils       import * 
 from wing_model         import Planform, Planform_Bezier_StraightTE, \
                                        Planform_DXF, Planform_Trapezoidal, Planform_Bezier         
-from ui_base            import Dialog_Abstract, Edit_Abstract, set_initialWindowSize, Dialog_Settings              
+from ui_base            import Dialog_Abstract, Edit_Abstract, Diagram_Abstract              
+from ui_base            import set_initialWindowSize, Dialog_Settings              
 from widgets            import * 
-from artist             import Plot_Toolbar
 from wing_artists       import *
 
 
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "0.9.6"
+AppVersion = "1.0.beta.0"
 
 #------------------------------------------------
 
@@ -671,14 +670,14 @@ class Edit_WingSection(Edit_Abstract_Wing):
                                                 lim='limits_yPos', dec=1, spin=True, step=2, unit=unit,
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
         self.add(Field_Widget  (self,1,3, lab="Position rel.", obj=self.wingSection, get='norm_yPos', set='set_norm_yPos',
-                                                lim='limits_norm_yPos', dec=2, spin=True, step=0.01, unit='%',
+                                                lim='limits_norm_yPos', dec=3, spin=True, step=0.01, unit='%',
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
 
         self.add(Field_Widget  (self,2,0, lab="Chord", obj=self.wingSection, get='chord', set='set_chord',
                                                 lim='limits_Chord', dec=1, spin=True, step=0.5, unit=unit,
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
         self.add(Field_Widget  (self,2,3, lab="Chord rel.", obj=self.wingSection, get='norm_chord', set='set_norm_chord',
-                                                lim='limits_normChord', dec=2, spin=True, step=0.01, unit='%',
+                                                lim='limits_normChord', dec=3, spin=True, step=0.01, unit='%',
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
 
         self.add(Field_Widget  (self,3,0, lab="Reynolds", obj=self.wingSection ,get='Re', set='set_Re',
@@ -766,7 +765,7 @@ class Edit_WingSection(Edit_Abstract_Wing):
 
 class Diagrams(ctk.CTkTabview):
     """ 
-    Master frame for diagrams - childs are the different plot frames 
+    Master frame for diagrams - childs are the different diagram frames 
     """
     def __init__(self, master, wingFn, *args, **kwargs):
         super().__init__(master, *args, text_color="white", **kwargs)
@@ -775,17 +774,14 @@ class Diagrams(ctk.CTkTabview):
             :master: frame self belongs to
         """
         
-        self._wingFn = wingFn
-        # handle the view for the switches 
-        self._view_dict: dict[str, ctk.CTkFrame] = {}
-         
+        self.diagrams = []
+        diagramClasses = [Diagram_Planform, Diagram_ChordDistribution, Diagram_Airfoils] 
 
-        self.myPlot_frames = []
-        diagramClasses = [Diagram_ChordDistribution, Diagram_Planform, Diagram_Airfoils]
         # Get all subclasses of Plot_Frame and create a tab for each 
-        for diaClass in diagramClasses:
+        for iDia, diaClass in enumerate (diagramClasses):
 
             tab_frame = self.add("   " + diaClass.name + "   ")
+            tab_frame.grid_columnconfigure(0, weight=0, minsize=160)
             tab_frame.grid_columnconfigure(1, weight=1)
             tab_frame.grid_rowconfigure(0, weight=1)
 
@@ -799,167 +795,47 @@ class Diagrams(ctk.CTkTabview):
             plot_frame.grid_columnconfigure(0, weight=1)
             plot_frame.grid_rowconfigure(0, weight=1)
             
-            # create the diagram in the plot frame
-            self.myPlot_frames.append (diaClass (plot_frame,  self._wingFn,
-                                    view_frame=view_frame))
+            # create the diagram in the plot frame and set first diagram active (show it)
+            self.diagrams.append (diaClass (plot_frame, wingFn, setActive=(iDia==0), view_frame=view_frame))
 
         # set size of tab view titles
         self._segmented_button.configure(font=("", 16))
-        # self.configure(fg_color=cl_background)
         self.configure(command=self.newTabSelected)
-        self.newTabSelected ()    
 
          
-
     def newTabSelected (self):
         # activate the new selected frame for updates 
-        newName = self.get()
-        plot_frame : Diagram_Abstract = None
-        for plot_frame in self.myPlot_frames:
-            plot_frame.setActive (False)                    # first deactivate all
-            if (plot_frame.name.strip() == newName.strip()): 
-                newPlot_frame = plot_frame
 
-        if newPlot_frame: newPlot_frame.setActive(True)    #  eactivate new one 
+        newName = self.get()                                # current from CTkTabview
+        diagram     : Diagram_Abstract = None
+        new_diagram : Diagram_Abstract = None
 
+        for diagram in self.diagrams:
+            diagram.setActive (False)                       # first deactivate all
+            if (diagram.name.strip() == newName.strip()): 
+                new_diagram = diagram
 
-    @property
-    def wing(self) -> Wing:
-        return self._wingFn()
+        if new_diagram: new_diagram.setActive(True)         #  activate new one 
+
     
-
-
-#---------------- plot frames ----------------------
-
-class Diagram_Abstract(ctk.CTkFrame):
-    """ 
-    Abstract super class of the specific plot frames like "Plot_Planform"
-    """
-    name = "This is the plot super class"
-    defaultTip = "Use switches ...."
-
-    def __init__(self, master, wingFn, *args, view_frame = None, size= None,  **kwargs):
-        super().__init__( master, *args, **kwargs)
-
-        self.view_frame : Frame = view_frame
-        self._wingFn = wingFn
-
-        # root for change events (widgets will have the same toplevel as root)
-        self.ctk_root = self.winfo_toplevel()
-
-        self.configure(fg_color= cl_background)
-
-        # big diagram grid 
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-        self.grid(row=0, column=0, sticky="news")
-
-        if size: 
-            self.figure : plt.Figure = plt.Figure(figsize=size)
-        else: 
-            self.figure : plt.Figure = plt.Figure()
-
-        # connect tk and pyplot
-        self.canvas = FigureCanvasTkAgg(self.figure, self)
-        # take background of dark mode for canvas
-        self.canvas._tkcanvas.configure(background= cl_background[1])
-        self.canvas._tkcanvas.grid (row=0, column=0, pady=0, padx=0, sticky="news")
-
-        # common axes for this diagram
-        self.create_axes()
-        self.setup_axes ()
-
-        # Create the artists for the diagram
-        self.setup_artists ()
-
-        # init of switches / plots if a frame for the switches is available 
-        r,c = 0,1
-        if self.view_frame: 
-            self.view_frame.grid_columnconfigure(0, weight=1)   # to center switches
-            self.view_frame.grid_columnconfigure(2, weight=1)   # to center switches
-
-            r,c = self.setup_Switches (r, c)   
-
-            r +=1
-            Blank_Widget (self.view_frame,r,c)
-            self.view_frame.grid_rowconfigure(r, weight=1)
-            r +=1
-            Label_Widget (self.view_frame, r, 0, lab='Pan and zoom')
-            r +=1
-            self.toolbar = Plot_Toolbar(self.canvas, self.view_frame, background=ctk.get_appearance_mode())
-            self.toolbar.grid (row=r, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,10))
-                    
-        # react on changes of model
-        self.setChangeBindings ()
-        self._active            = False                     # is active frame? control change events 
-
-
-    @property
-    def wing(self) -> Wing:
-        return self._wingFn()
-    
-    # ----- abstract - to overlaod
-
-    def create_axes (self):
-        """ setup axes, axis for this plot type """
-        self.ax : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
-        self.figure.subplots_adjust(left=0.04, bottom=0.08, right=0.98, top=0.96, wspace=None, hspace=None)
-
-
-    def setup_axes(self):
-        """ to overload - setup axes, axis for this plot type """
-        pass
-
-
-    def setup_artists(self):
-        """ setup artists for this plot type """
-        self.gridArtist = Grid_Artist (self.ax, self._wingFn, show=True)
-        self.gridArtist.plot()          # force to show first time
-
-
-    def setup_Switches(self, r=0, c=0):
-        """ define on/off switches ffor this plot type"""
-
-        Header_Widget (self.view_frame,0,0, width=160, columnspan=3, lab='View')
-
-        r += 1 
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Grid', 
-                       get=lambda: self.gridArtist.show, set=self.gridArtist.set_show)
-        return r, c 
-     
-
-    def refresh(self, dummy): 
-        # overwrite in sub class
-        if self._active:
-            pass  
-
-    # ----- general refresh when getting active view again
-
-    def setActive(self, active: bool):
-        # the Diagram master (Tabview) will activate/deactivate to avoid plot generation
-        #   if self is not visible
-        if active: 
-            self._active = True
-            self.refresh()
-        else: 
-            self._active = False
-
-    # ----- change event setup 
-
-    def setChangeBindings (self):
-        # overwrite in sub class
-        pass      
 
 
 #-------------------------------------------------------------------------------
 # Planform   
 #-------------------------------------------------------------------------------
 
+
 class Diagram_Planform (Diagram_Abstract):
     """ 
     Frame to plot planform 
     """
     name = "Planform"
+
+
+    def wing(self) -> Wing:
+        " main data object of the diagram"
+        return self._objectFn()
+
 
     def create_axes (self):
         """ setup axes, axis for this plot type """
@@ -968,6 +844,8 @@ class Diagram_Planform (Diagram_Abstract):
         super().create_axes()
         self.ax.set_xticks ([])
         self.ax.set_yticks ([])
+
+        self.ax.grid (visible=True)
 
 
     def setup_axes (self):
@@ -986,57 +864,76 @@ class Diagram_Planform (Diagram_Abstract):
         """ setup artists for this plot type """
 
         super().setup_artists()
-        self.planformArtist     = Planform_Artist (self.ax, self._wingFn, onMove=self.changed_by_mouse, show=True)
-        self.chordLinesArtist   = ChordLines_Artist (self.ax, self._wingFn, show=False)
-        self.sectionsArtist     = Sections_Artist (self.ax, self._wingFn, show=True,onPick=self.sectionPicked)     
-        self.curSectionArtist   = CurrentSection_Artist (self.ax, self._wingFn, show=True, onMove=self.section_by_mouse)
-        self.airfoilNameArtist  = AirfoilName_Artist (self.ax, self._wingFn, show=False)     
-        self.flapArtist         = Flap_Artist (self.ax, self._wingFn)
-        self.referenceArtist    = RefPlanform_Artist (self.ax, self._wingFn)
-        self.dxfArtist          = RefPlanform_DXF_Artist (self.ax, self._wingFn)
+        self.planformArtist     = Planform_Artist       (self.ax, self.wing, show=True, onMove=self.changed_by_mouse)
+        self.chordLinesArtist   = ChordLines_Artist     (self.ax, self.wing)
+        self.sectionsArtist     = Sections_Artist       (self.ax, self.wing, show=True, onPick=self.sectionPicked)     
+        self.curSectionArtist   = CurrentSection_Artist (self.ax, self.wing, show=True, onMove=self.section_by_mouse)
+        self.airfoilNameArtist  = AirfoilName_Artist    (self.ax, self.wing)     
+        self.flapArtist         = Flap_Artist           (self.ax, self.wing)
+        self.referenceArtist    = RefPlanform_Artist    (self.ax, self.wing)
+        self.dxfArtist          = RefPlanform_DXF_Artist(self.ax, self.wing)
 
 
-    def setup_Switches (self, r = 0, c = 0 ):
+    def setup_switches (self, r = 0, c = 0 ):
         """ define on/off switches for this plot types"""
 
-        r,c = super().setup_Switches(r,c)
+        r,c = super().setup_switches(r,c)
 
         # the whole plot work will be done by the artists
+        r += 1 
+        Switch_Widget (self.view_frame,r,c, lab='Grid', val=True,  set=self._set_grid)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Mouse helper', 
-                get=lambda: self.planformArtist.mouseActive, set=self.set_mouseHelpers)
+        Switch_Widget (self.view_frame,r,c, lab='Mouse helper', val=True, set=self._set_mouseHelpers)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Wing sections', 
-                get=lambda: self.sectionsArtist.show, set=self.set_showSections)
-        # r += 1
-        # Switch_Widget (self.view_frame,r,c, padx=10, lab='Current section', 
-        #         get=lambda: self.curSectionArtist.show, set=self.curSectionArtist.set_show)
+        Switch_Widget (self.view_frame,r,c, lab='Wing sections', val=True, set=self._set_showSections)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Airfoil names', 
-                get=lambda: self.airfoilNameArtist.show, set=self.airfoilNameArtist.set_show)
+        Switch_Widget (self.view_frame,r,c, lab='Airfoil names', val=False, set=self._set_showAirfoilNames)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Flaps', 
-                get=lambda: self.flapArtist.show, set=self.flapArtist.set_show)
+        Switch_Widget (self.view_frame,r,c, lab='Flaps', val=False, set=self._set_showFlaps)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Chord lines', 
-                get=lambda: self.chordLinesArtist.show, set=self.chordLinesArtist.set_show)
+        Switch_Widget (self.view_frame,r,c, lab='Chord lines', val=False, set=self._set_showChord)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Ref elliptical', 
-                get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
+        Switch_Widget (self.view_frame,r,c, lab='Ref elliptical', pady=(20,0), val=False, set=self._set_showReference)
 
-        if (self.wing.refPlanform_DXF): 
+        if (self.wing().refPlanform_DXF): 
             r += 1
-            Switch_Widget (self.view_frame,r,c, padx=10, lab='Ref DXF', 
-                    get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
+            Switch_Widget (self.view_frame,r,c, lab='Ref DXF', val=False, set=self._set_showRefDXF)
         return r,c 
 
-    def set_mouseHelpers (self, aBool): 
+
+    # -------- switch call back 
+
+    def _set_grid (self, aBool): 
+        self.ax.grid (aBool)
+        self.figure.canvas.draw_idle() 
+
+    def _set_showAirfoilNames (self, aBool):
+        self.airfoilNameArtist.set_show(aBool)
+        self.airfoilNameArtist.refresh (figureUpdate=True) 
+
+    def _set_showFlaps (self, aBool):
+        self.flapArtist.set_show(aBool)
+        self.flapArtist.refresh (figureUpdate=True) 
+
+    def _set_showChord (self, aBool):
+        self.chordLinesArtist.set_show(aBool)
+        self.chordLinesArtist.refresh (figureUpdate=True) 
+
+    def _set_showReference (self, aBool):
+        self.referenceArtist.set_show(aBool)
+        self.referenceArtist.refresh (figureUpdate=True) 
+
+    def _set_showRefDXF (self, aBool):
+        self.dxfArtist.set_show(aBool)
+        self.dxfArtist.refresh (figureUpdate=True) 
+
+    def _set_mouseHelpers (self, aBool): 
 
         self.planformArtist.set_mouseActive (aBool)
         self.curSectionArtist.set_mouseActive (aBool)
         self.sectionsArtist.set_mouseActive (aBool)
 
-    def set_showSections (self, aBool): 
+    def _set_showSections (self, aBool): 
 
         self.curSectionArtist.set_show (aBool)
         self.sectionsArtist.set_show (aBool)
@@ -1054,31 +951,30 @@ class Diagram_Planform (Diagram_Abstract):
         self.ctk_root.bind(AIRFOIL_CHANGED,          self.changed_airfoil, add='+')
         self.ctk_root.bind(CURRENT_SECTION_CHANGED,  self.changed_currentSection, add='+')
 
-    def wing_new (self, dummy): 
+    def wing_new (self, *_): 
         """ Eventhandler for new wing """
-        self.changed_wing (dummy)
-        self.changed_currentSection (dummy)
+        self.changed_wing ()
+        self.changed_currentSection ()
 
-    def changed_wing (self, dummy): 
+    def changed_wing (self, *_): 
         """ Eventhandler for changes of the complete wing - like wing span """
-        self.gridArtist.plot()
         self.refresh()
 
-    def changed_chord (self, dummy): 
+    def changed_chord (self, *_): 
         """ Eventhandler for changes of chord"""
         self.refresh()
 
-    def changed_planform (self, dummy): 
+    def changed_planform (self, *_): 
         """ Eventhandler for changes of planform"""
         self.refresh()
 
-    def changed_airfoil (self, dummy): 
+    def changed_airfoil (self, *_): 
         """ Eventhandler for changes of planform"""
         self.refresh_sections() 
 
-    def changed_sections (self, dummy): 
+    def changed_sections (self, *_): 
         """ Eventhandler for changes of planform"""
-        if self.wing.planform.planform_depend_on_sections:
+        if self.wing().planform.planform_depend_on_sections:
             self.refresh()
         self.refresh_sections() 
 
@@ -1095,13 +991,13 @@ class Diagram_Planform (Diagram_Abstract):
 
     def changed_by_mouse(self): 
         """" planform (banana) or wing (hinge) was changed with mouse """
-        self.changed_planform("")
+        self.changed_planform()
         fireEvent (self.ctk_root, WING_CHANGED_BY_MOUSE)
         fireEvent (self.ctk_root, PLANFORM_CHANGED_BY_MOUSE)
 
     def section_by_mouse(self): 
         """" current section was moved with mouse """
-        self.changed_sections("")
+        self.changed_sections()
         fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
 
 
@@ -1144,7 +1040,6 @@ class Diagram_Planform (Diagram_Abstract):
             self.setup_axes()                       # maybe the axis limits changed
 
             self.ax.figure.canvas.draw_idle()     # draw ony if Windows is idle!
-
             # print ("  - refresh in ", self.__class__.__name__," for active artists")
 
     def refresh_sections(self): 
@@ -1160,49 +1055,91 @@ class Diagram_Planform (Diagram_Abstract):
 
 
 
-class Diagram_Planform_Mini (Diagram_Abstract):
+class Diagram_Planform_Paneled (Diagram_Abstract):
     """ 
-    Frame to plot planform in a simple, mini Version for previews etc. 
+    Frame to plot planform in a simple, mini Version for panel previews . 
     """
-    name = "Planform"
+    name = "Planform paneled"
+
+    def __init__(self, master, objectFn, paneledPlanform : Planform_Paneled, *args, size= None,  **kwargs):
+
+        self._paneledPlanform    = paneledPlanform             # planform with panels to show 
+
+        super().__init__(master, objectFn, *args, size= size,  **kwargs)
+
+
+    def wing(self) -> Wing:
+        " main data object of the diagram"
+        return self._objectFn()
+
 
     def create_axes (self):
         """ setup axes, axis for this plot type """
         self.ax : plt.Axes = self.figure.add_subplot(frameon=False)        # the pyplot axes this diagram is plotted
         self.figure.subplots_adjust(left=0.01, bottom=0.0, right=0.99, top=1, wspace=None, hspace=None)
 
+
     def setup_axes (self):
         """ setup axes, axis for this plot type """
-        self.ax.set_ylim([self.wing.rootchord, 0.0])
-        self.ax.set_xlim([-0.05 * self.wing.halfwingspan, self.wing.halfwingspan * 1.05])
+        self.ax.set_ylim([self.wing().rootchord, 0.0])
+        self.ax.set_xlim([-0.05 * self.wing().halfwingspan, self.wing().halfwingspan * 1.05])
         self.ax.axis('equal')
         self.ax.set_xticks([], [])
         self.ax.set_yticks([], [])
 
 
     def setup_artists (self):
-        """ artists are not set automatically - set from outside """
-        pass
+        """ artists afor this view """
+        self.panelArtist = PaneledPlanform_Artist (self.ax, self.wing, self._paneledPlanform, show=True)
 
-    def setup_Switches (self, r = 0, c=0):
-        """ no switches"""   
-        return r,c 
-
-
-    def setChangeBindings (self):
-        # overloaded
-        pass
-
-    def changed_planform (self, dummy): 
-        """ Eventhandler for changes of planform"""
-        pass
-
-    def setActive(self, active: bool):
-        # overloaded to set active section 
-        pass
 
     def refresh(self): 
-        self.ax.figure.canvas.draw_idle()    # draw ony if Windows is idle!
+        self.panelArtist.refresh(figureUpdate=True)
+
+
+
+
+class Diagram_Planform_DXF (Diagram_Abstract):
+    """ 
+    Frame to plot planform in a simple, mini Version for dxf previews . 
+    """
+    name = "Planform paneled"
+
+    def __init__(self, master, objectFn, planform_dxf : Planform_DXF, *args, size= None,  **kwargs):
+
+        self._planform_dxf    = planform_dxf             # planform with panels to show 
+
+        super().__init__(master, objectFn, *args, size= size,  **kwargs)
+
+
+    def wing(self) -> Wing:
+        " main data object of the diagram"
+        return self._objectFn()
+
+
+    def create_axes (self):
+        """ setup axes, axis for this plot type """
+        self.ax : plt.Axes = self.figure.add_subplot(frameon=False)        # the pyplot axes this diagram is plotted
+        self.figure.subplots_adjust(left=0.01, bottom=0.0, right=0.99, top=1, wspace=None, hspace=None)
+
+
+    def setup_axes (self):
+        """ setup axes, axis for this plot type """
+        self.ax.set_ylim([self.wing().rootchord, 0.0])
+        self.ax.set_xlim([-0.05 * self.wing().halfwingspan, self.wing().halfwingspan * 1.05])
+        self.ax.axis('equal')
+        self.ax.set_xticks([], [])
+        self.ax.set_yticks([], [])
+
+
+    def setup_artists (self):
+        """ artists for this diagram """
+        self.planformArtist = RefPlanform_DXF_Artist (self.ax, self.wing, show=True, showDetail=True, 
+                                                      showMarker=False, planform=self._planform_dxf)
+
+    def refresh(self): 
+        self.planformArtist.refresh(figureUpdate=True)
+
 
 
 #-------------------------------------------------------------------------------
@@ -1215,6 +1152,11 @@ class Diagram_ChordDistribution (Diagram_Abstract):
     """
     name = "Chord distribution"
 
+    def wing(self) -> Wing:
+        " main data object of the diagram"
+        return self._objectFn()
+
+
     def create_axes (self):
         """ setup axes, axis for this plot type """
     
@@ -1223,57 +1165,68 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         self.ax.set_xticks ([])
         self.ax.set_yticks ([])
 
+        self.ax.grid (visible=True)
+
 
     def setup_axes(self):
         """ setup axes, axis, artiss for this plot type """
         self.ax.set_ylim([ 0.0, 1.19])
         self.ax.set_xlim([ 0.0, 1.06])
 
+
     def setup_artists(self):
         """ setup axes, axis, artists for this plot type """
 
         super().setup_artists()
-        self.chordArtist        = Chord_Artist (self.ax, self._wingFn, onMove=self.chord_by_mouse, show=True)
-        self.chordLinesArtist   = ChordLines_Artist (self.ax, self._wingFn, norm=True, show=False)
-        self.curSectionArtist   = CurrentSection_Artist (self.ax, self._wingFn, norm=True, show=False, onMove=self.section_by_mouse)
-        self.sectionsArtist     = Sections_Artist (self.ax, self._wingFn, show=False, norm=True,
-                                                       onPick=self.sectionPicked)
-        self.referenceArtist    = RefChord_Artist (self.ax, self._wingFn, norm=True)
-        self.dxfArtist          = RefChord_DXF_Artist (self.ax, self._wingFn, norm=True)
+        self.chordArtist        = Chord_Artist          (self.ax, self.wing, show=True, onMove=self.chord_by_mouse)
+        self.chordLinesArtist   = ChordLines_Artist     (self.ax, self.wing, norm=True, )
+        self.curSectionArtist   = CurrentSection_Artist (self.ax, self.wing, norm=True, onMove=self.section_by_mouse)
+        self.sectionsArtist     = Sections_Artist       (self.ax, self.wing, norm=True, onPick=self.sectionPicked)
+        self.referenceArtist    = RefChord_Artist       (self.ax, self.wing, norm=True)
+        self.dxfArtist          = RefChord_DXF_Artist   (self.ax, self.wing, norm=True)
 
 
-    def setup_Switches(self, r=0, c=0):
+    def setup_switches(self, r=0, c=0):
         """ define on/off switches ffor this plot type"""
 
-        r,c = super().setup_Switches(r, c)
+        r,c = super().setup_switches(r, c)
 
+        r += 1 
+        Switch_Widget (self.view_frame,r,c, lab='Grid', val=True,  set=self._set_grid)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Mouse helper', 
-                get=lambda: self.chordArtist.mouseActive, set=self.set_mouseHelpers)
+        Switch_Widget (self.view_frame,r,c, lab='Mouse helper', val=True, set=self._set_mouseHelpers)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Wing sections', 
-                        get=lambda: self.sectionsArtist.show, set=self.set_showSections)
+        Switch_Widget (self.view_frame,r,c, lab='Wing sections', val=False, set=self._set_showSections)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Ref elliptical', 
-                        get=lambda: self.referenceArtist.show, set=self.referenceArtist.set_show)
-        if (self.wing.refPlanform_DXF.isValid): 
+        Switch_Widget (self.view_frame,r,c, lab='Ref elliptical', val=False, set=self._set_showReference)
+        if (self.wing().refPlanform_DXF.isValid): 
             r += 1
-            Switch_Widget  (self.view_frame,r,c, padx=10, lab='Ref DXF', 
-                            get=lambda: self.dxfArtist.show, set=self.dxfArtist.set_show)
+            Switch_Widget  (self.view_frame,r,c, lab='Ref DXF', val=False, set=self._set_showRefDXF)
         return r,c 
 
 
-    def set_mouseHelpers (self, aBool): 
+    # -------- switch call back 
 
+    def _set_grid (self, aBool): 
+        self.ax.grid (aBool)
+        self.figure.canvas.draw_idle() 
+
+    def _set_mouseHelpers (self, aBool): 
         self.chordArtist.set_mouseActive (aBool)
         self.curSectionArtist.set_mouseActive (aBool)
         self.sectionsArtist.set_mouseActive (aBool)
 
-
-    def set_showSections (self, aBool): 
-
+    def _set_showSections (self, aBool): 
         self.curSectionArtist.set_show (aBool)
         self.sectionsArtist.set_show (aBool)
+
+    def _set_showReference (self, aBool):
+        self.referenceArtist.set_show(aBool)
+        self.referenceArtist.refresh (figureUpdate=True) 
+
+    def _set_showRefDXF (self, aBool):
+        self.dxfArtist.set_show(aBool)
+        self.dxfArtist.refresh (figureUpdate=True) 
 
 
     # -------- event handler
@@ -1286,29 +1239,29 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         self.ctk_root.bind(SECTION_CHANGED,          self.changed_sections, add='+')
         self.ctk_root.bind(CURRENT_SECTION_CHANGED,  self.changed_currentSection, add='+')
 
-    def wing_new (self, dummy): 
+    def wing_new (self, *_): 
         """ Eventhandler for new wing """
-        self.changed_chord (dummy)
-        self.changed_currentSection (dummy)
+        self.changed_chord ()
+        self.changed_currentSection ()
 
-    def changed_chord (self, dummy): 
+    def changed_chord (self, *_): 
         """ Eventhandler for changes of chord"""
         self.refresh()
 
-    def changed_planform (self, dummy): 
+    def changed_planform (self, *_): 
         """ Eventhandler for changes of planform"""
 
         if self._active:
             self.dxfArtist.refresh ()           # a new ref dxf could have been loaded
         self.refresh_sections() 
 
-    def changed_sections (self, dummy): 
+    def changed_sections (self, *_): 
         """ Eventhandler for changes of planform"""
-        if self.wing.planform.planform_depend_on_sections:
+        if self.wing().planform.planform_depend_on_sections:
             self.refresh()
         self.refresh_sections() 
 
-    def changed_currentSection(self, dummy): 
+    def changed_currentSection(self, *_): 
         """" eventhandler - current has changed from outside """
         if self._active:
             #retrieve new section name from App 
@@ -1319,7 +1272,7 @@ class Diagram_ChordDistribution (Diagram_Abstract):
 
     def chord_by_mouse(self): 
         """" chord distribution was changed with mouse """
-        self.changed_chord("")
+        self.changed_chord()
         fireEvent (self.ctk_root, CHORD_CHANGED_BY_MOUSE)
 
 
@@ -1381,52 +1334,63 @@ class Diagram_Airfoils (Diagram_Abstract):
     _show_strakedAirfoils = False
 
 
+    def wing(self) -> Wing:
+        " main data object of the diagram"
+        return self._objectFn()
+
+
     def setup_axes(self):
         """ setup axes, axis, artiss for this plot type """
         self.ax.axis('equal')
         self.ax.relim()
         self.ax.autoscale(enable=True, axis='Both')
 
+        self.ax.grid (visible=True)
 
 
     def setup_artists(self):
         """ setup axes, axis, artists for this plot type """
 
         super().setup_artists()
-        self.airfoilArtist      = Airfoil_Artist (self.ax, self._wingFn, show=True, norm=True, 
+        self.airfoilArtist      = Airfoil_Artist (self.ax, self.wing, show=True, norm=True, 
                                                   strak=False, onPick=self.airfoilPicked)
 
 
-    def setup_Switches(self, r=0, c=0):
+    def setup_switches(self, r=0, c=0):
         """ define on/off switches for this plot type"""
 
-        r,c =super().setup_Switches(r, c)
+        r,c =super().setup_switches(r, c)
 
+        r += 1 
+        Switch_Widget (self.view_frame,r,c, lab='Grid', val=True, set=self._set_grid)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='as wing section', 
-                       get=lambda: self.airfoilArtist.abs, set=self.airfoilArtist.set_abs)
+        Switch_Widget (self.view_frame,r,c, lab='as wing section', val=False, set=self._set_show_abs)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Straked airfoils', 
-                       get=self.show_strakedAirfoils, set=self.set_show_strakedAirfoils)
+        Switch_Widget (self.view_frame,r,c, padx=10, lab='Straked airfoils', val=False, set=self._set_show_strakedAirfoils)
         return r,c 
 
 
     # -------- switch call back 
 
-    def show_strakedAirfoils (self): 
+    def _set_grid (self, aBool): 
+        self.ax.grid (aBool)
+        self.figure.canvas.draw_idle() 
 
-        return self._show_strakedAirfoils
-
-    def set_show_strakedAirfoils (self, aBool):
-        # handled not in Artist to allow a re-gnerating of straked airfoils 
+    def _set_show_strakedAirfoils (self, aBool):
 
         if aBool: 
-            self.wing.do_strak()                    # recalculate strak airfoils 
+            self.wing().do_strak()                    # recalculate strak airfoils 
             self.airfoilArtist.set_strak (True)
             self.refresh()
         else: 
             self.airfoilArtist.set_strak (False)
         self._show_strakedAirfoils = aBool 
+
+    def _set_show_abs (self, aBool): 
+        self.airfoilArtist.set_abs (aBool)
+        self.airfoilArtist.refresh (figureUpdate=True) 
+
+
 
     # -------- event handler
 
@@ -1442,19 +1406,19 @@ class Diagram_Airfoils (Diagram_Abstract):
 
         self.ctk_root.bind(CURRENT_SECTION_CHANGED,  self.changed_currentSection, add='+')
 
-    def wing_new (self, dummy): 
+    def wing_new (self, *_): 
         """ Eventhandler for new wing """
-        self.set_show_strakedAirfoils (False)
-        self.changed_airfoil (dummy)
-        self.changed_currentSection (dummy)
+        self._set_show_strakedAirfoils (False)
+        self.changed_airfoil ()
+        self.changed_currentSection ()
 
-    def changed_airfoil(self, dummy): 
+    def changed_airfoil(self, *_): 
         """ Eventhandler for changes of airfoil"""
         if self._active:
             self.airfoilArtist.set_strak (False)            # switch off - strak airfoils could have changed
             self.refresh()
 
-    def changed_currentSection(self, dummy): 
+    def changed_currentSection(self, *_): 
         """" eventhandler - current has changed from outside """
         if self._active:
             #retrieve new section name from App 
@@ -1502,8 +1466,8 @@ class Dialog_Load_DXF (Dialog_Abstract):
     Returns in self.dxf_pathFilename if the user selected a valid file 
     """
     name  = "Import dxf file"
-    widthFrac  = 0.60
-    heightFrac = 0.40
+    widthFrac  = 0.65
+    heightFrac = 0.45
 
     def __init__(self, master, *args, wingFn = None, dxf_Path= None, ref:bool = False, **kwargs):
 
@@ -1547,21 +1511,10 @@ class Dialog_Load_DXF (Dialog_Abstract):
         r +=1  
         Blank_Widget  (frame,r,0)
         r +=1  
-        self.add(Label_Widget (frame,r,0, lab=lambda: self.tmpPlanform.infoText, columnspan=2, width=180, sticky = "ew" ))
-
-        # show a little dxf preview
-        self.diagram_frame = Diagram_Planform_Mini (frame, self.wingFn, size=(4.5,2.5))
-        self.diagram_frame.grid(row=r, column=1, columnspan= 5, padx=(0,15))
-        self.diagram_ax    = self.diagram_frame.ax
-        self.planformArtist = RefPlanform_DXF_Artist (self.diagram_ax, self.wingFn, show=True, showDetail=True, 
-                                                      showMarker=False, planform=self.tmpPlanform)
-        frame.grid_columnconfigure (5, weight=1)
-
-        self.planformArtist.refresh(figureUpdate=True)
+        self.add(Label_Widget (frame,r,0, lab=lambda: self.tmpPlanform.infoText, columnspan=1, width=180, sticky = "ew" ))
 
         r +=1  
         Blank_Widget (frame,r,0)
-        frame.grid_rowconfigure (r, weight=1)
 
         r +=1  
         self.add(Button_Widget (frame,r,1, lab='Ok', style=PRIMARY, set=self.ok, width=100, padx= 0, 
@@ -1571,7 +1524,14 @@ class Dialog_Load_DXF (Dialog_Abstract):
         r +=1  
         Blank_Widget  (frame,r,3)
 
-        self.diagram_frame.setActive(True)
+
+        # ----------- setup diagram frame at the end ---------------
+
+        # show a little dxf preview
+        self.diagram_frame = Diagram_Planform_DXF (frame, self.wingFn, self.tmpPlanform, size=(4.5,2.5))
+        self.diagram_frame.grid(row=5, column=1, columnspan= 5, padx=(0,15))
+        frame.grid_columnconfigure (5, weight=1)
+        frame.grid_rowconfigure (5, weight=1)
 
 
     def open_dxf_file (self):
@@ -1585,12 +1545,12 @@ class Dialog_Load_DXF (Dialog_Abstract):
         if newPathFilename: 
             self.tmpPlanform.set_dxfPathFilename (newPathFilename)
             self.refresh()
-            self.planformArtist.refresh(figureUpdate=True)
+            self.diagram_frame.refresh()
 
     def remove_dxf_file (self):
             self.tmpPlanform.set_dxfPathFilename ("")
             self.refresh()
-            self.planformArtist.refresh(figureUpdate=True)
+            self.diagram_frame.refresh()
 
     def remove_dxf_disable (self):
             disable =  not self.tmpPlanform.dxf_pathFilename
@@ -1621,7 +1581,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
     """
     name       = "Export to ..."
     widthFrac  = 0.70
-    heightFrac = 0.55
+    heightFrac = 0.62
 
     def __init__(self, master, wingFn, Xflr5=False, Flz=False, *args, **kwargs):
 
@@ -1645,25 +1605,16 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         # init UI 
 
         # main grid 3 x 1  (preview + edit + buttons) 
-
-        self.diagram_frame = Diagram_Planform_Mini (self.edit_frame, self.wingFn, size=(4.2,3.2))
-        self.diagram_frame.grid(row=0, column=0, sticky="nwe")
-
-        self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
+        self.input_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent") 
         self.input_frame.grid(row=1, column=0, sticky="nwe")
 
         self.button_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         self.button_frame.grid(row=2, column=0, sticky="wes", pady=10)
 
         self.edit_frame.grid_columnconfigure (0, weight=1)
-        self.edit_frame.grid_rowconfigure    (0, weight=1)
+        self.edit_frame.grid_rowconfigure    (0, weight=1, minsize=400)
         self.edit_frame.grid_rowconfigure    (2, weight=1)
 
-        # artists for preview
-        self.diagram_ax  = self.diagram_frame.ax
-        self.panelArtist = PaneledPlanform_Artist (self.diagram_ax, 
-                                self.wingFn, self.paneledPlanform, show=True)
-        self.panelArtist.refresh(figureUpdate=True)
 
         # header with hints 
         r = 0 
@@ -1734,6 +1685,14 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         self.ctk_root.bind(PANELS_CHANGED, self.refresh, add='+')
 
 
+        # ----------- setup diagram frame at the end ---------------
+
+        # set specific diagram frame for this dialog 
+        self.diagram_frame = Diagram_Planform_Paneled (self.edit_frame, self.wingFn, 
+                                                      self.paneledPlanform, size=(4.2,3.4))
+        self.diagram_frame.grid(row=0, column=0, sticky="nwes")
+
+
     def select_dir(self):
         " open dialog for directory selection"
 
@@ -1761,8 +1720,8 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
             hint = None   
         return hint
 
-    def refresh(self, dummy):
-        self.panelArtist.refresh(figureUpdate=True)
+    def refresh(self, *_):
+        self.diagram_frame.refresh()
         super().refresh()
 
     def cancel(self): 
@@ -2115,12 +2074,15 @@ class App(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.onExit)
 
         # create main frames        
-        diagram_frame = Diagrams        (self, self.wing, border_width=0, corner_radius=0, fg_color=cl_background ) 
-        edit_frame    = Edit            (self, self.wing, height=500, fg_color= 'transparent')
+        diagram_frame = Diagrams        (self, self.wing, border_width=0, corner_radius=0, 
+                                         fg_color=Diagram_Abstract.cl_background ) 
+        edit_frame    = Edit            (self, self.wing, height=250, fg_color= 'transparent')
         file_frame    = Edit_File_Menu  (self, self.wing, width=200)
 
         # maingrid 2 x 2 - diagram on top, file and edit on bottom
         self.grid_rowconfigure   (0, weight=1)
+        self.grid_rowconfigure   (1, weight=0, minsize=250)
+        self.grid_columnconfigure(1, weight=0, minsize=180)
         self.grid_columnconfigure(1, weight=1)
         diagram_frame.grid (row=0, column=0, columnspan=2, pady=(0,5), padx=5, sticky="news")
         file_frame.grid    (row=1, column=0,               pady=(0,5), padx=(5,0), ipady=5,sticky="news")
