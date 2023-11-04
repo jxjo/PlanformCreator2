@@ -277,7 +277,7 @@ class Diagram_Abstract(ctk.CTkFrame):
 
         r,c = 0,1
         self.view_frame.grid_columnconfigure(0, weight=1)   # to center switches
-        self.view_frame.grid_columnconfigure(2, weight=1)
+        self.view_frame.grid_columnconfigure(2, weight=2)
 
         Header_Widget (self.view_frame,r,0, columnspan=3, lab='View')
 

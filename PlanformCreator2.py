@@ -978,7 +978,7 @@ class Diagram_Planform (Diagram_Abstract):
             self.refresh()
         self.refresh_sections() 
 
-    def changed_currentSection(self, dummy): 
+    def changed_currentSection(self, *_): 
         """" eventhandler - current has changed from outside """
         if self._active:
             #retrieve new section name from App 
@@ -1366,7 +1366,7 @@ class Diagram_Airfoils (Diagram_Abstract):
         r += 1
         Switch_Widget (self.view_frame,r,c, lab='as wing section', val=False, set=self._set_show_abs)
         r += 1
-        Switch_Widget (self.view_frame,r,c, padx=10, lab='Straked airfoils', val=False, set=self._set_show_strakedAirfoils)
+        Switch_Widget (self.view_frame,r,c, lab='Straked airfoils', val=False, set=self._set_show_strakedAirfoils)
         return r,c 
 
 
@@ -2008,29 +2008,24 @@ class Edit_File_Menu(Edit_Abstract_Wing):
         
         self.grid_columnconfigure   (0, weight=1)
         Header_Widget (self,0,0, lab=self.name, width=80)
-        Button_Widget (self,0,0, icon_name='settings', padx=(120,0), style=ICON, set=self.myApp.edit_settings)
+        Button_Widget (self,0,0, icon_name='settings', sticky='e', style=ICON, set=self.myApp.edit_settings)
 
-        Button_Widget (self,1,0, lab='New',         width=100, padx=30, pady=4, sticky = '', set=self.myApp.new)
+        Button_Widget (self,1,0, lab='New',         width=100, pady=4, sticky = '', set=self.myApp.new)
         Button_Widget (self,2,0, lab='Open',        width=100, pady=4, sticky = '', set=self.myApp.open)
         Button_Widget (self,3,0, lab='Save',        width=100, pady=4, sticky = '', set=self.myApp.save)
         Button_Widget (self,4,0, lab='Save As...',  width=100, pady=4, sticky = '', set=self.myApp.saveAs)
 
         Button_Widget (self,5,0, lab='Import Dxf',  width=100, pady=4, sticky = '', set=self.myApp.load_reference_dxf)
-        # self.option_import = Option_Widget (self,5,0, width = 100, padx=(10,0), pady=4, 
-        #                                     get=self.importDisplayValue, set = self.set_importType,
-        #                                     options=self.importChoices())
+
         self.option_export = Option_Widget (self,6,0, width = 100, pady=4, sticky = '',
                                             get=self.exportDisplayValue, set = self.set_exportType,
                                             options=self.exportChoices())
 
-    # def importChoices (self):      return ["Dxf as reference", "Other things"]
-    # def importDisplayValue (self): return "Import..."
-    # def set_importType (self, aType):
-    #     self.option_import.refresh()
-    #     if aType == "Dxf as reference":  self.myApp.load_reference_dxf() 
 
     def exportChoices (self):       return ["to Xflr5","to FLZ_vortex", "to DXF", "Airfoils"]
+
     def exportDisplayValue (self):  return "Export..."
+
     def set_exportType (self, aType):
         self.option_export.refresh()
         if aType == "to Xflr5":         self.myApp.export_xflr5 ()
@@ -2082,7 +2077,7 @@ class App(ctk.CTk):
         # maingrid 2 x 2 - diagram on top, file and edit on bottom
         self.grid_rowconfigure   (0, weight=1)
         self.grid_rowconfigure   (1, weight=0, minsize=250)
-        self.grid_columnconfigure(1, weight=0, minsize=180)
+        self.grid_columnconfigure(0, weight=0, minsize=160)
         self.grid_columnconfigure(1, weight=1)
         diagram_frame.grid (row=0, column=0, columnspan=2, pady=(0,5), padx=5, sticky="news")
         file_frame.grid    (row=1, column=0,               pady=(0,5), padx=(5,0), ipady=5,sticky="news")

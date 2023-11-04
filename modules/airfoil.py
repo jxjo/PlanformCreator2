@@ -6,9 +6,7 @@
 
 """
 import os
-import copy
 from pathlib import Path
-import textwrap
 import numpy as np
 from math_util import * 
 from common_utils import * 
@@ -169,13 +167,10 @@ class Airfoil:
 
     @property
     def name_short (self):
-        """ name of airfoil shortend to 25 chars"""
-        return self.name_short_with (width=25)
-
-    def name_short_with (self, width=20):
-        """ name of airfoil shortend to 20 chars"""
-        return textwrap.shorten (self.name,width=width,placeholder='...')
-    
+        """ name of airfoil shortend at the beginning to 23 chars"""
+        if len(self.name) <= 23:    return self.name
+        else:                       return "..." + self.name[-20:]
+            
     @property
     def hasPolarSets (self):
         """does self has polarSets (which are set from 'outside')

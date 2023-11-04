@@ -83,9 +83,9 @@ class Wing:
         # attach the Planform 
         tmp_planformType      = fromDict (dataDict, "planformType", "Bezier", wingExists)
         self._planform        = None
-        self.planform         = Planform.having (tmp_planformType, self, dataDict) # via setter
+        self.set_planform      (Planform.having (tmp_planformType, self, dataDict))
 
-        self.wingSections     = self.createSectionsOn (fromDict(dataDict, "wingSections", None))
+        self._wingSections    = self.createSectionsOn (fromDict(dataDict, "wingSections", None))
     
         # create an extra Planform as dxf reference  
         self.refPlanform_DXF  = Planform_DXF (self, dataDict, ref=True)
@@ -158,9 +158,7 @@ class Wing:
 
     @property 
     def planform (self): return self._planform
-    
-    @planform.setter 
-    def planform (self, newPlanform: 'Planform'): 
+    def set_planform (self, newPlanform: 'Planform'): 
         """ assign new planform to wing"""
 
         # special treatment for dxf because it could be invalid 
@@ -191,7 +189,8 @@ class Wing:
     def set_planformType(self, newPlanformType):
         """ set planformType - will create a new planform object for this wing  """
         if (self.planformType != newPlanformType):
-            self.planform =  Planform.having (newPlanformType, self, self.dataDict)
+            self.set_planform (Planform.having (newPlanformType, self, self.dataDict))
+            self.wingSections_reSort()
 
     @property
     def wingspan(self): return self._wingspan
@@ -203,6 +202,7 @@ class Wing:
             section : WingSection
             for section  in self.wingSections:    # all sections within new half wing span
                 section.adjustToWing (oldSpan)
+            self.wingSections_reSort()
 
     @property
     def rootchord(self): return self._rootchord
@@ -211,6 +211,7 @@ class Wing:
         if (newChord > 10.0):
             self._rootchord = newChord
             self.rootSection.adjustToWing()
+            self.wingSections_reSort()
 
     @property
     def tipchord(self): return self._tipchord
@@ -220,6 +221,7 @@ class Wing:
             self._tipchord = newChord
             self.tipSection.adjustToWing()
             self.planform.refresh()             # e.g. update Bezier curve        
+            self.wingSections_reSort()
 
     @property
     def hingeAngle(self): return self._hingeAngle
@@ -235,6 +237,10 @@ class Wing:
     @property
     def flapDepthTip(self): return self._flapDepthTip
     def set_flapDepthTip(self, newDepth): self._flapDepthTip = newDepth
+
+    @property
+    def wingSections (self) -> list:
+        return self._wingSections
     
     @property
     def rootSection (self)   -> 'WingSection':  return self.wingSections[0]
@@ -480,6 +486,15 @@ class Wing:
         Is defined by planform typ. Within a trapezoidal a section may have both.
         An elliptic planform only one of both is valid   """
         return self.planform.wingSection_eitherPosOrChord
+    
+
+    def wingSections_reSort (self):
+        """ 
+        Re-sort wing sections to an ascending yPos. 
+        When changing major wing parms sections could become out of sort order when
+            they have fixed yPos and chord mixed    """
+
+        self._wingSections.sort (key=lambda sec: sec.yPos) 
     
 
     def wingSectionIndexOf (self, aSection):
@@ -1017,16 +1032,19 @@ class Planform_Bezier(Planform):
 
     # Bezier free definition points for chord distribution
 
-    @property                                   # root tangent 
+    @property                                       # root tangent 
     def p1x(self): return self._px[1]
     def set_p1x(self, aVal): 
-        self._px[1] = min (aVal, self._px[0])      # The angle may not become negative as chord value won't be unique!
+        self._px[1] = min (aVal, self._px[0])       # The angle may not become negative as chord value won't be unique!
         self._bezier.set_points (self._py, self._px)
+        self.wing.wingSections_reSort()             # oder of sections could have changed 
+
     @property
     def p1y(self): return self._py[1]
     def set_p1y(self, aVal): 
         self._py[1] = aVal 
         self._bezier.set_points (self._py, self._px)
+        self.wing.wingSections_reSort()             # oder of sections could have changed 
 
     @property
     def tangentAngle_root (self):
@@ -1045,6 +1063,7 @@ class Planform_Bezier(Planform):
         dx = hypo * np.cos (anAngle * np.pi / 180.0)
         self.set_p1x (self._px[0] + dy)
         self.set_p1y (self._py[0] + dx)
+        
     @property
     def tangentLength_root (self):
         dx = self._py[1] - self._py[0]
@@ -1062,17 +1081,23 @@ class Planform_Bezier(Planform):
     def set_p2x(self, aVal): 
         self._px[2] = aVal 
         self._bezier.set_points (self._py, self._px)
+        self.wing.wingSections_reSort()             # oder of sections could have changed 
+
     @property                                   
     def p3x(self): return self._px[3]
     def set_p3x(self, aVal): 
         self._px[3] = aVal 
         self._bezier.set_points (self._py, self._px)
+        self.wing.wingSections_reSort()             # oder of sections could have changed 
+
     @property                                    
     def p2y(self): return self._py[2]
+
     @property
     def tangentAngle_tip (self):
         """ angle in degrees of the bezier tangent at tip - fixed to 90° """
         return 90.0
+    
     @property
     def tangentLength_tip (self):
         dx = self._py[3] - self._py[2]
@@ -2420,7 +2445,7 @@ class WingSection:
         elif self.isRoot:
             self._yPos = 0.0
             self._norm_chord = 1.0 
-        elif self._yPos: 
+        elif self.hasFixedPosition(): 
             if oldSpan:
                 self._yPos = self._yPos * self.wing.wingspan / oldSpan  
 
