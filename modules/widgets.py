@@ -912,7 +912,7 @@ class Switch_Widget(Base_Widget):
     def __init__(self, *args, padx=None, pady=None, columnspan=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if padx is None: padx = (15,10)
+        if padx is None: padx = (15,5)
         if pady is None: pady = 0
         if columnspan is None: columnspan = 1
 

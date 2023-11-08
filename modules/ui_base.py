@@ -134,12 +134,17 @@ class Edit_Abstract (ctk.CTkFrame):
         # root for change events (widgets will have the same toplevel as root)
         self.ctk_root = self.winfo_toplevel()
         if myApp:
-            self.myApp = myApp
+            self._myApp = myApp
         else:
-            self.myApp = self.winfo_toplevel()
+            self._myApp = self.winfo_toplevel()
 
         self.init()
-    
+
+    @property
+    def myApp (self):
+        """ the top level app self belongs to -can be overloaded for type info"""
+        return self._myApp
+
     
     @property
     def workingDir (self): 
@@ -275,8 +280,8 @@ class Diagram_Abstract(ctk.CTkFrame):
 
         if not self.view_frame: return
 
-        r,c = 0,1
-        self.view_frame.grid_columnconfigure(0, weight=1)   # to center switches
+        r,c = 0,0
+        self.view_frame.grid_columnconfigure(0, weight=0)   # to center switches
         self.view_frame.grid_columnconfigure(2, weight=2)
 
         Header_Widget (self.view_frame,r,0, columnspan=3, lab='View')

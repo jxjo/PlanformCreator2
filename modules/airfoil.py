@@ -544,7 +544,6 @@ class Airfoil:
         if self.isLoaded: 
             self._write_toFile (self.pathFileName, self.name, self.x ,self.y)
             self.set_isModified (False)
-            print ("*** save ", self.pathFileName)
 
 
     def saveAs (self, dir = None, destName = None):

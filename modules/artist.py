@@ -11,6 +11,7 @@ from common_utils import *
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from matplotlib.collections import PathCollection
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk 
 
 from cycler import cycler  
@@ -212,7 +213,9 @@ class Artist():
 
     def _add(self, aPlot):
         """ add matplotlib artist to artists of self"""
-        if isinstance (aPlot, list):            # .plot returns list 
+        if isinstance (aPlot, PathCollection):      # scatter returns PathCollection 
+            art = aPlot
+        elif isinstance (aPlot, list):              # .plot returns list - take first element
             art = aPlot [0]
         else:
             art = aPlot
@@ -237,7 +240,7 @@ class Artist():
         """ plot a title in self axes
         Args:
             title: title text 
-            va: vertical alignment 'top' or 'bottom' 
+            va: vertical alignment 'top', 'bottom', 'center'
             ha: horizontal alignment  'left' or 'right' 
             wspace: width  space 
             hspace: height space        
@@ -245,6 +248,8 @@ class Artist():
 
         if va == 'top':
             y = 1.0 - hspace
+        elif va == 'center':
+            y = 0.5
         else:
             y = hspace 
         if ha == 'left':
