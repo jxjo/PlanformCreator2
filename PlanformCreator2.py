@@ -380,7 +380,7 @@ class Edit_Planform_Master(Edit_Abstract_Wing):
    
         dxf_Path = dxf_dialog.dxf_pathFilename
         if dxf_Path:  
-            self.wing().planform =  Planform_DXF( self.wing(), dxf_Path= dxf_Path, ref = False)
+            self.wing().set_planform (Planform_DXF( self.wing(), dxf_Path= dxf_Path, ref = False))
             handled = True
             fireEvent (self.ctk_root, WING_CHANGED)                   # update hinge, flaps
         else: 

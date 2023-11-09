@@ -197,6 +197,7 @@ def __get_matching_line(point, lines):
     # nothing was found
     ErrorMsg("No matching line was found")
     return None, None
+
     
 def create_contour(rootline, lines):
     # join all lines to contour
@@ -217,22 +218,29 @@ def create_contour(rootline, lines):
             ErrorMsg("no matching line was found, contour could not be finished")
             return contour, lines
         else:    
-            # append to contour
-            TraceMsg("Adding line %d to contour" % idx)
-            contour.extend(line)
+            # append to contour - take only additional point of line to contour
+            #                     to avoid dublicate points 
+            if not contour:
+                contour = list(line)                    # first line (tuple) complete
+            else:
+                for point in line:
+                    if point != contour[-1]:            # avoid dublicate points 
+                        contour.append(point) 
+                # if line [0] != contour [-1]:            # avoid dublicates
+                #     contour.append(line [0])
+                # contour.append(line[1])                 # 2nd point of line always
             
             # set new actual point, which is the endpoint of the current line
             actual_point = line[-1]
             x, y = actual_point
-            TraceMsg("New point: %f, %f" % (x,y))
             
             # check if we have reached the endpoint
             if __points_match(endpoint, actual_point):
                 x,y = endpoint
-                TraceMsg("Found Endpoint of contour: %f, %f" % (x,y))
                 # we have finished
                 return contour, lines
-        
+
+
 def split_contour(contour):
     # split contour into leading edge and trailing edge
     LE = []
@@ -390,6 +398,26 @@ def __convert_toPlanform(msp):
     
     return myLines
 
+def _normalize_lines (lines, y_offset, scaleFactor_y):  
+    """ noramlize lines (LE oder TE) to have x = 0..1 and y=0..1"""
+
+    x1, y1 = lines[0]                       # root point
+    x2, y2 = lines[-1]                      # tip point
+
+    scaleFactor_x = 1.0 / abs(x2-x1)
+    x_offset = x1
+
+    lines_norm = []       
+ 
+    for point in lines :  
+        point_norm = convert (point, x_offset, y_offset, scaleFactor_x, scaleFactor_y)
+        lines_norm.append(point_norm)
+
+    # ensure x = 1 for last point 
+    tip = lines_norm [-1]
+    lines_norm [-1] = ((1.0, tip[1]))
+
+    return lines_norm
 
 
 def __create_planformShape(lines):
@@ -410,7 +438,6 @@ def __create_planformShape(lines):
     (x1, y1) , (x2, y2) = rootline
     rootchord = y2 - y1
     scaleFactor_y = 1 / rootchord
-    x_offset = x1
     y_offset = y1
 
     # get hingeline, if any
@@ -431,45 +458,18 @@ def __create_planformShape(lines):
         ErrorMsg("number of TE points is zero")
         return None
     
-    # calculate halfwingspan, determine scale factor 
-    x1, y1 = LE[0]
-    x2, y2 = LE[-1]
-
-    halfwingspan = abs(x2-x1)
-    scaleFactor_x = 1.0/halfwingspan
-    
-    TraceMsg("rootchord: %f, halfwingspan: %f, x_offset: %f, y_offset: %f" % (rootchord, halfwingspan, x_offset, y_offset))
-
-    # normalize LE
-    LE_norm = [(0.0, 1.0)]
-    # further points
-    for idx in range(1, len(LE)):
-        LE_x, LE_y = convert(LE[idx], x_offset, y_offset, scaleFactor_x, scaleFactor_y)
-        LE_norm.append((LE_x, LE_y))
-
-    # normalize TE
-    TE_norm = [(0.0, 0.0)]
-    for idx in range(1, len(TE)):
-        TE_x, TE_y = convert(TE[idx], x_offset, y_offset, scaleFactor_x, scaleFactor_y)
-        TE_norm.append((TE_x, TE_y))
-    
-    # normalize hingeline
-    HL_norm = []
-    if hingeline != None:
-        for idx in range(len(hingeline)):
-            HL_x, HL_y = convert(hingeline[idx], x_offset, y_offset, scaleFactor_x, scaleFactor_y)
-            HL_norm.append((HL_x, HL_y))
+    LE_norm = _normalize_lines (LE, y_offset, scaleFactor_y) 
+    TE_norm = _normalize_lines (TE, y_offset, scaleFactor_y)  
+    HL_norm = _normalize_lines (hingeline, y_offset, scaleFactor_y )
                 
     # calculate angle of hingeline
     if (hingeline != None):
-        # get first and last point of hingeline
         p1 = hingeline[0]
         p2 = hingeline[-1]
         hingelineAngle = line_angle(p1, p2)
         TraceMsg(" hingeline angle: %f°" %(hingelineAngle))
     else: 
         hingelineAngle = None
-        
     
     return LE_norm, TE_norm, HL_norm, hingelineAngle
 
