@@ -47,7 +47,7 @@ from spline_of_airfoil  import UPPER, LOWER
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "1.0.0"
+AppVersion = "1.0.1"
 
 
 # tk change events for updating mainly plots or vice versa 
