@@ -11,14 +11,6 @@ import customtkinter as ctk
 import tkinter as tk
 from PIL import Image
 
-# some additional color definitions 
-cl_styles ={
-        'Normal'    : ("gray10","gray95"),
-        'Disabled'  : ("gray30","gray70"),
-        'Error'     : ("salmon","salmon") ,
-        'Hint'      : ("#E0A721", "#E0A721"),
-        'Warning'   : ("DarkOrange3", "orange")
-        }
 
 cl_entry            = ("gray95","gray35")         # background of entry fields
 cl_entry_disable    = ("gray88","gray35")         # background of diabeld entry fields
@@ -33,6 +25,23 @@ PRIMARY             = 1                           # buttonstyle for highlighted 
 SECONDARY           = 2                           # buttonstyle for normal action
 SUPTLE              = 3                           # buttonstyle for subtle appearance 
 ICON                = 4                           # buttonstyle for icon only button 
+
+
+STYLE_NORMAL        = 'Normal'
+STYLE_DISABLED      = 'Disabled'
+STYLE_ERROR         = 'Error'
+STYLE_HINT          = 'Hint'
+STYLE_WARNING       = 'Warning'
+
+# some additional color definitions 
+cl_styles ={
+        STYLE_NORMAL    : ("gray10","gray95"),
+        STYLE_DISABLED  : ("gray30","gray70"),
+        STYLE_ERROR     : ("red2","red2") ,
+        STYLE_HINT      : ("#E0A721", "#E0A721"),
+        STYLE_WARNING   : ("DarkOrange3", "orange")
+        }
+
 
 #-------------------------------------------------------------------------------
 # Pretty Messagebox   
@@ -147,7 +156,7 @@ class Messagebox(ctk.CTkToplevel):
         self.message_icon = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=None, font=self.font,
                                             fg_color="transparent", hover=False,  image=self.icon)
         self.message_text = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=self.message, font=self.font,
-                                            fg_color="transparent", text_color=cl_styles ['Normal'], hover=False,  image=None)
+                                            fg_color="transparent", text_color=cl_styles [STYLE_NORMAL], hover=False,  image=None)
         self.message_text._text_label.configure(wraplength=self.width *0.8, justify="center")
         self.message_icon.grid(row=0, column=0, columnspan=1, sticky="nes")
         self.message_text.grid(row=0, column=1, columnspan=2, sticky="nwes")
@@ -272,7 +281,7 @@ class SplashWindow (ctk.CTkToplevel):
         self.message_icon = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=None, 
                                             fg_color="transparent", hover=False,  image=self.icon)
         self.message_text = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=self.message,
-                                            fg_color="transparent", text_color=cl_styles ['Normal'], hover=False,  image=None)
+                                            fg_color="transparent", text_color=cl_styles [STYLE_NORMAL], hover=False,  image=None)
         self.message_text._text_label.configure(wraplength=self.width *0.8, justify="center")
         self.message_icon.grid(row=0, column=0, columnspan=1, sticky="nes")
         self.message_text.grid(row=0, column=1, columnspan=2, sticky="nwes")
@@ -341,7 +350,8 @@ class Base_Widget():
                  row:int, column:int, 
                  val = None, 
                  lab:str=None, 
-                 obj=None, get =None, set =None, objId=None,
+                 obj=None, objId=None,
+                 get =None, set =None, 
                  disable = False, 
                  event: str= None,
                  lim:tuple=None, dec = None, unit : str = None, 
@@ -419,7 +429,7 @@ class Base_Widget():
 
         self._styleGetter = None
         if text_style is None:
-            self._text_style = 'Normal'
+            self._text_style = STYLE_NORMAL
         else: 
             if not (isinstance(text_style, str)):
                 self._styleGetter = text_style
@@ -427,9 +437,9 @@ class Base_Widget():
             if text_style in cl_styles:
                 self._text_style = text_style
             else:
-                self._text_style = 'Normal'
+                self._text_style = STYLE_NORMAL
 
-        self.whileSetting = False                       # avoid circular actions with refresh()
+        self.whileSetting = False                   # avoid circular actions with refresh()
 
         self.mainCTk  = None                        # in a compound widget this is the important one
         self.subCTk   = None                        # the small add/sub buttons
@@ -695,7 +705,7 @@ class Base_Widget():
                 aStyle = self.get_value (self._styleGetter, self.obj, self.parent)
             else: 
                 aStyle = self._text_style
-        elif aStyle == 'Disabled' and self._styleGetter:        # external style overwrites disabled style
+        elif aStyle == STYLE_DISABLED and self._styleGetter:        # external style overwrites disabled style
                 extStyle = self.get_value (self._styleGetter, self.obj, self.parent)
                 if extStyle: 
                     aStyle = extStyle
@@ -703,7 +713,7 @@ class Base_Widget():
         if aStyle in cl_styles:
             return cl_styles [aStyle]
         else:
-            return cl_styles ['Normal']
+            return cl_styles [STYLE_NORMAL]
 
     @property     
     def _name (self): 
@@ -767,6 +777,7 @@ class Label_Widget(Base_Widget):
                  sticky=None,               # default sw
                  text_style='Disabled', 
                  columnspan=None,
+                 wraplength=0,              # enable wrap at length
                  **kwargs):
         
         super().__init__(*args, text_style=text_style, **kwargs)
@@ -776,7 +787,6 @@ class Label_Widget(Base_Widget):
         if sticky is None: 
             if justify == "right": sticky = "se"
             else:                  sticky = "sw" 
-
         if "e" in sticky:
             anchor = "e"
         else:
@@ -788,7 +798,9 @@ class Label_Widget(Base_Widget):
         if pady         is None: pady = 0
 
         self.mainCTk = ctk.CTkLabel(self.parent, width=self.width, justify =justify,  
-                                    text=self.label, anchor= anchor, text_color=self._text_color())           
+                                    text=self.label, anchor= anchor, text_color=self._text_color(),
+                                    wraplength=wraplength) 
+                  
         self.mainCTk.grid(row=self.row, column=self.column,  columnspan=columnspan, 
                           padx=padx, pady=pady, sticky=sticky)
 

@@ -84,6 +84,8 @@ class Dialog_Abstract (ctk.CTkToplevel):
         """ init UI, widgets, grid - to be overloaded"""
         pass
 
+    
+
     def ok (self):
         # to over load and do ok actions
         self.return_OK = True
@@ -101,8 +103,14 @@ class Dialog_Abstract (ctk.CTkToplevel):
         self.widgets.append (aWidget)
 
     def refresh(self, *_):
+        """ refresh (reread) all widgets """
         for widget in self.widgets:
             if isinstance(widget, Base_Widget): widget.refresh()
+
+    def force_set (self):
+        """ all widgets write back their value - e.g. on Ok to ensure to have actual data"""
+        for widget in self.widgets:
+            if isinstance(widget, Base_Widget): widget.force_set()
 
     def leftTopPosition(self, width=None, height=None):
         """ get center of a tkinter window
@@ -436,16 +444,12 @@ class Dialog_Settings (Dialog_Abstract):
         toDict(self.settings_dict, 'window_scaling', aVal)        
         self.refresh()
 
-    # ctk.set_appearance_mode    (Settings().get('appearance_mode', default='System'))   # Modes:  "System" (standard), "Dark", "Light"
-    # ctk.set_default_color_theme(Settings().get('color_theme', default='blue'))         # Themes: "blue" (standard), "green", "dark-blue"
-    # scaling = Settings().get('widget_scaling', default=1.0)
-    # if scaling != 1.0: 
-    #     ctk.set_widget_scaling(scaling)  # widget dimensions and text size
-    #     NoteMsg ("The App is scaled to %.2f" %scaling)
 
     def ok (self):
         # to over load and do ok actions
-        for widget in self.widgets:
-            widget.force_set()
+
+        self.force_set()
+
         Settings().write_dataDict (self.settings_dict, dataName='Settings')
+
         super().ok()                               
