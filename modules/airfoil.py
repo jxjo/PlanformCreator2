@@ -70,7 +70,8 @@ class Airfoil:
                 checkPath = os.path.join (self.workingDir, pathFileName)
             if not os.path.isfile(checkPath):
                 ErrorMsg ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
-                self._name = "-- ? --"
+                self._name = "-- Error --"
+                raise ValueError (f"Cannot create airfoil on '{checkPath}'")
             else:
                 self.pathFileName = pathFileName
                 self._name = os.path.splitext(os.path.basename(self.pathFileName))[0]  # load will get the real name

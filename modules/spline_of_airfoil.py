@@ -620,16 +620,18 @@ class SideOfAirfoil:
         Reversal detect starts at xStart - to exclude turbulent leading area... 
         """
         # algorithm from Xoptfoil where a change of sign of y[i] is detected 
+        reversals = []
         x = self.x
         y = self.y
 
+        if not np.any (y < 0.0): return reversals       # early fail if all are positive       
+
         iToDetect = np.nonzero (x >= xStart)[0]
 
-        reversals = []
         yold    = y[iToDetect[0]]
         for i in iToDetect:
-            if abs(y[i]) >= self.threshold:                # outside threshold range
-                if (y[i] * yold < 0.0):                     # yes - changed + - 
+            if abs(y[i]) >= self.threshold:             # outside threshold range
+                if (y[i] * yold < 0.0):                 # yes - changed + - 
                     reversals.append((round(x[i],10),round(y[i],10))) 
                 yold = y[i]
         return reversals 

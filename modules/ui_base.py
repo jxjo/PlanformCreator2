@@ -313,7 +313,12 @@ class Diagram_Abstract(ctk.CTkFrame):
         Label_Widget (self.view_frame, r, 0, lab='Pan and zoom')
         r +=1
         self.toolbar = Plot_Toolbar(self.canvas, self.view_frame, background=ctk.get_appearance_mode())
-        self.toolbar.grid (row=r, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,10))
+        self.toolbar.grid (row=r, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,0))
+
+        # show mouse coordinates 
+        r += 1
+        coords = ctk.CTkLabel (self.view_frame, textvariable=self.toolbar.mouse_coords, height=16)
+        coords.grid (row=r, column=0, columnspan= 3, sticky='w', padx=(15,10), pady=(0,2))
 
 
     def create_axes (self):

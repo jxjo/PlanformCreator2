@@ -748,17 +748,20 @@ class Header_Widget(Base_Widget):
         Header_Widget (self, 0,2, lab=self.localString) :)
     """
     def __init__(self, *args, 
-                 columnspan = 1, pady=None, sticky = None, anchor=None, 
+                 columnspan = 1, 
+                 padx=None, pady=None, 
+                 sticky = None, anchor=None, 
                  **kwargs):
         super().__init__(*args, **kwargs)
 
         if anchor is None: anchor = 'w'
         if sticky is None: sticky = "w"
+        if padx   is None: padx = (10,0)
         if pady   is None: pady = (10,15)
 
         self.mainCTk = ctk.CTkLabel (self.parent, width=self.width, text=self.label, 
                                      anchor= anchor, font= ("", fs_header))
-        self.mainCTk.grid(row=self.row, column=self.column,  columnspan= columnspan, pady=pady, padx=(10,0), sticky="w")
+        self.mainCTk.grid(row=self.row, column=self.column,  columnspan= columnspan, pady=pady, padx=padx, sticky="w")
 
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
         widgetCTk.configure (text=newLabelStr)
@@ -772,6 +775,7 @@ class Label_Widget(Base_Widget):
         Label_Widget  (self, 3,0, width=200, lab=self.myLabeText) :)
     """
     def __init__(self, *args, 
+                 textvariable=None,         # optional- use tkinter textvariable for auto update 
                  padx=None, pady=None, 
                  justify=None,              # left or right - default left 
                  sticky=None,               # default sw
@@ -797,8 +801,11 @@ class Label_Widget(Base_Widget):
         if padx         is None: padx = 10
         if pady         is None: pady = 0
 
-        self.mainCTk = ctk.CTkLabel(self.parent, width=self.width, justify =justify,  
-                                    text=self.label, anchor= anchor, text_color=self._text_color(),
+        if textvariable: self.label = None                  # a textvariable overwrites an additional label 
+
+        self.mainCTk = ctk.CTkLabel(self.parent, text=self.label, textvariable=textvariable,
+                                    width=self.width, justify =justify, 
+                                    anchor= anchor, text_color=self._text_color(),
                                     wraplength=wraplength) 
                   
         self.mainCTk.grid(row=self.row, column=self.column,  columnspan=columnspan, 
@@ -819,8 +826,10 @@ class Button_Widget(Base_Widget):
         style -- button appearance - either PRIMARY, SECONDARY or SUPTLE
     """
 
+    # <a target="_blank" href="https://icons8.com/icon/15813/pfeil%3A-einklappen">Pfeil: Einklappen</a> Icon von <a target="_blank" href="https://icons8.com">Icons8</a>
     ICONS = {
         "settings": None,
+        "collapse": None
         }
     
 
@@ -843,7 +852,7 @@ class Button_Widget(Base_Widget):
         elif style == ICON:
             self.fg_color = "transparent"
             self.width = 25
-            icon_size= (20,20)
+            icon_size= (17,17)
             icon_name = icon_name if icon_name is not None else "settings"
         else:
             self.fg_color = cl_button_secondary
@@ -857,7 +866,9 @@ class Button_Widget(Base_Widget):
 
 
         self.mainCTk = ctk.CTkButton(self.parent, text=text, height=self.height, width=self.width, 
-                                     anchor=anchor, image=icon, command=self.CTk_callback)
+                                     anchor=anchor, image=icon, 
+                                     border_spacing=0, border_width=0,
+                                     command=self.CTk_callback)
         self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky=sticky)
      
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
@@ -1138,7 +1149,7 @@ class Slider_Widget(Base_Widget):
 
         column = self.column
         if columnspan is None:  columnspan = 1
-        if padx is None: pady = 1 
+        if padx is None: padx = 1 
         if pady is None: pady = 0 
 
         self.mainCTk = ctk.CTkSlider (self.parent, width=self.width, height=self.height, border_width=1,
@@ -1147,7 +1158,7 @@ class Slider_Widget(Base_Widget):
         self._set_slider_range()                            # min, max, steps ...
 
         self.mainCTk.grid(row=self.row, column=column, columnspan= columnspan, 
-                          padx=padx, pady=pady, sticky='w')
+                          padx=padx, pady=pady, sticky='we')
 
         self.set_CTkControl()
         self.set_CTkControl_state()

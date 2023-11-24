@@ -15,57 +15,66 @@ from matplotlib.collections import PathCollection
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk 
 
 from cycler import cycler  
+import tkinter as tk
 
 cl_background       = '#101010'
-cl_labelGrid        = '#C0C0C0'
+cl_labelGrid        = '#D0D0D0'
+cl_axes             = '#606060'
 cl_text             = '#D0D0D0'
 cl_userHint         = '#E0A721'
 cl_toolbar          = ('gray85', 'gray35')
 
 
+# plt.rcParams.update({'figure.dpi': 180})
+plt.rcParams.update({'font.size': 9})                       # default font.size: 10.0
+plt.rcParams.update({'font.weight': 'light'})   
+plt.rcParams.update({'text.color': cl_text})   
+
+plt.rcParams.update({'figure.facecolor': cl_background})         
+plt.rcParams.update({'axes.facecolor': cl_background})      
+plt.rcParams.update({'axes.edgecolor': cl_axes})             # axes spines color        
+plt.rcParams.update({'xtick.color': cl_labelGrid})   
+plt.rcParams.update({'ytick.color': cl_labelGrid})   
+plt.rcParams.update({'axes.labelcolor':  cl_labelGrid})  
+plt.rcParams.update({'axes.spines.left': True})   
+plt.rcParams.update({'axes.spines.bottom': True})   
+plt.rcParams.update({'axes.spines.top': True})   
+plt.rcParams.update({'axes.spines.right': True})   
+plt.rcParams.update({'lines.linewidth': 1.0})               # line width in points
+
+plt.rcParams.update({'legend.fontsize': 'small'})          # fontsiize of legend 
+
+plt.rcParams.update({'axes.grid': False})                   # display grid or not    
+plt.rcParams.update({'grid.linewidth': 0.8})                # in points         
+plt.rcParams.update({'grid.color': cl_labelGrid})           
+plt.rcParams.update({'grid.alpha': 0.2})                    # transparency, between 0.0 and 1.0  
+
+
 class Artist():
     """
-    The "Artist" to plot a wing object on a matplotlib axes
+        Abstract class: The "Artist" to plot a data object on a matplotlib axes
 
-        - these are not MatplotLib artists  - 
+        - these are not MatplotLib artists  
 
-    Arguments:
-        axes --     the plt axes to plot onto
-        dataModel -- the object the artist should plot 
-
-    Keyword Arguments:
-        onPick --   call back command when line was picked by user - will activate picking :)
-        norm --     when implemented will plot in a normed coordinate systeme
     """
-    
-    # plt.rcParams.update({'figure.dpi': 180})
-    plt.rcParams.update({'font.size': 9})                       # default font.size: 10.0
-    plt.rcParams.update({'font.weight': 'light'})   
-    plt.rcParams.update({'text.color': cl_text})   
 
-    plt.rcParams.update({'figure.facecolor': cl_background})         
-    plt.rcParams.update({'axes.facecolor': cl_background})      
-    plt.rcParams.update({'axes.edgecolor': cl_labelGrid})       # axes spines color        
-    plt.rcParams.update({'xtick.color': cl_labelGrid})   
-    plt.rcParams.update({'ytick.color': cl_labelGrid})   
-    plt.rcParams.update({'axes.labelcolor':  cl_labelGrid})  
-    plt.rcParams.update({'axes.spines.left': True})   
-    plt.rcParams.update({'axes.spines.bottom': True})   
-    plt.rcParams.update({'axes.spines.top': True})   
-    plt.rcParams.update({'axes.spines.right': True})   
-    plt.rcParams.update({'lines.linewidth': 1.0})               # line width in points
-
-    plt.rcParams.update({'legend.fontsize': 'small'})          # fontsiize of legend 
-
-    plt.rcParams.update({'axes.grid': False})                   # display grid or not    
-    plt.rcParams.update({'grid.linewidth': 0.8})                # in points         
-    plt.rcParams.update({'grid.color': cl_labelGrid})           
-    plt.rcParams.update({'grid.alpha': 0.2})                    # transparency, between 0.0 and 1.0  
-
+    name = "Abstract Artist" 
 
     def __init__ (self, axes, modelFn, norm = False, onPick=None, onMove=None,
                   show=False, showMarker=True):
+        """
+        The Artist to plot a data object on a matplotlib axes
+        - these are not MatplotLib artists  
 
+        Args:
+            axes: the axes to plot on to 
+            modelFn: the object the artist should plot, either bound method or list  
+            norm: show in normed 0..1 scale 
+            onPick: call back command when line was picked by user - will activate picking. 
+            onMove: call back command when point was moved by user 
+            show: will show self immadiatly 
+            showMarker: show marker info 
+        """
         self.ax : plt.Axes = axes
         self._modelFn = modelFn             # we get a bounded method to the model e.g. Wing 
 
@@ -241,7 +250,7 @@ class Artist():
         Args:
             title: title text 
             va: vertical alignment 'top', 'bottom', 'center'
-            ha: horizontal alignment  'left' or 'right' 
+            ha: horizontal alignment  'left' or 'right', 'center'
             wspace: width  space 
             hspace: height space        
         """
@@ -252,8 +261,11 @@ class Artist():
             y = 0.5
         else:
             y = hspace 
+
         if ha == 'left':
             x = wspace
+        elif ha == 'center':
+            x = 0.5 - wspace
         else:
             x = 1.0 - wspace 
 
@@ -351,7 +363,7 @@ class Artist():
 
 
 
-def autoscale_y(ax,margin=(0.1, 0.1)):
+def autoscale_y(ax : plt.Axes,margin=(0.1, 0.1)):
     """
     This function rescales the y-axis based on the data that is visible given the current xlim of the axis.
     ax -- a matplotlib axes object
@@ -379,40 +391,6 @@ def autoscale_y(ax,margin=(0.1, 0.1)):
     ax.set_ylim(bot,top)
 
 
-def autoscale_x(ax, margin=(0.1, 0.1)):
-    """
-    This function rescales the x-axis based on the data that is visible given the current ylim of the axis.
-    ax -- a matplotlib axes object
-    margin -- the fraction of the total height of the y-data to pad the upper and lower ylims"""
-
-    def get_left_right(line):
-        xd = line.get_xdata()
-        yd = line.get_ydata()
-        lo,hi = ax.get_ylim()
-        x_displayed = xd[((yd>lo) & (yd<hi))]
-        if len(x_displayed) > 1:                # a normal line 
-            h = np.max(x_displayed) - np.min(x_displayed)
-            left  = np.min(x_displayed) - margin[0]*h
-            right = np.max(x_displayed) + margin[1]*h
-        elif len(x_displayed) == 1:              # just a point 
-            left  = xd[0] - margin[0] * xd[0]
-            right = xd[0] + margin[1] * xd[0]
-        else:                                   # empty plot 
-            left  = float('inf')
-            right = float('-inf')
-        return left,right
-
-    lines = ax.get_lines()
-    left,right = np.inf, -np.inf
-
-    for line in lines:
-        new_left, new_right = get_left_right(line)
-        if new_left  < left:  left  = new_left
-        if new_right > right: right = new_right
-
-    ax.set_xlim(left,right)
-
-
 
 
 # ----------------------------------------------------------
@@ -432,7 +410,7 @@ class Plot_Toolbar(NavigationToolbar2Tk):
     # )
     toolitems = (
         ('Home', 'Reset original view', 'home', 'home'),
-    #    ('Back', 'Back to previous view', 'back', 'back'),
+        ('Back', 'Back to previous view', 'back', 'back'),
     #    ('Forward', 'Forward to next view', 'forward', 'forward'),
     #    (None, None, None, None),
         ('Pan',
@@ -459,10 +437,13 @@ class Plot_Toolbar(NavigationToolbar2Tk):
         for button in self.winfo_children():
             button.config(background=backColor)
 
+        self.mouse_coords = tk.StringVar(master=self)
+
  
     def set_message(self, s):
-        # suppress coordinates to show 
-        pass
+        # suppress coordinates to show in original toolbar 
+
+        self.mouse_coords.set (s) 
 
 
 # ----------------------------------------------------------
