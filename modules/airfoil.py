@@ -13,6 +13,116 @@ from common_utils import *
 from spline_of_airfoil import SideOfAirfoil, SplineOfAirfoil, SideOfAirfoil_Bezier, UPPER,LOWER
 
 
+class Geometry_Fast:
+    """ 
+    Helper class for fast(er) geometry calculcations for Airfoil
+
+    In contrast to the high precision calculation with splines a simple interpolation 
+    of airfoils coordinates is just to determine thickness, camber etc...
+
+    """
+    def __init__(self, airfoil: 'Airfoil'):
+        """ new Geometry_Fast helper
+
+        Args:
+            airfoil (Airfoil): the airfoil self belongs to 
+        """
+
+        self._airfoil   = airfoil 
+
+        self._thickness : SideOfAirfoil = None 
+        self._camber    : SideOfAirfoil = None 
+
+        self._maxThick  = None
+        self._maxThickX = None
+        self._maxCamb   = None
+        self._maxCambX  = None 
+
+    @property
+    def airfoil (self) -> 'Airfoil': return self._airfoil
+
+    @property
+    def thickness (self) -> SideOfAirfoil:
+        if self._thickness is None: self._eval_thickness_camber()
+        return self._thickness
+
+    @property
+    def camber (self) -> SideOfAirfoil:
+        if self._camber is None: self._eval_thickness_camber()
+        return self._camber
+
+    @property
+    def maxThick (self): 
+        """ max thickness """
+        if self._maxThick is None:
+            self._maxThickX, self._maxThick = self.thickness.maximum
+        return self._maxThick
+
+    @property
+    def maxThickX (self): 
+        """  max thickness x-Position"""
+        if self._maxThickX is None:
+            self._maxThickX, self._maxThick = self.thickness.maximum
+        return self._maxThickX
+
+    @property
+    def maxCamb (self): 
+        """ max camber """
+        if self._maxCamb is None:
+            self._maxCambX, self._maxCamb = self.camber.maximum
+        return self._maxCamb
+
+    @property
+    def maxCambX (self): 
+        """ max camber """
+        if self._maxCambX is None:
+            self._maxCambX, self._maxCamb = self.camber.maximum
+        return self._maxCambX
+
+
+    # ----------  Methods ---------------
+
+
+    def _eval_thickness_camber (self): 
+        """
+        evalutes self thickness and camber distribution as SideOfAirfoil objects
+        with a x-distribution of the upper side.
+        
+        Note: It's an approximation as thickness is just the sum of y_upper(x) and y_lower(x)
+              and camber is just the mean value y_upper(x) and y_lower(x)
+        """
+
+        upper = self.airfoil.upper
+        lower = self.airfoil.lower 
+
+
+        nupper = len(upper.y)
+        y_oppo = np.zeros (nupper)
+
+        for i, x in enumerate (upper.x):
+
+            # find the surrounding x(j) and x(j+1) on lower side of x (from upper side)
+            jl = bisection (lower.x, x)
+            
+            # now interpolate the y-value on lower side 
+            if jl < (len(lower.x) -2):
+                x1 = lower.x[jl]
+                x2 = lower.x[jl+1]
+                y1 = lower.y[jl]
+                y2 = lower.y[jl+1]
+                y_oppo[i] = interpolate (x1, x2, y1, y2, x)
+            else: 
+                y_oppo[i] = lower.y[-1]
+
+        # thickness and camber can now easily calculated 
+        self._thickness = SideOfAirfoil (upper.x, upper.y - y_oppo, name='Thickness distribution')
+        self._camber    = SideOfAirfoil (upper.x, (upper.y + y_oppo) / 2.0, name='Camber line')
+
+        return 
+
+
+
+
 
 class Airfoil:
     """ 
@@ -58,6 +168,8 @@ class Airfoil:
         self._te_bunch       = 0.7   	         # repanel: panel bunch at trailing edge
 
         self._polarSets      = None              # polarSets which are defined from outside 
+
+        self._geoFast        = None              # helper object for fast geometry calcs
 
         self._propertyDict   = {}                # multi purpose extra properties for an AIirfoil
 
@@ -150,11 +262,13 @@ class Airfoil:
     @property
     def y (self): return self._y
 
-    def set_xy (self, newX, newY): 
+    def set_xy (self, newX, newY):
+        """ set new coordinates - will reset self""" 
         self._x      = newX
         self._y      = newY
         self._iLe    = None
         self._spline = None
+        self._geoFast= None
         self.set_isModified (True)
   
     @property
@@ -357,6 +471,13 @@ class Airfoil:
         """ set max camber x-position in %"""
         self.spline.set_maxCambX (newVal/100.0)
         self.set_xy (self.spline.x, self.spline.y)
+
+    @property
+    def geoFast (self) -> Geometry_Fast:
+        """ fast geometry informations"""
+        if self._geoFast is None: 
+            self._geoFast = Geometry_Fast(self)
+        return self._geoFast
 
     @property
     def isSymmetric(self):
@@ -1121,6 +1242,33 @@ class Airfoil_Bezier(Airfoil):
 
 # ------------ test functions - to activate  -----------------------------------
 
+def test_geoFast (): 
+
+    from airfoil_examples import Root_Example, Tip_Example
+    from timeit import default_timer as timer
+
+    airfoils = [Root_Example(), Tip_Example()]
+    airfoil : Airfoil
+
+    for airfoil in airfoils: 
+
+        print ("\n", airfoil.name, "-------------\n")
+
+        start = timer()
+        obj = airfoil.spline
+        print (f"Spline     {obj.maxThick:.5f} {obj.maxThickX:.5f}   {obj.maxCamb:.5f} {obj.maxCambX:.5f}")
+        end = timer()
+        print (f"Time {end - start:.6f}")  
+
+        print ()
+
+        start = timer()
+        obj = airfoil.geoFast
+        print (f"Geo fast   {obj.maxThick:.5f} {obj.maxThickX:.5f}   {obj.maxCamb:.5f} {obj.maxCambX:.5f}")
+        end = timer()
+        print (f"Time {end - start:.6f}")  
+
+
 # def test_adapt_bezier (): 
 
 #     import matplotlib.pyplot as plt
@@ -1205,6 +1353,7 @@ class Airfoil_Bezier(Airfoil):
 
 if __name__ == "__main__":
 
+    test_geoFast ()
     # test_set_maxCamberX
     # test_strak() 
     # test_adapt_bezier()

@@ -26,7 +26,7 @@ cl_toolbar          = ('gray85', 'gray35')
 
 
 # plt.rcParams.update({'figure.dpi': 180})
-plt.rcParams.update({'font.size': 9})                       # default font.size: 10.0
+plt.rcParams.update({'font.size': 10})                       # default font.size: 10.0
 plt.rcParams.update({'font.weight': 'light'})   
 plt.rcParams.update({'text.color': cl_text})   
 
