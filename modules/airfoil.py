@@ -95,27 +95,15 @@ class Geometry_Fast:
         upper = self.airfoil.upper
         lower = self.airfoil.lower 
 
-
         nupper = len(upper.y)
         y_oppo = np.zeros (nupper)
 
+        # eval the corresponding y value on lower side - use high speed linear interpolation
         for i, x in enumerate (upper.x):
-
-            # find the surrounding x(j) and x(j+1) on lower side of x (from upper side)
-            jl = bisection (lower.x, x)
-            
-            # now interpolate the y-value on lower side 
-            if jl < (len(lower.x) -2):
-                x1 = lower.x[jl]
-                x2 = lower.x[jl+1]
-                y1 = lower.y[jl]
-                y2 = lower.y[jl+1]
-                y_oppo[i] = interpolate (x1, x2, y1, y2, x)
-            else: 
-                y_oppo[i] = lower.y[-1]
+            y_oppo[i] = lower.yFn (x, highPrec=False)
 
         # thickness and camber can now easily calculated 
-        self._thickness = SideOfAirfoil (upper.x, upper.y - y_oppo, name='Thickness distribution')
+        self._thickness = SideOfAirfoil (upper.x, (upper.y - y_oppo), name='Thickness distribution')
         self._camber    = SideOfAirfoil (upper.x, (upper.y + y_oppo) / 2.0, name='Camber line')
 
         return 

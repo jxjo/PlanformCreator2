@@ -56,7 +56,7 @@ from wing_artists       import *
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "1.0.1"
+AppVersion = "1.0.2"
 
 #------------------------------------------------
 
@@ -1653,8 +1653,8 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         self.add (Field_Widget  (self.input_frame,r,c, lab="Min tip chord", width=100, padx=(20,0),
                                  obj=self.paneledPlanform, get='minTipChord', set='set_minTipChord',
                                  event=PANELS_CHANGED, lim=(1,100), dec=0, spin=True, step=1, unit=self.wing.unit))
-        text = "Tip chord of wing is %d %s" %(self.wing.tipchord, self.wing.unit)
-        self.add (Label_Widget  (self.input_frame,r,c+3, lab=text, padx=(0,0)))
+        self.add (Label_Widget  (self.input_frame,r,c+3, lab=self.tipChord_text, padx=(0,0),
+                                 text_style=self.tipChord_text_style))
 
         r = 1 
         c = 7 
@@ -1691,6 +1691,22 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         self.diagram_frame = Diagram_Planform_Paneled (self.edit_frame, self.wingFn, 
                                                       self.paneledPlanform, size=(4.2,3.4))
         self.diagram_frame.grid(row=0, column=0, sticky="nwes")
+
+
+    def tipChord_text (self): 
+        """ user hint for tipChord"""
+        if self.paneledPlanform.minTipChord > self.wing.tipchord:
+            return "Tip will be cutted to 'Min tip chord'"
+        else: 
+            return "Tip chord of wing is %d %s" %(self.wing.tipchord, self.wing.unit)
+
+    def tipChord_text_style (self): 
+        """ style for user hint for tipChord"""
+
+        if self.paneledPlanform.minTipChord > self.wing.tipchord:
+            return STYLE_WARNING
+        else: 
+            return STYLE_DISABLED
 
 
     def select_dir(self):

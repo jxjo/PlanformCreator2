@@ -26,7 +26,7 @@ import bisect
 import json
 import sys
 from pathlib import Path
-from math_util import findRoot
+from math_util import findRoot, interpolate
 
 
 # let python find the other modules in the dir of self  
@@ -261,7 +261,7 @@ class Wing:
 
 
     @property
-    def exporterXflr5 (self): 
+    def exporterXflr5 (self) : 
         """ returns class managing Xflr5 export """
         from export_Xflr5       import Export_Xflr5         # here - otherwise circular errors
 
@@ -1559,10 +1559,6 @@ class Planform_Paneled (Planform_Trapezoidal):
         self._y_minWidth  = fromDict (dataDict, "y-minWidth", 20 , False)
         self._minTipChord = fromDict (dataDict, "minTipChord", 30 , False)
 
-        self._yPosList    = None                # cache wing section data 
-        self._chordList   = None 
-    
-
         self.distribution_fns = {}
         self.distribution_fns["uniform"]= lambda y : y
         self.distribution_fns["-sine"]  = lambda y : np.sin (y     * np.pi/2)
@@ -1620,13 +1616,15 @@ class Planform_Paneled (Planform_Trapezoidal):
             # ... more than tip chord  
             val = max (val, self.wing.tipchord)  
         self._minTipChord = val
-        self._yPosList    = None                # reset cache wing section data 
-        self._chordList   = None 
 
     @property
     def isTipCutted (self):                     
         """ is tip cutted due to minTipChord?""" 
-        return self._calc_reducedTipPos() != self.halfwingspan
+
+        # sanity check: is minTipChord between chord at tip and chord tip-1
+
+        _, chordList = self.wing.get_wingSections_yPos_chord()
+        return chordList[-1] < self._minTipChord and chordList[-2] > self._minTipChord
 
     # --- Methods --------------------- 
 
@@ -1663,26 +1661,21 @@ class Planform_Paneled (Planform_Trapezoidal):
     def _sections_yPos_chord (self):
         """ returns yPos and chord of all sections as two lists"""
 
-        if self._yPosList is None:                      # cache values 
 
-            yPosList, chordList = self.wing.get_wingSections_yPos_chord()
+        yPosList, chordList = self.wing.get_wingSections_yPos_chord()
 
-            # is there a new tip yPos because of minimum tip chord? 
-            if self.isTipCutted:
-                reducedTipPos = self._calc_reducedTipPos()
-                yPosList[-1]  = reducedTipPos                        # set "new" tip 
-                chordList[-1] = self.wing.planform.chord_function(reducedTipPos)
+        # is there a new tip yPos because of minimum tip chord? 
+        if self.isTipCutted:
+
+            reducedTipPos = self._calc_reducedTipPos()
+            yPosList[-1]  = reducedTipPos                        # set "new" tip 
+            chordList[-1] = self.wing.planform.chord_function(reducedTipPos)
             
-            self._yPosList = yPosList
-            self._chordList = chordList 
-
-        return self._yPosList, self._chordList
+        return yPosList, chordList
     
 
-    def y_panels_forSection(self, iSec):
+    def y_panels_forSection(self, sections_yPos, iSec):
         """y-panels for section i depending on min panel width"""
-
-        sections_yPos = self._sections_yPos_chord() [0]
 
         if iSec < len(sections_yPos)-1:
             y_left = sections_yPos [iSec]
@@ -1754,7 +1747,7 @@ class Planform_Paneled (Planform_Trapezoidal):
             te_right = sections_le_te[iSec+1][1]
 
             # assure a min panel width in y-direction 
-            y_panels = self.y_panels_forSection(iSec)
+            y_panels = self.y_panels_forSection(sections_yPos, iSec)
 
             # line on section will be double
             for d_yn_pan in np.linspace (0, 1, y_panels +1): 

@@ -303,11 +303,11 @@ class SEGMENT (FLZ_Element):
         if leftSection_yPos <rightSection_yPos:          # right halfwing
             chord     = rightSection_chord / 1000
             flapGroup = self.leftSection.flapGroup
-            y_panels  = self.paneledPlanform.y_panels_forSection(leftSectionIndex)
+            y_panels  = self.paneledPlanform.y_panels_forSection(sections_yPos,leftSectionIndex)
         else:                                                       # left halfwing 
             chord     = leftSection_chord / 1000
             flapGroup = self.rightSection.flapGroup
-            y_panels  = self.paneledPlanform.y_panels_forSection(rightSectionIndex)
+            y_panels  = self.paneledPlanform.y_panels_forSection(sections_yPos, rightSectionIndex)
             # we have to flip FLZ SIN_R - SIN_L  on left side 
             if   distrib == "SIN_R": distrib = "SIN_L"
             elif distrib == "SIN_L": distrib = "SIN_R"

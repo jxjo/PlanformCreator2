@@ -36,8 +36,8 @@ class Export_Xflr5:
         """ returns the parameters of self in dataDict"""
 
         myDict = {}
-        toDict (myDict, "exportDir",         self._exportDir) 
-        toDict (myDict, "useNick",            self._useNick) 
+        toDict (myDict, "exportDir", self._exportDir) 
+        toDict (myDict, "useNick",   self._useNick) 
         self.paneledPlanform._save (myDict)
 
         return myDict
@@ -146,7 +146,7 @@ class Export_Xflr5:
 
             # y
             for y_number_of_panels in newSectionXml.iter('y_number_of_panels'):
-                y_number_of_panels.text = str(self.paneledPlanform.y_panels_forSection(iSec))
+                y_number_of_panels.text = str(self.paneledPlanform.y_panels_forSection(sections_yPos, iSec))
             for y_panel_distribution in newSectionXml.iter('y_panel_distribution'):
                 # map to xflr5 distribution names 
                 xflr5_dist = self.distrib_name_map[self.paneledPlanform.y_dist]

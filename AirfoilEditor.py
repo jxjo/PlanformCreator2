@@ -47,7 +47,7 @@ from spline_of_airfoil  import UPPER, LOWER
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "1.0.1"
+AppVersion = "1.0.2"
 
 
 # tk change events for updating mainly plots or vice versa 
@@ -764,6 +764,12 @@ class Diagram_Airfoil_Bezier (Diagram_Abstract):
 
     # -------- event handler
 
+    def setChangeBindings (self):
+            # overloaded
+            self.ctk_root.bind(AIRFOIL_CHANGED, self.changed_airfoil, add='+')
+            self.ctk_root.bind(AIRFOIL_NEW,     self.changed_airfoil, add='+')
+
+ 
     def changed_airfoil(self, dummy): 
         """ Eventhandler for changes of airfoil from outside """
         self.refresh()
@@ -1543,7 +1549,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,  lab="Upper points", 
-                                 get=lambda: self.airfoil.upper.nPoints, 
+                                 get=self.nPoints, 
                                  set=self.set_nPoints, objId = UPPER,
                                  spin=True, step=1, lim=(3,10), width=90, lab_width=100))
         self.add (Button_Widget (self.input_frame,r,c+3, width=90, padx=0, 
@@ -1553,7 +1559,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,  lab="Lower points", 
-                                 get=lambda: self.airfoil.lower.nPoints, 
+                                 get=self.nPoints, 
                                  set=self.set_nPoints, objId = LOWER,
                                  spin=True, step=1, lim=(3,10), width=90, lab_width=100))
         self.add (Button_Widget (self.input_frame,r,c+3, width=90, padx=0, 
@@ -1606,6 +1612,13 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         self.diagram_frame.grid(row=1, column=1, pady=(5,5), padx=(5,5), sticky="news")
 
  
+
+    def nPoints(self, objId):
+        """ number of control points upper/lowerfor entry field"""
+        if objId == UPPER:
+            return self.airfoil.upper.nPoints
+        else: 
+            return self.airfoil.lower.nPoints
 
 
     def set_nPoints(self, nPoints, objId):

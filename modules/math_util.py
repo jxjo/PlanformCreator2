@@ -20,6 +20,17 @@ import math
 
 
 
+#------------ linear interpolation -----------------------------------
+
+def interpolate(x1, x2, y1, y2, x):
+    try:
+        y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
+    except:
+        raise ValueError (f"Division by zero in interpolation , x1: {x1}, x2: {x2}")
+    return y
+
+
+
 #------------ panel angles -----------------------------------
 
 
@@ -71,6 +82,7 @@ def panel_angles (x,y):
             angles[i] = 0.0
     angles = 180.0 - angles * (180/np.pi)
     return angles 
+
 
 #------------ Bisection - find Root  -----------------------------------
 

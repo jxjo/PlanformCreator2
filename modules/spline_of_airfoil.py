@@ -3,7 +3,7 @@
 
 """
 
-    Spline of airfoil functions and operations on it 
+    Spline and Side of airfoil functions and operations on it 
 
 """
 
@@ -13,6 +13,9 @@ from copy import copy, deepcopy
 from spline import Spline1D, Spline2D, Bezier
 from spline import print_array_compact
 
+
+UPPER  = 'upper'
+LOWER  = 'lower'
 
 
 class SplineOfAirfoil: 
@@ -365,7 +368,7 @@ class SplineOfAirfoil:
         """
 
         # evaluate the corresponding y-values on lower side 
-        x_upper, y_upper, y_oppo = self._y_oppoTo ("upper")    
+        x_upper, y_upper, y_oppo = self._y_oppoTo (UPPER)    
 
         # get ascending x-coordinate 0..1
         x_upper = np.flip(x_upper)
@@ -391,7 +394,7 @@ class SplineOfAirfoil:
 
         Parameters
         ----------
-        side : either 'upper' or 'lower'
+        side : either UPPER or LOWER
              
         Returns
         -------
@@ -405,11 +408,11 @@ class SplineOfAirfoil:
 
         iLe = np.argmin (self._x)
 
-        if side == "lower": 
+        if side == LOWER: 
             x_from = self.x [iLe : ]
             y_from = self.y [iLe : ]
             u_from = self.spline.u [iLe : ]                
-        elif side == "upper":
+        elif side == UPPER:
             x_from = self.x [0: (iLe +1)] 
             y_from = self.y [0: (iLe +1)] 
             u_from = self.spline.u [0: (iLe +1)]              
@@ -482,7 +485,7 @@ class SplineOfAirfoil:
 
         Parameters
         ----------
-        side : either 'upper' or 'lower'
+        side : either UPPER or LOWER
         xIn : x-coordinates on 'side' to evaluate y
              
         Returns
@@ -492,11 +495,11 @@ class SplineOfAirfoil:
 
         iLe = np.argmin (self._x)
 
-        if side == "lower": 
+        if side == LOWER: 
             uStart = self.spline.u[iLe] 
             uEnd   = self.spline.u[-1]  
             uGuess = 0.75          
-        elif side == "upper":
+        elif side == UPPER:
             uStart = self.spline.u[0] 
             # uEnd   = self.spline.u[iLe-1]   
             uEnd   = self.spline.u[iLe]   
@@ -518,8 +521,8 @@ class SplineOfAirfoil:
 
         # ensure Le is 0,0 and Te is at 1
         if  xIn[0] == self._x[iLe]:                         yOut[0]  = self._y[iLe]
-        elif xIn[-1] == self._x[0] and side == "upper":     yOut[-1] = self._y[0]
-        elif xIn[-1] == self._x[-1] and side == "lower":    yOut[-1] = self._y[-1]
+        elif xIn[-1] == self._x[0] and side == UPPER:     yOut[-1] = self._y[0]
+        elif xIn[-1] == self._x[-1] and side == LOWER:    yOut[-1] = self._y[-1]
 
         return yOut 
 
@@ -747,18 +750,41 @@ class SideOfAirfoil:
         self._y = newY         
 
 
-    def yFn (self,x):
-        """ returns interpolated y values based on a x-value"""
-                
-        return self.spline.eval (x)
+    def _yFn_bisect (self,x):
+        """ returns a bisect (linear) interpolated y values based on a x-value"""
 
+        # find the surrounding x(j) and x(j+1) on lower side of x (from upper side)
+        jl = bisection (self.x, x)
+        
+        # now interpolate the y-value on lower side 
+        if jl < (len(self.x) -2):
+            x1 = self.x[jl]
+            x2 = self.x[jl+1]
+            y1 = self.y[jl]
+            y2 = self.y[jl+1]
+            y = interpolate (x1, x2, y1, y2, x)
+        else: 
+            y = self.y[-1]
+        return y
+
+
+
+    def yFn (self,x, highPrec = True):
+        """ returns interpolated y values based on a x-value
+        
+        highPrec = False: simple linear interpolation between the neigbour coordinates  
+        highPrec = True:  evaluation with spline of self 
+        """
+
+        if highPrec: 
+            return self.spline.eval (x)
+        else:                
+            return self._yFn_bisect (x)
 
 
 
 # ---------------------------
 
-UPPER  = 'upper'
-LOWER  = 'lower'
 
 class SideOfAirfoil_Bezier (SideOfAirfoil): 
     """ 
@@ -775,7 +801,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         ----------
         px, py : array of control point coordinates 
         nPoints : number of points 
-        curveType : either 'upper' or 'lower'
+        curveType : either UPPER or LOWER
              
         """
         self._name      = curveType 

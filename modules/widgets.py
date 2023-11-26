@@ -488,7 +488,10 @@ class Base_Widget():
         if not getter: 
             return None                                 # could be a button
         if callable(getter):                            # getter is a method ?
-            return getter()                
+            if not self.objId is None:                  # an object Id was set to identify object
+                return getter(objId=self.objId) 
+            else:            
+                return getter()                         # normal callback
         else:                                           # ... no - getter is a String
             if obj:
                 if callable(obj):                       # obj getter is a method ?
