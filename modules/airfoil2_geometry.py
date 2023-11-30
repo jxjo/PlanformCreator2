@@ -45,6 +45,8 @@ from copy import copy, deepcopy
 from spline import Spline1D, Spline2D, Bezier
 from spline import print_array_compact
 
+from common_utils import ErrorMsg
+
 
 UPPER  = 'upper'
 LOWER  = 'lower'
@@ -52,8 +54,15 @@ LOWER  = 'lower'
 
 class Geometry (): 
     """ 
-    Abstract geometry strategy class
+    Basic geometry strategy class - uses linear interpolation of points 
+
+    no repanel 
+    no curvature
+    no move of high points of thickness and camber 
+
     """
+    isBasic = True 
+
     def __init__ (self, x : np.ndarray, y: np.ndarray):
 
         self._x_org = x                         # copy as numpy is used in geometry 
@@ -79,6 +88,10 @@ class Geometry ():
         return self._y_org if self._y is None else self._y
 
     @property
+    def xy (self):
+        return self.x, self.y
+
+    @property
     def iLe (self) -> int: 
         """ the index of leading edge in x coordinate array"""
         return int(np.argmin (self.x))
@@ -86,7 +99,20 @@ class Geometry ():
     @property
     def isNormalized (self):
         """ true if LE is at 0,0 and TE is symmetrical at x=1"""
-        return self._isNormalized_le() and self._isNormalized_te
+
+        # LE at 0,0? 
+        xle, yle = self.le
+        normalized =  xle == 0.0 and yle == 0.0
+
+        # TE at 1? - numerical issues happen at the last deicmal (numpy -> python?)  
+        xteUp,  yteUp  = self.x[ 0], round(self.y[ 0],10),
+        xteLow, yteLow = self.x[-1], round(self.y[-1],10)
+        if xteUp != 1.0 or xteLow != 1.0: 
+            normalized = False 
+        elif yteUp != - yteLow: 
+            normalized = False        
+
+        return normalized
     
     @property
     def le (self) -> tuple: 
@@ -162,12 +188,13 @@ class Geometry ():
     @property
     def upper(self) -> 'SideOfAirfoil': 
         """the upper surface as a line object - where x 0..1"""
-        return self._upper()
+        return SideOfAirfoil (np.flip (self.x [0: self.iLe + 1]),
+                              np.flip (self.y [0: self.iLe + 1]), name=UPPER)
             
     @property
     def lower(self) -> 'SideOfAirfoil': 
         """the lower surface as a line object - where x 0..1"""
-        return self._lower()
+        return SideOfAirfoil (self.x[self.iLe:], self.y[self.iLe:], name=LOWER)
 
 
     @property
@@ -205,6 +232,50 @@ class Geometry ():
         return self.camber.maximum [0]
 
 
+    def set_teGap (self, newGap, xBlend = 0.8):
+        """ set self te gap.
+         The procedere is based on xfoil allowing to define a blending distance from le.
+
+        Arguments: 
+            newGap:   in y-coordinates - typically 0.01 or so 
+            xblend:   the blending distance from trailing edge 0..1 - Default 0.8
+        """
+
+        # currently le must be at 0,0 - te must be at 1,gap/2 (normalized airfoil) 
+        if not self.isNormalized: 
+            self.normalize ()
+            if not self.isNormalized: 
+                ErrorMsg ("Airfoil can't be normalized. Te gap can't be set.")
+                return  
+        
+        x = np.copy (self.x) 
+        y = np.copy (self.y) 
+        xBlend = min( max( xBlend , 0.0 ) , 1.0 )
+
+        gap = y[0] - y[-1]
+        dgap = newGap - gap 
+        ile = self.iLe
+
+        # go over each point, changing the y-thickness appropriately
+        for i in range(len(x)):
+            # thickness factor tails off exponentially away from trailing edge
+            if (xBlend == 0.0): 
+                tfac = 0.0
+                if (i == 0 or i == (len(x)-1)):
+                    tfac = 1.0
+            else:
+                arg = min ((1.0 - x[i]) * (1.0/xBlend -1.0), 15.0)
+                tfac = np.exp(-arg)
+
+            if i <= ile: 
+                y[i] = y[i] + 0.5 * dgap * x[i] * tfac # * gap 
+            else:
+                y[i] = y[i] - 0.5 * dgap * x[i] * tfac # * gap   
+
+        self._x, self._y = x, y 
+
+
+
     def set_maxThick (self, newY): 
         """ change max thickness"""
         self.thickness.set_maximum(newY=newY)
@@ -226,41 +297,35 @@ class Geometry ():
         self._rebuildFromThicknessCamber()
 
 
+    def upper_new_x (self, new_x): 
+        """
+        returns sideOfAirfoil having new_x and new, calculated y coordinates
+        
+        Using linear interpolation - shall be overloaded 
+        """
+        # evaluate the corresponding y-values on lower side 
+        upper_y = np.zeros (len(new_x))
+        for i, x in enumerate (new_x):
+            upper_y[i] = self.upper.yFn(x)
 
-    # ------------------ private ---------------------------
-
-
-    def _upper(self) -> 'SideOfAirfoil': 
-        """returns the upper surface as a line object"""
-        # can be overloaded
-        return SideOfAirfoil (np.flip (self.x [0: self.iLe + 1]),
-                              np.flip (self.y [0: self.iLe + 1]), name=UPPER)
-
-    def _lower(self) -> 'SideOfAirfoil': 
-        """returns the lower surface as a line object"""
-        # can be overloaded
-        return SideOfAirfoil (self.x[self.iLe:], self.y[self.iLe:], name=LOWER)
-
-    def _isNormalized_te (self) -> bool: 
-        """ TE at x=1.0 and y symmetric?"""
-        normalized = True 
-        # TE at 1? - numerical issues happen at the last deicmal (numpy -> python?)  
-        xteUp,  yteUp  = self.x[ 0], round(self.y[ 0],10),
-        xteLow, yteLow = self.x[-1], round(self.y[-1],10)
-        if xteUp != 1.0 or xteLow != 1.0: 
-            normalized = False 
-        elif yteUp != - yteLow: 
-            normalized = False        
-        return normalized
-
-    def _isNormalized_le (self) -> bool: 
-        """ LE at x,y =0.0 """
-        # LE at 0,0? 
-        xle, yle = self.le
-        return xle == 0.0 and yle == 0.0
+        return SideOfAirfoil (new_x, upper_y, name=UPPER)
 
 
-    def _normalize (self) -> bool:
+    def lower_new_x (self, new_x): 
+        """
+        returns sideOfAirfoil having new_x and new, calculated y coordinates
+        
+        Using linear interpolation - shall be overloaded 
+        """
+        # evaluate the corresponding y-values on lower side 
+        lower_y = np.zeros (len(new_x))
+        for i, x in enumerate (new_x):
+            lower_y[i] = self.lower.yFn(x)
+
+        return SideOfAirfoil (new_x, lower_y, name=LOWER)
+
+
+    def normalize (self) -> bool:
         """
         Shift, rotate, scale airfoil so LE is at 0,0 and TE is symmetric at 1,y
         
@@ -317,6 +382,17 @@ class Geometry ():
         return True
 
 
+    def repanel (self, **kwargs):
+        """repanel self with a new cosinus distribution 
+
+            to be overloaded
+        """
+        raise NotImplementedError
+
+
+    # ------------------ private ---------------------------
+
+
     def _eval_thickness_camber (self): 
         """
         evalutes self thickness and camber distribution as SideOfAirfoil objects
@@ -328,19 +404,24 @@ class Geometry ():
               and camber is just the mean value y_upper(x) and y_lower(x)
         """
 
+        if not self.isNormalized:
+            self.normalize()
+
+        # evaluate the corresponding y-values on lower side 
         upper = self.upper
-        lower = self.lower 
-
-        nupper = len(upper.y)
-        y_oppo = np.zeros (nupper)
-
-        # eval the corresponding y value on lower side - use high speed linear interpolation
-        for i, x in enumerate (upper.x):
-            y_oppo[i] = lower.yFn (x)
+        lower = self.lower_new_x (upper.x)
 
         # thickness and camber can now easily calculated 
-        self._thickness = SideOfAirfoil (upper.x, (upper.y - y_oppo), name='Thickness distribution')
-        self._camber    = SideOfAirfoil (upper.x, (upper.y + y_oppo) / 2.0, name='Camber line')
+        if self.isBasic:
+            self._thickness = SideOfAirfoil (upper.x, (upper.y - lower.y), name='Thickness distribution')
+            self._camber    = SideOfAirfoil (upper.x, (upper.y + lower.y) / 2.0, name='Camber line')
+        else:
+            self._thickness = SideOfAirfoil_Spline (upper.x, (upper.y - lower.y), name='Thickness distribution')
+            self._camber    = SideOfAirfoil_Spline (upper.x, (upper.y + lower.y) / 2.0, name='Camber line')
+
+        # for symmetric airfoil with unclean data set camber line to 0 
+        if np.max(self._camber._y) < 0.00001: 
+            self._camber._y = np.zeros (len(self._camber._y))
 
         return 
 
@@ -379,6 +460,8 @@ class Geometry_Spline (Geometry):
     The 2D spline is used to get the best approximation of the airfoil e.g. for re-paneling
     """
 
+    isBasic = False
+
     def __init__ (self, x,y):
         super().__init__(x,y)        
 
@@ -415,7 +498,7 @@ class Geometry_Spline (Geometry):
         return self._uLe
 
     @property
-    def isLe_closeTo_leSpline (self): 
+    def _isLe_closeTo_leSpline (self): 
         """ true if LE of x,y cordinates nearly equal to the real (splined) leading edge.
             If not the airfoil should be repaneled...! """
 
@@ -432,7 +515,7 @@ class Geometry_Spline (Geometry):
         true if LE is at 0,0 and TE is symmetrical at x=1
            and real le (spline) is close to le
         """
-        return super().isNormalized and self.isLe_closeTo_leSpline
+        return super().isNormalized and self._isLe_closeTo_leSpline
 
 
     @property
@@ -471,85 +554,103 @@ class Geometry_Spline (Geometry):
     def curv_upper (self): 
         " return SideOfAirfoil with curvature on the upper side"
         if self._curv_upper is None: 
-            iLe  = np.argmin (self.x)                # index of LE in x,y and u 
-            self._curv_upper = SideOfAirfoil (np.flip(self.x[: iLe+1]),
-                                              np.flip(self.curvature [: iLe+1]), 
+            self._curv_upper = SideOfAirfoil (np.flip(self.x[: self.iLe+1]),
+                                              np.flip(self.curvature [: self.iLe+1]), 
                                               name='Curvature upper' )
-            # set default value für reversal detection 
-            self._curv_upper.set_threshold (0.1)
         return self._curv_upper 
 
     @property
     def curv_lower (self): 
         " return SideOfAirfoil with curvature on the lower side"
         if self._curv_lower is None: 
-            iLe  = np.argmin (self.x)                # index of LE in x,y and u 
-            self._curv_lower = SideOfAirfoil (self.x[iLe: ],
-                                              self.curvature [iLe: ], 
+            self._curv_lower = SideOfAirfoil (self.x[self.iLe: ],
+                                              self.curvature [self.iLe: ], 
                                               name='Curvature lower' )
-            # set default value für reversal detection 
-            self._curv_lower.set_threshold (0.1)
         return self._curv_lower 
     
 
     #-----------
 
-    def _reset (self):
-        """ reinit self if x,y has changed""" 
-        super()._reset()
-        self._reset_spline()
+
+    def upper_new_x (self, new_x): 
+        """
+        returns sideOfAirfoil having new_x and new, calculated y coordinates
+        
+        Using spline interpolation  
+        """
+        # evaluate the corresponding y-values on lower side 
+        upper_y = np.zeros (len(new_x))
  
+        for i, x in enumerate (new_x):
+ 
+            # nelder mead find min boundaries 
+            uStart = 0.0
+            uEnd   = self.uLe 
+            uGuess = interpolate (0.0, 1.0, uStart, uEnd, x)   # best guess as start value
 
-    def _reset_spline (self):
-        """ reinit self spline data if x,y has changed""" 
-        self._curvature  = None
-        self._curv_upper = None
-        self._curv_lower = None
-        self._spline     = None
-        self._uLe        = None                  # u value at LE 
+            u = findMin (lambda xlow: abs(self.spline.evalx(xlow) - x), uGuess, 
+                        bounds=(uStart, uEnd), no_improve_thr=1e-8) 
 
+            # with the new u-value we get the y value on lower side 
+            upper_y[i] = self.spline.evaly (u)
 
-    def _repanel_to_real_le (self):
-        """ repanel self based on the real le of the spline 
-        so iLe will be at the real leading edge"""
-
-        if not self.isLe_closeTo_leSpline:
-            self._repanelDefault() 
-            if not self.isLe_closeTo_leSpline:
-                # print ("LE after 1st repan: ", self.le, self.leSpline, self.isLe_closeTo_leSpline, self.uLe)
-                self._repanelDefault (tryHarder=True) 
-                if not self.isLe_closeTo_leSpline:
-                    print ("LE after 2nd repan: ", super().le, self.le, self.isLe_closeTo_leSpline, self.uLe)
-                    raise ValueError ("Leading edge couldn't be iterated") 
+        return SideOfAirfoil_Spline (new_x, upper_y, name=UPPER)
 
 
-    def _normalize (self):
+
+    def lower_new_x (self, new_x): 
+        """
+        returns sideOfAirfoil having new_x and new, calculated y coordinates
+        
+        Using spline interpolation  
+        """
+        # evaluate the corresponding y-values on lower side 
+        lower_y = np.zeros (len(new_x))
+ 
+        for i, x in enumerate (new_x):
+ 
+            # nelder mead find min boundaries 
+            uStart = self.uLe
+            uEnd   = 1.0 
+            uGuess = interpolate (0.0, 1.0, uStart, 1.0, x)   # best guess as start value
+
+            u = findMin (lambda xlow: abs(self.spline.evalx(xlow) - x), uGuess, 
+                        bounds=(uStart, uEnd), no_improve_thr=1e-8) 
+
+            # with the new u-value we get the y value on lower side 
+            lower_y[i] = self.spline.evaly (u)
+
+        return SideOfAirfoil_Spline (new_x, lower_y, name=LOWER)
+
+
+    def normalize (self):
         """Shift, rotate, scale airfoil so LE is at 0,0 and TE is symmetric at 1,y"""
 
         if self.isNormalized: return False
 
         # first do repanel airfoil if LE of coordinates and LE of spline differ too much 
-        self._repanel_to_real_le()
+        if not self._isLe_closeTo_leSpline:
+            self.repanel () 
+            if not self._isLe_closeTo_leSpline:
+                # print ("LE after 1st repan: ", self.le, self.leSpline, self.isLe_closeTo_leSpline, self.uLe)
+                self.repanel (tryHarder=True) 
+                if not self._isLe_closeTo_leSpline:
+                    print ("LE after 2nd repan: ", super().le, self.le, self._isLe_closeTo_leSpline, self.uLe)
+                    raise ValueError ("Leading edge couldn't be iterated") 
 
         # normal normalization 
-        return super()._normalize() 
+        return super().normalize() 
 
 
     def deriv1Fn (self,u): 
         " return dx,dy at spline arc u"
         return  self.spline.eval(u, der=1)
 
+
     def xyFn (self,u): 
         " return x,y at spline arc u"
         return  self.spline.eval (u)
 
-    def xFn (self,u): 
-        " return x at spline arc u"
-        return  self.spline.evalx (u)
-
-    def yFn (self,u): 
-        " return y at spline arc u"
-        return  self.spline.evaly (u)
 
     def scalarProductFn (self,u): 
         """ return the scalar product of a vector from TE to u and the tangent at u
@@ -570,6 +671,98 @@ class Geometry_Spline (Geometry):
         dot = dx * dxTe + dy * dyTe
 
         return dot 
+        
+
+    def repanel (self,  nPanels : int = 200, 
+                        nPan_upper : int = None, nPan_lower : int = None,
+                        le_bunch : float = 0.84, te_bunch : float = 0.7, 
+                        tryHarder : bool =False):
+        """repanel self with a new cosinus distribution 
+
+        Args:
+            nPanels  (int, optional): new number of panels. Defaults to 200.
+            le_bunch (float, optional): leading edge bunch. Defaults to 0.84.
+            te_bunch (float, optional): trailing edge bunch. Defaults to 0.7.
+            tryHarder (bool, optional): more le bunch - nPanels >=200.
+        """
+
+        # explicit panels for upper and lower have precedence 
+        if not (nPan_upper and nPan_lower):
+
+            # in case of odd number of panels, upper side will have +1 panels 
+            if nPanels % 2 == 0:
+                nPan_upper = int (nPanels / 2)
+                nPan_lower = nPan_upper
+            else: 
+                nPan_lower = int(nPanels / 2)
+                nPan_upper = nPan_lower + 1 
+
+        # leading edge bunch of panels 
+        le_bunch = 0.9 if tryHarder else le_bunch
+         
+        # trailing edge bunch of panels 
+        te_bunch = te_bunch 
+         
+        # new distribution for upper and lower - points = +1 
+        u_cos_upper = cosinus_distribution (nPan_upper+1, le_bunch, te_bunch)
+        u_new_upper = np.abs (np.flip(u_cos_upper) -1) * self.uLe
+
+        u_cos_lower = cosinus_distribution (nPan_lower+1, le_bunch, te_bunch)
+        u_new_lower = u_cos_lower * (1- self.uLe) + self.uLe
+
+        # add new upper and lower 
+        u_new = np.concatenate ((u_new_upper, u_new_lower[1:]))
+
+        # new calculated x,y coordinates  
+        self._x, self._y = self.xyFn(u_new)
+
+        # reset chached values
+        self._reset()
+
+
+
+
+    # ------------------ private ---------------------------
+
+
+    def _reset (self):
+        """ reinit self if x,y has changed""" 
+        super()._reset()
+        self._reset_spline()
+ 
+
+    def _reset_spline (self):
+        """ reinit self spline data if x,y has changed""" 
+        self._curvature  = None
+        self._curv_upper = None
+        self._curv_lower = None
+        self._spline     = None
+        self._uLe        = None                  # u value at LE 
+
+
+    def _rebuildFromThicknessCamber(self):
+        """ rebuilds self out of thickness and camber distribution """
+        # overloaded to reset spline
+
+        nPan_upper = self.iLe
+        nPan_lower = self.nPanels - nPan_upper
+
+        print ("ile vor", self.iLe, self.nPanels)
+        print ("panels", nPan_upper, nPan_lower)
+
+        super()._rebuildFromThicknessCamber()
+
+        nPan_upper_new = self.iLe
+        nPan_lower_new = self.nPanels - nPan_upper_new
+
+        if (nPan_upper != nPan_upper_new) or (nPan_lower != nPan_lower_new):
+            print ("*** repanel panels", nPan_upper, nPan_lower)
+            self._reset_spline ()
+            self.repanel (nPan_upper=nPan_upper,nPan_lower=nPan_lower)
+            print ("ile nach", self.iLe, self.nPanels)
+        else: 
+            self._reset_spline ()
+
 
     def _le_find (self):
         """ returns u (arc) value of leading edge based on scalar product tangent and te vector = 0"""
@@ -584,134 +777,6 @@ class Geometry_Spline (Geometry):
 
         return uLe
 
-
-    def _eval_thickness_camber (self): 
-        """
-        evalutes self thickness and camber distribution as SideOfAirfoil objects
-        with a x-distribution of the upper side.
-        
-        Note: It's an approximation as thickness is just the sum of y_upper(x) and y_lower(x)
-              and camber is just the mean value y_upper(x) and y_lower(x)
-        """
-
-        # evaluate the corresponding y-values on lower side 
-        x_upper, y_upper, y_oppo = self._y_oppoTo (UPPER)    
-
-        # get ascending x-coordinate 0..1
-        x_upper = np.flip(x_upper)
-        y_upper = np.flip(y_upper)
-        y_oppo  = np.flip(y_oppo)
-
-        # thickness and camber can now easily calculated 
-        self._thickness = SideOfAirfoil_Spline (x_upper,  y_upper - y_oppo,        name='Thickness distribution')
-        self._camber    = SideOfAirfoil_Spline (x_upper, (y_oppo + y_upper) / 2.0, name='Camber line')
-
-        # for symmetric airfoil with unclean data set camber line to 0 
-        if np.max(self._camber._y) < 0.00001: 
-            self._camber._y = np.zeros (len(self._camber._y))
-
-        return 
-
-    def _rebuildFromThicknessCamber(self):
-        """ rebuilds self out of thickness and camber distribution """
-
-        super()._rebuildFromThicknessCamber()
-
-        self._reset_spline ()
-
-
-
-    def _y_oppoTo (self, side): 
-        """
-        Evalutes y values right opposite (having same x-value) to side.
-        Note: if self isn't normalized, it will be normalized if le_highPrecision
-              prior to evaluation
-
-        Parameters
-        ----------
-        side : either UPPER or LOWER
-             
-        Returns
-        -------
-        x_from : np array - x_values of source side - for convinience 
-        y_from : np array - yvalues of source side - for convinience 
-        y_oppo : np array - y_values on the opposite side in the same order as side
-        """
-
-        if not self.isNormalized:
-            self._normalize()
-
-        iLe = np.argmin (self.x)
-
-        if side == LOWER: 
-            x_from = self.x [iLe : ]
-            y_from = self.y [iLe : ]
-            u_from = self.spline.u [iLe : ]                
-        elif side == UPPER:
-            x_from = self.x [0: (iLe +1)] 
-            y_from = self.y [0: (iLe +1)] 
-            u_from = self.spline.u [0: (iLe +1)]              
-        else:
-            raise ValueError ("'%s' not supported" % side)
-        
-        u_oppo = np.zeros (len(x_from))
-        for i, xi in enumerate (x_from): 
-
-            u_oppo[i]    = self._eval_u_oppo (u_from[i], xi)
-
-        y_oppo = self.yFn(u_oppo)
-
-        return x_from, y_from, y_oppo
-
-
-
-    def _eval_u_oppo (self, uIn, xIn):
-        """ returns u at the opposite site having the same x-value"""
-
-        du = abs(self.uLe - uIn)                    # distance to LE
-
-        if   du == 0.0:     return uIn
-        elif xIn <= 0.0:    return uIn 
-        elif uIn <= 0.0:    return 1.0 
-        elif uIn >= 1.0:    return 0.0 
-
-        # define search range for minimum and a good start value for the search 
-
-        elif uIn < self.uLe:                        # will search on lower side 
-            uStart = self.uLe                       # search boundaries 
-            uEnd   = 1.0 
-            if du < 0.1:  uGuess = uStart + 0.1     # estimate a first guess for the search algo 
-            else:         uGuess = uStart + du / 2
-        else:                                       # will search on upper side 
-            uStart = 0.0
-            uEnd   = self.uLe
-            if du < 0.1:  uGuess = uEnd - 0.1
-            else:         uGuess = uEnd - du / 2
-
-        uOpp = findMin (lambda x: abs(self.spline.evalx(x) - xIn), uGuess, 
-                        bounds=(uStart, uEnd), no_improve_thr=1e-8) 
-        return uOpp
-
-
-    def _repanelDefault (self, tryHarder=False): 
-        """Repanels self with a new, default cosinus distribution. Reinit spline.
-           'tryHarder=True' will repanel with more panels and more LE bunch of panels"""
-
-        if tryHarder:                           # generate more panels with higer LE bunch
-            nPanels = 200                       # ... no experiments 
-            le_bunch = 0.90 # 0.93
-            te_bunch = 0.7
-        else: 
-            if len(self.x) < 120:               # ensure a min number of panels for strange (old) airfoils
-                nPanels = 120
-            else: 
-                nPanels = self.nPanels          # do not change no of panels
-            le_bunch = 0.84
-            te_bunch = 0.7
-
-        self._x, self._y = self.get_repaneled (nPanels, le_bunch, te_bunch)
-        self._reset()
-        
 
     def get_y_on (self, side, xIn): 
         """
@@ -752,7 +817,7 @@ class Geometry_Spline (Geometry):
             uGuess = ux[i]
 
         # get y coordinate from u          
-        yOut = self.yFn(ux)
+        yOut = self.spline.evaly (ux)
 
         # ensure Le is 0,0 and Te is at 1
         if   xIn[0]  == self.x[iLe]:                    yOut[0]  = self.y[iLe]
@@ -762,32 +827,16 @@ class Geometry_Spline (Geometry):
         return yOut 
 
 
-    def get_repaneled (self, nPanels, le_bunch, te_bunch): 
-        """Returns x,y of self with a repaneled  cosinus distribution 
-        
-        Args: 
-        nPanels : new number of panels (which is no of points -1) 
-        le_bunch : 0..1  where 1 is the full cosinus bunch at leading edge - 0 no bunch 
-        te_bunch : 0..1  where 1 is the full cosinus bunch at trailing edge - 0 no bunch 
-        """
 
-        # new, equal distribution for upper and lower 
-        u_cosinus = cosinus_distribution (int (nPanels/2) + 1, le_bunch, te_bunch)
-
-        u_new_upper = np.abs (np.flip(u_cosinus) -1) * self.uLe
-        u_new_lower = u_cosinus * (1- self.uLe) + self.uLe
-        u_new = np.concatenate ((u_new_upper, u_new_lower[1:]))
-
-        # return new calculated x,y coordinates  
-        return  self.xyFn(u_new) 
-    
 
 
 class Geometry_Bezier (Geometry): 
     """ 
     Geometry based on two Bezier curves for upper and lower side
     """
-
+    
+    isBasic = False
+    
     @property
     def isNormalized (self):
         """ true - Bezier is always normalized"""
@@ -812,7 +861,7 @@ class SideOfAirfoil:
         self._x         = x
         self._y         = y
         self._name      = name 
-        self._threshold = 0.001                 # threshold for reversal dectection 
+        self._threshold = 0.1                   # threshold for reversal dectection 
         self._maximum   = None                  # the highpoint of the spline line
 
     @property
@@ -897,11 +946,11 @@ class SideOfAirfoil:
     def yFn (self,x):
         """ returns interpolated y values based on a x-value  """
 
-        # find the surrounding x(j) and x(j+1) on lower side of x (from upper side)
+        # find the index in self.x which is right before x
         jl = bisection (self.x, x)
         
         # now interpolate the y-value on lower side 
-        if jl < (len(self.x) -2):
+        if jl < (len(self.x) - 1):
             x1 = self.x[jl]
             x2 = self.x[jl+1]
             y1 = self.y[jl]
@@ -1490,6 +1539,28 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
 
 # ------------ test functions - to activate  -----------------------------------
 
+def compare_lower ():
+
+    from airfoil2_examples import Root_Example, Tip_Example
+    
+    air1 = Root_Example(geometryClass = Geometry)
+    geo1 = air1.geo
+    low1 = geo1.lower_new_x (geo1.upper.x)
+    air2 = Root_Example(geometryClass = Geometry_Spline)
+    geo2 = air2.geo
+    low2 = geo2.lower_new_x (geo2.upper.x)
+
+    for i in range (len(low1.y)): 
+        print (f"{i:3} {low1.x[i]:.6f}   {low1.y[i]:.6f}  {low2.y[i]:.6f} {low1.y[i]-low2.y[i]:.7f} ")
+
+    upp1 = geo1.upper_new_x (geo1.lower.x)
+    upp2 = geo2.upper_new_x (geo2.lower.x)
+
+    for i in range (len(upp1.y)): 
+        print (f"{i:3} {upp1.x[i]:.6f}   {upp1.y[i]:.6f}  {upp2.y[i]:.6f} {upp1.y[i]-upp2.y[i]:.7f} ")
+
+
+
 # def bezierTest (): 
 
 #     from spline import print_array_compact
@@ -1643,163 +1714,18 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
 #     plt.show()
 
 
-# def u_fxy_Test ():
-
-#     import matplotlib.pyplot as plt
-#     from airfoil_examples import Root_Example, Tip_Example
-    
-#     air = Tip_Example()
-
-#     spl : SplineOfAirfoil = air.spline
-
-#     y0 = air.y
-#     x0 = air.x
-#     le0 = spl.leSpline
-
-#     spl._normalize ()
-
-#     # if True: quit()
-#     y = spl.y
-#     x = spl.x
-#     leNorm = spl.leSpline
-
-#     # x_new, y_new = spl.get_repaneled (200, 0.97, 0.7)
-
-#     fig, axa = plt.subplots(3, 1, figsize=(16,8))
-#     ax1 = axa[0]
-#     ax2 = axa[1]
-#     ax3 = axa[2]
-#     ax1.axis('equal')
-#     ax1.set_ylim([ -0.2,  0.2])
-#     # ax1.set_xlim([ 0.0, 1.1])
-
-#     # ax3.set_ylim([ -1,  1])
-
-#     ax1.grid(True)
-#     ax2.grid(True)
-#     ax3.grid(True)
-
-#     ax1.plot(x0, y0, '-', marker='o', lw=0.5, fillstyle='none', markersize=4, label=air.name + " org")
-#     ax1.plot(x, y, '-', marker='o', lw=0.5, fillstyle='none', markersize=4, label=air.name + " norm")
-#     ax1.plot(le0[0], le0[1], "g",  marker='o', lw=0.5, markersize=4,    label= "LE org")
-#     ax1.plot(leNorm[0], leNorm[1], "r",  marker='o', lw=0.5, markersize=4, label= "LE norm")
-    
-#     ax2.plot (x, spl._spline.u, marker='o', fillstyle='none', markersize=3, label='x')
-#     # ax2.plot (spl._spline.u, y, marker='o', fillstyle='none', markersize=3, label='y')
 
 
-#     # find opposite points 
-
-#     ax3.axis('equal')
-#     ax3.set_ylim([ -0.2,  0.2])
-
-#     iLe  = np.argmin (x) 
-#     x1 = x[:iLe]
-#     y1 = y[:iLe]
-#     xO = []
-#     yO = []  
-#     for i in range (iLe+1):
-#         ui = spl._spline.u[i]  
-#         uOpp = spl._eval_u_oppo (ui, x[i])
-#         xOpp, yOpp = spl._spline.eval(uOpp)
-#         xO.append(xOpp)
-#         yO.append(yOpp)
-#         # print (i, ui, x[i], uOpp, xOpp, "  delta: ", abs(x[i]-xOpp))
-#         if y[i] != yOpp:
-#             ax3.axline ((x[i],y[i]), (xOpp,yOpp))
-
-#     ax3.plot (x,y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='xy upper')
-#     # ax3.plot (xO,yO, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='xy opposite')
-#     # ax3.plot (x1,y1, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='xy upper')
-#     # ax3.plot (xO,yO, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='xy opposite')
-
-#     # ax3.set_ylim([ -10,  10])
-#     # ax3.plot (x,spl.curvature, label='Curvature')
-#     # ax3.plot (spl.curv_upper.x, spl.curv_upper.y, label='Curvature upper')
-#     # ax3.plot (spl.curv_lower.x, - spl.curv_lower.y, label='Curvature lower')
-
-#     ax1.legend()
-#     ax2.legend()
-#     ax3.legend()
-#     plt.show()
-
-
-# def cubicSplineTest ():
-
-#     import matplotlib.pyplot as plt
-#     from airfoil_examples import Root_Example, Tip_Example
-#     from airfoil import Airfoil
-    
-   
-#     # air = Airfoil(pathFileName="test_airfoils\\JX-GP-033.dat")
-#     # air.load()
-#     air = Root_Example()
-
-#     y = air.y
-#     x = air.x
-
-#     print ("LE angle         : ", air.panelAngle_le)
-#     print ("Min panel angle  : ", air.panelAngle_min[0],"  at: ",air.panelAngle_min[1] )
-
-#     spl = air.spline
-
-#     print ("Thickness: ", spl.thickness.maximum)
-#     print ("Camber:    ", spl.camber.maximum)
-
-#     x_new, y_new = spl.get_repaneled (200, 0.97, 0.7)
-
-#     fig, axa = plt.subplots(3, 1, figsize=(16,8))
-#     ax1 = axa[0]
-#     ax2 = axa[1]
-#     ax3 = axa[2]
-#     ax1.axis('equal')
-#     ax1.set_ylim([ -0.2,  0.2])
-#     # ax1.set_xlim([ 0.0, 1.1])
-
-#     # ax3.set_ylim([ -1,  1])
-
-#     ax1.grid(True)
-#     ax2.grid(True)
-#     ax3.grid(True)
-
-#     ax1.plot(x, y, '-', marker='o', lw=1, fillstyle='none', markersize=4, label=air.name)
-#     ax1.plot(x_new, y_new, '-', color = 'red', marker='o', lw=1, fillstyle='none', markersize=4, label=air.name + " repan")
-    
-#     # ax1.plot(x_upper, t, '-.', label='thickness')
-#     # ax1.plot(x_upper, c, '-', marker='o', lw=1, fillstyle='none', markersize=4, label='camber 2D')
-#     # ax1.plot(air.camber.x, air.camber.y, '-', label='camber 1D')
-
-#     # ax2.plot (x,spl.angle, marker='o', lw=1, fillstyle='none', markersize=4, label='Angle')
-#     # ax2.plot (x,panel_angles(x,y), marker='o', lw=1, fillstyle='none', markersize=4, label='Panel angle')
-#     # ax2.plot (x,spl.deriv1, label='Angle')
-#     ax2.plot (x,spl.scalarProduct, marker='o', fillstyle='none', markersize=4, label='Scalar product')
-
-
-#     # ax3.set_ylim([ -10,  10])
-#     ax3.plot (x,spl.curvature, label='Curvature')
-#     ax3.plot (spl.curv_upper.x, spl.curv_upper.y, label='Curvature upper')
-#     ax3.plot (spl.curv_lower.x, - spl.curv_lower.y, label='Curvature lower')
-
-#     # leading edge 
-#     xLe, yLe = spl.leSpline
-#     print ("Leading edge: ", xLe, yLe)
-
-#     ax1.plot (xLe, yLe, marker='o', color= 'red', markersize=5)
-
-#     ax1.legend()
-#     ax2.legend()
-#     ax3.legend()
-#     plt.show()
 
 
 if __name__ == "__main__":
 
     # ---- Test -----
 
+    compare_lower()
     # bezierTest()
     # splineCompare()
     # blendTest()
-    # cubicSplineTest()
     # lineTest()
     # curvatureTest()
     # u_fxy_Test()

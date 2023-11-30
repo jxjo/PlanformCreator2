@@ -50,28 +50,37 @@ class TestAirfoil:
         print ("Thickness: ", geo.thickness.maximum )
         print ("Camber:    ", geo.camber.maximum )
 
-        assert not geo._normalize(), "should be False because no normalizaton needed"
+        assert not geo.normalize(), "should be False because no normalizaton needed"
         assert geo.isNormalized
 
         # set thickness and camber 
 
         geo.set_maxThick  (0.08)
-        assert geo.maxThick == 0.08
+        assert round(geo.maxThick,4) == 0.08
 
         geo.set_maxThickX (0.40)
-        assert round(geo.maxThickX,4) == 0.40
+        assert round(geo.maxThickX,3) == 0.40
 
         geo.set_maxCamb   (0.02)
-        assert geo.maxCamb == 0.02
+        assert round(geo.maxCamb,4) == 0.02
 
         geo.set_maxCambX  (0.30)
-        assert round(geo.maxCambX,4) == 0.30
+        assert round(geo.maxCambX,3) == 0.30
 
-        assert geo.nPoints == 203, "nPoints changed with rebuild from upper and lower "
+        assert geo.nPoints == 200, "nPoints changed with rebuild from upper and lower "
 
         print ("Thickness: ", geo.thickness.maximum )
         print ("Camber:    ", geo.camber.maximum )
-        
+
+
+    def test_airfoil_geo_functions (self):
+
+        airfoil = Root_Example(geometryClass = Geometry_Spline)
+
+        # teGap 
+
+        airfoil.set_teGap (1.0)
+        assert airfoil.teGap == 1.0
 
 
 

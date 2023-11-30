@@ -11,4 +11,8 @@ spline.hasBeen_normalized:  -> removed
 spline.leSpline -> removed
 
 airfoil.geoFast -> removed
+
+airfoil.curv_upper --> removed
+airfoil.curv_lower --> removed
+airfoil.deriv2 --> removed
 """

@@ -17,7 +17,7 @@ from spline_of_airfoil import SideOfAirfoil, SplineOfAirfoil, SideOfAirfoil_Bezi
 
 
 
-class Airfoil:
+class Airfoil2:
     """ 
 
     Airfoil object to handle a airfoil direct related things  
@@ -116,7 +116,7 @@ class Airfoil:
         else: 
             return None 
     @classmethod
-    def asCopy (cls, sourceAirfoil: 'Airfoil', nameExt="-mod"):
+    def asCopy (cls, sourceAirfoil: 'Airfoil2', nameExt="-mod"):
         """
         Alternate constructor for new Airfoil based on another airfoil  
 
@@ -294,7 +294,8 @@ class Airfoil:
         """ set trailing edge gap to new value which is in %"""
         newGap = max(0.0, newGap)
         newGap = min(5.0, newGap)
-        self.set_xy(*self.with_TEGap( newGap / 100))
+        self.geo.set_teGap (newGap / 100)
+        self.set_xy(*self.geo.xy)
         
 
     @property
@@ -345,51 +346,27 @@ class Airfoil:
     @property
     def isSymmetric(self):
         """ true if max camber is 0.0 - so it's a symmetric airfoil"""
-        #todo remove
         return self.geo.maxCamb == 0.0
-
 
     @property
     def camber (self) -> 'SideOfAirfoil': 
         """ camber line as Line object"""
-        #todo remove
         return self.geo.camber 
 
     @property
     def thickness (self) -> 'SideOfAirfoil': 
         """ thickness distribution as Line object """
-        #todo remove
         return self.geo.thickness
 
     @property
     def upper(self) -> SideOfAirfoil: 
         """returns the upper surface as a line object - where x 0..1"""
-        #todo remove
         return self.geo.upper
             
     @property
     def lower(self) -> SideOfAirfoil: 
         """returns the lower surface as a line object - where x 0..1"""
-        #todo remove
         return self.geo.lower
-
-    @property
-    def curv_upper (self): 
-        """ SideOfAirfoil with curvature on the upper side"""
-        #todo remove
-        return self.geo.curv_upper
-    
-    @property
-    def curv_lower (self): 
-        """ SideOfAirfoil with curvature on the lower side"""
-        #todo remove
-        return self.geo.curv_lower
-    
-    @property
-    def deriv2 (self):
-        """ derivative 2 at self.x"""
-        #todo remove
-        return self.geo.deriv2
 
     @property
     def nPanelsNew (self): 
@@ -536,6 +513,55 @@ class Airfoil:
         self.set_isModified (False)
 
 
+    def cloneTo (self, dir = None, destName = None, teGap=None ):
+        """
+        return a copy of self with destDir and destName (the airfoil can be renamed).
+        Self remains with its current values.
+
+        return: 
+            new Airfoil  
+        """        
+
+        if not self.isLoaded: self.load()
+
+        # adjust te gap if requested
+        if teGap is not None: 
+            x, y = self.with_TEGap (teGap)
+            if x is None:                                       # error - couldn't set new teGap 
+                teGap = None 
+        if teGap is None:  
+            x = self.x
+            y = self.y 
+            teText = ''
+        else: 
+            teText = '_te=%.2f' % (teGap * 100)                 # te thickness in percent
+
+        # determine (new) airfoils name 
+        if not destName:
+            if self.isStrakAirfoil:
+                destName = self.sourceName                     # strak: take the long name of the two airfoils
+            else:
+                if self.fileName:
+                    destName = Path(self.fileName).stem        # cut '.dat'
+                else: 
+                    destName = self.name    
+        destName = destName + teText   
+
+        # create dir if not exist - build airfoil filename
+        if dir: 
+            if not os.path.isdir (dir):
+                os.mkdir(dir)
+            newPathFileName = os.path.join (dir, destName) + '.dat'
+        else: 
+            newPathFileName = destName + '.dat'
+
+        # write header and coordinates
+        self._write_toFile (newPathFileName, destName, x ,y )
+        
+        return newPathFileName
+    
+
+
     def copyAs (self, dir = None, destName = None, teGap=None ):
         """
         Write a copy of self to destPath and destName (the airfoil can be renamed).
@@ -640,18 +666,14 @@ class Airfoil:
 
     def repanel (self): 
         """
-        Repanel self with the current values of nPointsNew, le_ and te_bunch.
-        geo of self remains in it's original state """
+        Repanel self with the current values of nPointsNew, le_ and te_bunch."""
 
+        #todo geo spline if needed
         # new, equal distribution for upper and lower 
-        x, y = self.geo.get_repaneled (self.nPanelsNew, self.le_bunch, self.te_bunch)
-        self.set_xy (x, y) 
-
-
-    def apply_repanel (self):
-        """the repaneled x,y will become the new source of truth - the spline will be reinitialized"""
-
-        self.geo = None
+        if not self.geo.isBasic: 
+            self.geo.repanel (self.nPanelsNew, self.le_bunch, self.te_bunch)
+            
+            #todo reload x,y 
 
 
     def normalize (self, highPrec = False):
@@ -660,14 +682,14 @@ class Airfoil:
         Returns True/False if normalization was done  
         """
 
-        normalized = self.geo._normalize() 
+        normalized = self.geo.normalize() 
 
         if normalized:
             self.set_xy (self.geo.x, self.geo.y)
         return normalized 
 
 
-    def do_strak (self, airfoil1 : 'Airfoil', airfoil2 : 'Airfoil', blendBy):
+    def do_strak (self, airfoil1 : 'Airfoil2', airfoil2 : 'Airfoil2', blendBy):
         """ straks (blends) self out of two airfoils to the left and right
         depending on the blendBy factor"""
     
@@ -746,7 +768,7 @@ class Airfoil:
 
 #------------------------------------------------------
 
-class Airfoil_Bezier(Airfoil):
+class Airfoil2_Bezier(Airfoil2):
     """ 
 
     Airfoil based on Bezier curves for upper and lower side 

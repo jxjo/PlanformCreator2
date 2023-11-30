@@ -11,10 +11,10 @@ from typing import Type
 import io
 
 from common_utils import * 
-from airfoil2 import Airfoil
+from airfoil2 import Airfoil2
 from airfoil2_geometry import Geometry, Geometry_Spline
 
-class Example_Airfoil (Airfoil): 
+class Example_Airfoil (Airfoil2): 
 
     isExample = True
 
