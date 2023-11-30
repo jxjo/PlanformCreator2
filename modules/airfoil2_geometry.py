@@ -20,14 +20,12 @@
 
     Class hierarchy overview  
 
-        Geometry_Abstract                           - abstract super class 
-            |-- Geometry_Basic                      - linear interpolation
+        Geometry                                    - basic with linear interpolation 
             |-- Geometry_Spline                     - splined 
             |-- Geometry_Bezier                     - Bezier based 
 
 
-        Line_Abstract                               - abstract super class 
-            |-- Line_Basic                          - linear interpolation
+        Line                                        - basic with linear interpolation
             |-- Line_Spline                         - splined 
             |-- Line_Bezier                         - Bezier based            
                                 
@@ -35,12 +33,11 @@
     Object model - example                          
 
         airfoil                                     - an airfoils 
-            |-- geo : Geometry_Basic                - geometry strategy (Basic) 
-                    |-- line_upper : Line_Basic     - upper surface
-                    |-- camber     : Line_Spline    - cambr line                    - 
+            |-- geo : Geometry                      - geometry strategy (basic) 
+                    |-- line_upper : Line           - upper surface
+                    |-- camber     : Line_Spline    - camber line                    - 
 """
 
-from abc import ABC
 
 import numpy as np
 from math_util import * 
@@ -53,7 +50,7 @@ UPPER  = 'upper'
 LOWER  = 'lower'
 
 
-class Geometry (ABC): 
+class Geometry (): 
     """ 
     Abstract geometry strategy class
     """
@@ -67,6 +64,11 @@ class Geometry (ABC):
 
         self._thickness : SideOfAirfoil = None  # thickness distribution
         self._camber    : SideOfAirfoil = None  # camber line
+
+    def __repr__(self) -> str:
+        # overwritten to get a nice print string 
+        return f"{type(self).__name__} nPoints: {self.nPoints}"
+
 
     @property
     def x (self): 
@@ -88,8 +90,14 @@ class Geometry (ABC):
     
     @property
     def le (self) -> tuple: 
-        """ coordinates of le """
-        # can be overloaded for e.g. splined 
+        """ coordinates of le defined by the smallest x-value (iLe)"""
+        return self.x[self.iLe], self.y[self.iLe]      
+    
+    @property
+    def le_real (self) -> tuple: 
+        """ coordinates of le defined by a virtual curve (eg spline)"""
+        # can be overloaded
+        # for basic geometry equals to self.le
         return self.x[self.iLe], self.y[self.iLe]      
     
     @property
@@ -197,7 +205,30 @@ class Geometry (ABC):
         return self.camber.maximum [0]
 
 
-    # ------------------
+    def set_maxThick (self, newY): 
+        """ change max thickness"""
+        self.thickness.set_maximum(newY=newY)
+        self._rebuildFromThicknessCamber()
+
+    def set_maxThickX (self,newX): 
+        """ change max thickness x position"""
+        self.thickness.set_maximum(newX=newX)
+        self._rebuildFromThicknessCamber()
+
+    def set_maxCamb (self, newY): 
+        """ change max camber"""
+        self.camber.set_maximum(newY=newY)
+        self._rebuildFromThicknessCamber()
+
+    def set_maxCambX (self,newX): 
+        """ change max camber x position"""
+        self.camber.set_maximum(newX=newX)
+        self._rebuildFromThicknessCamber()
+
+
+
+    # ------------------ private ---------------------------
+
 
     def _upper(self) -> 'SideOfAirfoil': 
         """returns the upper surface as a line object"""
@@ -236,7 +267,7 @@ class Geometry (ABC):
         Returns True if it was normaized in self._x and _y
         """
 
-        if self.isNormalized: return 
+        if self.isNormalized: return False
 
         # ensure a copy of x,y 
         if self._x is None:
@@ -289,26 +320,29 @@ class Geometry (ABC):
     def _eval_thickness_camber (self): 
         """
         evalutes self thickness and camber distribution as SideOfAirfoil objects
+        with a x-distribution of the upper side.
+        
+        Using linear interpolation - shall be overloaded 
+
+        Note: It's an approximation as thickness is just the sum of y_upper(x) and y_lower(x)
+              and camber is just the mean value y_upper(x) and y_lower(x)
         """
-        pass                            # implemented in subclass
 
+        upper = self.upper
+        lower = self.lower 
 
-    def set_maxThick (self, newY): 
-        self.thickness.set_maximum(newY=newY)
-        self._rebuildFromThicknessCamber()
+        nupper = len(upper.y)
+        y_oppo = np.zeros (nupper)
 
-    def set_maxThickX (self,newX): 
-        self.thickness.set_maximum(newX=newX)
-        self._rebuildFromThicknessCamber()
+        # eval the corresponding y value on lower side - use high speed linear interpolation
+        for i, x in enumerate (upper.x):
+            y_oppo[i] = lower.yFn (x)
 
-    def set_maxCamb (self, newY): 
-        self.camber.set_maximum(newY=newY)
-        self._rebuildFromThicknessCamber()
+        # thickness and camber can now easily calculated 
+        self._thickness = SideOfAirfoil (upper.x, (upper.y - y_oppo), name='Thickness distribution')
+        self._camber    = SideOfAirfoil (upper.x, (upper.y + y_oppo) / 2.0, name='Camber line')
 
-    def set_maxCambX (self,newX): 
-        self.camber.set_maximum(newX=newX)
-        self._rebuildFromThicknessCamber()
-
+        return 
 
 
     def _rebuildFromThicknessCamber(self):
@@ -334,40 +368,6 @@ class Geometry (ABC):
         self._thickness  = None                 # thickness distribution
         self._camber     = None                 # camber line
 
-
-
-
-class Geometry_Basic (Geometry): 
-    """ 
-    Linear interpolation of airfoils geomtry
-    """
-
-
-
-    def _eval_thickness_camber (self): 
-        """
-        evalutes self thickness and camber distribution as SideOfAirfoil objects
-        with a x-distribution of the upper side.
-        
-        Note: It's an approximation as thickness is just the sum of y_upper(x) and y_lower(x)
-              and camber is just the mean value y_upper(x) and y_lower(x)
-        """
-
-        upper = self.upper
-        lower = self.lower 
-
-        nupper = len(upper.y)
-        y_oppo = np.zeros (nupper)
-
-        # eval the corresponding y value on lower side - use high speed linear interpolation
-        for i, x in enumerate (upper.x):
-            y_oppo[i] = lower.yFn (x)
-
-        # thickness and camber can now easily calculated 
-        self._thickness = SideOfAirfoil (upper.x, (upper.y - y_oppo), name='Thickness distribution')
-        self._camber    = SideOfAirfoil (upper.x, (upper.y + y_oppo) / 2.0, name='Camber line')
-
-        return 
 
 
 
@@ -400,8 +400,9 @@ class Geometry_Spline (Geometry):
         return self._spline
 
     @property
-    def le (self): 
+    def le_real (self): 
         """ le calculated based on spline """
+        #overloading
         xLe, yLe = self.xyFn (self.uLe)   
         # + 0.0 ensures not to have -0.0 
         return round(xLe,7) + 0.0, round(yLe,7) + 0.0 
@@ -418,29 +419,20 @@ class Geometry_Spline (Geometry):
         """ true if LE of x,y cordinates nearly equal to the real (splined) leading edge.
             If not the airfoil should be repaneled...! """
 
-        xle, yle   = super().le
-        xleS, yleS = self.le
+        xle, yle   = self.le
+        xleS, yleS = self.le_real
         if abs(xle-xleS) > 0.00005 or abs(yle-yleS) > 0.00005: 
             return False
         else: 
             return True
-        
 
-    def set_maxThick (self, newY): 
-        self.thickness.set_maximum(newY=newY)
-        self._rebuildFromThicknessCamber()
-
-    def set_maxThickX (self,newX): 
-        self.thickness.set_maximum(newX=newX)
-        self._rebuildFromThicknessCamber()
-
-    def set_maxCamb (self, newY): 
-        self.camber.set_maximum(newY=newY)
-        self._rebuildFromThicknessCamber()
-
-    def set_maxCambX (self,newX): 
-        self.camber.set_maximum(newX=newX)
-        self._rebuildFromThicknessCamber()
+    @property
+    def isNormalized (self):
+        """ 
+        true if LE is at 0,0 and TE is symmetrical at x=1
+           and real le (spline) is close to le
+        """
+        return super().isNormalized and self.isLe_closeTo_leSpline
 
 
     @property
@@ -479,8 +471,8 @@ class Geometry_Spline (Geometry):
     def curv_upper (self): 
         " return SideOfAirfoil with curvature on the upper side"
         if self._curv_upper is None: 
-            iLe  = np.argmin (self._x)                # index of LE in x,y and u 
-            self._curv_upper = SideOfAirfoil (np.flip(self._x[: iLe+1]),
+            iLe  = np.argmin (self.x)                # index of LE in x,y and u 
+            self._curv_upper = SideOfAirfoil (np.flip(self.x[: iLe+1]),
                                               np.flip(self.curvature [: iLe+1]), 
                                               name='Curvature upper' )
             # set default value für reversal detection 
@@ -491,8 +483,8 @@ class Geometry_Spline (Geometry):
     def curv_lower (self): 
         " return SideOfAirfoil with curvature on the lower side"
         if self._curv_lower is None: 
-            iLe  = np.argmin (self._x)                # index of LE in x,y and u 
-            self._curv_lower = SideOfAirfoil (self._x[iLe: ],
+            iLe  = np.argmin (self.x)                # index of LE in x,y and u 
+            self._curv_lower = SideOfAirfoil (self.x[iLe: ],
                                               self.curvature [iLe: ], 
                                               name='Curvature lower' )
             # set default value für reversal detection 
@@ -564,8 +556,8 @@ class Geometry_Spline (Geometry):
         Used for finding LE where this value is 0.0at u"""
 
         # exact trailing edge point 
-        xTe = (self._x[0] + self._x[-1]) / 2
-        yTe = (self._y[0] + self._y[-1]) / 2
+        xTe = (self.x[0] + self.x[-1]) / 2
+        yTe = (self.y[0] + self.y[-1]) / 2
 
         x,y = self.xyFn(u) 
 
@@ -582,7 +574,7 @@ class Geometry_Spline (Geometry):
     def _le_find (self):
         """ returns u (arc) value of leading edge based on scalar product tangent and te vector = 0"""
 
-        iLeGuess = np.argmin (self._x)          # first guess for Le point 
+        iLeGuess = np.argmin (self.x)          # first guess for Le point 
         # exact determination of root  = scalar product = 0.0 
         try: 
             uLe = findRoot (self.scalarProductFn, self.spline.u[iLeGuess-1] , bounds=(0.4, 0.6)) 
@@ -611,8 +603,8 @@ class Geometry_Spline (Geometry):
         y_oppo  = np.flip(y_oppo)
 
         # thickness and camber can now easily calculated 
-        self._thickness = SideOfAirfoil (x_upper,  y_upper - y_oppo,        name='Thickness distribution')
-        self._camber    = SideOfAirfoil (x_upper, (y_oppo + y_upper) / 2.0, name='Camber line')
+        self._thickness = SideOfAirfoil_Spline (x_upper,  y_upper - y_oppo,        name='Thickness distribution')
+        self._camber    = SideOfAirfoil_Spline (x_upper, (y_oppo + y_upper) / 2.0, name='Camber line')
 
         # for symmetric airfoil with unclean data set camber line to 0 
         if np.max(self._camber._y) < 0.00001: 
@@ -649,7 +641,7 @@ class Geometry_Spline (Geometry):
         if not self.isNormalized:
             self._normalize()
 
-        iLe = np.argmin (self._x)
+        iLe = np.argmin (self.x)
 
         if side == LOWER: 
             x_from = self.x [iLe : ]
@@ -713,7 +705,7 @@ class Geometry_Spline (Geometry):
             if len(self.x) < 120:               # ensure a min number of panels for strange (old) airfoils
                 nPanels = 120
             else: 
-                nPanels = len(self.x)           # do not change no of panels
+                nPanels = self.nPanels          # do not change no of panels
             le_bunch = 0.84
             te_bunch = 0.7
 
@@ -736,7 +728,7 @@ class Geometry_Spline (Geometry):
         yOut : np array - evaluated y values 
         """
 
-        iLe = np.argmin (self._x)
+        iLe = np.argmin (self.x)
 
         if side == LOWER: 
             uStart = self.spline.u[iLe] 
@@ -763,9 +755,9 @@ class Geometry_Spline (Geometry):
         yOut = self.yFn(ux)
 
         # ensure Le is 0,0 and Te is at 1
-        if  xIn[0] == self._x[iLe]:                         yOut[0]  = self._y[iLe]
-        elif xIn[-1] == self._x[0] and side == UPPER:     yOut[-1] = self._y[0]
-        elif xIn[-1] == self._x[-1] and side == LOWER:    yOut[-1] = self._y[-1]
+        if   xIn[0]  == self.x[iLe]:                    yOut[0]  = self.y[iLe]
+        elif xIn[-1] == self.x[0]  and side == UPPER:   yOut[-1] = self.y[0]
+        elif xIn[-1] == self.x[-1] and side == LOWER:   yOut[-1] = self.y[-1]
 
         return yOut 
 
@@ -842,6 +834,19 @@ class SideOfAirfoil:
     def set_threshold (self, aVal): 
         self._threshold =aVal 
 
+    @property
+    def maximum (self): 
+        """ 
+        x,y position of the maximum y value of self
+
+        ! The accuracy of linear interpolation is about 1% compared to a spline or bezier
+          based interpolation 
+        """
+        if self._maximum is None: 
+            self._maximum = self._get_maximum()
+        return self._maximum 
+
+
     def reversals (self, xStart= 0.1):
         """ 
         returns a list of reversals (change of curvature sign equals curvature = 0 )
@@ -866,14 +871,49 @@ class SideOfAirfoil:
         return reversals 
     
 
-    @property
-    def maximum (self, fast=False): 
+    def set_maximum (self, newX=None, newY=None): 
         """ 
-        returns the x,y position of the maximum y value of self
+        set x,y of the mx point of self 
         """
-        if self._maximum is None: 
-            self._maximum = self._get_maximum()
-        return self._maximum 
+
+        # if e.g. camber is already = 0.0, a new camber line cannot be build
+        if np.max(self.y) == 0.0: return
+
+        if not newY is None: 
+
+            if newY <= 0.0: 
+                self._y = np.zeros(len(self._y))
+            else: 
+                curY = self.maximum[1]
+                self._y = self._y * (newY / curY)
+            self._reset()                
+
+        if not newX is None: 
+         
+            self._moveMaxX (newX)                   # a little bit more complicated ...
+            self._reset()
+    
+
+    def yFn (self,x):
+        """ returns interpolated y values based on a x-value  """
+
+        # find the surrounding x(j) and x(j+1) on lower side of x (from upper side)
+        jl = bisection (self.x, x)
+        
+        # now interpolate the y-value on lower side 
+        if jl < (len(self.x) -2):
+            x1 = self.x[jl]
+            x2 = self.x[jl+1]
+            y1 = self.y[jl]
+            y2 = self.y[jl+1]
+            y = interpolate (x1, x2, y1, y2, x)
+        else: 
+            y = self.y[-1]
+        return y
+
+
+
+    # ------------------ private ---------------------------
 
 
     def _get_maximum (self): 
@@ -898,13 +938,6 @@ class SideOfAirfoil:
         return xmax, ymax
 
 
-    def set_maximum (self, newX=None, newY=None): 
-        """ 
-        set x,y of the mx point of self 
-        """
-        raise NotImplementedError
-
-
     def _moveMaxX (self, newMax):
         """ 
         moves the point of maximum to newMaxX  
@@ -912,22 +945,10 @@ class SideOfAirfoil:
         raise NotImplementedError
 
 
-    def yFn (self,x):
-        """ returns interpolated y values based on a x-value  """
+    def _reset (self):
+        """ reinit self if x,y has changed""" 
+        self._maximum  = None                 # thickness distribution
 
-        # find the surrounding x(j) and x(j+1) on lower side of x (from upper side)
-        jl = bisection (self.x, x)
-        
-        # now interpolate the y-value on lower side 
-        if jl < (len(self.x) -2):
-            x1 = self.x[jl]
-            x2 = self.x[jl+1]
-            y1 = self.y[jl]
-            y2 = self.y[jl+1]
-            y = interpolate (x1, x2, y1, y2, x)
-        else: 
-            y = self.y[-1]
-        return y
 
 
 
@@ -935,6 +956,8 @@ class SideOfAirfoil_Spline (SideOfAirfoil):
     """ 
     1D line of an airfoil like upper, lower side, camber line, curvature etc...
     with x 0..1
+
+    Represented by a 1D spline
 
     """
 
@@ -952,27 +975,16 @@ class SideOfAirfoil_Spline (SideOfAirfoil):
         return self._spline
 
 
-    def set_maximum (self, newX=None, newY=None): 
-        """ 
-        set x,y of the mx point of self 
+
+
+    def yFn (self,x):
+        """ returns interpolated y values based on a x-value
         """
-        # if e.g. camber is already = 0.0, a new camber line cannot be build
-        if np.max(self.y) == 0.0: return
+        return self.spline.eval (x)
 
-        if not newY is None: 
 
-            if newY <= 0.0: 
-                self._y = np.zeros(len(self._y))
-            else: 
-                curY = self.maximum[1]
-                self._y = self._y * (newY / curY)
-            self._reset_spline()                
+    # ------------------ private ---------------------------
 
-        if not newX is None: 
-         
-            self._moveMaxX (newX)                   # a little bit more complicated ...
-            self._reset_spline ()
-    
 
     def _get_maximum (self): 
         """ 
@@ -990,13 +1002,11 @@ class SideOfAirfoil_Spline (SideOfAirfoil):
             else:                               # lower side
                 xmax = findMin (self.yFn, 0.3, bounds=(0.0,1.0))
             ymax = self.yFn (xmax)
+            # limit decimals to a reasonable value
+            xmax = round(xmax, 7)
+            ymax = round(ymax, 7)
+
         return xmax, ymax
-
-
-    def _reset_spline (self):
-        """ reinit self spline data if x,y has changed""" 
-        self._spline     = None
-        self._maximum    = None                     # the highpoint of the line 
 
 
     def _moveMaxX (self, newMax):
@@ -1045,10 +1055,11 @@ class SideOfAirfoil_Spline (SideOfAirfoil):
         self._y = newY         
 
 
-    def yFn (self,x):
-        """ returns interpolated y values based on a x-value
-        """
-        return self.spline.eval (x)
+    def _reset (self):
+        """ reinit self if x,y has changed""" 
+
+        super()._reset()
+        self._spline     = None
 
 
 

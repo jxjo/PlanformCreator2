@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 from math_util import * 
 from common_utils import * 
-from airfoil2_geometry import Geometry_Spline, Geometry_Basic, Geometry 
+from airfoil2_geometry import Geometry_Spline, Geometry 
 from spline_of_airfoil import SideOfAirfoil, SplineOfAirfoil, SideOfAirfoil_Bezier, UPPER,LOWER
 
 
@@ -143,7 +143,7 @@ class Airfoil:
  
 
     def __repr__(self) -> str:
-        # overwrite to get a nice print string 
+        # overwritten to get a nice print string 
         info = f"\'{self.name}\'"
         return f"{type(self).__name__} {info}"
 
