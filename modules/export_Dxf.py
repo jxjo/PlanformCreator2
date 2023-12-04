@@ -5,7 +5,7 @@ import ezdxf
 from ezdxf import enums
 from common_utils import *
 from wing_model import Wing, WingSection, Flap
-
+from airfoil2 import Airfoil2
 
 class Export_Dxf:
     """ 
@@ -247,22 +247,22 @@ class Dxf_Artist:
 
         # ! here in dxf and airfoil coordinate system (not wing) !
 
+        airfoil: Airfoil2
         sec : WingSection
         for sec in self.wing.wingSections:
 
-            airfoil = sec.airfoil
             teGap = None 
 
             # te gap in mm? if yes scale it to normed ... do it
             if not teGap_mm is None and teGap_mm >= 0.0: 
                 teGap = teGap_mm / sec.chord
-                x, y = airfoil.with_TEGap (teGap)
-                if x is None: 
-                    teGap = None 
+                airfoil = Airfoil2.asCopy (sec.airfoil)
+                airfoil.set_teGap_perc(teGap * 100)
+            else: 
+                airfoil = sec.airfoil
 
-            if teGap is None:  
-                x = airfoil.x
-                y = airfoil.y
+            x = airfoil.x
+            y = airfoil.y
 
             # scale to real size 
             x = x * sec.chord

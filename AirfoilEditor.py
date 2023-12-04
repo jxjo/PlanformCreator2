@@ -34,14 +34,14 @@ import customtkinter as ctk
 sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 
 from common_utils       import * 
-from airfoil            import *
-from airfoil_examples   import Root_Example
+from airfoil2           import *
+from airfoil2_examples  import Root_Example
 from widgets            import *
 from ui_base            import Dialog_Abstract, Edit_Abstract, Diagram_Abstract              
 from ui_base            import set_initialWindowSize, Dialog_Settings              
 from airfoil_artists    import *
 
-from spline_of_airfoil  import UPPER, LOWER
+from airfoil2_geometry  import UPPER, LOWER
 
 
 #------------------------------------------------
@@ -84,9 +84,14 @@ class Edit_Abstract_Airfoil (Edit_Abstract):
         self.ctk_root.bind(AIRFOIL_NEW,              self.changed_airfoil, add='+')
 
     
-    def airfoil(self) -> Airfoil:
+    def airfoil(self) -> Airfoil2:
         # it's a method - not a property to exchange the wing 
         return self._airfoilFn()
+    
+    @property
+    def geo (self) -> Geometry:
+        """ geometry of self.airfoil"""
+        return self.airfoil().geo 
     
     def changed_airfoil (self, dummy): 
         self.refresh()
@@ -194,7 +199,9 @@ class Edit_Airfoil_Data(Edit_Abstract_Airfoil):
                                 get='maxCamberX', width=50, unit="%", dec=2))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="TE gap", obj=self.airfoil, 
-                                get='teGap', width=50, lab_width=80, unit="%", dec=2))
+                                get='teGap_perc', width=50, lab_width=80, unit="%", dec=2))
+        r += 1
+        self.add (Label_Widget  (self,r,c+1, padx=0,  pady=(5,0), lab=lambda : self.airfoil().geo.description))
  
 
     def modify_airfoil (self): 
@@ -216,37 +223,30 @@ class Edit_Curvature(Edit_Abstract_Airfoil):
     """
     name = "Curvature"
 
-    def __init__(self, master, airfoilFn, *args, **kwargs):
-
-        self._curvature_threshold = None
-
-        super().__init__(master, airfoilFn, *args, **kwargs)
+    @property
+    def myApp () -> 'AirfoilEditor':
+        super().myApp
 
     @property
     def curvature_threshold (self): 
-        return self._curvature_threshold
+        return self.geo.curvature.upper.threshold
     def _set_curvature_threshold (self, aVal):
-        self._curvature_threshold = aVal
-        self.airfoil().curv_upper.set_threshold(aVal)
-        self.airfoil().curv_lower.set_threshold(aVal)
+        self.geo.curvature.upper.set_threshold(aVal)
+        self.geo.curvature.lower.set_threshold(aVal)
     
 
     def init (self):
 
-        self._curvature_threshold = self.airfoil().curv_upper.threshold
-
         r, c = 0, 0 
         self.add (Header_Widget (self,r,c,   width=90, lab=self.name, columnspan= 2))
-        # self.add (Button_Widget (self,r,c+3, lab='Smooth', width=80, padx= (10,0), columnspan=2, sticky='w', 
-        #                          set=self.smooth_airfoil ))
 
         r = 1
         Blank_Widget (self, r,0)                # left blank column to inset the fields 
         c = 1                                  
-        self.add (Field_Widget  (self,r,c,   lab="Reversals upper", get=lambda: len(self.airfoil().curv_upper.reversals()),
+        self.add (Field_Widget  (self,r,c,   lab="Reversals upper", get=lambda: self.geo.curvature.upper.nreversals,
                                 width=50, lab_width=100, set='', dec=0, disable= True))
        
-        self.add (Field_Widget  (self,r,c+3, lab="lower", get=lambda: len(self.airfoil().curv_lower.reversals()), 
+        self.add (Field_Widget  (self,r,c+3, lab="lower", get=lambda: self.geo.curvature.lower.nreversals, 
                                 width=50, lab_width=60, padx=(20,0), set='', dec=0, disable= True))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="... threshold", get=lambda: self.curvature_threshold, 
@@ -258,7 +258,6 @@ class Edit_Curvature(Edit_Abstract_Airfoil):
         self.add (Button_Widget (self,r,c+3, lab='Airfoil Bezier', width=110, 
                                  pady=(25,10), padx= (20,0), columnspan=3, sticky='w', 
                                  set=self.airfoil_Bezier ))
-
 
 
     def refresh(self): 
@@ -296,19 +295,19 @@ class Edit_Panels(Edit_Abstract_Airfoil):
         r += 1
         Blank_Widget (self, r,0)    
         c = 1                                  # left blank column to inset the fields 
-        self.add (Field_Widget  (self,r,c,   lab="No of panels", get=lambda: self.airfoil().nPanels,
+        self.add (Field_Widget  (self,r,c,   lab="No of panels", get=lambda: self.geo.nPanels,
                                  width=50, lab_width=0, dec=0, text_style=lambda: self.style('no')))
         r += 1
-        self.add (Field_Widget  (self,r,c,   lab="Angle at LE", get=lambda: self.airfoil().panelAngle_le, 
+        self.add (Field_Widget  (self,r,c,   lab="Angle at LE", get=lambda: self.geo.panelAngle_le, 
                                  width=50,   lab_width=80, unit="°", dec=1, text_style=lambda: self.style('le_angle')))
         self.add(Label_Widget   (self,r,c+3, columnspan=2, padx= 0,  width=80, 
-                                 lab= lambda: "at index %d" % self.airfoil().iLe))
+                                 lab= lambda: "at index %d" % self.geo.iLe))
 
         r += 1
-        self.add (Field_Widget  (self,r,c,   lab="Angle min", get=lambda: self.airfoil().panelAngle_min[0], 
+        self.add (Field_Widget  (self,r,c,   lab="Angle min", get=lambda: self.geo.panelAngle_min[0], 
                                  width=50,   lab_width=80, unit="°", dec=1, text_style=lambda: self.style('min_angle')))
         self.add(Label_Widget   (self,r,c+3, columnspan=2, padx= 0, width=80, 
-                                 lab= lambda: "at index %d" % self.airfoil().panelAngle_min[1]))
+                                 lab= lambda: "at index %d" % self.geo.panelAngle_min[1]))
         r += 1
         Blank_Widget (self, r,c)
         r += 1
@@ -316,20 +315,18 @@ class Edit_Panels(Edit_Abstract_Airfoil):
                                  lab= lambda: self.messageText()))
         
 
-
     def messageText (self): 
 
         text = []
-        airfoil = self.airfoil()
-        minAngle, atIndex = self.airfoil().panelAngle_min
+        minAngle, atIndex = self.geo.panelAngle_min
 
-        if airfoil.panelAngle_le > 172.0: 
-            text.append("- Panel angle at LE (%d°) is too blunt." %(self.airfoil().panelAngle_le))
+        if self.geo.panelAngle_le > 172.0: 
+            text.append("- Panel angle at LE (%d°) is too blunt." %(self.geo.panelAngle_le))
         if minAngle < 150.0: 
             text.append("- Min. angle of two panels is < 150°")
-        if airfoil.panelAngle_le == 180.0: 
+        if self.geo.panelAngle_le == 180.0: 
             text.append("- Leading edge has 2 points")
-        if airfoil.nPanels < 160 or airfoil.nPanels > 260: 
+        if self.geo.nPanels < 160 or self.geo.nPanels > 260: 
             text.append("- No of panels should be > 160 and < 260")
         
         text = '\n'.join(text)
@@ -337,15 +334,14 @@ class Edit_Panels(Edit_Abstract_Airfoil):
     
     def style (self, panel): 
 
-        airfoil = self.airfoil()
-        minAngle, atIndex = airfoil.panelAngle_min
+        minAngle, atIndex = self.geo.panelAngle_min
 
         if   panel =="min_angle":
             if minAngle < 150.0 : return 'Warning'
         elif panel =="le_angle":
-            if airfoil.panelAngle_le > 170.0 : return 'Warning'
+            if self.geo.panelAngle_le > 170.0 : return 'Warning'
         elif panel =="no":
-            if airfoil.nPanels < 160 or airfoil.nPanels > 260 : return 'Warning'
+            if self.geo.nPanels < 160 or self.geo.nPanels > 260 : return 'Warning'
 
     def style_repanel (self): 
         """ text style of the repanel button"""
@@ -382,21 +378,21 @@ class Edit_Coordinates(Edit_Abstract_Airfoil):
         r = 1
         Blank_Widget (self, r,0)    
         c = 1                                  # left blank column to inset the fields 
-        self.add (Field_Widget  (self,r,c,   lab="Leading edge", get=lambda: self.airfoil().le[0],
-                                 width=75, lab_width=90, dec=6, text_style=lambda: self.style('le_x')))
-        self.add (Field_Widget  (self,r,c+3,                     get=lambda: self.airfoil().le[1],
-                                 width=75,               dec=6, text_style=lambda: self.style('le_y')))
+        self.add (Field_Widget  (self,r,c,   lab="Leading edge", get=lambda: self.geo.le[0],
+                                 width=80, lab_width=90, dec=7, text_style=lambda: self.style('le_x')))
+        self.add (Field_Widget  (self,r,c+3,                     get=lambda: self.geo.le[1],
+                                 width=80,               dec=7, text_style=lambda: self.style('le_y')))
         r += 1
-        self.add (Field_Widget  (self,r,c,   lab="Trailing edge", get=lambda: self.airfoil().te_fromPoints[0],
-                                 width=75, lab_width=90, dec=6, text_style=lambda: self.style('te_x')))
-        self.add (Field_Widget  (self,r,c+3,                     get=lambda: self.airfoil().te_fromPoints[1],
-                                 width=75,               dec=6, text_style=lambda: self.style('te_y')))
+        self.add (Field_Widget  (self,r,c, lab="Trailing edge", get=lambda: self.geo.te[0],
+                                 width=80, lab_width=90, dec=7, text_style=lambda: self.style('te_x')))
+        self.add (Field_Widget  (self,r,c+3, get=lambda: self.geo.te[1],
+                                 width=80, dec=7, text_style=lambda: self.style('te_y')))
  
         r += 1
-        self.add (Field_Widget  (self,r,c,   lab=" " ,            get=lambda: self.airfoil().te_fromPoints[2],
-                                 width=75, lab_width=90, dec=6, text_style=lambda: self.style('te_x')))
-        self.add (Field_Widget  (self,r,c+3,                      get=lambda: self.airfoil().te_fromPoints[3],
-                                 width=75,               dec=6, text_style=lambda: self.style('te_y')))
+        self.add (Field_Widget  (self,r,c, lab=" " , get=lambda: self.geo.te[2],
+                                 width=80, lab_width=90, dec=7, text_style=lambda: self.style('te_x')))
+        self.add (Field_Widget  (self,r,c+3, get=lambda: self.geo.te[3],
+                                 width=80, dec=7, text_style=lambda: self.style('te_y')))
 
         r += 1
         Blank_Widget (self, r,c)
@@ -417,11 +413,10 @@ class Edit_Coordinates(Edit_Abstract_Airfoil):
     def messageText (self): 
 
         text = []
-        airfoil = self.airfoil()
 
-        if airfoil.le[0] != 0.0 or airfoil.le[1] != 0.0:
+        if self.geo.le[0] != 0.0 or self.geo.le[1] != 0.0:
             text.append("- Leading edge is not at 0,0")
-        if airfoil.te_fromPoints[0] != 1.0 or airfoil.te_fromPoints[2] != 1.0 : 
+        if self.geo.te[0] != 1.0 or self.geo.te[2] != 1.0 : 
            text.append("- Trailing edge is not at 1")
         
         text = '\n'.join(text)
@@ -430,17 +425,16 @@ class Edit_Coordinates(Edit_Abstract_Airfoil):
 
     def style (self, coord): 
         """ text style of entry fields"""
-        airfoil = self.airfoil()
 
         if   coord =="le_x":
-            if airfoil.le[0] != 0.0 : return 'Warning'
+            if self.geo.le[0] != 0.0 : return 'Warning'
         elif coord =="le_y":
-            if airfoil.le[1] != 0.0 : return 'Warning'
+            if self.geo.le[1] != 0.0 : return 'Warning'
         elif coord =="te_x":
-            if airfoil.te_fromPoints[0] != 1.0 or \
-               airfoil.te_fromPoints[2] != 1.0 : return 'Warning'
+            if self.geo.te[0] != 1.0 or \
+               self.geo.te[2] != 1.0 : return 'Warning'
         elif coord =="te_y":
-            if airfoil.te_fromPoints[3] != - airfoil.te_fromPoints[1] : return 'Warning'
+            if self.geo.te[3] != - self.geo.te[1] : return 'Warning'
 
 
     def style_normalize (self): 
@@ -612,11 +606,11 @@ class Diagram_Airfoil_Bezier (Diagram_Abstract):
 
     def __init__(self, master, airfoilOrg, airfoilBezier, *args, **kwargs):
 
-        self._airfoilBezier : Airfoil_Bezier = airfoilBezier
+        self._airfoilBezier : Airfoil2_Bezier = airfoilBezier
         super().__init__( master, airfoilOrg, *args, **kwargs)
 
 
-    def airfoilBezier (self) -> Airfoil_Bezier:  
+    def airfoilBezier (self) -> Airfoil2_Bezier:  
         return self._airfoilBezier
 
 
@@ -964,16 +958,26 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
 
         self.has_switches_frame = has_switches_frame
 
-        self.airfoilOrg : Airfoil = airfoilFn()             # keep the original airfoil 
-        self.airfoil  = Airfoil.asCopy (self.airfoilOrg, nameExt=self.nameExt) 
+        self.airfoilOrg : Airfoil2 = airfoilFn()             # keep the original airfoil 
+        self.airfoil  = Airfoil2.asCopy (self.airfoilOrg, nameExt=self.nameExt, geometry=GEO_SPLINE) 
         self.hasbeen_normalized = False
 
-        if not self.airfoil.isNormalized_highPrec:          # also LE of spline at 0,0? 
-            self.hasbeen_normalized = self.airfoil.normalize (highPrec = True)        # ensure exact le based on spline
+        if not self.airfoil.isNormalized:                    # also LE of spline at 0,0? 
+            self.hasbeen_normalized = self.airfoil.normalize ()    # ensure exact le based on spline
 
         title  = self.name +"   [" + self.airfoil.name + "]"
 
         super().__init__(master, workingDir=workingDir, title=title, *args, **kwargs)
+
+    @property
+    def geo (self) -> Geometry:
+        """ geometry of self.airfoil"""
+        return self.airfoil.geo
+
+    @property
+    def geoOrg (self) -> Geometry:
+        """ geometry of self.airfoilOrg"""
+        return self.airfoilOrg.geo
 
 
     def init (self):
@@ -1065,8 +1069,6 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
             # maybe user changed name when saving to file? 
             airfoilName = os.path.splitext(airfoilFileName)[0]
 
-            self.airfoil.apply_repanel ()
-
             try: 
                 self.airfoil.saveAs (airfoilPath, airfoilName)
             except: 
@@ -1074,7 +1076,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
                 msg = Messagebox (self, title="Save", message=message, icon="cancel", option_1="Ok")
                 msg.get()                # wait until pressed ok
 
-            self.refresh('')
+            self.refresh()
 
 
     def cancel(self): 
@@ -1085,7 +1087,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
 
     def _save_fileTypes (self):
         # returns the fileTypes for save message
-        return "'.dat'" 
+        return "" 
 
     def ok(self): 
         """ saves modified airfoil and returns to parent with filename of the new, modified airfoil"""
@@ -1105,7 +1107,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
 
             try: 
                 self.airfoil.saveAs (dir = airfoilDir)
-                message = "Airfoil '%s'\n\nsaved %s to\n\n%s" \
+                message = "Airfoil '%s'\n\nsaved %s to\n\ndirectory '%s'" \
                            % (self.airfoil.name, self._save_fileTypes(), airfoilDirMSG )
                 msg = Messagebox (self, title="Save", message=message, icon="check", option_1="Ok")
             except: 
@@ -1210,7 +1212,7 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
 
 
     def le_bunch_message (self): 
-        angle = self.airfoil.panelAngle_le
+        angle = self.geo.panelAngle_le
         if angle > 172.0: 
             text = "Angle at LE is too blunt. Decrease bunch" 
         elif angle < 155.0: 
@@ -1221,7 +1223,7 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
             
 
     def le_bunch_message_style (self): 
-        angle = self.airfoil.panelAngle_le
+        angle = self.geo.panelAngle_le
         if angle > 170.0 or angle < 155.0: 
             return 'Warning'
         else: 
@@ -1271,26 +1273,26 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
         self.add (Label_Widget (self.input_frame,r,c+3, padx=0, lab="y"))
 
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab="Leading edge", get=lambda: self.airfoil.le[0],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab="Leading edge", get=lambda: self.geo.le[0],
                                  width=80, lab_width=130, dec=7))
-        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoil.le[1],
+        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.geo.le[1],
                                  width=80, dec=7))
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ... of spline", get=lambda: self.airfoil.spline.leSpline[0],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ... of spline", get=lambda: self.geo.le_real[0],
                                  width=80, lab_width=130, dec=7))
-        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoil.spline.leSpline[1],
+        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.geo.le_real[1],
                                  width=80, dec=7))
         r += 1
         Blank_Widget (self.input_frame, r,c, height=15)
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab="Trailing edge", get=lambda: self.airfoil.te_fromPoints[0],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab="Trailing edge", get=lambda: self.geo.te[0],
                                  width=80, dec=7))
-        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoil.te_fromPoints[1],
+        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.geo.te[1],
                                  width=80, dec=7))
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab=" " , get=lambda: self.airfoil.te_fromPoints[2],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" " , get=lambda: self.geo.te[2],
                                  width=80, dec=7))
-        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoil.te_fromPoints[3],
+        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.geo.te[3],
                                  width=80, dec=7))
 
         # fields original airfoil
@@ -1300,25 +1302,25 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
         self.add (Label_Widget (self.input_frame,r,c+3, padx=0, lab="y"))
 
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoilOrg.le[0],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.geoOrg.le[0],
                                  width=80,   lab_width=60, dec=7, text_style=lambda: self.style('le_x')))
-        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoilOrg.le[1],
+        self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.geoOrg.le[1],
                                  width=80, dec=7,                 text_style=lambda: self.style('le_y')))
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoilOrg.spline.leSpline[0],
-                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.style('leSpline_x')))
-        self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.airfoilOrg.spline.leSpline[1],
-                                 width=80, dec=7,                 text_style=lambda: self.style('leSpline_y')))
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.geoOrg.le_real[0],
+                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.style('le_real_x')))
+        self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.geoOrg.le_real[1],
+                                 width=80, dec=7,                 text_style=lambda: self.style('le_real_y')))
 
         r += 2
-        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoilOrg.te_fromPoints[0],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.geoOrg.te[0],
                                  width=80,   lab_width=60, dec=7, text_style=lambda: self.style('te_x')))
-        self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.airfoilOrg.te_fromPoints[1],
+        self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.geoOrg.te[1],
                                  width=80,                 dec=7, text_style=lambda: self.style('te_y')))
         r += 1
-        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.airfoilOrg.te_fromPoints[2],
+        self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.geoOrg.te[2],
                                  width=80,   lab_width=60, dec=7, text_style=lambda: self.style('te_x')))
-        self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.airfoilOrg.te_fromPoints[3],
+        self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.geoOrg.te[3],
                                  width=80,                 dec=7, text_style=lambda: self.style('te_y')))
 
         self.input_frame.grid_columnconfigure (9, weight=2)
@@ -1327,18 +1329,18 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
         
     def style (self, coord): 
         if   coord =="le_x":
-            if self.airfoilOrg.le[0] != 0.0 : return 'Warning'
+            if self.geoOrg.le[0] != 0.0 : return 'Warning'
         elif coord =="le_y":
-            if self.airfoilOrg.le[1] != 0.0 : return 'Warning'
-        elif coord =="leSpline_x":
-            if not self.airfoilOrg.spline.isLe_closeTo_leSpline : return 'Warning'
-        elif coord =="leSpline_y":
-            if not self.airfoilOrg.spline.isLe_closeTo_leSpline : return 'Warning'
+            if self.geoOrg.le[1] != 0.0 : return 'Warning'
+        elif coord =="le_real_x":
+            if not self.geoOrg.isNormalized : return 'Warning'
+        elif coord =="le_real_y":
+            if not self.geoOrg.isNormalized : return 'Warning'
         elif coord =="te_x":
-            if self.airfoilOrg.te_fromPoints[0] != 1.0 or \
-               self.airfoilOrg.te_fromPoints[2] != 1.0 : return 'Warning'
+            if self.geoOrg.te[0] != 1.0 or \
+               self.geoOrg.te[2] != 1.0 : return 'Warning'
         elif coord =="te_y":
-            if self.airfoilOrg.te_fromPoints[3] != - self.airfoilOrg.te_fromPoints[1] : return 'Warning'
+            if self.geoOrg.te[3] != - self.geoOrg.te[1] : return 'Warning'
 
 
 
@@ -1412,7 +1414,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
                                 event=self.change_event))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="TE gap", obj=self.airfoil, 
-                                get='teGap', set='set_teGap', step=0.01,
+                                get='teGap_perc', set='set_teGap_perc', step=0.01,
                                 spin=True, width=95, lab_width=70, unit="%", dec=2,
                                 event=self.change_event))
 
@@ -1443,7 +1445,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
 
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="TE gap",  
-                                get=lambda: self.airfoil.teGap * self.chord / 100,  
+                                get=lambda: self.airfoil.teGap_perc * self.chord / 100,  
                                 width=50, lab_width=70, unit="mm", dec=2, disable= True))
 
         self.input_frame.grid_columnconfigure (7,  weight=1)
@@ -1508,16 +1510,14 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         # overwrite
 
-        if not self.airfoilOrg.isNormalized_highPrec:               # also LE of spline at 0,0? 
+        if not self.airfoilOrg.isNormalized:                        # also LE of spline at 0,0? 
             pathFileName = self.airfoilOrg.pathFileName
-            self.airfoilOrg  = Airfoil.asCopy (self.airfoilOrg, nameExt='_norm') 
-            self.airfoilOrg.normalize (highPrec = True)             # ensure exact le based on spline
+            self.airfoilOrg  = Airfoil2.asCopy (self.airfoilOrg, nameExt='_norm',geometry=GEO_SPLINE) 
+            self.airfoilOrg.normalize ()                            # ensure exact le based on spline
             self.airfoilOrg.set_isModified (False)                  # do not plot as modified airfoil
             self.airfoilOrg.set_pathFileName (pathFileName)         # asCopy doesn't copy - needed for save
-        self.airfoilOrg_upper = self.airfoilOrg.upper               # cache sides 
-        self.airfoilOrg_lower = self.airfoilOrg.lower               # cache sides 
 
-        self.airfoil    = Airfoil_Bezier (name=self.airfoil.name) 
+        self.airfoil    = Airfoil2_Bezier (name=self.airfoil.name) 
         self.airfoil.set_isEdited (True)                            # will indicate airfoil when plotted 
 
         self.showOrg = True 
@@ -1592,7 +1592,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         r += 1
         c = 0 
         self.add (Field_Widget  (self.input_frame,r,c,   lab="TE gap", obj=self.airfoil, 
-                                get='teGap', set='set_teGap', step=0.01,
+                                get='teGap_perc', set='set_teGap_perc', step=0.01,
                                 spin=True, width=90, lab_width=70, unit="%", dec=2,
                                 event=self.changed_te_gap))
         Label_Widget (self.input_frame,r,c+3, padx=0, lab= "= move last point of Bezier curves up or down", columnspan = 2)
@@ -1616,9 +1616,9 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     def nPoints(self, objId):
         """ number of control points upper/lowerfor entry field"""
         if objId == UPPER:
-            return self.airfoil.upper.nPoints
+            return self.airfoil.geo.upper.nPoints
         else: 
-            return self.airfoil.lower.nPoints
+            return self.airfoil.geo.lower.nPoints
 
 
     def set_nPoints(self, nPoints, objId):
@@ -1628,11 +1628,11 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         curveType = objId
         if curveType == UPPER: 
-            airfoil_side = self.airfoil.upper
-            airfoil_side_target = self.airfoilOrg_upper
+            airfoil_side = self.airfoil.geo.upper
+            airfoil_side_target = self.airfoilOrg.geo.upper
         else:
-            airfoil_side = self.airfoil.lower
-            airfoil_side_target = self.airfoilOrg_lower
+            airfoil_side = self.airfoil.geo.lower
+            airfoil_side_target = self.airfoilOrg.geo.lower
 
         cp_x, cp_y, = airfoil_side.get_initial_bezier(airfoil_side_target, nPoints)
         airfoil_side.set_controilPoints (cp_x, cp_y)
@@ -1652,11 +1652,11 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         self.update()
 
         if curveType == UPPER: 
-            airfoil_side = self.airfoil.upper
-            airfoil_side_target = self.airfoilOrg_upper
+            airfoil_side = self.airfoil.geo.upper
+            airfoil_side_target = self.airfoilOrg.geo.upper
         else:
-            airfoil_side = self.airfoil.lower
-            airfoil_side_target = self.airfoilOrg_lower
+            airfoil_side = self.airfoil.geo.lower
+            airfoil_side_target = self.airfoilOrg.geo.lower
 
         #-- adapt TE gap - last control point is fix 
          
@@ -1706,7 +1706,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     def _adapt_result_info (self, airfoil_side: SideOfAirfoil_Bezier, ncp, nVars, deviation, niter, max_reached):
         # info message for user 
 
-        title = "Auto adjust %s side" %(airfoil_side.curveType)
+        title = "Auto adjust %s side" %(airfoil_side.name)
 
         if   nVars >= 7:
             good_deviation = 0.001
@@ -1744,10 +1744,10 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         # adapt bezier only for 4 and 5 point bezier 
 
         if curveType == UPPER: 
-            return self.airfoil.upper.nPoints < 4 or self.airfoil.upper.nPoints > 7 or \
+            return self.airfoil.geo.upper.nPoints < 4 or self.airfoil.geo.upper.nPoints > 7 or \
                    self.adapt_running(UPPER)
         else:
-            return self.airfoil.lower.nPoints < 4 or self.airfoil.lower.nPoints > 7 or \
+            return self.airfoil.geo.lower.nPoints < 4 or self.airfoil.geo.lower.nPoints > 7 or \
                    self.adapt_running(LOWER)
 
 
@@ -1916,7 +1916,7 @@ class AirfoilEditor ():
 
     # ------------------
 
-    def curAirfoil (self) -> Airfoil:
+    def curAirfoil (self) -> Airfoil2:
         """ encapsulates current airfoil. Childs should acces only via this function
         to enable a new airfoil to be set """
         return self._curAirfoil
@@ -1991,7 +1991,7 @@ class AirfoilEditor ():
             if pathFilename == "Root_Example":
                 airfoil = Root_Example()
             else:
-                airfoil = Airfoil(pathFileName=pathFilename)
+                airfoil = Airfoil2(pathFileName=pathFilename, geometry=GEO_BASIC)
         airfoil.load()
 
         self.curAirfoilFile = airfoil.pathFileName

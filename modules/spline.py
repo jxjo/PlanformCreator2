@@ -413,6 +413,8 @@ class Spline2D:
         Returns
         -------
         """
+        self.x = x
+        self.y = y
         self.s = self._calc_s(x, y)
         # print_array1D (self.s)
 
@@ -516,6 +518,25 @@ class Spline2D:
         c = (ddy * dx - ddx * dy) / (dx ** 2 + dy ** 2) ** 1.5
         return c
 
+
+    def deriv2 (self, u):
+        """
+        Evaluate second derivative of self at u 0..1
+
+        Parameters
+        ----------
+        u :   Scalar or an array of arc length at which to return 
+              the value of the spline or its derivatives. 
+        Returns
+        -------
+        c : An array of values representing the 2nd derivative evaluated at the points u.  
+        """
+
+        dx,  dy  = self.eval (u, der=1)
+        ddx, ddy = self.eval (u, der=2)
+
+        deriv2 = ddy * dx - ddx * dy
+        return deriv2
 
 
 #------------ Bezier -----------------------------------
@@ -762,24 +783,45 @@ class Bezier:
             return x
  
     def curvature (self, u):
-            """
-            Evaluate the curvature of self at u 0..1
+        """
+        Evaluate the curvature of self at u 0..1
 
-            Parameters
-            ----------
-            u :   Scalar or an array of arc length at which to return 
-                the value of the spline or its derivatives. 
-            Returns
-            -------
-            c : An array of values representing the curvature evaluated at the points u.  
-            """
+        Parameters
+        ----------
+        u :   Scalar or an array of arc length at which to return 
+              the value of the spline or its derivatives. 
+        Returns
+        -------
+        c : An array of values representing the curvature evaluated at the points u.  
+        """
 
-            dx,  dy  = self.eval (u, der=1)
-            ddx, ddy = self.eval (u, der=2)
+        dx,  dy  = self.eval (u, der=1)
+        ddx, ddy = self.eval (u, der=2)
 
-            c = (ddy * dx - ddx * dy) / (dx ** 2 + dy ** 2) ** 1.5
-            return c
-    
+        c = (ddy * dx - ddx * dy) / (dx ** 2 + dy ** 2) ** 1.5
+        return c
+
+
+    def deriv2 (self, u):
+        """
+        Evaluate second derivative of self at u 0..1
+
+        Parameters
+        ----------
+        u :   Scalar or an array of arc length at which to return 
+              the value of the spline or its derivatives. 
+        Returns
+        -------
+        c : An array of values representing the 2nd derivative evaluated at the points u.  
+        """
+
+        dx,  dy  = self.eval (u, der=1)
+        ddx, ddy = self.eval (u, der=2)
+
+        deriv2 = ddy * dx - ddx * dy
+        return deriv2  
+
+
     # -------------  end public --------------------
 
 
@@ -878,97 +920,44 @@ class Bezier:
 #     print("Time ", end - start)  
 
 
-def test_Bezier (): 
+# def test_Bezier (): 
     
-    import matplotlib.pyplot as plt
+#     import matplotlib.pyplot as plt
 
-    px = [   0,  0.0,  0.3, 0.9,  1]
-    py = [   0, 0.06, 0.12, 0.0,  0]
+#     px = [   0,  0.0,  0.3, 0.9,  1]
+#     py = [   0, 0.06, 0.12, 0.0,  0]
 
-    u = np.linspace( 0, 1 , 50)
-    # beta = np.linspace(0.15 ,0.90 , 100) * np.pi   
-    # u = (1 - np.cos(beta)) * 0.5
+#     u = np.linspace( 0, 1 , 50)
 
-    # # normalize to 0..1
-    # umin = np.amin(u)
-    # umax = np.amax(u) 
-    # u = (u - umin) / (umax-umin)
+#     bez = Bezier (px, py)
+#     x,y = bez.eval(u)
 
-    # # ensure 0.0 and 1.0 
-    # u[0]  = u[0].round(10)
-    # u[-1] = u[-1].round(10)
+#     # arc length 
+#     dx = np.ediff1d(x, to_end=0.01 )
+#     dy = np.ediff1d(y, to_end=0.01 )
+#     arc = np.sqrt(dx**2 + dy**2) 
 
 
-    bez = Bezier (px, py)
-    x,y = bez.eval(u)
+#     plt.subplots(1, figsize=(16,6))
+#     plt.plot(px, py, "or", label="Points")    
+#     plt.plot(x, y, ".", label="Bezier")
+#     plt.plot(x, arc, ".", label="arc")
 
-    # arc length 
-    dx = np.ediff1d(x, to_end=0.01 )
-    dy = np.ediff1d(y, to_end=0.01 )
-    arc = np.sqrt(dx**2 + dy**2) 
+#     plt.axis("equal")
+#     plt.grid(True)
+#     plt.legend()
+
+#     # curvature 
+#     plt.subplots(1, figsize=(16,6))
+#     curv = bez.curvature (u)
+#     # plt.plot(u, -curv,  ".r", label="curvature (u)")
+#     plt.plot(x, abs(curv),  ".b", label="curvature (x)")
+#     plt.plot(x, 0.25 / arc,  ".g", label="arc length (x)")
+#     plt.grid(True)
+#     plt.legend()
 
 
-    plt.subplots(1, figsize=(16,6))
-    plt.plot(px, py, "or", label="Points")    
-    plt.plot(x, y, ".", label="Bezier")
-    plt.plot(x, arc, ".", label="arc")
-
-    # plt.plot(x, u, "b", label="u(x)")
-    # plt.plot(u, x, "b", label="x(u)")
-    # plt.plot(u, y, "g", label="y(u)")
-    plt.axis("equal")
-    plt.grid(True)
-    plt.legend()
-
-    # bezier basis functions 
-    # plt.subplots(1)
-    # for i, line in enumerate (bez.basisFn):
-    #     plt.plot (u,line, label="bezier basis %d" %i) 
-    # plt.grid(True)
-    # plt.legend()
-
-    # curvature 
-    plt.subplots(1, figsize=(16,6))
-    curv = bez.curvature (u)
-    # plt.plot(u, -curv,  ".r", label="curvature (u)")
-    plt.plot(x, abs(curv),  ".b", label="curvature (x)")
-    plt.plot(x, 0.25 / arc,  ".g", label="arc length (x)")
-    plt.grid(True)
-    plt.legend()
-
-    # radius 
-    # plt.subplots(1)
-    # curv = bez.curvature (u)
-    # plt.plot(u, 1/-curv,  "-r", label="radius")
-    # plt.grid(True)
-    # plt.legend()
-
-    # # der 1 
-    # plt.subplots(1)
-    # dx, dy = bez.eval(u, der=1)
-    # plt.plot(x, dy/dx,  "-r", label="der 1")
-    # plt.grid(True)
-    # plt.legend()
-
-    # der 2 
-    # plt.subplots(1)
-    # dx, dy = bez.eval(u, der=1)
-    # ddx, ddy = bez.eval(u, der=2)
-    # deriv2 = dx * ddy - dy * ddx
-
-    # py2_list=  [0.08, 0.12, 0.16]
-    # for py2 in py2_list:
-    #     py[2] = py2
-    #     bez = Bezier (px, py)
-    #     dx, dy   = bez.eval(u, der=1)
-    #     ddx, ddy = bez.eval(u, der=2)
-    #     deriv2 = dx * ddy - dy * ddx
-
-    #     plt.plot(x, deriv2,  "-r", label="der 2 %f" %py2)
-    # plt.grid(True)
-    # plt.legend()
-
-    plt.show()
+#     plt.show()
 
 
 # def test_spline1D (): 
@@ -1047,7 +1036,7 @@ if __name__ == '__main__':
     
     # test_Bezier_for_Fortran()
     # test_BezierCubic () 
-    test_Bezier () 
+    # test_Bezier () 
     # test_spline1D ()
     # test_spline2D ()
     pass

@@ -23,6 +23,9 @@ import math
 #------------ linear interpolation -----------------------------------
 
 def interpolate(x1, x2, y1, y2, x):
+
+    if (x1 -x) == 0.0: return y1
+    
     try:
         y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
     except:

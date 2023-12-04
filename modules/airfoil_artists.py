@@ -7,13 +7,11 @@ The "Artists" to plot a airfoil object on a matplotlib axes
 
 """
 import numpy as np
-from copy import deepcopy
 from artist import Artist, cl_userHint, cl_labelGrid, DragManager
 
 from common_utils import *
-from spline import Bezier 
-from spline_of_airfoil import SideOfAirfoil_Bezier
-from airfoil import* 
+from airfoil2_geometry import SideOfAirfoil_Bezier
+from airfoil2          import* 
 
 cl_planform         = 'whitesmoke'
 cl_editing          = 'deeppink'
@@ -86,7 +84,7 @@ class Airfoil_Artist (Artist):
         self._set_colorcycle (10, colormap="Paired")          # no of cycle colors - extra color for each airfoil
 
         # now plot each single airfoil
-        airfoil: Airfoil
+        airfoil: Airfoil2
 
         for airfoil in self.airfoils:
             if (airfoil.isLoaded):
@@ -125,15 +123,15 @@ class Airfoil_Artist (Artist):
         if self._pickActive: self._connectPickEvent ()
 
 
-    def draw_controlPoints(self, airfoil: Airfoil_Bezier, color):
+    def draw_controlPoints(self, airfoil: Airfoil2_Bezier, color):
         """ draw Bezier control Points of airfoil """
 
         markersize  = 6
         linewidth   = 0.7
         linestyle   = ':'
 
-        for sideBezier in [airfoil.upper, airfoil.lower]:
-            if sideBezier.curveType == UPPER:
+        for sideBezier in [airfoil.geo.upper, airfoil.geo.lower]:
+            if sideBezier.name == UPPER:
                 markerstyle = 6
             else: 
                 markerstyle = 7
@@ -141,18 +139,6 @@ class Airfoil_Artist (Artist):
             y = sideBezier.bezier.points_y
             p = self.ax.plot (x,y, linestyle, linewidth=linewidth, marker=markerstyle, markersize=markersize, color=color) 
             self._add(p)
-            # for ipoint, cpoint in enumerate (sideBezier.controlPoints):
-
-            #     markersize = 6
-            #     if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
-            #         markerstyle = '.'
-            #         markersize = 3
-            #     elif sideBezier.curveType == UPPER:
-            #         markerstyle = 6
-            #     else: 
-            #         markerstyle = 7
-            #     p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, color=color) 
-            #     self._add(p)
 
 
 
@@ -213,7 +199,7 @@ class Curvature_Artist (Airfoil_Line_Artist):
 
         airfoilList = self.airfoils
 
-        airfoil: Airfoil
+        airfoil: Airfoil2
         for airfoil in airfoilList:
             if (airfoil.isLoaded):
                 if airfoil.isEdited:
@@ -223,7 +209,7 @@ class Curvature_Artist (Airfoil_Line_Artist):
                 linewidth=0.8
 
                 if self.upper: 
-                    line = airfoil.curv_upper 
+                    line = airfoil.geo.curvature.upper
                     label = airfoil.name + " - upper"
                     p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=label, 
                                       linewidth= linewidth, **self._marker_style)
@@ -235,7 +221,7 @@ class Curvature_Artist (Airfoil_Line_Artist):
                 else: 
                     color = None
                 if self.lower: 
-                    line = airfoil.curv_lower 
+                    line = airfoil.geo.curvature.lower 
                     label = airfoil.name + " - lower"
                     p = self.ax.plot (line.x, line.y, ls_curvature, color = color, label=label, 
                                       linewidth= linewidth, **self._marker_style)
@@ -330,7 +316,7 @@ class Curvature_Smooth_Artist (Airfoil_Line_Artist):
 
         airfoilList = self.airfoils
 
-        airfoil: Airfoil
+        airfoil: Airfoil2
         for airfoil in airfoilList:
             if (airfoil.isLoaded):
 
@@ -338,7 +324,7 @@ class Curvature_Smooth_Artist (Airfoil_Line_Artist):
                 linewidth=0.8
 
                 if self.upper: 
-                    line = airfoil.curv_upper 
+                    line = airfoil.geo.curvature.upper
                     if airfoil.isEdited:
                         color = cl_editing
                     else:
@@ -351,7 +337,7 @@ class Curvature_Smooth_Artist (Airfoil_Line_Artist):
                         self._plot_marker (line, self._get_color(p), 'upper')
 
                 if self.lower: 
-                    line = airfoil.spline.curv_lower 
+                    line = airfoil.geo.curvature.lower 
                     if airfoil.isEdited:
                         color = cl_editing_lower
                     else:
@@ -396,11 +382,11 @@ class Difference_Artist (Airfoil_Line_Artist):
     """
 
     @property
-    def airfoil (self) -> Airfoil_Bezier: 
+    def airfoil (self) -> Airfoil2_Bezier: 
         return self.airfoils[1] 
     
     @property
-    def ref_airfoil (self) -> Airfoil : 
+    def ref_airfoil (self) -> Airfoil2 : 
         return self.airfoils[0] 
     
 
@@ -425,8 +411,8 @@ class Difference_Artist (Airfoil_Line_Artist):
                 color = cl_editing
             else: 
                 color = None
-            x = self.ref_airfoil.upper.x
-            y = 10 * self._get_difference (self.ref_airfoil.upper, self.airfoil.upper )
+            x = self.ref_airfoil.geo.upper.x
+            y = 10 * self._get_difference (self.ref_airfoil.geo.upper, self.airfoil.geo.upper )
             p = self.ax.plot (x, y, ls_difference, color = color, label="diff upper * 10", 
                             linewidth= linewidth, **self._marker_style)
             self._add(p)
@@ -436,8 +422,8 @@ class Difference_Artist (Airfoil_Line_Artist):
                 color = cl_editing_lower
             else: 
                 color = None
-            x = self.ref_airfoil.lower.x
-            y = 10 * self._get_difference (self.ref_airfoil.lower, self.airfoil.lower ) 
+            x = self.ref_airfoil.geo.lower.x
+            y = 10 * self._get_difference (self.ref_airfoil.geo.lower, self.airfoil.geo.lower ) 
             p = self.ax.plot (x, y, ls_difference, color = color, label="diff lower * 10", 
                             linewidth= linewidth, **self._marker_style)
             self._add(p)
@@ -473,7 +459,7 @@ class Le_Artist (Artist):
         # create cycled colors 
         self._set_colorcycle (10, colormap="Paired")          # no of cycle colors - extra color for each airfoil
 
-        airfoil : Airfoil
+        airfoil : Airfoil2
 
         for airfoil in self.airfoils:
             if (airfoil.isLoaded):
@@ -494,7 +480,7 @@ class Le_Artist (Artist):
                                   linewidth= linewidth, **self._marker_style)
                 self._add(p)
 
-                self._plot_le (airfoil.le, self._get_color(p))
+                self._plot_le (airfoil.geo.le, self._get_color(p))
 
                 self._cycle_color()                       # in colorycle are pairs - move next
 
@@ -507,11 +493,11 @@ class Le_Artist (Artist):
             self._add(p)
 
 
-    def _plot_le_angle (self, airfoil: Airfoil):
+    def _plot_le_angle (self, airfoil: Airfoil2):
 
         yLim1, yLim2 = self.ax.get_ylim()
 
-        xLe, yLe = airfoil.le
+        xLe, yLe = airfoil.geo.le
         iLe = np.nonzero(airfoil.x == xLe)[0][0]
  
         # plot two lines from LE to upper and lower neighbour points 
@@ -529,7 +515,7 @@ class Le_Artist (Artist):
         self._add(p)
 
         # plot angle text 
-        text = "%.1f °" % (airfoil.panelAngle_le)
+        text = "%.1f °" % (airfoil.geo.panelAngle_le)
 
         p = self.ax.annotate(text, (x[1], y[1]), 
                              xytext=(-15, 5), textcoords='offset points', color = cl_helperLine)
@@ -547,9 +533,9 @@ class Le_Artist (Artist):
 
 
 
-    def _plot_le_coordinates (self, airfoil: Airfoil):
+    def _plot_le_coordinates (self, airfoil: Airfoil2):
 
-        xLe, yLe = airfoil.le
+        xLe, yLe = airfoil.geo.le
         if airfoil.isEdited:
             text = "New "
         else:
@@ -576,7 +562,7 @@ class Thickness_Artist (Airfoil_Line_Artist):
         if not n: return 
         self._set_colorcycle (n, colormap="Paired")          # no of cycle colors (each 2 for upper and lower)
 
-        airfoil: Airfoil
+        airfoil: Airfoil2
         for airfoil in self.airfoils:
             if (airfoil.isLoaded ):
                     
@@ -662,13 +648,7 @@ class Bezier_Edit_Artist (Artist):
             self.ax.figure.canvas.mpl_disconnect(self.ciddraw)
 
     @property
-    def airfoil (self) -> Airfoil_Bezier: return self.model
-
-    @property
-    def sideBezier_upper (self) -> SideOfAirfoil_Bezier:  return self.airfoil.upper
-    @property
-    def sideBezier_lower (self) -> SideOfAirfoil_Bezier:  return self.airfoil.lower
-
+    def airfoil (self) -> Airfoil2_Bezier: return self.model
 
     def _plot (self): 
         """ do plot of bezier control points and bezier curve 
@@ -676,9 +656,9 @@ class Bezier_Edit_Artist (Artist):
 
         # plot bezier control points for upper and lower side
 
-        for sideBezier in [self.sideBezier_upper, self.sideBezier_lower]:
+        for sideBezier in [self.airfoil.geo.upper, self.airfoil.geo.lower]:
 
-            side = sideBezier.curveType
+            side_name = sideBezier.name
             points_artist = []
 
             for ipoint, cpoint in enumerate (sideBezier.controlPoints):
@@ -687,20 +667,18 @@ class Bezier_Edit_Artist (Artist):
                 if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
                     markerstyle = '.'
                     markersize = 3
-                elif side == UPPER:
+                elif side_name == UPPER:
                     markerstyle = 6
                 else: 
                     markerstyle = 7
-                # else:
-                #     markerstyle = 'o'
-                #     markersize = 4
+
                 p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, 
                                   color=cl_userHint, animated=True) 
                 points_artist.append (self._add(p))
            
             # plot  bezier curve points 
 
-            label = "Bezier" if side== UPPER else ''
+            label = "Bezier" if side_name == UPPER else ''
 
             # the marker style to show points
             if self._points:
@@ -715,7 +693,7 @@ class Bezier_Edit_Artist (Artist):
             bezier_artist  = self._add(p) 
 
             # remind artist - activate dragManager per side 
-            if side == UPPER:
+            if side_name == UPPER:
                 self.points_upper_artist = points_artist
                 self.bezier_upper_artist = bezier_artist 
             else: 
@@ -723,7 +701,7 @@ class Bezier_Edit_Artist (Artist):
                 self.bezier_lower_artist = bezier_artist 
                 
             self._dragManagers.append (DragManager (self.ax, points_artist,
-                                typeTag = side, draw_event=False, 
+                                typeTag = side_name, draw_event=False, 
                                 callback_draw_static    = self.draw_static_all,
                                 callback_draw_animated  = self.draw_animated_point,
                                 callback_shiftCtrlClick = self.handle_shiftCtrlClick,
@@ -814,10 +792,10 @@ class Bezier_Edit_Artist (Artist):
 
             if typeTag == UPPER:
                 bezier_artist = self.bezier_upper_artist
-                sideBezier   = self.sideBezier_upper
+                sideBezier   = self.airfoil.geo.upper
             elif typeTag == LOWER: 
                 bezier_artist = self.bezier_lower_artist
-                sideBezier   = self.sideBezier_lower
+                sideBezier   = self.airfoil.geo.lower
             else: 
                 return
             
@@ -850,11 +828,11 @@ class Bezier_Edit_Artist (Artist):
         if typeTag == UPPER:
             points_artist = self.points_upper_artist
             bezier_artist = self.bezier_upper_artist
-            sideBezier    = self.sideBezier_upper
+            sideBezier    = self.airfoil.geo.upper
         elif typeTag == LOWER: 
             points_artist = self.points_lower_artist
             bezier_artist = self.bezier_lower_artist
-            sideBezier   = self.sideBezier_lower
+            sideBezier   = self.airfoil.geo.lower
         else: 
             return
 
