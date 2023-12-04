@@ -38,7 +38,7 @@ cl_styles ={
         STYLE_NORMAL    : ("gray10","gray95"),
         STYLE_DISABLED  : ("gray30","gray70"),
         STYLE_ERROR     : ("red2","red2") ,
-        STYLE_HINT      : ("#E0A721", "#E0A721"),
+        STYLE_HINT      : ("RoyalBlue3", "cornflower blue"),
         STYLE_WARNING   : ("DarkOrange3", "orange")
         }
 

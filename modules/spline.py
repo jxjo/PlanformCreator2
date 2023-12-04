@@ -726,11 +726,16 @@ class Bezier:
         """
 
         if fast and (not self._x is None) and (x >= self._x[0] and x <= self._x[-1]):
+
+            # find closest index
             i = min(bisect.bisect(self._x, x)-1, len(self._x) -2)
+
             # interpolate u 
             u = ((self._u[i+1]-self._u[i])/(self._x[i+1]-self._x[i])) * (x - self._x[i]) + self._u[i]
+
             # evaluate y from u 
-            return self._eval_1D (self._py, u)
+            y =  self._eval_1D (self._py, u)
+
         else: 
 
             # nelder mead
@@ -744,13 +749,15 @@ class Bezier:
             else: 
                 u0 = x 
 
+            # find u value for x
             u, niter  = newton (lambda u: self._eval_1D(self._px,u) - x,
                         lambda u: self._eval_1D(self._px,u, der=1) , u0, 
                         epsilon=epsilon, max_iter=20, bounds=(0.0,1.0))
-            # print ("delta x  %12.9f   niter: %d" %(self._eval(self._px,u) - x, niter))
 
+            # eval y for u value
             y =  self._eval_1D (self._py, u)
-            return y
+
+        return y
         
 
 

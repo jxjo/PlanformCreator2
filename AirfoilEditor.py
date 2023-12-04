@@ -27,6 +27,8 @@ from pathlib import Path
 import fnmatch 
 
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+
 from tkinter import filedialog
 import customtkinter as ctk
 
@@ -191,12 +193,12 @@ class Edit_Airfoil_Data(Edit_Abstract_Airfoil):
         self.add (Field_Widget  (self,r,c,   lab="Thickness", obj=self.airfoil, 
                                 get='maxThickness', width=50, lab_width=80, unit="%", dec=2))
         self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=40, obj=self.airfoil, 
-                                get='maxThicknessX', width=50, unit="%", dec=2))
+                                get='maxThicknessX', width=50, unit="%", dec=1))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="Camber", obj=self.airfoil, 
                                 get='maxCamber', width=50, lab_width=80, unit="%", dec=2))
         self.add (Field_Widget  (self,r,c+3, lab="at", lab_width=40, obj=self.airfoil, 
-                                get='maxCamberX', width=50, unit="%", dec=2))
+                                get='maxCamberX', width=50, unit="%", dec=1))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="TE gap", obj=self.airfoil, 
                                 get='teGap_perc', width=50, lab_width=80, unit="%", dec=2))
@@ -224,8 +226,8 @@ class Edit_Curvature(Edit_Abstract_Airfoil):
     name = "Curvature"
 
     @property
-    def myApp () -> 'AirfoilEditor':
-        super().myApp
+    def myApp (self) -> 'AirfoilEditor':
+        return super().myApp
 
     @property
     def curvature_threshold (self): 
@@ -464,8 +466,11 @@ class Diagram_Airfoil (Diagram_Abstract):
 
     def create_axes (self):
         """ setup 2 axes for airfoil and its curvature  """
-        self.ax1 : plt.Axes = self.figure.add_subplot(2, 1, 1)
-        self.ax2 : plt.Axes = self.figure.add_subplot(2, 1, 2)
+
+        gs = GridSpec(2, 1, height_ratios=[5, 4])
+        self.ax1 = self.figure.add_subplot(gs[:-1, :])          # top, full   - airfoil
+        self.ax2 = self.figure.add_subplot(gs[ -1, :])          # lower, full - thickness
+
         self.figure.subplots_adjust(left=0.04, bottom=0.05, right=0.98, top=0.97, wspace=None, hspace=0.11)
 
         self.ax1.grid (visible=True)
@@ -886,9 +891,7 @@ class Diagram_Airfoil_Mini (Diagram_Abstract):
     def create_axes (self):
         """ setup 2 axes for airfoil, thickness, curvature etc."""
 
-        from matplotlib.gridspec import GridSpec
-
-        gs = GridSpec(2, 1)
+        gs = GridSpec(2, 1, height_ratios=[5, 4])
         self.ax1 = self.figure.add_subplot(gs[:-1, :])          # top, full   - airfoil
         self.ax2 = self.figure.add_subplot(gs[ -1, :])          # lower, full - thickness
 
@@ -1387,10 +1390,13 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
         r = 0 
         c = 0 
         if self.hasbeen_normalized: 
-            Label_Widget (self.input_frame,r,c, padx=0, lab= "Working copy normalized for higher precision", columnspan = 3,
-                          text_style="Warning")
-        else:
-            Label_Widget (self.input_frame,r,c, padx=0, lab= "Working copy", columnspan = 2)
+            lab = "Working copy normalized " + self.airfoil.geo.description
+            style = STYLE_WARNING
+        else: 
+            lab = "Working copy " + self.airfoil.geo.description
+            style = STYLE_HINT
+        Label_Widget (self.input_frame,r,c, padx=0, lab= lab, columnspan = 4,
+                      text_style=style)
 
         r += 1
         Blank_Widget (self.input_frame, r,10, height=5)
@@ -1401,7 +1407,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
                                 event=self.change_event))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
                                 get='maxThicknessX', set='set_maxThicknessX', step=0.1, 
-                                spin=True, width=95, unit="%", dec=2,
+                                spin=True, width=95, unit="%", dec=1,
                                 event=self.change_event))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="Camber", obj=self.airfoil, 
@@ -1410,7 +1416,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
                                 event=self.change_event))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
                                 get='maxCamberX', set='set_maxCamberX', disable= 'isSymmetric',  
-                                spin=True, width=95, unit="%", dec=2, step=0.1,
+                                spin=True, width=95, unit="%", dec=1, step=0.1,
                                 event=self.change_event))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="TE gap", obj=self.airfoil, 
@@ -1456,7 +1462,8 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
 
         # ----------- setup diagram frame at the end ---------------
 
-        self.diagram_frame = Diagram_Airfoil_Mini (self.edit_frame, self.airfoilList, size=(7.0,5))
+        self.diagram_frame = Diagram_Airfoil_Mini (self.edit_frame, self.airfoilList, 
+                                                   size=(7.0,5.5))
         self.diagram_frame.grid(row=1, column=1, sticky="nwe")
 
 
@@ -1496,7 +1503,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     nameExt     ='-bezier'
 
     widthFrac  = 0.92
-    heightFrac = 0.80
+    heightFrac = 0.76
 
     def __init__(self, master, airfoilFn, workingDir=None, *args, **kwargs):
 

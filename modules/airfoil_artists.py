@@ -602,7 +602,7 @@ class Thickness_Artist (Airfoil_Line_Artist):
         self._add(p)
 
         if isModified:
-            p = self.ax.annotate(text + "%.2f%% at %.2f%%" % (y * 100, x *100), (x, y), 
+            p = self.ax.annotate(text + "%.2f%% at %.1f%%" % (y * 100, x *100), (x, y), 
                                 xytext=(3, 3), textcoords='offset points', color = cl_helperLine)
             self._add (p)   
 

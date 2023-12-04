@@ -479,7 +479,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
     """
 
-    def __init__ (self, px, py, name=UPPER, nPoints = 101):
+    def __init__ (self, px, py, name=None, nPoints = 101):
         """
         1D line of an airfoil like upper, lower side based on a Bezier curve with x 0..1
 
@@ -490,13 +490,20 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         name : either UPPER or LOWER
              
         """
-        self._name      = name 
-        self._bezier    = Bezier(px,py)             # the bezier curve 
+        super().__init__(None, None, name=name)
+
+        if px and py:
+            self._bezier    = Bezier(px,py)             # the bezier curve 
+        else:
+            raise ValueError ("Bezier points missing")
 
         # Bezier needs a special u cosinus distribution as the points are bunched
         # by bezier if there is high curvature ... 
 
         self._u = self._u_distribution_bezier(nPoints)
+
+        # eval Bezier for u - x,y - values will be cached in 'Bezier'
+        self.bezier.eval(self._u)
 
 
     def _u_distribution_bezier (self, nPoints):
@@ -1264,9 +1271,8 @@ class Geometry ():
             geo_norm = self.__class__(np.copy(self.x), np.copy(self.y))
             geo_norm.normalize()
             upper = geo_norm.upper
-            lower = geo_norm.lower
             lower = geo_norm.lower_new_x (upper.x) 
-            print ("#### correcting")
+            print ("#### normalizing for thickness")
         else: 
             upper = self.upper
             lower = self.lower_new_x (upper.x)
@@ -1868,6 +1874,7 @@ class Geometry_Bezier (Geometry):
         # evaluate the corresponding y-values on lower side 
         lower_y = np.zeros (len(new_x))
  
+        # !! bezier must be evaluated with u to have x,y !! 
         for i, x in enumerate (new_x):
             lower_y[i] = self.lower.bezier.eval_y_on_x (x, fast=True)  
 
