@@ -36,14 +36,14 @@ import customtkinter as ctk
 sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 
 from common_utils       import * 
-from airfoil2           import *
-from airfoil2_examples  import Root_Example
+from airfoil            import *
+from airfoil_examples   import Root_Example
 from widgets            import *
 from ui_base            import Dialog_Abstract, Edit_Abstract, Diagram_Abstract              
 from ui_base            import set_initialWindowSize, Dialog_Settings              
 from airfoil_artists    import *
 
-from airfoil2_geometry  import UPPER, LOWER
+from airfoil_geometry   import UPPER, LOWER
 
 
 #------------------------------------------------
@@ -86,7 +86,7 @@ class Edit_Abstract_Airfoil (Edit_Abstract):
         self.ctk_root.bind(AIRFOIL_NEW,              self.changed_airfoil, add='+')
 
     
-    def airfoil(self) -> Airfoil2:
+    def airfoil(self) -> Airfoil:
         # it's a method - not a property to exchange the wing 
         return self._airfoilFn()
     
@@ -611,11 +611,11 @@ class Diagram_Airfoil_Bezier (Diagram_Abstract):
 
     def __init__(self, master, airfoilOrg, airfoilBezier, *args, **kwargs):
 
-        self._airfoilBezier : Airfoil2_Bezier = airfoilBezier
+        self._airfoilBezier : Airfoil_Bezier = airfoilBezier
         super().__init__( master, airfoilOrg, *args, **kwargs)
 
 
-    def airfoilBezier (self) -> Airfoil2_Bezier:  
+    def airfoilBezier (self) -> Airfoil_Bezier:  
         return self._airfoilBezier
 
 
@@ -962,10 +962,10 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
         self.has_switches_frame = has_switches_frame
 
         # make a copy of original airfoil as splined airfoil
-        self.airfoilOrg = Airfoil2.asCopy (airfoilFn(), geometry=GEO_SPLINE) 
+        self.airfoilOrg = Airfoil.asCopy (airfoilFn(), geometry=GEO_SPLINE) 
 
         # and a copy of original airfoil as splined airfoil, normalized - as working copy 
-        self.airfoil    = Airfoil2.asCopy (airfoilFn(), nameExt=self.nameExt, geometry=GEO_SPLINE) 
+        self.airfoil    = Airfoil.asCopy (airfoilFn(), nameExt=self.nameExt, geometry=GEO_SPLINE) 
         self.hasbeen_normalized = False
         if not self.airfoil.isNormalized:                    # also LE of spline at 0,0? 
             self.hasbeen_normalized = self.airfoil.normalize ()    # ensure exact le based on spline
@@ -1538,7 +1538,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             self.airfoilOrg.normalize() 
             self.airfoilOrg.set_isModified (False)                  # do not plot as modified airfoil
 
-        self.airfoil    = Airfoil2_Bezier (name=self.airfoil.name) 
+        self.airfoil    = Airfoil_Bezier (name=self.airfoil.name) 
         self.airfoil.set_isEdited (True)                            # will indicate airfoil when plotted 
 
         self.showOrg = True 
@@ -1937,7 +1937,7 @@ class AirfoilEditor ():
 
     # ------------------
 
-    def curAirfoil (self) -> Airfoil2:
+    def curAirfoil (self) -> Airfoil:
         """ encapsulates current airfoil. Childs should acces only via this function
         to enable a new airfoil to be set """
         return self._curAirfoil
@@ -2012,7 +2012,7 @@ class AirfoilEditor ():
             if pathFilename == "Root_Example":
                 airfoil = Root_Example()
             else:
-                airfoil = Airfoil2(pathFileName=pathFilename, geometry=GEO_BASIC)
+                airfoil = Airfoil(pathFileName=pathFilename, geometry=GEO_BASIC)
         airfoil.load()
 
         self.curAirfoilFile = airfoil.pathFileName

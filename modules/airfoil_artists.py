@@ -10,8 +10,8 @@ import numpy as np
 from artist import Artist, cl_userHint, cl_labelGrid, DragManager
 
 from common_utils import *
-from airfoil_geometry import SideOfAirfoil_Bezier
-from airfoil          import Airfoil
+from airfoil_geometry import SideOfAirfoil, SideOfAirfoil_Bezier, UPPER, LOWER
+from airfoil          import Airfoil, Airfoil_Bezier
 
 cl_planform         = 'whitesmoke'
 cl_editing          = 'deeppink'
@@ -228,6 +228,9 @@ class Curvature_Artist (Airfoil_Line_Artist):
                     self._add(p)
                     self._plot_marker (line, self._get_color(p), upper=False)
 
+                # test nose area 
+                # self._plot_nose_detailed (airfoil) 
+
         self._plot_title ('Curvature', va='bottom', ha='left')
 
         if self._myPlots:                     # something plotted? 
@@ -252,7 +255,27 @@ class Curvature_Artist (Airfoil_Line_Artist):
 
                 p = self.ax.text (marker_x, marker_y, text, va=va, ha='center', color = color )
                 self._add (p) 
-            
+
+
+    def _plot_nose_detailed (self, airfoil: Airfoil):
+        """ plot nose in high resolution  """
+
+        from airfoil import GEO_SPLINE
+        from airfoil_geometry import Geometry_Splined
+
+        air = Airfoil.asCopy (airfoil, geometry=GEO_SPLINE) 
+        geo : Geometry_Splined = air.geo 
+        uLe = geo.uLe
+        uStart = 0.99 * uLe
+        uEnd   = 1.01 * uLe
+        u = np.linspace (uStart, uEnd, 200)
+        x, y = geo.spline.eval (u)
+        c = geo.spline.curvature (u)
+
+        p = self.ax.plot (x, c, ls_curvature, color = 'red',  
+                    linewidth= 0.5)
+        self._add(p) 
+
 
 
 class Curvature_Smooth_Artist (Airfoil_Line_Artist):

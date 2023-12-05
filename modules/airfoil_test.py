@@ -16,7 +16,7 @@ from airfoil_geometry import Geometry, Geometry_Splined, Geometry_Bezier
 from airfoil_geometry import Curvature_of_xy, Curvature_of_Spline, Curvature_of_Bezier
 
 
-class Test_Airfoil2:
+class Test_Airfoil:
 
     def test_geo_basic (self): 
 
@@ -216,7 +216,7 @@ class Test_Airfoil2:
 
 
 
-class Test_Airfoil2_Bezier:
+class Test_Airfoil_Bezier:
 
 
     def test_geo_bezier (self): 
@@ -267,7 +267,7 @@ class Test_Airfoil2_Bezier:
 # Main program for testing 
 if __name__ == "__main__":
 
-    test = Test_Airfoil2()
+    test = Test_Airfoil()
     test.test_geo_basic()
     test.test_geo_spline()
 

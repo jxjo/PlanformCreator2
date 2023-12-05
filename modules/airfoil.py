@@ -143,6 +143,9 @@ class Airfoil:
             nameExt: -optional     - will be appended to self.name (if name is not provided)
             geometry: optional     - the geometry staretegy either GEO_BASIC, GEO_SPLNE...
         """
+        if pathFileName is None and name is None: 
+            pathFileName = sourceAirfoil.pathFileName
+
         if name is None:
             name = sourceAirfoil.name + nameExt
 

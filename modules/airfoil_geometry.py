@@ -1405,6 +1405,10 @@ class Geometry_Splined (Geometry):
             self._curvature = Curvature_of_Spline (self.spline)  
         return self._curvature 
 
+    @property
+    def angle (self): 
+        """ return the angle in degrees at knots"""
+        return np.arctan (self.spline.deriv1(self.spline.u)) * 180 / np.pi
     
 
     #-----------
