@@ -10,8 +10,8 @@ import numpy as np
 from artist import Artist, cl_userHint, cl_labelGrid, DragManager
 
 from common_utils import *
-from airfoil2_geometry import SideOfAirfoil_Bezier
-from airfoil2          import* 
+from airfoil_geometry import SideOfAirfoil_Bezier
+from airfoil          import Airfoil
 
 cl_planform         = 'whitesmoke'
 cl_editing          = 'deeppink'
@@ -84,7 +84,7 @@ class Airfoil_Artist (Artist):
         self._set_colorcycle (10, colormap="Paired")          # no of cycle colors - extra color for each airfoil
 
         # now plot each single airfoil
-        airfoil: Airfoil2
+        airfoil: Airfoil
 
         for airfoil in self.airfoils:
             if (airfoil.isLoaded):
@@ -123,7 +123,7 @@ class Airfoil_Artist (Artist):
         if self._pickActive: self._connectPickEvent ()
 
 
-    def draw_controlPoints(self, airfoil: Airfoil2_Bezier, color):
+    def draw_controlPoints(self, airfoil: Airfoil_Bezier, color):
         """ draw Bezier control Points of airfoil """
 
         markersize  = 6
@@ -199,7 +199,7 @@ class Curvature_Artist (Airfoil_Line_Artist):
 
         airfoilList = self.airfoils
 
-        airfoil: Airfoil2
+        airfoil: Airfoil
         for airfoil in airfoilList:
             if (airfoil.isLoaded):
                 if airfoil.isEdited:
@@ -316,7 +316,7 @@ class Curvature_Smooth_Artist (Airfoil_Line_Artist):
 
         airfoilList = self.airfoils
 
-        airfoil: Airfoil2
+        airfoil: Airfoil
         for airfoil in airfoilList:
             if (airfoil.isLoaded):
 
@@ -382,11 +382,11 @@ class Difference_Artist (Airfoil_Line_Artist):
     """
 
     @property
-    def airfoil (self) -> Airfoil2_Bezier: 
+    def airfoil (self) -> Airfoil_Bezier: 
         return self.airfoils[1] 
     
     @property
-    def ref_airfoil (self) -> Airfoil2 : 
+    def ref_airfoil (self) -> Airfoil : 
         return self.airfoils[0] 
     
 
@@ -459,7 +459,7 @@ class Le_Artist (Artist):
         # create cycled colors 
         self._set_colorcycle (10, colormap="Paired")          # no of cycle colors - extra color for each airfoil
 
-        airfoil : Airfoil2
+        airfoil : Airfoil
 
         for airfoil in self.airfoils:
             if (airfoil.isLoaded):
@@ -493,12 +493,12 @@ class Le_Artist (Artist):
             self._add(p)
 
 
-    def _plot_le_angle (self, airfoil: Airfoil2):
+    def _plot_le_angle (self, airfoil: Airfoil):
 
         yLim1, yLim2 = self.ax.get_ylim()
 
         xLe, yLe = airfoil.geo.le
-        iLe = np.nonzero(airfoil.x == xLe)[0][0]
+        iLe = airfoil.geo.iLe
  
         # plot two lines from LE to upper and lower neighbour points 
         xLe_before = airfoil.x [iLe-1]
@@ -517,7 +517,7 @@ class Le_Artist (Artist):
         # plot angle text 
         text = "%.1f °" % (airfoil.geo.panelAngle_le)
 
-        p = self.ax.annotate(text, (x[1], y[1]), 
+        p = self.ax.annotate(text, (x[1], y[1]), fontsize = 'small',
                              xytext=(-15, 5), textcoords='offset points', color = cl_helperLine)
         self._add (p)   
 
@@ -533,7 +533,7 @@ class Le_Artist (Artist):
 
 
 
-    def _plot_le_coordinates (self, airfoil: Airfoil2):
+    def _plot_le_coordinates (self, airfoil: Airfoil):
 
         xLe, yLe = airfoil.geo.le
         if airfoil.isEdited:
@@ -542,7 +542,7 @@ class Le_Artist (Artist):
             text = ""
 
         text = text + "LE at %.7f, %.7f" % (xLe, yLe)
-        p = self.ax.annotate(text, (xLe, yLe), 
+        p = self.ax.annotate(text, (xLe, yLe), fontsize = 'small',
                              xytext=(20, -4), textcoords='offset points', color = cl_helperLine)
         self._add (p)   
 
@@ -562,7 +562,7 @@ class Thickness_Artist (Airfoil_Line_Artist):
         if not n: return 
         self._set_colorcycle (n, colormap="Paired")          # no of cycle colors (each 2 for upper and lower)
 
-        airfoil: Airfoil2
+        airfoil: Airfoil
         for airfoil in self.airfoils:
             if (airfoil.isLoaded ):
                     
@@ -648,7 +648,7 @@ class Bezier_Edit_Artist (Artist):
             self.ax.figure.canvas.mpl_disconnect(self.ciddraw)
 
     @property
-    def airfoil (self) -> Airfoil2_Bezier: return self.model
+    def airfoil (self) -> Airfoil_Bezier: return self.model
 
     def _plot (self): 
         """ do plot of bezier control points and bezier curve 

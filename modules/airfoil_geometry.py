@@ -1399,19 +1399,6 @@ class Geometry_Splined (Geometry):
 
 
     @property
-    def deriv1 (self): 
-        """ derivate 1 of spline at knots"""
-
-        dx, dy = self.spline.eval (None, der=1)
-        #  derivative 1 (gradient) is dy/dx = dy/du / dx/du
-        return dy/dx
-
-    @property
-    def angle (self): 
-        """ return the angle in degrees at knots"""
-        return np.arctan (self.deriv1) * 180 / np.pi
-
-    @property
     def curvature (self) -> Curvature_of_Spline: 
         " return the curvature object"
         if self._curvature is None: 
@@ -1503,11 +1490,6 @@ class Geometry_Splined (Geometry):
         return super().normalize() 
 
 
-    def deriv1Fn (self,u): 
-        " return dx,dy at spline arc u"
-        return  self.spline.eval(u, der=1)
-
-
     def xyFn (self,u): 
         " return x,y at spline arc u"
         return  self.spline.eval (u)
@@ -1527,7 +1509,7 @@ class Geometry_Splined (Geometry):
         dxTe = x - xTe
         dyTe = y - yTe
         # verctor2 tangent at point 
-        dx, dy = self.deriv1Fn (u)
+        dx, dy = self.spline.eval(u, der=1) 
 
         dot = dx * dxTe + dy * dyTe
 

@@ -33,8 +33,8 @@ from math_util import findRoot, interpolate
 sys.path.append(Path(__file__).parent)
 from common_utils       import *
 from spline             import Bezier
-from airfoil            import Airfoil
-from airfoil_examples   import Root_Example, Tip_Example
+from airfoil           import Airfoil
+from airfoil_examples  import Root_Example, Tip_Example
 
 
 # disables all print output to console

@@ -961,10 +961,12 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
 
         self.has_switches_frame = has_switches_frame
 
-        self.airfoilOrg : Airfoil2 = airfoilFn()             # keep the original airfoil 
-        self.airfoil  = Airfoil2.asCopy (self.airfoilOrg, nameExt=self.nameExt, geometry=GEO_SPLINE) 
-        self.hasbeen_normalized = False
+        # make a copy of original airfoil as splined airfoil
+        self.airfoilOrg = Airfoil2.asCopy (airfoilFn(), geometry=GEO_SPLINE) 
 
+        # and a copy of original airfoil as splined airfoil, normalized - as working copy 
+        self.airfoil    = Airfoil2.asCopy (airfoilFn(), nameExt=self.nameExt, geometry=GEO_SPLINE) 
+        self.hasbeen_normalized = False
         if not self.airfoil.isNormalized:                    # also LE of spline at 0,0? 
             self.hasbeen_normalized = self.airfoil.normalize ()    # ensure exact le based on spline
 
@@ -1282,9 +1284,9 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
                                  width=80, dec=7))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab=" ... of spline", get=lambda: self.geo.le_real[0],
-                                 width=80, lab_width=130, dec=7))
+                                 width=80, lab_width=130, dec=7, text_style=lambda: self.style('le_real_x')))
         self.add (Field_Widget  (self.input_frame,r,c+3, get=lambda: self.geo.le_real[1],
-                                 width=80, dec=7))
+                                 width=80, dec=7, text_style=lambda: self.style('le_real_y')))
         r += 1
         Blank_Widget (self.input_frame, r,c, height=15)
         r += 1
@@ -1306,31 +1308,46 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
 
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.geoOrg.le[0],
-                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.style('le_x')))
+                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.styleOrg('le_x')))
         self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.geoOrg.le[1],
-                                 width=80, dec=7,                 text_style=lambda: self.style('le_y')))
+                                 width=80, dec=7,                 text_style=lambda: self.styleOrg('le_y')))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.geoOrg.le_real[0],
-                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.style('le_real_x')))
+                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.styleOrg('le_real_x')))
         self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.geoOrg.le_real[1],
-                                 width=80, dec=7,                 text_style=lambda: self.style('le_real_y')))
+                                 width=80, dec=7,                 text_style=lambda: self.styleOrg('le_real_y')))
 
         r += 2
         self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.geoOrg.te[0],
-                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.style('te_x')))
+                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.styleOrg('te_x')))
         self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.geoOrg.te[1],
-                                 width=80,                 dec=7, text_style=lambda: self.style('te_y')))
+                                 width=80,                 dec=7, text_style=lambda: self.styleOrg('te_y')))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab=" ", get=lambda: self.geoOrg.te[2],
-                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.style('te_x')))
+                                 width=80,   lab_width=60, dec=7, text_style=lambda: self.styleOrg('te_x')))
         self.add (Field_Widget  (self.input_frame,r,c+3,          get=lambda: self.geoOrg.te[3],
-                                 width=80,                 dec=7, text_style=lambda: self.style('te_y')))
+                                 width=80,                 dec=7, text_style=lambda: self.styleOrg('te_y')))
 
         self.input_frame.grid_columnconfigure (9, weight=2)
         self.input_frame.grid_rowconfigure (0, weight=1)
 
         
     def style (self, coord): 
+        if   coord =="le_x":
+            if self.geo.le[0] != 0.0 : return 'Warning'
+        elif coord =="le_y":
+            if self.geo.le[1] != 0.0 : return 'Warning'
+        elif coord =="le_real_x":
+            if not self.geo.isNormalized : return 'Warning'
+        elif coord =="le_real_y":
+            if not self.geo.isNormalized : return 'Warning'
+        elif coord =="te_x":
+            if self.geo.te[0] != 1.0 or \
+               self.geo.te[2] != 1.0 : return 'Warning'
+        elif coord =="te_y":
+            if self.geo.te[3] != - self.geo.te[1] : return 'Warning'
+        
+    def styleOrg (self, coord): 
         if   coord =="le_x":
             if self.geoOrg.le[0] != 0.0 : return 'Warning'
         elif coord =="le_y":
@@ -1355,7 +1372,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
     name        ='Modify airfoil'
     nameExt     ='-mod'
     widthFrac   = 0.80
-    heightFrac  = 0.70
+    heightFrac  = 0.72
 
     def init (self):
         # init UI ...
@@ -1463,7 +1480,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
         # ----------- setup diagram frame at the end ---------------
 
         self.diagram_frame = Diagram_Airfoil_Mini (self.edit_frame, self.airfoilList, 
-                                                   size=(7.0,5.5))
+                                                   size=(7.0,5.2))
         self.diagram_frame.grid(row=1, column=1, sticky="nwe")
 
 
@@ -1503,7 +1520,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     nameExt     ='-bezier'
 
     widthFrac  = 0.92
-    heightFrac = 0.76
+    heightFrac = 0.80
 
     def __init__(self, master, airfoilFn, workingDir=None, *args, **kwargs):
 
@@ -1518,11 +1535,8 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         # overwrite
 
         if not self.airfoilOrg.isNormalized:                        # also LE of spline at 0,0? 
-            pathFileName = self.airfoilOrg.pathFileName
-            self.airfoilOrg  = Airfoil2.asCopy (self.airfoilOrg, nameExt='_norm',geometry=GEO_SPLINE) 
-            self.airfoilOrg.normalize ()                            # ensure exact le based on spline
+            self.airfoilOrg.normalize() 
             self.airfoilOrg.set_isModified (False)                  # do not plot as modified airfoil
-            self.airfoilOrg.set_pathFileName (pathFileName)         # asCopy doesn't copy - needed for save
 
         self.airfoil    = Airfoil2_Bezier (name=self.airfoil.name) 
         self.airfoil.set_isEdited (True)                            # will indicate airfoil when plotted 
@@ -1585,14 +1599,14 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                                 disable=True, width=65, lab_width=70, unit="%", dec=2))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
                                 get='maxThicknessX',  
-                                disable=True, width=65, unit="%", dec=2))
+                                disable=True, width=65, unit="%", dec=1))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="Camber", obj=self.airfoil, 
                                 get='maxCamber', 
                                 disable=True, width=65, lab_width=70, unit="%", dec=2))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
                                 get='maxCamberX',   
-                                disable=True, width=65,  unit="%", dec=2))
+                                disable=True, width=65,  unit="%", dec=1))
 
         self.input_frame.grid_columnconfigure (15, weight=3)
 

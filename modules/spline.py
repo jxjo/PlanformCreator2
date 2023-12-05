@@ -519,9 +519,28 @@ class Spline2D:
         return c
 
 
+    def deriv1 (self, u):
+        """
+        Evaluate first derivative dy/du / dx/du of self at u 0..1
+
+        Parameters
+        ----------
+        u :   Scalar or an array of arc length at which to return 
+              the value of the spline or its derivatives. 
+        Returns
+        -------
+        c : An array of values representing the 2nd derivative evaluated at the points u.  
+        """
+
+        dx,  dy  = self.eval (u, der=1)
+
+        deriv1 = dy/dx
+        return deriv1
+
+
     def deriv2 (self, u):
         """
-        Evaluate second derivative of self at u 0..1
+        Evaluate second derivative ddy * dx - ddx * dy of self at u 0..1
 
         Parameters
         ----------

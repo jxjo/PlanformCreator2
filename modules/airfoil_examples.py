@@ -7,17 +7,18 @@
 - Tip airfoil 
 
 """
-
 import io
-from common_utils import * 
-from airfoil import Airfoil
+
+from common_utils   import * 
+from airfoil       import Airfoil, GEO_SPLINE, GEO_BASIC
+
 
 class Example_Airfoil (Airfoil): 
 
     isExample = True
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, geometry  = GEO_SPLINE ):
+        super().__init__(geometry = geometry)
         """Abstract superclass for example airfoils
         """
 

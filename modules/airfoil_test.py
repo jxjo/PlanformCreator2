@@ -10,10 +10,10 @@ import pytest
 
 import numpy as np 
 
-from airfoil2 import Airfoil2, Airfoil2_Bezier, GEO_BASIC, GEO_SPLINE
-from airfoil2_examples import Root_Example, Tip_Example
-from airfoil2_geometry import Geometry, Geometry_Splined, Geometry_Bezier
-from airfoil2_geometry import Curvature_of_xy, Curvature_of_Spline, Curvature_of_Bezier
+from airfoil import Airfoil, Airfoil_Bezier, GEO_BASIC, GEO_SPLINE
+from airfoil_examples import Root_Example, Tip_Example
+from airfoil_geometry import Geometry, Geometry_Splined, Geometry_Bezier
+from airfoil_geometry import Curvature_of_xy, Curvature_of_Spline, Curvature_of_Bezier
 
 
 class Test_Airfoil2:
@@ -34,7 +34,7 @@ class Test_Airfoil2:
         # thickness, camber 
 
         assert geo.thickness.maximum == (0.2853921, 0.0764922 )
-        assert geo.camber.maximum    == (0.4153436, 0.0170051 )
+        assert geo.camber.maximum    == (0.4097331, 0.0170114)
 
         geo.set_maxThick  (0.08)
         assert round(geo.maxThick,4) == 0.08
@@ -192,7 +192,7 @@ class Test_Airfoil2:
         destName = 'huhu'
         newPathFileName = airfoil.copyAs (dir=str(p_tmp), destName=destName, teGap=teGap_perc/100)
 
-        new_airfoil = Airfoil2 (pathFileName=newPathFileName)
+        new_airfoil = Airfoil (pathFileName=newPathFileName)
         new_airfoil.load()
 
         assert new_airfoil.teGap_perc == teGap_perc
@@ -208,7 +208,7 @@ class Test_Airfoil2:
 
         destName = 'haha'
         newPathFileName = airfoil.saveAs (dir=str(p_tmp), destName=destName)
-        new_airfoil = Airfoil2 (pathFileName=newPathFileName)
+        new_airfoil = Airfoil (pathFileName=newPathFileName)
         new_airfoil.load()
 
 
@@ -221,7 +221,7 @@ class Test_Airfoil2_Bezier:
 
     def test_geo_bezier (self): 
 
-        airfoil = Airfoil2_Bezier()
+        airfoil = Airfoil_Bezier()
         geo : Geometry_Bezier = airfoil.geo
         print (f"\n{airfoil} having {geo}")
 
@@ -235,8 +235,8 @@ class Test_Airfoil2_Bezier:
 
         # thickness, camber 
 
-        assert geo.thickness.maximum == (0.3140353, 0.111065)
-        assert geo.camber.maximum    == (0.3973177, 0.014023)
+        assert geo.thickness.maximum == (0.3140348, 0.111065)
+        assert geo.camber.maximum    == (0.3973167, 0.014023)
 
         with pytest.raises(NotImplementedError):
             geo.set_maxThick  (0.08)
@@ -253,7 +253,7 @@ class Test_Airfoil2_Bezier:
         
         # curvature
 
-        airfoil = Airfoil2_Bezier()
+        airfoil = Airfoil_Bezier()
         curv : Curvature_of_Bezier = airfoil.geo.curvature
 
         assert round(curv.upper.maximum[1],0) == 61.0
