@@ -266,13 +266,14 @@ class Curvature_Artist (Airfoil_Line_Artist):
         air = Airfoil.asCopy (airfoil, geometry=GEO_SPLINE) 
         geo : Geometry_Splined = air.geo 
         uLe = geo.uLe
-        uStart = 0.99 * uLe
-        uEnd   = 1.01 * uLe
+        uStart = 0.4 # 0.99 * uLe
+        uEnd   = 0.6 # 1.01 * uLe
         u = np.linspace (uStart, uEnd, 200)
         x, y = geo.spline.eval (u)
-        c = geo.spline.curvature (u)
+        # c = geo.spline.curvature (u)
+        c = geo.scalarProductFn (u)
 
-        p = self.ax.plot (x, c, ls_curvature, color = 'red',  
+        p = self.ax.plot (u, c, ls_curvature, color = 'red',  
                     linewidth= 0.5)
         self._add(p) 
 

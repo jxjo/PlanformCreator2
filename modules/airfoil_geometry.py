@@ -905,12 +905,12 @@ class Geometry ():
         """ true if LE is at 0,0 and TE is symmetrical at x=1"""
 
         # LE at 0,0? 
-        xle, yle = self.le
+        xle, yle = self.x[self.iLe], self.y[self.iLe]
         normalized =  xle == 0.0 and yle == 0.0
 
         # TE at 1? - numerical issues happen at the last deicmal (numpy -> python?)  
-        xteUp,  yteUp  = self.x[ 0], round(self.y[ 0],7),
-        xteLow, yteLow = self.x[-1], round(self.y[-1],7)
+        xteUp,  yteUp  = self.x[ 0], round(self.y[ 0],10),
+        xteLow, yteLow = self.x[-1], round(self.y[-1],10)
         if xteUp != 1.0 or xteLow != 1.0: 
             normalized = False 
         elif yteUp != - yteLow: 
@@ -1121,7 +1121,7 @@ class Geometry ():
         for i, x in enumerate (new_x):
             upper_y[i] = self.upper.yFn(x)
 
-        upper_y = np.round(upper_y, 8)
+        upper_y = np.round(upper_y, 10)
 
         return self.sideDefaultClass (new_x, upper_y, name=UPPER)
 
@@ -1137,7 +1137,7 @@ class Geometry ():
         for i, x in enumerate (new_x):
             lower_y[i] = self.lower.yFn(x)
 
-        lower_y = np.round(lower_y, 8)
+        lower_y = np.round(lower_y, 10)
 
         return self.sideDefaultClass (new_x, lower_y, name=LOWER)
 
@@ -1190,8 +1190,8 @@ class Geometry ():
         xn[0]   = 1.0 
         xn[-1]  = 1.0
 
-        self._x = np.round (xn, 8)
-        self._y = np.round (yn, 8) 
+        self._x = np.round (xn, 10)
+        self._y = np.round (yn, 10) 
 
         # re-init 
         self._reset_lines()                     # the child lines like thickness
@@ -1289,7 +1289,6 @@ class Geometry ():
             self._camber._y = np.zeros (len(self._camber._y))
 
         if not self.thickness.isNormalized or not self.camber.isNormalized:
-            self.thickness.isNormalized or not self.camber.isNormalized
             raise ValueError ("eval thickness: Thickness or Camber are not normalized")
 
         return 
@@ -1384,7 +1383,7 @@ class Geometry_Splined (Geometry):
 
         xle, yle   = self.le
         xleS, yleS = self.le_real
-        if abs(xle-xleS) > 0.00005 or abs(yle-yleS) > 0.00005: 
+        if abs(xle-xleS) > 0.00001 or abs(yle-yleS) > 0.00001: 
             return False
         else: 
             return True
@@ -1436,7 +1435,7 @@ class Geometry_Splined (Geometry):
             # with the new u-value we get the y value on lower side 
             upper_y[i] = self.spline.evaly (u)
 
-        upper_y = np.round(upper_y, 8)
+        upper_y = np.round(upper_y, 10)
 
         return self.sideDefaultClass (new_x, upper_y, name=UPPER)
 
@@ -1471,7 +1470,7 @@ class Geometry_Splined (Geometry):
                 # with the new u-value we get the y value on lower side 
                 lower_y[i] = self.spline.evaly (u)
 
-        lower_y = np.round(lower_y, 8)
+        lower_y = np.round(lower_y, 10)
 
         return self.sideDefaultClass (new_x, lower_y, name=LOWER)
 
@@ -1481,17 +1480,16 @@ class Geometry_Splined (Geometry):
 
         if self.isNormalized: return False
 
-        # first do repanel airfoil if LE of coordinates and LE of spline differ too much 
-        if not self._isLe_closeTo_le_real:
-            self.repanel () 
-            if not self._isLe_closeTo_le_real:
-                self.repanel (tryHarder=True) 
-                if not self._isLe_closeTo_le_real:
-                    print ("LE after 2nd repan: ", super().le, self.le, self._isLe_closeTo_le_real, self.uLe)
-                    raise ValueError ("Leading edge couldn't be iterated") 
+        # the exact determination of the splined LE is quite "sensibel"
+        # on numeric issues (decimals) 
+        # there try to iterate to a goord result 
 
-        # normal normalization 
-        return super().normalize() 
+        n = 0
+        while not self.isNormalized and n < 10:
+            n += 1
+            self.repanel () 
+            super().normalize()
+        return True
 
 
     def xyFn (self,u): 
@@ -1522,8 +1520,7 @@ class Geometry_Splined (Geometry):
 
     def repanel (self,  nPanels : int = None, 
                         nPan_upper : int = None, nPan_lower : int = None,
-                        le_bunch : float = 0.84, te_bunch : float = 0.7, 
-                        tryHarder : bool =False):
+                        le_bunch : float = 0.84, te_bunch : float = 0.7):
         """repanel self with a new cosinus distribution.
 
         If no new panel numbers are defined, the current numbers for upper and lower side 
@@ -1533,7 +1530,6 @@ class Geometry_Splined (Geometry):
             nPanels  (int, optional): new number of panels. Defaults to 200.
             le_bunch (float, optional): leading edge bunch. Defaults to 0.84.
             te_bunch (float, optional): trailing edge bunch. Defaults to 0.7.
-            tryHarder (bool, optional): more le bunch - nPanels >=200.
         """
 
         # explicit panels for upper and lower have precedence 
@@ -1554,13 +1550,7 @@ class Geometry_Splined (Geometry):
             else:
                 nPan_upper = self.iLe
                 nPan_lower = self.nPanels - nPan_upper
-
-        # leading edge bunch of panels 
-        le_bunch = 0.9 if tryHarder else le_bunch
-         
-        # trailing edge bunch of panels 
-        te_bunch = te_bunch 
-         
+        
         # new distribution for upper and lower - points = +1 
         u_cos_upper = cosinus_distribution (nPan_upper+1, le_bunch, te_bunch)
         u_new_upper = np.abs (np.flip(u_cos_upper) -1) * self.uLe
@@ -1572,10 +1562,10 @@ class Geometry_Splined (Geometry):
         u_new = np.concatenate ((u_new_upper, u_new_lower[1:]))
 
         # new calculated x,y coordinates  
-        self._x, self._y = self.xyFn(u_new)
+        x, y = self.xyFn(u_new)
 
-        self._x = np.round (self._x, 8)
-        self._y = np.round (self._y, 8)
+        self._x = np.round (x, 10)
+        self._y = np.round (y, 10)
 
         # reset the child lines, keep current spline as it was the master
         self._reset_lines()
@@ -1811,7 +1801,6 @@ class Geometry_Bezier (Geometry):
             nPanels  (int, optional): new number of panels. Defaults to 200.
             le_bunch (float, optional): leading edge bunch. Defaults to 0.84.
             te_bunch (float, optional): trailing edge bunch. Defaults to 0.7.
-            tryHarder (bool, optional): more le bunch - nPanels >=200.
         """
 
         # explicit panels for upper and lower have precedence 
@@ -1847,7 +1836,7 @@ class Geometry_Bezier (Geometry):
         for i, x in enumerate (new_x):
             upper_y[i] = self.upper.bezier.eval_y_on_x (x, fast=True)  
 
-        upper_y = np.round(upper_y, 8)
+        upper_y = np.round(upper_y, 10)
 
         return SideOfAirfoil (new_x, upper_y, name=LOWER)
         
@@ -1864,7 +1853,7 @@ class Geometry_Bezier (Geometry):
         for i, x in enumerate (new_x):
             lower_y[i] = self.lower.bezier.eval_y_on_x (x, fast=True)  
 
-        lower_y = np.round(lower_y, 8)
+        lower_y = np.round(lower_y, 10)
 
         return SideOfAirfoil (new_x, lower_y, name=LOWER)
 

@@ -75,14 +75,14 @@ class Test_Airfoil:
 
         assert airfoil.nPoints == 200
         assert airfoil.nPanels == 199
-        assert airfoil.isNormalized       
+        assert not airfoil.isNormalized       
         assert airfoil.teGap_perc == 0.03
         assert geo.le_real           == (0.0, 1.29e-05)
 
         # thickness, camber 
 
-        assert geo.thickness.maximum == (0.2903507, 0.076502)
-        assert geo.camber.maximum    == (0.4152501, 0.0170127)
+        assert geo.thickness.maximum == (0.2903387, 0.076502)
+        assert geo.camber.maximum    == (0.4153434, 0.0170051)
 
         geo.set_maxThick  (0.08)
         assert round(geo.maxThick,4) == 0.08
@@ -104,7 +104,7 @@ class Test_Airfoil:
         # normalize, repanel 
 
         assert geo.le == (0.0, 0.0) 
-        assert geo.le_real == (-3e-07, 3.74e-05) 
+        assert geo.le_real == (0.0, 3.8e-06) 
 
         assert not geo.normalize(), "should be False because no normalizaton needed"
         assert geo.isNormalized
@@ -185,6 +185,7 @@ class Test_Airfoil:
 
         airfoil = Root_Example(geometry = GEO_SPLINE)
         p_tmp = Path.cwd() / 'tmp'
+        airfoil.normalize()
 
         # copyAs with te gap 
 
@@ -194,6 +195,7 @@ class Test_Airfoil:
 
         new_airfoil = Airfoil (pathFileName=newPathFileName)
         new_airfoil.load()
+        new_airfoil.normalize()
 
         assert new_airfoil.teGap_perc == teGap_perc
         assert new_airfoil.name  == destName + "_te=1.00"
@@ -235,8 +237,8 @@ class Test_Airfoil_Bezier:
 
         # thickness, camber 
 
-        assert geo.thickness.maximum == (0.3140348, 0.111065)
-        assert geo.camber.maximum    == (0.3973167, 0.014023)
+        assert geo.thickness.maximum == (0.3140353, 0.111065)
+        assert geo.camber.maximum    == (0.3973177, 0.014023)
 
         with pytest.raises(NotImplementedError):
             geo.set_maxThick  (0.08)
@@ -269,5 +271,5 @@ if __name__ == "__main__":
 
     test = Test_Airfoil()
     test.test_geo_basic()
-    test.test_geo_spline()
+    test.test_geo_splined()
 

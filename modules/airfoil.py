@@ -195,9 +195,14 @@ class Airfoil:
     def set_xy (self, x, y):
         """ set new coordinates - will reset self"""
 
-        if not x is None: x = x if isinstance(x,np.ndarray) else np.asarray (x)
+        if not x is None: 
+            x = x if isinstance(x,np.ndarray) else np.asarray (x)
+            x = np.round(x,7)
+        if not y is None: 
+            y = y if isinstance(y,np.ndarray) else np.asarray (y)
+            y = np.round(y,7)
+
         self._x     = x
-        if not y is None: y = y if isinstance(y,np.ndarray) else np.asarray (y)
         self._y     = y  
 
         self._geo    = None
@@ -526,10 +531,13 @@ class Airfoil:
             if self.isStrakAirfoil:
                 destName = self.sourceName                     # strak: take the long name of the two airfoils
             else:
-                if self.fileName:
-                    destName = Path(self.fileName).stem        # cut '.dat'
-                else: 
+                if self.name: 
                     destName = self.name    
+                else:
+                    if self.fileName:
+                        destName = Path(self.fileName).stem        # cut '.dat'
+                    else: 
+                        raise ValueError ("Destination name of airfoil couldn't be evaluated")
 
         # create dir if not exist - build airfoil filename
         if dir: 
