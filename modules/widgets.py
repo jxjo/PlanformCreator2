@@ -46,25 +46,6 @@ cl_styles ={
 #-------------------------------------------------------------------------------
 # Pretty Messagebox   
 #-------------------------------------------------------------------------------
-class MessageWindow ():
-    """ a little message window during 'functionFn' is executed"""
-
-    def __init__ (self, master, functionFn, message):
-
-                # #todo - not the real solution ... Title bar isn't painted ...
-        msg =  Messagebox(master, title="", message=message, icon="info", 
-                                  option_1=None, width=400, height=150).show()
-
-        msg.deiconify()
-        msg.after(100)
-        # try self._windows_set_titlebar_color(self._get_appearance_mode())
-        msg.update_idletasks()
-
-        functionFn ()
-
-        msg.grab_release()
-        msg.destroy()
-  
 
 
 class Messagebox(ctk.CTkToplevel):
@@ -229,94 +210,85 @@ class Messagebox(ctk.CTkToplevel):
 
 
 
-class SplashWindow (ctk.CTkToplevel):
-    """ Message in different styles - inspired vom CTKMessagebox"""
+class MessageWindow (ctk.CTkToplevel):
+    """ a little message window during 'functionFn' is executed"""
 
-    ICONS = {
-            "info": None,
-        }
 
-    def __init__(self,                   
-                 width: int = 400,
-                 height: int = 200,
-                 message: str = "This is a Splash!",
-                 button_color: str = "default",
-                 icon: str = "info",             #  "check", "cancel", "info", "question", "warning"
-                 ):
-        
-        super().__init__()
+    def __init__(self, master, 
+                 functionFn,                  
+                 width: int = 300,
+                 height: int = 150,
+                 title: str = "Running ...",
+                 message: str = "This is a Messagebox!",
+                 border_width: int = 1):
+
+    
+        super().__init__(master)
+
+        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+        self.configure (fg_color=fg_color)
+        self.configure (bg_color=bg_color)
+
+        self._functionFn = functionFn
 
         self.width   = 250 if width<250 else width
-        self.height  = 150 if height<150 else height
+        self.height  = 150 if height<150 else  height
 
+        master_width  = master.winfo_width()
+        master_height = master.winfo_height()
+        if master_height < 250 or master_width < 250: 
+            master = self._root()                   # self.winfo_toplevel() doesn't work here 
+            master_width  = master.winfo_width()
+            master_height = master.winfo_height()
+        master_x      = master.winfo_x()
+        master_y      = master.winfo_y()
 
-        self.geometry(f"{self.width}x{self.height}+{600}+{200}")
+        self.spawn_x = int(master_width  * .5 + master_x - .5 * self.width + 7)
+        self.spawn_y = int(master_height * .5 + master_y - .5 * self.height + 20)
 
-        self.resizable(width=False, height=False)
-        
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)   
+        self.after(10)
+        self.geometry(f"{self.width}x{self.height}+{self.spawn_x}+{self.spawn_y}")
+
+        self.overrideredirect(True)                 # remove titlebar 
+
         self.message = message
+        self.border_width = border_width if border_width<6 else 5
         
-
-        if button_color=="default":
-            self.button_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
-        else:
-            self.button_color = button_color
-                    
-        self.icon = self.load_icon(icon, (25,25)) if icon else None                    
-
         # ---------------
 
-        self.bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
-        self.fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
-
-        self.frame_middle = ctk.CTkFrame(self, bg_color=self.bg_color, fg_color=self.fg_color)
-        self.frame_middle.grid(row=0, column=0, columnspan=3, sticky="nwes", padx=(0,0), pady=(0,0))
-        self.frame_middle.grid_rowconfigure   (0, weight=1)
-        self.frame_middle.grid_columnconfigure(0, weight=1)
-        self.frame_middle.grid_columnconfigure(1, weight=6)
-        self.frame_middle.grid_columnconfigure(2, weight=1)
-
-        self.message_icon = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=None, 
-                                            fg_color="transparent", hover=False,  image=self.icon)
-        self.message_text = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=self.message,
-                                            fg_color="transparent", text_color=cl_styles [STYLE_NORMAL], hover=False,  image=None)
+        self.message_text = ctk.CTkButton(self,  width=self.width-40, height=120, corner_radius=0, 
+                                          text=self.message, fg_color="transparent", text_color=cl_styles [STYLE_NORMAL],
+                                          hover=False, image=None) #
         self.message_text._text_label.configure(wraplength=self.width *0.8, justify="center")
-        self.message_icon.grid(row=0, column=0, columnspan=1, sticky="nes")
-        self.message_text.grid(row=0, column=1, columnspan=2, sticky="nwes")
+        self.message_text.grid(row=1, column=1, sticky="nwes")
         
-        # #todo - not the real solution ... Title bar isn't painted ...
-        # self.wm_overrideredirect(True)  
-        self.deiconify()
-        self.lift()
-        self.after (50)
-        self.update()
-        # try self._windows_set_titlebar_color(self._get_appearance_mode())
-        # self.update_idletasks()
+        self.grid_columnconfigure(0, weight=0)
+        self.grid_columnconfigure(1, weight=4)
+        self.grid_columnconfigure(2, weight=0)
+        self.grid_rowconfigure(1, weight=1)   
 
-        # if self.winfo_exists():
-        #     self.grab_set()
+        # ---------------
+        self.after (100, self._run_function)
 
-
-    def load_icon(self, icon, icon_size):
-            if icon not in self.ICONS or self.ICONS[icon] is None:
-                image_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon + '.png')
-                if icon_size:
-                    size_height = icon_size[1] if icon_size[1] <= self.height - 100 else self.height - 100
-                    size = (icon_size[0], size_height)
-                else:
-                    size = (self.height / 4, self.height / 4)
-                self.ICONS[icon] = ctk.CTkImage(Image.open(image_path), size=size)
-            return self.ICONS[icon]         
+        if self.winfo_exists():
+            self.grab_set()
 
 
-    def closeIt (self): 
-        """close self from outside """
+    def close (self): 
+        """close self """
         self.grab_release()
         self.destroy()
 
+    def _run_function (self):
+        """ run the function ..."""
+        self.deiconify()
+        print ("function startet")
+        self._functionFn()
+        print ("function ended")
+        self.after (100, self.close)
 
+  
 
 #-------------------------------------------------------------------------------
 # Widgets  

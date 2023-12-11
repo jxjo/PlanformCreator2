@@ -13,11 +13,28 @@ import numpy as np
 from math_util import * 
 from common_utils import * 
 from airfoil_geometry import Geometry_Splined, Geometry, Geometry_Bezier
-from airfoil_geometry import SideOfAirfoil, SideOfAirfoil_Bezier, UPPER, LOWER
+from airfoil_geometry import Side_Airfoil, Side_Airfoil_Bezier, UPPER, LOWER
 
+
+# geometry soecification 
 
 GEO_BASIC  = Geometry
 GEO_SPLINE = Geometry_Splined
+
+# airfoil types for some usage semantics in application 
+
+NORMAL      = ""
+SEED        = "Seed"
+SEED_DESIGN = "Seed of design"
+REF1        = "Reference 1" 
+REF2        = "Reference 2" 
+DESIGN      = "Design"
+FINAL       = "Final"
+
+AIRFOIL_TYPES = [NORMAL, SEED, SEED_DESIGN, REF1, REF2, DESIGN, FINAL]
+
+
+#--------------------------------------------------------------------------
 
 class Airfoil:
     """ 
@@ -71,6 +88,7 @@ class Airfoil:
 
         self._polarSets      = None              # polarSets which are defined from outside 
 
+        self._usedAs         = None              # usage type of airfoil used by app <- AIRFOIL_TYPES
         self._propertyDict   = {}                # multi purpose extra properties for an AIirfoil
 
 
@@ -98,7 +116,7 @@ class Airfoil:
 
 
     @classmethod
-    def onDict(cls, dataDict, workingDir = None):
+    def onDict(cls, dataDict, workingDir = None, geometry : Type[Geometry]  = None):
         """
         Alternate constructor for new Airfoil based on dictionary 
 
@@ -108,7 +126,8 @@ class Airfoil:
         """
         pathFileName  = fromDict(dataDict, "file", None)
         name          = fromDict(dataDict, "name", None)
-        return cls(pathFileName = pathFileName, name = name, workingDir=workingDir)
+        return cls(pathFileName = pathFileName, name = name, 
+                   geometry = geometry, workingDir = workingDir)
 
 
     @classmethod
@@ -131,7 +150,7 @@ class Airfoil:
 
     @classmethod
     def asCopy (cls, sourceAirfoil: 'Airfoil', pathFileName = None, 
-                name=None, nameExt="-mod",
+                name=None, nameExt=None,
                 geometry=None) -> 'Airfoil':
         """
         Alternate constructor for new Airfoil based on another airfoil  
@@ -147,7 +166,7 @@ class Airfoil:
             pathFileName = sourceAirfoil.pathFileName
 
         if name is None:
-            name = sourceAirfoil.name + nameExt
+            name = sourceAirfoil.name + nameExt if nameExt else sourceAirfoil.name
 
         x = np.copy (sourceAirfoil.x)               # initial coordinates
         y = np.copy (sourceAirfoil.y)
@@ -185,12 +204,25 @@ class Airfoil:
     @property
     def y (self): return self._y
 
+
     @property
     def geo (self) -> Geometry:
         """ the geometry strategy of self"""
         if self._geo is None: 
             self._geo = self._geometryClass (self.x, self.y)
         return self._geo
+    
+    def set_geo (self, geometry):
+        """ set new geometry strategy of self
+        Args: 
+            geometry: either GEO_BASIC or GEO_SPLIne
+        """
+        if geometry != GEO_BASIC and geometry != GEO_SPLINE: return 
+
+        if self._geometryClass != geometry:
+           self._geometryClass = geometry
+           self._geo = None 
+
 
     def set_xy (self, x, y):
         """ set new coordinates - will reset self"""
@@ -308,7 +340,6 @@ class Airfoil:
     @property
     def maxThickness (self): 
         """ max thickness in %"""
-        #todo remove
         return self.geo.maxThick * 100
     def set_maxThickness(self,newVal): 
         """ set max thickness in %"""
@@ -321,7 +352,6 @@ class Airfoil:
     @property
     def maxThicknessX (self): 
         """ max thickness x-position in %"""
-        #todo remove
         return self.geo.maxThickX * 100
     def set_maxThicknessX(self,newVal): 
         """ set max thickness x-position in %"""
@@ -332,7 +362,6 @@ class Airfoil:
     @property
     def maxCamber (self): 
         """ max camber in %"""
-        #todo remove
         return self.geo.maxCamb * 100
     def set_maxCamber(self,newVal): 
         """ set max camber in %"""
@@ -356,12 +385,12 @@ class Airfoil:
         return self.geo.maxCamb == 0.0
 
     @property
-    def camber (self) -> 'SideOfAirfoil': 
+    def camber (self) -> 'Side_Airfoil': 
         """ camber line as Line object"""
         return self.geo.camber 
 
     @property
-    def thickness (self) -> 'SideOfAirfoil': 
+    def thickness (self) -> 'Side_Airfoil': 
         """ thickness distribution as Line object """
         return self.geo.thickness
 
@@ -394,16 +423,14 @@ class Airfoil:
         self._te_bunch = newVal
         self.repanel()
 
-
-    #-----------------------------------------------------------
-
-    def set_property (self, key, value):
-        """ set an arbritary property to this airfoil - hold in a dict """
-        self._propertyDict[key] = value  
-
-    def get_property (self, key):
-        """ returns the extra property to this airfoil - hold in a dict """
-        return self._propertyDict.get(key)   
+    @property
+    def usedAs (self):
+        """ usage type of self like DESIGN <- Airfoil_Types"""
+        return self._usedAs
+    def set_usedAs (self, aType): 
+        if aType in AIRFOIL_TYPES:
+            self._usedAs = aType
+    
 
     #-----------------------------------------------------------
 
@@ -623,9 +650,14 @@ class Airfoil:
         return normalized 
 
 
-    def do_strak (self, airfoil1 : 'Airfoil', airfoil2 : 'Airfoil', blendBy : float):
+    def do_strak (self, airfoil1 : 'Airfoil', airfoil2 : 'Airfoil', blendBy : float,
+                  geometry = None ):
         """ straks (blends) self out of two airfoils to the left and right
-        depending on the blendBy factor"""
+        depending on the blendBy factor
+        
+        Args: 
+            geometry: optional - geo strategy for strak - either GEO_BASIC or GEO_SPLINE
+        """
     
         # sanity - both airfoils must be loaded 
         if not airfoil1.isLoaded:
@@ -636,9 +668,15 @@ class Airfoil:
         if blendBy < 0.0: raise ValueError ("blendyBy must be >= 0.0")
         if blendBy > 1.0: raise ValueError ("blendyBy must be <= 1.0")
 
-        self.geo.strak (airfoil1.geo, airfoil2.geo, blendBy)
+        # other geo strategy? 
+        if not geometry is None and geometry != self._geometryClass:
+            geo = geometry (self.x, self.y)
+        else:
+            geo = self.geo 
 
-        self.set_xy (*self.geo.xy)
+        geo.strak (airfoil1.geo, airfoil2.geo, blendBy)
+
+        self.set_xy (*geo.xy)
         self.sourceName = airfoil1.name + ("_blended_%.2f_" % blendBy) + airfoil2.name
         self.set_isStrakAirfoil (True)
 
@@ -713,12 +751,7 @@ class Airfoil_Bezier(Airfoil):
     def set_newSide_for (self, curveType, px,py): 
         """creates either a new upper or lower side in self"""
         self.geo.set_newSide_for (self, curveType, px,py)
-        if px and py:
-            if curveType == UPPER: 
-                self._upper = SideOfAirfoil_Bezier (px, py, curveType=UPPER)
-            elif curveType == LOWER:
-                self._lower = SideOfAirfoil_Bezier (px, py, curveType=LOWER)
-            self.set_isModified (True)
+        self.set_isModified (True)
 
     @property
     def x (self):

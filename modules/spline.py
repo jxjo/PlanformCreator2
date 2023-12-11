@@ -613,6 +613,12 @@ class Bezier:
             return list(zip(self._px,self._py))   
         else:
             return []
+        
+    @property
+    def npoints (self) -> int:
+        """ number of control points"""
+        return len (self._px) 
+    
     @property
     def points_x (self):  
         """ x coordinate of control points of self """
@@ -776,6 +782,7 @@ class Bezier:
             # eval y for u value
             y =  self._eval_1D (self._py, u)
 
+            # print ("Newton iter", niter, x - self._eval_1D (self._px, u))
         return y
         
 

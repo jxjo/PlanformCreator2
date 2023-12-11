@@ -324,7 +324,8 @@ class Diagram_Abstract(ctk.CTkFrame):
     def create_axes (self):
         """ setup axes, axis for this plot type """
         self.ax : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
-        self.figure.subplots_adjust(left=0.04, bottom=0.08, right=0.98, top=0.96, wspace=None, hspace=None)
+        self.figure.subplots_adjust(left=0.04, bottom=0.06, right=0.98, top=0.97, wspace=None, hspace=None)
+        self.ax.tick_params (labelsize='small')
 
 
     def setup_axes(self):

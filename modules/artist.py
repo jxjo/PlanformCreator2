@@ -21,8 +21,38 @@ cl_background       = '#101010'
 cl_labelGrid        = '#D0D0D0'
 cl_axes             = '#606060'
 cl_text             = '#D0D0D0'
+cl_textHeader       = '#808080'
 cl_userHint         = '#E0A721'
 cl_toolbar          = ('gray85', 'gray35')
+
+
+# -------- common methodes ------------------------
+
+# helper functions to position values and text 
+
+def print_number (ax : plt.Axes, val, decimals, xy, xytext, color, alpha=0.8, asPercent=False):
+    """ print a formatted numer at axes x,y with pixel offset xytext"""
+
+    if asPercent: 
+        text = f"{val:.{decimals}%}"  
+    else: 
+        text = f"{val:.{decimals}f}"  
+
+    p = ax.annotate(text, xy=xy, xytext=xytext, va='top', ha='right',
+                            xycoords='axes fraction', textcoords='offset points', fontsize='small',
+                            color = color, alpha=alpha)
+    return p
+
+
+def print_text  (ax : plt.Axes , text, ha, xy, xytext, color, alpha=1.0, xycoords='data'):
+    """ print a text at axes x,y with pixel offset xytext
+        
+    xycoords: 'data' (default), 'axes fraction', ... 
+        """
+    p = ax.annotate(text, xy=xy, xytext=xytext, va='top', ha=ha,
+                            xycoords=xycoords, textcoords='offset points', fontsize='small',
+                            color = color, alpha=alpha)
+    return p
 
 
 # plt.rcParams.update({'figure.dpi': 180})
@@ -48,6 +78,10 @@ plt.rcParams.update({'axes.grid': False})                   # display grid or no
 plt.rcParams.update({'grid.linewidth': 0.8})                # in points         
 plt.rcParams.update({'grid.color': cl_labelGrid})           
 plt.rcParams.update({'grid.alpha': 0.2})                    # transparency, between 0.0 and 1.0  
+
+
+
+# ---------------------------------------------------------------------------
 
 
 class Artist():
@@ -98,6 +132,7 @@ class Artist():
             self._mouseActive = True
             self._moveCallback = onMove
 
+        self._ciddraw      = None           # callback id draw event 
         self._cidpick      = None           # callback id pick event 
         self._curLineLabel = None
 
@@ -185,9 +220,18 @@ class Artist():
     def curLineLabel (self): return self._curLineLabel
     """ Label of current line object"""
 
-    def set_showLegend (self, aBool: bool):
-        """ switch display of axes legend - no refresh will be done"""
-        self._showLegend = aBool
+    @property
+    def showLegend (self): return self._showLegend
+    def set_showLegend (self, mode):
+        """ 
+        switch display of axes legend. Different modes are possible 
+
+        mode =  True        matplotlib legend
+                False       no legend
+               'extended'   an extended legend is created by the artist 
+               'normal'     a mini legend version is created by the artist
+        """
+        self._showLegend = mode
 
     # --------------  private -------------
 
@@ -205,19 +249,39 @@ class Artist():
             except:
                 print (" -!- ups - artist %snot found" %p)
         self._myPlots = []
+    
+        self._remove_myticks ()                         # remove ticks self added to axis
+        self._disconnect()                              # remove event connections
 
-        # remove registered pick events 
-        if not self._cidpick is None:
-            self.ax.figure.canvas.mpl_disconnect(self._cidpick)
 
-        # remove DragManagers 
+    def _disconnect (self):
+        """ remove all registered event callbacks of self """
+
+        if not self._cidpick is None:  self.ax.figure.canvas.mpl_disconnect(self._cidpick)
+        if not self._ciddraw is None:  self.ax.figure.canvas.mpl_disconnect(self._cidpick)
+
+        # remove DragManagers event callbacks 
         dm : DragManager
         for dm in self._dragManagers:
-            dm.disconnect()
+            dm._disconnect()
         self._dragManagers = []
 
-        # remove ticks self added to axis
-        self._remove_myticks ()
+
+    def _connectDrawEvent (self):
+        """ connect matplotlib 'event' with function"""
+        self._ciddraw = self.ax.figure.canvas.mpl_connect('draw_event', self._on_draw)
+
+    def _connectPickEvent (self):
+        """ installs and connects callback for pick event """ 
+        self._cidpick = self.ax.figure.canvas.mpl_connect('pick_event', self._on_pick)     
+
+
+    def draw_animated_artists (self): 
+        """draw all artists of self which are animated"""
+        for art in self._myPlots:
+            if art.get_animated():
+                self.ax.draw_artist (art)
+
 
 
     def _add(self, aPlot):
@@ -234,15 +298,17 @@ class Artist():
     def _plotLegend(self):
         """ shows the legend """
 
-        if self._showLegend:
-            # are there any lines with labels
-            h, l = self.ax.get_legend_handles_labels()
+        if self.showLegend == True:
+
+            # show the original matplotlib legend
+
+            h, l = self.ax.get_legend_handles_labels()          # are there any lines with labels
             if h: 
                 leg = self.ax.legend(h, l, labelcolor=cl_labelGrid)
             else: 
-                leg = self.ax.legend([], [])        # remove legend 
-            leg.set_zorder(2)
-            leg.get_frame().set_linewidth(0.0)
+                leg = self.ax.legend([], [])                    # remove legend 
+            leg.set_zorder(2)                                   
+            leg.get_frame().set_linewidth(0.0)                  # no frame 
 
 
     def _plot_title (self, title: str, va='top', ha='left', wspace=0.08, hspace=0.1 ): 
@@ -288,11 +354,6 @@ class Artist():
         except: 
             pass
 
-    def _connectPickEvent (self):
-        """ installs and connects callback for pick event """ 
-        self._cidpick = self.ax.figure.canvas.mpl_connect('pick_event', self._on_pick)     
-
-
 
     def _on_pick (self, event):
         # callback of matplt - having matplt 'event' as argument
@@ -307,6 +368,24 @@ class Artist():
             if myLabel[0] == '_':
                 myLabel = myLabel[1:]
             self._pickCallback(myLabel)
+
+
+    def _on_draw (self, event): 
+        """ call back of draw event when self will be drawn"""
+
+        canvas = self.ax.figure.canvas
+        if event is not None:
+            if event.canvas != canvas: raise RuntimeError
+
+        # get the current (empty) background of axes with the points
+        background = canvas.copy_from_bbox(self.ax.bbox)
+
+        # provide the dragManagers with an empty background image 
+        dragMan: DragManager
+        for dragMan in self._dragManagers:
+            dragMan.set_background(background)
+ 
+        self.draw_animated_artists ()
 
 
     def _set_colorcycle (self, nColors = 10, colormap='Set2'):
@@ -457,9 +536,7 @@ class DragManager:
     """
 
     def __init__(self, ax, animated_artists, bounds=None, 
-                 draw_event=True, 
                  typeTag = None, 
-                 callback_draw_static = None, 
                  callback_draw_animated = None, 
                  callback_shiftCtrlClick = None, 
                  callback_on_moved=None):
@@ -471,21 +548,16 @@ class DragManager:
         ax :                Axes - matplotlib axes we are working on 
         animated_artist :   Artist - matplotlib artist like Line2D - either single or list
         bounds :            [(x1,x2),(y1,y2)] - bounds for movement of the artist - either scalar or array
-        draw_event :      = False: self does not listen to draw_eevent. The initial draw of artists
-                            must be initialized from 'outside' - also the background image must be provided 
         typeTag :           optional free form tag to identy DragManager in callBacks
-        callback_draw_static : - optional external method to draw the artist when it's not moved
         callback_draw_animated : function - optional external method to draw the artist (and do other thinsg)
-        callback_shiftCtrlClick : function - call with coordinates during double click
+        callback_shiftCtrlClick : function - call with coordinates shift or control click
         callback_on_moved : function - call with final coordinates after movement
              
         """
         self.ax = ax
         self._typeTag = typeTag
-        self._draw_event = draw_event
         self.canvas = ax.figure.canvas
         self._callback_on_moved = callback_on_moved
-        self._callback_draw_static = callback_draw_static
         self._callback_draw_animated = callback_draw_animated
         self._callback_shiftCtrlClick = callback_shiftCtrlClick
         self._shiftCtrlClick = False                # was shift or ctrl press down made?
@@ -502,6 +574,7 @@ class DragManager:
             self._bounds_y = None
 
         self._bg = None
+
         if isinstance (animated_artists, list):         # could be list or single artist
             self._artists = animated_artists
         else:
@@ -509,10 +582,6 @@ class DragManager:
         self._press_xy = None
 
         # Connect to all the events we need.
-        if draw_event:
-            self.ciddraw    = self.canvas.mpl_connect('draw_event', self.on_draw)
-        else: 
-            self.ciddraw    = None 
         self.cidpress   = self.canvas.mpl_connect('button_press_event', self.on_press)
         self.cidrelease = self.canvas.mpl_connect('button_release_event', self.on_release)
         self.cidmotion  = self.canvas.mpl_connect('motion_notify_event', self.on_motion)
@@ -522,21 +591,12 @@ class DragManager:
     def _draw_animated(self, duringMove=False, iArtMoved=None):
         """Draw the animated artists either via callback for static and animated"""
 
-        if self._callback_draw_static:
-            if duringMove:                # on move - draw on move only current
-                artistMoved = self._artists[iArtMoved]
-                # draw and handle all the animated stuff 
-                self._callback_draw_animated(artist_onMove=artistMoved, 
-                                             iArtist= iArtMoved, typeTag= self._typeTag)
-                # in case there are many artists - allow the others to draw static 
-                if len(self._artists) > 1: 
-                    self._callback_draw_static  (artist_onMove=artistMoved, typeTag= self._typeTag)
-            else: 
-                self._callback_draw_static  (typeTag= self._typeTag)
-
-        else: 
-            raise ValueError ("DragManager: callback for static draw is missing")
-
+        if duringMove:                # on move - draw on move only current
+            artistMoved = self._artists[iArtMoved]
+            # draw and handle all the animated stuff 
+            self._callback_draw_animated(artist_onMove=artistMoved, 
+                                            iArtist= iArtMoved, typeTag= self._typeTag)
+ 
 
     def on_enter_event(self, event): 
         """Callback to register with 'motion_notify_even' which is fired when entering axes"""
@@ -549,27 +609,6 @@ class DragManager:
     def set_background(self, aBackground):
         """ background image can also be provided from outside if there are several dragMans """ 
         self._bg = aBackground
-
-
-    def on_draw(self, event):
-        
-        if event is not None:
-            if event.canvas != self.canvas: raise RuntimeError
-
-        # save background without my artists - can also be provided from outside 
-        if self._draw_event:                    # self takes care of background itself
-            self._bg = self.canvas.copy_from_bbox(self.ax.bbox)
-        else: 
-            if self._bg is None: 
-                raise ("Dragmanager: background not set by parent")
-
-        # initial draw 
-        self._draw_animated()
-
-        self.canvas.blit(self.ax.bbox)
-
-        # fix scaling as it would conflict the background image
-        self.ax.autoscale(enable=False, axis='both')
 
 
     def on_press(self, event):
@@ -592,13 +631,13 @@ class DragManager:
         if event.key =='control' or event.key =='shift':
             if self._callback_shiftCtrlClick:
 
-                #call back into parent 
+                # blank background
+                self.canvas.restore_region(self._bg)
+
+                #call back into parent - draw artists with new values 
                 self._callback_shiftCtrlClick(iArtist=iArt, typeTag= self._typeTag, event=event)
 
-                # refresh  - maybe point deleted / inserted 
-                self.canvas.restore_region(self._bg)
-                self._draw_animated()
-                self.canvas.blit(self.ax.bbox)
+                # new state of self 
                 self._shiftCtrlClick = True
                 return 
 
@@ -658,32 +697,31 @@ class DragManager:
         # does the released button belong to self motion? 
         if self._press_xy: 
 
+            self.canvas.restore_region(self._bg)
+
             # callback when move is finished - before redraw - parent could change points
             if not self._callback_on_moved is None:
                 self._callback_on_moved() 
 
-            self.canvas.restore_region(self._bg)
-
-            # draw my artists after movement in their 'static style' 
-            self._draw_animated()
-
-            self.canvas.blit(self.ax.bbox)
+            # parent has to take care on refresh 
+            #  --> self._draw_animated()
 
         elif self._shiftCtrlClick:
 
+            # now show artists which were drawn at button down 
+            self.canvas.blit(self.ax.bbox)
+            self.canvas.flush_events()
+
             # callback when shiftCtrlClick is finished 
-            if not self._callback_on_moved is None:
-                self._callback_on_moved() 
+            self._callback_on_moved() 
 
         # reset state variable         
         self._shiftCtrlClick = False
         self._press_xy = None
 
 
-    def disconnect(self):
+    def _disconnect(self):
         """Disconnect all callbacks."""
-        if self.ciddraw is not None: 
-            self.canvas.mpl_disconnect(self.ciddraw)
         self.canvas.mpl_disconnect(self.cidpress)
         self.canvas.mpl_disconnect(self.cidrelease)
         self.canvas.mpl_disconnect(self.cidmotion)
@@ -692,7 +730,7 @@ class DragManager:
 
 
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
 
 #     # Test DraggableArtist 
 #     #     
@@ -740,3 +778,4 @@ class DragManager:
 
 
 #     plt.show()
+    pass

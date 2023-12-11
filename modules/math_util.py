@@ -538,6 +538,8 @@ def nelder_mead_wrap  (fn, xStart,
                                           no_improve_thr=no_improve_thr, 
                                           no_improv_break=no_improv_break, max_iter=max_iter,  
                                           bounds=bounds)    
+    # print ("nelder_mead : ", xmin, score, niters)
+    
     # workaround of bug in melder-mead
     # seems to be a float issue as it happens at rounded decimals like 0.61 or 0.8
     # retry with a new xStart-Value solves ... most of the time.

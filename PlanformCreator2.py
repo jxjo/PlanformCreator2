@@ -686,8 +686,8 @@ class Edit_WingSection(Edit_Abstract_Wing):
 
 
         # Blank_Widget (self,4,0) 
-        self.add(Field_Widget  (self,5,0, lab="Airfoil", width=110, obj=self.wingSection, 
-                                get='airfoilName', set='', disable=True, event=SECTION_CHANGED))
+        self.add(Field_Widget  (self,5,0, lab="Airfoil", width=110, get=lambda: self.wingSection().airfoil.name, 
+                                disable=True, event=SECTION_CHANGED))
         
         self.add(Button_Widget (self,5,2, lab='Select', width=60, columnspan=2, sticky='w',style=SUPTLE, 
                                 padx=(3,10),set=self.select_airfoil ))
@@ -892,12 +892,15 @@ class Diagram_Planform (Diagram_Abstract):
         Switch_Widget (self.view_frame,r,c, lab='Flaps', val=False, set=self._set_showFlaps)
         r += 1
         Switch_Widget (self.view_frame,r,c, lab='Chord lines', val=False, set=self._set_showChord)
+
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Ref elliptical', pady=(20,0), val=False, set=self._set_showReference)
+        Label_Widget (self.view_frame,r,c, lab='Reference planforms', pady=(20,10))
+        r += 1
+        Switch_Widget (self.view_frame,r,c, lab='Elliptical', val=False, set=self._set_showReference)
 
         if (self.wing().refPlanform_DXF): 
             r += 1
-            Switch_Widget (self.view_frame,r,c, lab='Ref DXF', val=False, set=self._set_showRefDXF)
+            Switch_Widget (self.view_frame,r,c, lab='From DXF', val=False, set=self._set_showRefDXF)
         return r,c 
 
 
@@ -1197,11 +1200,14 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         Switch_Widget (self.view_frame,r,c, lab='Mouse helper', val=True, set=self._set_mouseHelpers)
         r += 1
         Switch_Widget (self.view_frame,r,c, lab='Wing sections', val=False, set=self._set_showSections)
+
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Ref elliptical', val=False, set=self._set_showReference)
+        Label_Widget (self.view_frame,r,c, lab='Reference planforms', pady=(20,10))
+        r += 1
+        Switch_Widget (self.view_frame,r,c, lab='Elliptical', val=False, set=self._set_showReference)
         if (self.wing().refPlanform_DXF.isValid): 
             r += 1
-            Switch_Widget  (self.view_frame,r,c, lab='Ref DXF', val=False, set=self._set_showRefDXF)
+            Switch_Widget  (self.view_frame,r,c, lab='From DXF', val=False, set=self._set_showRefDXF)
         return r,c 
 
 

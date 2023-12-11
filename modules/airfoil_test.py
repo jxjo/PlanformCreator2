@@ -153,18 +153,25 @@ class Test_Airfoil:
         airfoil.set_maxCamberX (40.0)
         assert round(airfoil.maxCamberX,3) == 40.0
 
-        # strak 
+        # strak  - splined
 
+        airfoil  = Airfoil (name="<strak>", geometry = GEO_SPLINE)
         airfoil1 = Root_Example(geometry = GEO_SPLINE)
         airfoil2 = Tip_Example (geometry = GEO_SPLINE)
 
         airfoil.do_strak (airfoil1, airfoil2, blendBy=0.0)
-        assert airfoil.maxThickness == airfoil1.maxThickness
+        assert airfoil1.maxThickness == airfoil.maxThickness
+
+        airfoil.do_strak (airfoil1, airfoil2, blendBy=0.5)
+        assert airfoil.maxThickness == 7.3015
+        y30_splined = airfoil.y[30]
 
         airfoil.do_strak (airfoil1, airfoil2, blendBy=1.0)
         assert airfoil.maxCamber == airfoil2.maxCamber
 
-        airfoil  = Root_Example(geometry = GEO_BASIC)
+        # strak  - basic 
+
+        airfoil  = Airfoil (name="<strak>", geometry = GEO_BASIC)
         airfoil1 = Root_Example(geometry = GEO_BASIC)
         airfoil2 = Tip_Example (geometry = GEO_BASIC)
 
@@ -173,6 +180,13 @@ class Test_Airfoil:
 
         airfoil.do_strak (airfoil1, airfoil2, blendBy=1.0)
         assert airfoil.maxCamber == airfoil2.maxCamber
+
+        airfoil.do_strak (airfoil1, airfoil2, blendBy=0.5)
+        assert airfoil.maxThickness == (airfoil1.maxThickness + airfoil2.maxThickness) / 2 
+        assert round(airfoil.y[30],3) == round(y30_splined,3) 
+
+        airfoil.do_strak (airfoil1, airfoil2, blendBy=0.5, geometry=GEO_SPLINE)
+        assert airfoil.y[30] == y30_splined 
 
 
 

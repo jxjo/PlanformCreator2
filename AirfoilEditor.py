@@ -36,27 +36,31 @@ import customtkinter as ctk
 sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 
 from common_utils       import * 
-from airfoil            import *
+
+from airfoil            import Airfoil, Airfoil_Bezier, GEO_BASIC, GEO_SPLINE
+from airfoil            import NORMAL
+from airfoil_geometry   import Geometry, Side_Airfoil_Bezier, UPPER, LOWER, Match_Side_Bezier
+
 from airfoil_examples   import Root_Example
+from airfoil_artists    import *
+
 from widgets            import *
 from ui_base            import Dialog_Abstract, Edit_Abstract, Diagram_Abstract              
 from ui_base            import set_initialWindowSize, Dialog_Settings              
-from airfoil_artists    import *
-
-from airfoil_geometry   import UPPER, LOWER
 
 
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "1.0.2"
+AppVersion = "1.1.beta"
 
 
 # tk change events for updating mainly plots or vice versa 
 
 AIRFOIL_NEW                 = "<<AIRFOIL_NEW>>"                
 AIRFOIL_CHANGED             = "<<AIRFOIL_CHANGED>>"
-BEZIER_CHANGED              = "<<BEZIERL_CHANGED>>"            # bezier curve was changed in diagram
+BEZIER_CHANGED              = "<<BEZIER_CHANGED>>"                 # bezier curve was changed in app
+BEZIER_CHANGED_IN_ARTIST    = "<<BEZIER_CHANGED_IN_ARTIST>>"       # bezier curve was changed in artist
 
 
 def fireEvent(ctk_root : ctk.CTkToplevel, eventType): 
@@ -248,18 +252,13 @@ class Edit_Curvature(Edit_Abstract_Airfoil):
         self.add (Field_Widget  (self,r,c,   lab="Reversals upper", get=lambda: self.geo.curvature.upper.nreversals,
                                 width=50, lab_width=100, set='', dec=0, disable= True))
        
-        self.add (Field_Widget  (self,r,c+3, lab="lower", get=lambda: self.geo.curvature.lower.nreversals, 
+        r += 1
+        self.add (Field_Widget  (self,r,c, lab="lower", get=lambda: self.geo.curvature.lower.nreversals, 
                                 width=50, lab_width=60, padx=(20,0), set='', dec=0, disable= True))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="... threshold", get=lambda: self.curvature_threshold, 
                                 set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
                                 width=50, lab_width=80, lim=(0,1), dec=2, spin=False, step=0.02))
-
-        r += 1
-        self.add (Header_Widget (self,r,0,   pady=(25,10), width=90, lab='Specials', columnspan= 2))
-        self.add (Button_Widget (self,r,c+3, lab='Airfoil Bezier', width=110, 
-                                 pady=(25,10), padx= (20,0), columnspan=3, sticky='w', 
-                                 set=self.airfoil_Bezier ))
 
 
     def refresh(self): 
@@ -268,11 +267,51 @@ class Edit_Curvature(Edit_Abstract_Airfoil):
         super().refresh()
 
 
+
+class Edit_Specials (Edit_Abstract_Airfoil):
+    """ 
+    Frame to edit main data of the airfoil like thickness. This is just the header
+    """
+    name = "Specials"
+
+    @property
+    def myApp (self) -> 'AirfoilEditor':
+        return super().myApp
+
+    
+
+    def init (self):
+
+        r, c = 0, 0 
+        self.add (Header_Widget (self,r,c,   width=90, lab=self.name, columnspan= 2))
+
+        r = 1
+        Blank_Widget (self, r,0)                # left blank column to inset the fields 
+        c = 1                                  
+        self.add (Button_Widget (self,r,c, lab='Airfoil Bezier', width=130, 
+                                 padx= (20,0), columnspan=2, sticky='w', 
+                                 set=self.airfoil_Bezier ))
+        r += 1
+        self.add (Button_Widget (self,r,c, lab='Blend Airfoil', width=130, 
+                                 padx= (20,0), pady = (20,0), columnspan=2, sticky='w', 
+                                 set=self.blend_airfoils ))
+
+
+
     def airfoil_Bezier (self): 
         """ Open dialog for Bezier design - if 'OK' the modified airfoil will be inserted to the list 
         of airfoils and set to current """
 
         dialog = Dialog_Bezier (self, self._airfoilFn )
+        self.wait_window (dialog)
+
+        if dialog.return_OK: 
+            self.myApp.add_toAirfoilFiles (dialog.return_newAirfoilPathFileName)
+
+    def blend_airfoils (self): 
+        """ Open dialog to blend airfoil with another one  """
+
+        dialog = Dialog_Blend_Airfoils (self, self._airfoilFn )
         self.wait_window (dialog)
 
         if dialog.return_OK: 
@@ -454,9 +493,31 @@ class Edit_Coordinates(Edit_Abstract_Airfoil):
 
 class Diagram_Airfoil (Diagram_Abstract):
     """ 
-    plots the airfoil and curvature  of all wing sections
+    plots the airfoil and curvature 
     """
     name = "Airfoils"
+
+    def __init__(self, master, objectFn, view_frame = None, *args,  **kwargs):
+        """_summary_
+
+        Args:
+            master: master ctk frame 
+            projectFn: function to get project
+        """
+
+        self._show_points = False          # switch to show airfoil points
+        self._show_upper  = False          # switch to show upper curvature
+        self._show_lower  = False          # switch to show lower curvature
+        self._show_camber = False          # switch to show camber / thickness
+        self._show_logScale = True        # switch to have log scale for curvature 
+        self._log_widget : Switch_Widget = None   # log switch widget
+
+        self.airfoilArtist   = None
+        self.thicknessArtist = None
+        self.curvatureArtist = None
+
+
+        super().__init__(master, objectFn, view_frame = view_frame, *args, **kwargs)
 
 
     def airfoils(self):
@@ -467,46 +528,53 @@ class Diagram_Airfoil (Diagram_Abstract):
     def create_axes (self):
         """ setup 2 axes for airfoil and its curvature  """
 
-        gs = GridSpec(2, 1, height_ratios=[5, 4])
-        self.ax1 = self.figure.add_subplot(gs[:-1, :])          # top, full   - airfoil
-        self.ax2 = self.figure.add_subplot(gs[ -1, :])          # lower, full - thickness
+        if self.show_upper or self.show_lower:
+            gs = GridSpec(2, 1, height_ratios=[5, 4])
+            self.ax1 : plt.Axes = self.figure.add_subplot(gs[0])
+            self.ax2 : plt.Axes = self.figure.add_subplot(gs[1])
+        else:
+            gs = GridSpec(1, 1)
+            self.ax1 : plt.Axes = self.figure.add_subplot(gs[0])
+            self.ax2 = None
 
-        self.figure.subplots_adjust(left=0.04, bottom=0.05, right=0.98, top=0.97, wspace=None, hspace=0.11)
-
-        self.ax1.grid (visible=True)
-        self.ax2.grid (visible=True)
+        self.figure.subplots_adjust(left=0.04, bottom=0.06, right=0.98, top=0.97, wspace=None, hspace=0.10)
 
 
-    def setup_axes(self, show_logScale=True):
+
+    def setup_axes(self):
         """ setup axes, axis, artiss for this plot type """
 
         # airfoil contour 
-        self.ax1.tick_params (labelbottom=False, labelleft=True, labelsize='small')
+        self.ax1.tick_params (labelbottom=self.ax2 is None, labelleft=True, labelsize='small')
+        self.ax1.autoscale(enable=False, axis='both')
         self.ax1.set_xlim([-0.05,1.05])
         self.ax1.axis('equal')
+        self.ax1.grid (visible=True)
+        self.ax1.axhline(0, color=cl_labelGrid, linewidth=.5, alpha=0.6)
 
         # curvature
-        self.ax2.tick_params (labelsize='small')
-        self.ax2.set_xlim([-0.05,1.05])
+        if self.ax2:
+            self.ax2.tick_params (labelsize='small')
+            self.ax2.set_xlim([-0.05,1.05])
 
-        if show_logScale:
+            if self.show_logScale:
 
-            # ! linear range from 0..1 will lead to a kink in the curve 
-            thresh  = 1 
-            self.ax2.set_yscale('symlog', linthresh=thresh, linscale=1) # , linscale=2
-            self.ax2.set_ylim([ -10, 1000])
-            # mark linear and log y-axis because of kink in y log scale
-            x, y = 0.008, 0.5                   # x in axes coordinates
-            self.ax2.text (x, y, 'linear', va='center', ha='left', transform=self.ax2.get_yaxis_transform(), 
-                                color = cl_labelGrid, fontsize='small')
-            y = 40
-            self.ax2.text (x, y, 'log10', va='top',     ha='left', transform=self.ax2.get_yaxis_transform(), 
-                                color = cl_labelGrid, fontsize='small')
-            self.ax2.axhline (y= thresh, xmin=0, xmax=0.035, linestyle='dashed', linewidth=0.5, color = cl_labelGrid,)
-            self.ax2.axhline (y=-thresh, xmin=0, xmax=0.035, linestyle='dashed', linewidth=0.5, color = cl_labelGrid,)
-        else: 
-            self.ax2.clear()
-            self.ax2.set_ylim([ -1, 1])
+                # ! linear range from 0..1 will lead to a kink in the curve 
+                thresh  = 1 
+                self.ax2.set_yscale('symlog', linthresh=thresh, linscale=1) # , linscale=2
+                self.ax2.set_ylim([ -1000, 1000])
+                # mark linear and log y-axis because of kink in y log scale
+                x, y = 0.008, 0.5                   # x in axes coordinates
+                self.ax2.text (x, y, 'linear', va='center', ha='left', transform=self.ax2.get_yaxis_transform(), 
+                                    color = cl_labelGrid, fontsize='small')
+                y = 40
+                self.ax2.text (x, y, 'log10', va='top',     ha='left', transform=self.ax2.get_yaxis_transform(), 
+                                    color = cl_labelGrid, fontsize='small')
+                self.ax2.axhline (y= thresh, xmin=0, xmax=0.035, linestyle='dashed', linewidth=0.5, color = cl_labelGrid,)
+                self.ax2.axhline (y=-thresh, xmin=0, xmax=0.035, linestyle='dashed', linewidth=0.5, color = cl_labelGrid,)
+            else: 
+                self.ax2.clear()
+                self.ax2.set_ylim([ -1, 1])
             self.ax2.grid (visible=True)
 
 
@@ -518,8 +586,39 @@ class Diagram_Airfoil (Diagram_Abstract):
         # airfoil is list to prepare for multiple airfoils to view 
         
         self.airfoilArtist   = Airfoil_Artist   (self.ax1,     self.airfoils, show=True)
-        self.camberArtist    = Thickness_Artist (self.ax1,     self.airfoils, show=False)
-        self.curvatureArtist = Curvature_Artist (self.ax2,     self.airfoils, show=True)
+        self.thicknessArtist = Thickness_Artist (self.ax1,     self.airfoils, show=False)
+
+        if self.ax2: 
+            self.curvatureArtist = Curvature_Artist (self.ax2,     self.airfoils, show=True)
+            self.curvatureArtist.set_lower(self.show_lower)
+            self.curvatureArtist.set_upper(self.show_upper)
+        else: 
+            self.curvatureArtist = None
+
+
+    def re_create_axes (self):
+        """ re create axes to add/remove curvature diagram """
+        # remove current artists
+        self.airfoilArtist.set_show(False)
+        self.airfoilArtist = None
+        self.thicknessArtist.set_show(False)
+        self.thicknessArtist = None
+        if self.curvatureArtist:
+            self.curvatureArtist.set_show(False)
+            self.curvatureArtist = None
+
+        # remove axes 
+        if self.ax1: 
+            self.ax1.remove()
+            self.ax1 = None
+        if self.ax2: 
+            self.ax2.remove()
+            self.ax2 = None
+                    
+        # re_create 
+        self.create_axes()
+        self.setup_axes()
+        self.setup_artists()
 
 
     def setup_switches(self, r=0, c=0):
@@ -528,11 +627,14 @@ class Diagram_Airfoil (Diagram_Abstract):
         r, c = super().setup_switches(r, c)
 
         r += 1 
-        Switch_Widget (self.view_frame,r,c, lab='Grid',       val=True,  set=self._set_grid)
+        Switch_Widget (self.view_frame,r,c, lab='Grid',       
+                       val=True,  set=self.set_show_grid)
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Points',     val=False, set=self._set_points)
+        Switch_Widget (self.view_frame,r,c, lab='Points', 
+                       get=lambda: self.show_points, set=self.set_show_points)
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Camber',     val=False, set=self._set_camber)
+        Switch_Widget (self.view_frame,r,c, lab='Camber',
+                       get=lambda: self.show_camber, set=self.set_show_camber)
         r += 1
         Blank_Widget (self.view_frame,r,c)
         self.view_frame.grid_rowconfigure(r, weight=1)
@@ -540,41 +642,72 @@ class Diagram_Airfoil (Diagram_Abstract):
         r += 1
         Label_Widget  (self.view_frame, r, 0, lab='Curvature')
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Upper side',  val=True, set=self._set_upper)
+        Switch_Widget (self.view_frame,r,c, lab='Upper side',  
+                       get=lambda: self.show_upper, set=self.set_show_upper)
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Lower side',  val=True, set=self._set_lower)
+        Switch_Widget (self.view_frame,r,c, lab='Lower side',  
+                       get=lambda: self.show_lower, set=self.set_show_lower)
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='log scale y', val=True, set=self._set_logScale)
+        self._log_widget = Switch_Widget (self.view_frame,r,c, lab='log scale y', 
+                       get=lambda: self.show_logScale, set=self.set_show_logScale,
+                       disable=lambda: not (self.show_upper or self.show_lower))
         return r, c
 
 
     # -------- switch call back 
 
-    def _set_grid (self, aBool): 
+    def set_show_grid (self, aBool): 
         self.ax1.grid (aBool)
-        self.ax2.grid (aBool)
+        if self.ax2: self.ax2.grid (aBool)
         self.figure.canvas.draw_idle() 
 
-    def _set_points (self, aBool):
+    @property
+    def show_points (self) -> bool: return self._show_points
+    def set_show_points (self, aBool): 
+        self._show_points = True
         self.airfoilArtist.set_points (aBool)
         self.airfoilArtist.refresh (figureUpdate=True) 
-        self.curvatureArtist.set_points (aBool)
-        self.curvatureArtist.refresh (figureUpdate=True) 
+        if self.curvatureArtist:
+            self.curvatureArtist.set_points (aBool)
+            self.curvatureArtist.refresh (figureUpdate=True) 
 
-    def _set_camber  (self, aBool):
-        self.camberArtist.set_show (aBool)
-        self.camberArtist.refresh (figureUpdate=True) 
+    @property
+    def show_camber(self) -> bool: return self._show_camber
+    def set_show_camber (self, aBool):
+        self._show_camber = aBool
+        self.thicknessArtist.set_show (aBool)
 
-    def _set_upper (self, aBool):
-        self.curvatureArtist.set_upper(aBool)
-        self.curvatureArtist.refresh (figureUpdate=True) 
+    @property
+    def show_upper(self) -> bool: return self._show_upper
+    def set_show_upper (self, aBool):
+        self._show_upper = aBool
+        # show on/off curvature diagram 
+        if (not self.ax2 and aBool) or (self.ax2 and not self.show_lower and not self.show_upper):
+            self.re_create_axes()
+        if self.curvatureArtist:
+            self.curvatureArtist.set_upper(aBool)
+        self._log_widget.refresh()
+        self.refresh()
 
-    def _set_lower (self, aBool):
-        self.curvatureArtist.set_lower(aBool) 
-        self.curvatureArtist.refresh (figureUpdate=True) 
 
-    def _set_logScale (self, aBool):
-        self.setup_axes(show_logScale=aBool)
+    @property
+    def show_lower(self) -> bool: return self._show_lower
+    def set_show_lower (self, aBool):
+        self._show_lower = aBool
+        # show on/off curvature diagram 
+        if (not self.ax2 and aBool) or (self.ax2 and not self.show_lower and not self.show_upper):
+            self.re_create_axes()
+        if self.curvatureArtist:
+            self.curvatureArtist.set_lower(aBool)
+        self._log_widget.refresh()
+        self.refresh()
+
+
+    @property
+    def show_logScale(self) -> bool: return self._show_logScale
+    def set_show_logScale (self, aBool):
+        self._show_logScale = aBool
+        self.setup_axes()
         self.refresh()
 
 
@@ -594,15 +727,16 @@ class Diagram_Airfoil (Diagram_Abstract):
     def refresh(self): 
         # overloaded
         self.airfoilArtist.refresh ()  
-        self.camberArtist.refresh ()  
-        self.curvatureArtist.refresh ()  
+        self.thicknessArtist.refresh ()  
+        if self.curvatureArtist:
+            self.curvatureArtist.refresh ()  
 
         self.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
 
 
 
-class Diagram_Airfoil_Bezier (Diagram_Abstract):
+class Diagram_Airfoil_Bezier (Diagram_Airfoil):
     """ 
     plots an Bezier based airfoil and curvature 
     Allows to modiffy Bezier points
@@ -612,172 +746,114 @@ class Diagram_Airfoil_Bezier (Diagram_Abstract):
     def __init__(self, master, airfoilOrg, airfoilBezier, *args, **kwargs):
 
         self._airfoilBezier : Airfoil_Bezier = airfoilBezier
+
+        self._show_original   = True 
+        self._show_diff       = False
+        self.bezierArtist     = None
+        self.diffArtist       = None 
+
         super().__init__( master, airfoilOrg, *args, **kwargs)
+
+
+    def airfoils(self):
+        """ list with airfoil(s) self is working on """
+        if self.show_original:
+            airfoils =  super().airfoils()
+        else: 
+            airfoils =  []
+        airfoils.append (self._airfoilBezier)
+        return airfoils
 
 
     def airfoilBezier (self) -> Airfoil_Bezier:  
         return self._airfoilBezier
 
 
-    def airfoils(self):
-        """ list with airfoil(s) self is working on """
-        return self.mainObjects()
-
-
     def airfoils_to_diff (self):
         """ two airfoils to show the difference"""
-        return [self.airfoils[0], self.airfoilBezier()] 
-
-
-    def create_axes (self):
-        """ setup 2 axes for airfoil and its curvature  """
-
-        from matplotlib.gridspec import GridSpec
-
-        gs = GridSpec(2, 1, height_ratios=[6, 4])
-        self.ax1 : plt.Axes = self.figure.add_subplot(gs[0])
-        self.ax2 : plt.Axes = self.figure.add_subplot(gs[1])
-        self.figure.subplots_adjust(left=0.04, bottom=0.05, right=0.98, top=0.97, wspace=None, hspace=0.11)
-
-        self.ax1.grid (visible=True)
-        self.ax2.grid (visible=True)
-
-
-    def setup_axes(self, show_logScale=True):
-        """ setup axes, axis, artiss for this plot type """
-
-        # airfoil contour 
-        self.ax1.tick_params (labelbottom=False, labelleft=True, labelsize='small')
-        self.ax1.set_xlim([-0.05,1.05])
-        self.ax1.axis('equal')
-
-        # curvature
-        self.ax2.tick_params (labelsize='small')
-        self.ax2.set_xlim([-0.05,1.05])
-
-        if show_logScale:
-
-            # ! linear range from 0..1 will lead to a kink in the curve 
-            thresh  = 1 
-            self.ax2.set_yscale('symlog', linthresh=thresh, linscale=1) # , linscale=2
-            self.ax2.set_ylim([ -10, 1000])
-            # mark linear and log y-axis because of kink in y log scale
-            x, y = 0.008, 0.5                   # x in axes coordinates
-            self.ax2.text (x, y, 'linear', va='center', ha='left', transform=self.ax2.get_yaxis_transform(), 
-                                color = cl_labelGrid, fontsize='small')
-            y = 40
-            self.ax2.text (x, y, 'log10', va='top',     ha='left', transform=self.ax2.get_yaxis_transform(), 
-                                color = cl_labelGrid, fontsize='small')
-            self.ax2.axhline (y= thresh, xmin=0, xmax=0.035, linestyle='dashed', linewidth=0.5, color = cl_labelGrid,)
-            self.ax2.axhline (y=-thresh, xmin=0, xmax=0.035, linestyle='dashed', linewidth=0.5, color = cl_labelGrid,)
-        else: 
-            self.ax2.clear()
-            self.ax2.set_ylim([ -1, 1])
-            self.ax2.grid (visible=True)
+        return [super().airfoils()[0], self.airfoilBezier()] 
 
 
     def setup_artists(self):
         """ setup axes, axis, artists for this plot type """
 
         self.bezierArtist     = Bezier_Edit_Artist (self.ax1, self.airfoilBezier, show=True, 
-                                                   onMove=self.changed_bezier)
-        self.curvatureArtist  = Curvature_Artist  (self.ax2, [self.airfoilBezier], show=True)
-
-        self.airfoilOrgArtist = Airfoil_Artist    (self.ax1, self.airfoils, show=True)
-        self.curvOrgArtist    = Curvature_Artist  (self.ax2, self.airfoils, show=True)
-        self.camberArtist     = Thickness_Artist  (self.ax1, self.airfoils, show=False)
+                                                   onMove=self.changed_bezier_in_artist)
         self.diffArtist       = Difference_Artist (self.ax1, self.airfoils_to_diff, show=False)
+
+        super().setup_artists ()
+
+
+    def re_create_axes (self):
+        """ re create axes to add/remove curvature diagram """
+        # remove current artists
+        self.bezierArtist.set_show(False)
+        self.bezierArtist = None
+        self.diffArtist.set_show(False)
+        self.diffArtist = None
+        super().re_create_axes ()
 
 
     def setup_switches(self, r=0, c=0):
-        """ define on/off switches for this plot type"""
-
-        r, c = super().setup_switches(r, c)
+        """ on/off switches for this plot type"""
 
         r += 1 
-        Switch_Widget (self.view_frame,r,c, lab='Grid', val=True, set=self._set_grid)
-        r += 1 
-        Switch_Widget (self.view_frame,r,c, lab='Original airfoil', val=True, set=self._set_original)
+        Switch_Widget (self.view_frame,r,c, lab='Grid',       
+                       val=True,  set=self.set_show_grid)
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Points', val=False, set=self._set_points)
+        Switch_Widget (self.view_frame,r,c, lab='Original airfoil', 
+                       get=lambda: self.show_original, set=self.set_show_original)
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Camber', val=False, set=self._set_camber)
+        Switch_Widget (self.view_frame,r,c, lab='Points', 
+                       get=lambda: self.show_points, set=self.set_show_points)
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Diff * 10', val=False, set=self._set_difference)
+        Switch_Widget (self.view_frame,r,c, lab='Camber',
+                       get=lambda: self.show_camber, set=self.set_show_camber)
+        r += 1
+        Switch_Widget (self.view_frame,r,c, lab='Diff * 10',
+                       get=lambda: self.show_diff, set=self.set_show_diff)
         r += 1
         Blank_Widget (self.view_frame,r,c)
         self.view_frame.grid_rowconfigure(r, weight=1)
-        r += 1
 
+        r += 1
         Label_Widget  (self.view_frame, r, 0, lab='Curvature')
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Upper side', val=True, set=self._set_upper)
+        Switch_Widget (self.view_frame,r,c, lab='Upper side',  
+                       get=lambda: self.show_upper, set=self.set_show_upper)
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='Lower side', val=True, set=self._set_lower)
+        Switch_Widget (self.view_frame,r,c, lab='Lower side',  
+                       get=lambda: self.show_lower, set=self.set_show_lower)
         r += 1
-        Switch_Widget (self.view_frame,r,c, lab='log scale y', val=True, set=self._set_logScale)
+        self._log_widget = Switch_Widget (self.view_frame,r,c, lab='log scale y', 
+                       get=lambda: self.show_logScale, set=self.set_show_logScale,
+                       disable=lambda: not (self.show_upper or self.show_lower))
         return r, c
 
 
     # -------- switch call back 
 
-    def _set_grid (self, aBool): 
-        self.ax1.grid (aBool)
-        self.ax2.grid (aBool)
-        self.figure.canvas.draw_idle() 
+    @property
+    def show_original(self) -> bool: return self._show_original
+    def set_show_original (self, aBool):
+        self._show_original = aBool
+        self.airfoilArtist.refresh(figureUpdate=True)
 
-    def _set_original (self, aBool):
-        self.airfoilOrgArtist.set_show(aBool)
-        self.curvOrgArtist.set_show(aBool)
-        if not aBool: 
-           self.camberArtist.set_show(False)
-        self.refresh()
-
-    def _set_points (self, aBool):
-        self.bezierArtist.set_points(aBool)
-        self.airfoilOrgArtist.set_points(aBool)
-        self.curvatureArtist.set_points(aBool)
-        self.refresh()
-
-    def _set_camber (self, aBool):
-        self.bezierArtist.set_camber(aBool)
-        self.refresh()
-
-    def _set_upper (self, aBool):
-        self.curvatureArtist.set_upper(aBool)
-        self.curvOrgArtist.set_upper(aBool)
-        self.refresh()
-
-    def _set_lower (self, aBool):
-        self.curvatureArtist.set_lower(aBool)
-        self.curvOrgArtist.set_lower(aBool) 
-        self.refresh()
-
-    def _set_difference (self, aBool):
-        self.diffArtist.set_show (aBool)
-        self.diffArtist.refresh (figureUpdate=True)
-
-    def _set_logScale (self, aBool):
-        self.setup_axes(show_logScale=aBool)
-        self.refresh()
+    @property
+    def show_diff(self) -> bool: return self._show_diff
+    def set_show_diff (self, aBool):
+        self._show_diff = aBool
+        self.diffArtist.set_show(aBool) 
 
     # -------- event handler
 
-    def setChangeBindings (self):
-            # overloaded
-            self.ctk_root.bind(AIRFOIL_CHANGED, self.changed_airfoil, add='+')
-            self.ctk_root.bind(AIRFOIL_NEW,     self.changed_airfoil, add='+')
-
- 
-    def changed_airfoil(self, dummy): 
-        """ Eventhandler for changes of airfoil from outside """
-        self.refresh()
-
     # -------- call back from diagram 
     
-    def changed_bezier(self):
+    def changed_bezier_in_artist(self):
         # call back from diagram 
-        self.curvatureArtist.refresh () 
+        if self.curvatureArtist:
+            self.curvatureArtist.refresh () 
+        self.airfoilArtist.refresh()
         self.diffArtist.refresh() 
         self.figure.canvas.set_cursor = lambda cursor: None     # matplotlib hack: suppress busy cursor
         self.figure.canvas.draw()
@@ -786,21 +862,15 @@ class Diagram_Airfoil_Bezier (Diagram_Abstract):
         self.airfoilBezier().reset()  
 
         # inform entry fields
-        fireEvent  (self.ctk_root, BEZIER_CHANGED)               
+        fireEvent  (self.ctk_root, BEZIER_CHANGED_IN_ARTIST)               
 
     # -------- refresh my Artists which are on 'show mode' 
 
     def refresh(self): 
         # overloaded
         self.bezierArtist.refresh ()  
-        self.curvatureArtist.refresh ()  
-
-        self.airfoilOrgArtist.refresh ()
-        self.curvOrgArtist.refresh ()
         self.diffArtist.refresh ()
-
-        self.figure.canvas.draw_idle()    # draw ony if Windows is idle!
-
+        super().refresh()
 
 
 
@@ -855,6 +925,7 @@ class Diagram_LeTe_Mini (Diagram_Abstract):
 
         self.airfoilArtist  = Airfoil_Artist (self.ax2, self.airfoils, show=True)
         self.airfoilArtist.set_points(True)
+        self.airfoilArtist.set_showLegend ('normal')
 
         self.leArtist  = Le_Artist (self.ax1, self.airfoils, show=True)
         self.teArtist  = Le_Artist (self.ax3, self.airfoils, show=True)
@@ -883,6 +954,12 @@ class Diagram_Airfoil_Mini (Diagram_Abstract):
     """
     name = "Thickness and Camber"
 
+    def __init__(self, master, objectFn, show_thickness=True, *args, **kwargs):
+        super().__init__( master, objectFn, *args, **kwargs)
+
+        self._show_thickness = show_thickness
+
+
     def airfoils(self):
         """ list with airfoil(s) self is working on """
         return self.mainObjects()
@@ -891,9 +968,15 @@ class Diagram_Airfoil_Mini (Diagram_Abstract):
     def create_axes (self):
         """ setup 2 axes for airfoil, thickness, curvature etc."""
 
-        gs = GridSpec(2, 1, height_ratios=[5, 4])
-        self.ax1 = self.figure.add_subplot(gs[:-1, :])          # top, full   - airfoil
-        self.ax2 = self.figure.add_subplot(gs[ -1, :])          # lower, full - thickness
+        if self._show_thickness:
+            gs = GridSpec(2, 1, height_ratios=[5, 4])
+            self.ax1 = self.figure.add_subplot(gs[:-1, :])          # top, full   - airfoil
+            self.ax2 = self.figure.add_subplot(gs[ -1, :])          # lower, full - thickness
+        else: 
+            gs = GridSpec(1, 1)
+            self.ax1 = self.figure.add_subplot(gs[:, :])            # full
+            self.ax2 = None
+
 
         self.figure.subplots_adjust(left=0.02, bottom=0.08, right=0.98, top=0.97, wspace=0.07, hspace=0.15)
 
@@ -902,15 +985,18 @@ class Diagram_Airfoil_Mini (Diagram_Abstract):
 
         # airfoil contour 
         self.ax1.tick_params (labelbottom=True, labelleft=False, labelsize='small')
+        self.ax1.autoscale(enable=False, axis='both')
+        self.ax1.set_xlim([-0.05,1.05])
         self.ax1.axis('equal')
-        self.ax1.autoscale(enable=True, axis='both')
-        self.ax1.grid ()
-
-        # additional plot 
-        self.ax2.tick_params (labelbottom=True, labelleft=False, labelsize='small')
-        self.ax2.axis('equal')
-        self.ax2.autoscale(enable=True, axis='both')
-        self.ax2.grid ()
+        self.ax1.grid (visible=True)
+        
+        if self._show_thickness:
+            # additional plot 
+            self.ax2.tick_params (labelbottom=True, labelleft=False, labelsize='small')
+            self.ax2.autoscale(enable=False, axis='both')
+            self.ax2.set_xlim([-0.05,1.05])
+            self.ax2.axis('equal')
+            self.ax2.grid (visible=True)
 
 
     def setup_artists(self):
@@ -918,8 +1004,12 @@ class Diagram_Airfoil_Mini (Diagram_Abstract):
         super().setup_artists()
 
         # airfoil is list to prepare for multiple airfoils to view         
-        self.airfoilArtist   = Airfoil_Artist   (self.ax1,     self.airfoils, show=True)
-        self.camberArtist    = Thickness_Artist (self.ax2,     self.airfoils, show=True)
+        self.airfoilArtist = Airfoil_Artist (self.ax1, self.airfoils, show=True)
+
+        if self._show_thickness:
+            self.thicknessArtist = Thickness_Artist (self.ax2, self.airfoils, show=True)
+        else: 
+            self.thicknessArtist = None 
 
 
     def setup_switches(self, r=0, c=0):
@@ -931,7 +1021,8 @@ class Diagram_Airfoil_Mini (Diagram_Abstract):
     def refresh(self): 
         # overloaded
         self.airfoilArtist.refresh ()  
-        self.camberArtist.refresh ()  
+        if self._show_thickness:
+            self.thicknessArtist.refresh ()  
 
         self.ax1.figure.canvas.draw_idle()    # draw ony if Windows is idle!
 
@@ -962,10 +1053,14 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
         self.has_switches_frame = has_switches_frame
 
         # make a copy of original airfoil as splined airfoil
+
         self.airfoilOrg = Airfoil.asCopy (airfoilFn(), geometry=GEO_SPLINE) 
+        self.airfoilOrg.set_usedAs (NORMAL)
 
         # and a copy of original airfoil as splined airfoil, normalized - as working copy 
+
         self.airfoil    = Airfoil.asCopy (airfoilFn(), nameExt=self.nameExt, geometry=GEO_SPLINE) 
+        self.airfoil.set_usedAs (DESIGN)
         self.hasbeen_normalized = False
         if not self.airfoil.isNormalized:                    # also LE of spline at 0,0? 
             self.hasbeen_normalized = self.airfoil.normalize ()    # ensure exact le based on spline
@@ -973,6 +1068,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
         title  = self.name +"   [" + self.airfoil.name + "]"
 
         super().__init__(master, workingDir=workingDir, title=title, *args, **kwargs)
+
 
     @property
     def geo (self) -> Geometry:
@@ -1033,15 +1129,18 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
                                  obj=lambda: self.airfoil, get='name', set='set_name',
                                  lab_width=130, width=220, justify='left')
         c += 2
-        Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, style=SUPTLE, width=90)
+        self.add (Button_Widget (self.button_frame,r,c, lab='Save As...', set=self.save, 
+                                 style=SUPTLE, width=90, disable=self._ok_disabled))
         c += 1 
-        Button_Widget (self.button_frame,r,c, lab='Ok', set=self.ok, style=PRIMARY, width=90)
+        self.add (Button_Widget (self.button_frame,r,c, lab='Ok', set=self.ok, 
+                                 style=PRIMARY, width=90, disable=self._ok_disabled))
         c += 1 
-        Button_Widget (self.button_frame,r,c, lab='Cancel', set=self.cancel, width=90)
+        self.add (Button_Widget (self.button_frame,r,c, lab='Cancel', set=self.cancel, 
+                                 width=90))
 
         c += 1
-        Label_Widget (self.button_frame,r,c, text_style='Warning',
-                                lab= lambda: self._save_warning(), width= 110)
+        self.add (Label_Widget (self.button_frame,r,c, text_style='Warning',
+                                lab= lambda: self._save_warning(), width= 110))
 
         self.button_frame.grid_columnconfigure (9, weight=1)
 
@@ -1093,6 +1192,11 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
     def _save_fileTypes (self):
         # returns the fileTypes for save message
         return "" 
+    
+    def _ok_disabled (self):
+        # ok and save button disabling 
+        # to be overloaded
+        return False
 
     def ok(self): 
         """ saves modified airfoil and returns to parent with filename of the new, modified airfoil"""
@@ -1378,8 +1482,6 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
         # init UI ...
         super().init()                              # basic airfoil layout in super 
 
-        self.airfoil.set_isEdited (True)            # will indicate airfoil when plotted 
-
         # ! see Dialog_Airfoil_Abstract for init of airfoil !
 
         self.showModified = True 
@@ -1512,6 +1614,157 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
 
 
 
+class Dialog_Blend_Airfoils (Dialog_Airfoil_Abstract):
+    """ 
+    Dialog to blend airfoil with another
+    """
+    name        ='Blend airfoil'
+    nameExt     ='-blended'
+    widthFrac   = 0.65
+    heightFrac  = 0.65
+
+    def __init__(self, master, airfoilFn, workingDir=None, *args, **kwargs):
+
+        
+        self.airfoilBlend = None        # airfoil to blend with - start none
+        self._blendBy = 0.5 
+
+        super().__init__ (master, airfoilFn, workingDir=workingDir, *args, **kwargs)
+
+
+    def init (self):
+        # init UI ...
+        super().init()                              # basic airfoil layout in super 
+
+        # ! see Dialog_Airfoil_Abstract for init of airfoil !
+        
+        self.airfoilOrg.set_geo (GEO_BASIC)         # use linear interpolation for max speed
+        self.airfoil = None 
+
+        self.showModified = True 
+
+        # Header 
+        c = 0 
+        r = 0 
+        Header_Widget (self.header_frame,r,c, pady=0, lab= "Blend Airfoil", sticky = 'nw', width=140)
+        
+        # Switch_Widget (self.header_frame,r,c+1, padx=(30,30), lab='Show modified airfoil',
+        #                get=lambda: self.showModified, set=self.set_showModified)
+
+        Label_Widget  (self.header_frame,r, c+1, padx= 15, sticky = 'nw', columnspan=1,
+                        lab= "For blending the interpolated y-coordinates of the\n" + \
+                             "airfoils are taken to calculate a new y-coordinate.")
+        Label_Widget  (self.header_frame,r, c+2, padx= 20,  sticky = 'nw', columnspan=1,
+                        lab= "The involved airfoils will be temporarly \n" + \
+                             "repaneled and normalized to ensure exact results.")
+        Label_Widget  (self.header_frame,r, c+3, padx= 20,  sticky = 'nw', columnspan=1,
+                        lab= "Paneling information is taken from the more weighted airfoil.\n" + \
+                             "The final airfoil will be evaluated with a spline for high precision.")
+
+        self.header_frame.grid_columnconfigure (4, weight=1)
+
+        r = 0 
+        c = 0 
+        lab = "Airfoils normalized " + self.airfoilOrg.geo.description
+        style = STYLE_HINT
+        Label_Widget (self.input_frame,r,c, padx=0, lab= lab, columnspan = 4,
+                      text_style=style)
+        c = 2 
+        r += 1
+        Blank_Widget (self.input_frame, r,c+2, width=25)
+        self.add (Label_Widget  (self.input_frame,r,c+3, lab="blendy by", padx=(30,0), width=60, columnspan=1))
+
+        r += 1
+        self.add (Field_Widget  (self.input_frame,r,c, width=200, 
+                                 get=lambda: self.airfoilOrg.name))
+        c += 2
+        self.add(Slider_Widget (self.input_frame,r,c, width=200, height=16, padx=(0,10), 
+                                lim=(0, 1), step=0.01, columnspan=3, 
+                                obj=self, get='blendBy', set='set_blendBy'))
+        c += 3
+        self.add(Field_Widget  (self.input_frame,r,c, width=200, justify='left', 
+                                get=lambda: self.airfoilBlend.name if self.airfoilBlend else None ))
+        c += 4
+        self.add(Button_Widget (self.input_frame,r,c, lab='Select', width=90, columnspan=2, sticky='w',
+                                style=PRIMARY, padx=(3,10),set=self.select_airfoil))
+
+        r += 1
+        c = 5
+        self.add (Field_Widget  (self.input_frame,r,c, width=100, pady=10,
+                                obj=self,  get='blendBy', set='set_blendBy', step=0.1, lim=(0,1),  
+                                spin=True, unit="", dec=2))
+
+        self.input_frame.grid_columnconfigure ( 0,  weight=1)
+        self.input_frame.grid_columnconfigure (12,  weight=2)
+
+        # ---- buttons in super class
+
+        # ----------- setup diagram frame at the end ---------------
+
+        self.diagram_frame = Diagram_Airfoil_Mini (self.edit_frame, self.airfoilList, 
+                                                   show_thickness= False, size=(5.5,4.0))
+        self.diagram_frame.grid(row=1, column=1, sticky="nwe")
+
+
+
+    @property                               
+    def blendBy (self): return self._blendBy
+    def set_blendBy (self, aVal): 
+        self._blendBy= aVal
+        if self.airfoil and self.airfoilBlend:
+            self.airfoil.do_strak (self.airfoilOrg, self.airfoilBlend, self.blendBy, geometry=GEO_BASIC)
+        self.refresh()
+
+
+    def airfoilList (self):
+        airfoils = [self.airfoilOrg]
+        if self.airfoilBlend: airfoils.append(self.airfoilBlend)
+        if self.airfoil:      airfoils.append(self.airfoil)
+        return airfoils
+
+    
+    def select_airfoil(self):
+        """ select airfoil with explorer and load it if possible """
+
+        filetypes  = [('dat files', '*.dat')]
+    
+        newPathFilename = filedialog.askopenfilename(
+                    title='Select airfoil file',
+                    initialdir=self.workingDir,
+                    filetypes=filetypes)
+        if newPathFilename: 
+            self.airfoilBlend = Airfoil (pathFileName= newPathFilename, geometry=GEO_BASIC)
+            self.airfoilBlend.load()
+            self.airfoilBlend.normalize() 
+            self.airfoilBlend.set_usedAs (REF1)
+
+            # initial result airfoil 
+            self.airfoil = Airfoil.asCopy (self.airfoilOrg, nameExt=self.nameExt, geometry=GEO_BASIC) 
+            self.airfoil.set_usedAs (DESIGN)
+
+            # initial blend - will refresh 
+            self.set_blendBy (0.5) 
+
+
+    def refresh(self, *_):
+        self.diagram_frame.refresh()
+        super().refresh()
+
+    def _ok_disabled(self):
+        return self.airfoilBlend is None
+
+    def ok (self): 
+        """ save and close"""
+        # overloaded to spline final, blended airfoil 
+        if self.airfoil: 
+
+            self.airfoil.do_strak (self.airfoilOrg, self.airfoilBlend, self.blendBy, 
+                                   geometry=GEO_SPLINE)
+            self.airfoil.set_isStrakAirfoil (False)     # suppress auto naming 
+
+        return super().ok()
+
+
 class Dialog_Bezier (Dialog_Airfoil_Abstract):
     """ 
     Dialog to change thickness, camber or TE gap of airfoil  
@@ -1524,7 +1777,8 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
     def __init__(self, master, airfoilFn, workingDir=None, *args, **kwargs):
 
-        super().__init__ (master, airfoilFn, workingDir=None, has_switches_frame=True, *args, **kwargs)
+        super().__init__ (master, airfoilFn, workingDir=workingDir, has_switches_frame=True,
+                          *args, **kwargs)
 
 
     def init (self):
@@ -1536,16 +1790,14 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         if not self.airfoilOrg.isNormalized:                        # also LE of spline at 0,0? 
             self.airfoilOrg.normalize() 
-            self.airfoilOrg.set_isModified (False)                  # do not plot as modified airfoil
 
         self.airfoil    = Airfoil_Bezier (name=self.airfoil.name) 
-        self.airfoil.set_isEdited (True)                            # will indicate airfoil when plotted 
+        self.airfoil.set_usedAs (DESIGN)                            # will indicate airfoil when plotted 
 
         self.showOrg = True 
 
         # react on changes in diagram made by mouse drag 
-        self.ctk_root.bind(BEZIER_CHANGED, self.refresh, add='+')
-        self._adapt_running = None                                  # is optimization runnning?
+        self.ctk_root.bind(BEZIER_CHANGED_IN_ARTIST, self.refresh, add='+')
 
         # ----------- Input Fields  ----------------
 
@@ -1574,9 +1826,9 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                                  set=self.set_nPoints, objId = UPPER,
                                  spin=True, step=1, lim=(3,10), width=90, lab_width=100))
         self.add (Button_Widget (self.input_frame,r,c+3, width=90, padx=0, 
-                                 get=lambda: 'Auto adjust' if not self.adapt_running(UPPER) else '.. running ..',
-                                 set=lambda: self.adapt_bezier(UPPER), 
-                                 disable=lambda: self.adapt_bezier_disabled(UPPER)))
+                                 get=lambda: 'Auto adjust',
+                                 set=lambda: self.match_bezier(UPPER), 
+                                 disable=lambda: self.match_bezier_disabled(UPPER)))
 
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,  lab="Lower points", 
@@ -1584,9 +1836,9 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                                  set=self.set_nPoints, objId = LOWER,
                                  spin=True, step=1, lim=(3,10), width=90, lab_width=100))
         self.add (Button_Widget (self.input_frame,r,c+3, width=90, padx=0, 
-                                 get=lambda: 'Auto adjust' if not self.adapt_running(LOWER) else '.. running ..',
-                                 set=lambda: self.adapt_bezier(LOWER), 
-                                 disable=lambda: self.adapt_bezier_disabled(LOWER)))
+                                 get=lambda: 'Auto adjust',
+                                 set=lambda: self.match_bezier(LOWER), 
+                                 disable=lambda: self.match_bezier_disabled(LOWER)))
 
 
         self.input_frame.grid_columnconfigure (7, weight=1)
@@ -1655,8 +1907,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             airfoil_side = self.airfoil.geo.lower
             airfoil_side_target = self.airfoilOrg.geo.lower
 
-        cp_x, cp_y, = airfoil_side.get_initial_bezier(airfoil_side_target, nPoints)
-        airfoil_side.set_controilPoints (cp_x, cp_y)
+        airfoil_side.set_initial_bezier(airfoil_side_target, nPoints)
 
         # update diagram                                        
         self.airfoil.reset()                                    # make splined curves like thickness invalid 
@@ -1665,12 +1916,8 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         self.refresh()
 
 
-    def adapt_bezier (self, curveType): 
+    def match_bezier (self, curveType): 
         """ adapt bezier curve to 'original' airfoil """
-
-        self.set_adapt_running(curveType)                         # update button text, disable 
-        self.refresh()
-        self.update()
 
         if curveType == UPPER: 
             airfoil_side = self.airfoil.geo.upper
@@ -1679,55 +1926,32 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             airfoil_side = self.airfoil.geo.lower
             airfoil_side_target = self.airfoilOrg.geo.lower
 
-        #-- adapt TE gap - last control point is fix 
-         
-        airfoil_side.set_te_gap (airfoil_side_target.y[-1])                 
-
         #---------- run optimization with nelder mead ---------------------
 
-        cp_adapt, ncp_adapt, nVars = self._cPoints_to_adapt (airfoil_side)
+        opt = Match_Side_Bezier (airfoil_side, airfoil_side_target)
 
-        deviation, niter, max_reached = airfoil_side.adapt_bezier_to (airfoil_side_target, cp_adapt)
+        message = f"Matching {curveType} side Bezier to \n\n{self.airfoilOrg.name} ..." 
+        msg = MessageWindow (self, opt.run, message=message)
+
+        airfoil_side.set_controlPoints (opt.bezier.points)
 
         # update diagram                                        
-
         self.airfoil.reset()                                    # make splined curves like thickness invalid 
         fireEvent  (self.ctk_root, AIRFOIL_CHANGED)             # update diagram 
 
         # user info 
-        self._adapt_result_info (airfoil_side, ncp_adapt, nVars, deviation, niter, max_reached)
-
-        self.set_adapt_running(None)                            # update button text, disable 
-        self.refresh()
+        self._match_result_info (airfoil_side, opt)
 
 
-    def _cPoints_to_adapt (self, airfoil_side: SideOfAirfoil_Bezier):
-        # returns the control points of airfoil_side to optimize as list of tuples
-
-        ncp = len(airfoil_side.bezier.points)
-        cp_adapt = [(False, False)] * ncp 
-
-        nVars = 0 
-        ncp_adapt = 0 
-        for ip in range(ncp):                               # all y-values of cpoint 1..n-1
-            if ip > 0 and ip < (ncp-1):                     # exclude LE and TE
-                x_adapt = False
-                y_adapt = False
-                if not ip==1:                               # point 1 only y 
-                    x_adapt = True                            # the others also x coord
-                    nVars +=1
-                y_adapt = True                                # all y coord
-                nVars +=1
-                ncp_adapt += 1
-                cp_adapt[ip] = (x_adapt, y_adapt)
-
-        return cp_adapt, ncp_adapt, nVars 
- 
-
-    def _adapt_result_info (self, airfoil_side: SideOfAirfoil_Bezier, ncp, nVars, deviation, niter, max_reached):
+    def _match_result_info (self, side: Side_Airfoil_Bezier, opt: Match_Side_Bezier):
         # info message for user 
 
-        title = "Auto adjust %s side" %(airfoil_side.name)
+        nVars       = opt._nvar
+        deviation   = opt._norm2
+        niter       = opt._niter
+        max_reached = opt._max_reached
+        ncp         = side.bezier.npoints
+        title = "Auto adjust %s side" %(side.name)
 
         if   nVars >= 7:
             good_deviation = 0.001
@@ -1754,23 +1978,13 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         msg.get()
 
 
-    def adapt_running(self, curveType): 
-        # is a optimization for curveType running? 
-        return self._adapt_running == curveType
-    def set_adapt_running(self, curveType):
-        self._adapt_running = curveType 
-    
-
-    def adapt_bezier_disabled (self, curveType): 
+    def match_bezier_disabled (self, curveType): 
         # adapt bezier only for 4 and 5 point bezier 
 
         if curveType == UPPER: 
-            return self.airfoil.geo.upper.nPoints < 4 or self.airfoil.geo.upper.nPoints > 7 or \
-                   self.adapt_running(UPPER)
+            return self.airfoil.geo.upper.nPoints < 4 or self.airfoil.geo.upper.nPoints > 7 
         else:
-            return self.airfoil.geo.lower.nPoints < 4 or self.airfoil.geo.lower.nPoints > 7 or \
-                   self.adapt_running(LOWER)
-
+            return self.airfoil.geo.lower.nPoints < 4 or self.airfoil.geo.lower.nPoints > 7 
 
 
     def open_bez(self): 
@@ -1798,14 +2012,6 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     def _save_fileTypes (self):
         # returns the fileTypes for save message
         return "'.dat' and '.bez'" 
-
-
-    def save(self): 
-        """ save modified airfoil to file """
-        
-        # overloaded to ensure isModified (color in curvature) 
-        super().save()
-        self.airfoil.set_isEdited (True)                            # will indicate airfoil when plotted 
 
 
     def changed_te_gap (self):
@@ -1854,7 +2060,7 @@ class AirfoilEditor ():
         if self.isModal: 
             # modal - inherit ctk mode from parent
             main = ctk.CTkToplevel (parentApp)
-            set_initialWindowSize (main, widthFrac=0.77, heightFrac=0.75)
+            set_initialWindowSize (main, widthFrac=0.80, heightFrac=0.75)
             main.transient (parentApp)
             # bug fix titlebar color https://github.com/TomSchimansky/CustomTkinter/issues/1930
             main.after(20, lambda: main._windows_set_titlebar_color(main._get_appearance_mode()))
@@ -1906,7 +2112,7 @@ class AirfoilEditor ():
 
         # different sections of the edit area 1 x 3 
         edit_frame.grid_rowconfigure      (0, weight=1)
-        edit_frame.grid_columnconfigure   (3, weight=1)
+        edit_frame.grid_columnconfigure   (4, weight=1)
 
         edit_Airfoil_frame    = Edit_Airfoil_Data   (edit_frame, self.curAirfoil, myApp=self)
         edit_Airfoil_frame.grid   (row=0, column=0, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
@@ -1918,7 +2124,10 @@ class AirfoilEditor ():
         edit_Coordinates_frame.grid (row=0, column=2, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
 
         edit_Curvature_frame  = Edit_Curvature (edit_frame, self.curAirfoil, myApp=self)
-        edit_Curvature_frame.grid (row=0, column=3, pady=(0,5), padx=(5,5), ipadx=10, sticky="news")
+        edit_Curvature_frame.grid (row=0, column=3, pady=(0,5), padx=(5,0), ipadx=10, sticky="news")
+
+        edit_Specials_frame  = Edit_Specials (edit_frame, self.curAirfoil, myApp=self)
+        edit_Specials_frame.grid (row=0, column=4, pady=(0,5), padx=(5,5), ipadx=10, sticky="news")
 
 
         diagram_frame  = Diagram_Airfoil  (main, self.curAirfoil, view_frame=switches_frame, size=[20,8])
@@ -2013,6 +2222,7 @@ class AirfoilEditor ():
                 airfoil = Root_Example()
             else:
                 airfoil = Airfoil(pathFileName=pathFilename, geometry=GEO_BASIC)
+                airfoil.set_usedAs (NORMAL)
         airfoil.load()
 
         self.curAirfoilFile = airfoil.pathFileName

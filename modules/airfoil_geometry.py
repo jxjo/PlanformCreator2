@@ -33,20 +33,20 @@
             |-- Curvature_of_Spline                 - based on existing spline
             |-- Curvature_of_Bezier                 - based on Bezier geo upper and lower side 
 
-        SideOfAirfoil                               - basic with linear interpolation
-            |-- SideOfAirfoil_Spline                - splined 
-            |-- SideOfAirfoil_Bezier                - Bezier based            
+        Side_Airfoil                               - basic with linear interpolation
+            |-- Side_Airfoil_Spline                - splined 
+            |-- Side_Airfoil_Bezier                - Bezier based            
                                 
                                                     
     Object model - example                          
 
         airfoil                                     - an airfoils 
             |-- geo : Geometry                      - geometry strategy (basic) 
-                    |-- upper  : SideOfAirfoil      - upper surface
-                    |-- camber : SideOfAirfoil      - camber line       
+                    |-- upper  : Side_Airfoil      - upper surface
+                    |-- camber : Side_Airfoil      - camber line       
                     |-- Curvature                   - curvature of the geometry spline
-                        |-- upper : SideOfAirfoil   - curvature of upper surface
-                        |-- lower : SideOfAirfoil   - curvature of lower surface
+                        |-- upper : Side_Airfoil   - curvature of upper surface
+                        |-- lower : Side_Airfoil   - curvature of lower surface
                     
                     """
 
@@ -64,6 +64,207 @@ UPPER  = 'upper'
 LOWER  = 'lower'
 
 
+
+# -----------------------------------------------------------------------------
+# Match geometry 
+# -----------------------------------------------------------------------------
+
+class Match_Side_Bezier:
+    """ 
+    Controller for matching a Side_Airfoil with Bezier
+    """
+    def __init__ (self, side : 'Side_Airfoil_Bezier', target_side: 'Side_Airfoil'):
+
+        self._side      = deepcopy (side)
+
+        self._nvar      = 0                         # number of optimization variables
+        self._norm2     = 0                         # norm2 diviation of y points
+        self._niter     = 0                         # number of iterations needed
+        self._max_reached = False                   # max number of iterations reached
+
+        #-- selected target points for objective function
+        self._targets_x, self._targets_y   = self._define_targets(target_side)    
+
+        #-- (start) position of control points 
+        self._set_initial_bezier (target_side)       
+
+
+    @property
+    def bezier (self) -> Bezier:
+        """ bezier curve of self"""
+        return self._side.bezier
+
+    def _define_targets(self, target_side: 'Side_Airfoil'):
+        """ returns target points where deviation is tested during optimization """
+
+        # we do not take every coordinate point - nelder mead would take much to 
+        # long to evaluate x,y on Bezier
+        i = 1
+        if   len(target_side.x) > 120:
+            step = 6
+        elif len(target_side.x) > 80:
+            step = 5
+        else: 
+            step = 4
+        targ_x = []
+        targ_y = []
+        while i < (len(target_side.x) -1):
+            targ_x.append(target_side.x[i])
+            targ_y.append(target_side.y[i])
+            i += step
+        return np.array(targ_x), np.array(targ_y)
+
+
+    def _set_initial_bezier (self, targetSide: 'Side_Airfoil'):
+        """ returns inital coordinates of control points """
+
+        ncp = self.bezier.npoints
+        cp_x, cp_y = np.zeros(ncp), np.zeros(ncp)
+
+        # initial x values 
+        cp_x[0]   = 0.0                                 # LE and TE fix pos 
+        cp_x[1]   = 0.0 
+        cp_x[-1]  = 1.0
+
+        np_between =  ncp - 3                           # equal distribution between                         
+        dx = 1.0 / (np_between + 1)
+        x = 0.0 
+        for ib in range(np_between): 
+            icp = 2 + ib
+            x += dx
+            cp_x[icp] = x
+
+        # initial y values 
+        for icp, xi in enumerate (cp_x): 
+            if icp == 1:                                # special case y-start value of point 1
+                x = 0.1                                 #       take y-coord near LE
+            else: 
+                x = xi          
+            cp_y[icp]  = round(targetSide.yFn (x), 6)                 
+
+        self.bezier.set_points (cp_x, cp_y)
+
+
+    def _map_bezier_to_variables (self): 
+        """ maps bezier control points to design variables of objective function
+        
+        Returns: 
+            list of design variables """
+
+        vars = []
+        cp_x, cp_y = self.bezier.points_x, self.bezier.points_y
+        ncp = self.bezier.npoints
+
+        for icp in range (ncp): 
+            if icp == 0: 
+                pass                                    # skip leading edge
+            elif icp == ncp-1:                      
+                pass                                    # skip trailing edge
+            elif icp == 1:                      
+                vars.append(cp_y[icp])                  # le tangent only y
+            else:                                       
+                vars.append(cp_x[icp])                  # all control points in between 
+                vars.append(cp_y[icp])
+        return vars
+
+
+
+    def _map_variables_to_bezier (self, vars: list): 
+        """ maps design variables to bezier (control points)"""
+
+        cp_x, cp_y = self.bezier.points_x, self.bezier.points_y
+        ncp = self.bezier.npoints
+        ivar = 0
+        for icp in range (ncp): 
+            if icp == 0: 
+                pass                                    # skip leading edge
+            elif icp == ncp-1:                      
+                pass                                    # skip trailing edge
+            elif icp == 1:    
+                cp_y[icp] = vars[ivar]
+                ivar += 1                  
+            else:                                       
+                cp_x[icp] = vars[ivar]
+                ivar += 1                  
+                cp_y[icp] = vars[ivar]
+                ivar += 1                  
+        self.bezier.set_points (cp_x, cp_y)
+
+
+    def _objectiveFn (self, variables ):  
+        """ returns norm2 value of y deviations of self to target y at x """
+            
+        self._map_variables_to_bezier (variables)
+
+        # evaluate the new y values on Bezier for the target x-coordinate
+        y_new = np.zeros (len(self._targets_y))
+        for i, target_x in enumerate(self._targets_x) :
+            y_new[i] = self.bezier.eval_y_on_x(target_x, fast=False, epsilon=1e-7)
+
+        # calculate norm2 of the *relative* deviations 
+        devi = np.abs((y_new - self._targets_y))
+        base = np.abs(self._targets_y)
+
+        # move base so targets with a small base (at TE) don't become overweighted 
+        shift = np.max (base) * 0.4
+    
+        norm2 = np.linalg.norm (devi / (base+shift))
+
+        return norm2 
+
+
+
+    def run (self) :
+        """ 
+        Optimizes self bezier to best fit to another airfoil side
+        uses nelder meat root finding
+        """
+
+      
+        #-- map control point x,y to optimization variable 
+
+        variables_start = self._map_bezier_to_variables ()
+        nVars = len(variables_start)
+
+        # print_array_compact (var_start, header="var_start")
+
+        # ----- objective function
+
+        f = lambda variables : self._objectiveFn (variables) 
+
+        # ----- nelder mead find minimum --------
+
+        max_iter = nVars * 70 
+
+        res, niter = nelder_mead (f, variables_start,
+                    step=0.05, no_improve_thr=1e-5,             
+                    no_improv_break=25, max_iter=max_iter,
+                    bounds = None)
+
+        variables = res[0]
+        score = res[1]
+
+        self._niter = niter
+        self._max_reached = (niter >= max_iter)
+
+        #-- finally move control points to their new position 
+            
+        self._map_variables_to_bezier (variables)
+
+
+        #-- evaluate the new y values on Bezier for the target x-coordinate
+
+        y_new = np.zeros (len(self._targets_x))
+        for i, target_x in enumerate(self._targets_x) :
+            y_new[i] = self.bezier.eval_y_on_x(target_x, fast=False, epsilon=1e-7)
+
+        devi = np.abs((y_new - self._targets_y))        
+        self._norm2 = np.linalg.norm (devi)           # calc the 'real' norm2 (objFun uses another) 
+
+        return 
+
+
+
 # -----------------------------------------------------------------------------
 #  Curvature Classes 
 # -----------------------------------------------------------------------------
@@ -74,14 +275,14 @@ class Curvature_Abstract:
     Curvature of geometry spline at (x,y) 
     """
     def __init__ (self):
-        self._upper    = None                   # upper side curvature as SideOfAirfoil
-        self._lower    = None                   # lower side curvature as SideOfAirfoil
+        self._upper    = None                   # upper side curvature as Side_Airfoil
+        self._lower    = None                   # lower side curvature as Side_Airfoil
 
     @property
-    def upper (self) -> 'SideOfAirfoil': return self._upper
+    def upper (self) -> 'Side_Airfoil': return self._upper
 
     @property
-    def lower (self) -> 'SideOfAirfoil': return self._lower  
+    def lower (self) -> 'Side_Airfoil': return self._lower  
 
 
 
@@ -101,17 +302,17 @@ class Curvature_of_xy (Curvature_Abstract):
 
     @property
     def upper (self): 
-        " return SideOfAirfoil with curvature on the upper side"
+        " return Side_Airfoil with curvature on the upper side"
         if self._upper is None: 
-            self._upper = SideOfAirfoil (np.flip(self._x[: self._iLe+1]),
+            self._upper = Side_Airfoil (np.flip(self._x[: self._iLe+1]),
                                          np.flip(self.curvature [: self._iLe+1]), name=UPPER )
         return self._upper 
 
     @property
     def lower (self): 
-        " return SideOfAirfoil with curvature on the lower side"
+        " return Side_Airfoil with curvature on the lower side"
         if self._lower is None: 
-            self._lower = SideOfAirfoil (self._x[self._iLe: ],
+            self._lower = Side_Airfoil (self._x[self._iLe: ],
                                         self.curvature [self._iLe: ], name=LOWER )
         return self._lower 
 
@@ -136,17 +337,17 @@ class Curvature_of_Spline (Curvature_Abstract):
 
     @property
     def upper (self): 
-        " return SideOfAirfoil with curvature on the upper side"
+        " return Side_Airfoil with curvature on the upper side"
         if self._upper is None: 
-            self._upper = SideOfAirfoil (np.flip(self._x[: self._iLe+1]),
+            self._upper = Side_Airfoil (np.flip(self._x[: self._iLe+1]),
                                          np.flip(self.curvature [: self._iLe+1]), name=UPPER )
         return self._upper 
 
     @property
     def lower (self): 
-        " return SideOfAirfoil with curvature on the lower side"
+        " return Side_Airfoil with curvature on the lower side"
         if self._lower is None: 
-            self._lower = SideOfAirfoil (self._x[self._iLe: ],
+            self._lower = Side_Airfoil (self._x[self._iLe: ],
                                          self.curvature [self._iLe: ], name=LOWER )
         return self._lower 
 
@@ -162,7 +363,7 @@ class Curvature_of_Bezier (Curvature_Abstract):
     Curvature of Bezier based geometry - is build from curvature of upper and lower side 
     """
 
-    def __init__ (self,  upper : 'SideOfAirfoil_Bezier' , lower : 'SideOfAirfoil_Bezier'):
+    def __init__ (self,  upper : 'Side_Airfoil_Bezier' , lower : 'Side_Airfoil_Bezier'):
         super().__init__()
 
         self._upper_side = upper
@@ -170,17 +371,17 @@ class Curvature_of_Bezier (Curvature_Abstract):
 
     @property
     def upper (self): 
-        " return SideOfAirfoil with curvature on the upper side"
+        " return Side_Airfoil with curvature on the upper side"
         if self._upper is None: 
-            self._upper = SideOfAirfoil (self._upper_side.x, 
+            self._upper = Side_Airfoil (self._upper_side.x, 
                                          - self._upper_side.curvature.y, name=UPPER)
         return self._upper 
 
     @property
     def lower (self): 
-        " return SideOfAirfoil with curvature on the lower side"
+        " return Side_Airfoil with curvature on the lower side"
         if self._lower is None: 
-            self._lower = SideOfAirfoil (self._lower_side.x, 
+            self._lower = Side_Airfoil (self._lower_side.x, 
                                          self._lower_side.curvature.y, name=LOWER)
         return self._lower 
 
@@ -193,17 +394,17 @@ class Curvature_of_Bezier (Curvature_Abstract):
 
 
 # -----------------------------------------------------------------------------
-#   SideOfAirfoil Classes 
+#   Side_Airfoil Classes 
 # -----------------------------------------------------------------------------
 
 
-class SideOfAirfoil: 
+class Side_Airfoil: 
     """ 
     1D line of an airfoil like upper, lower side, camber line, curvature etc...
     with x 0..1
 
     Implements basic linear interpolation. 
-    For higher precision use SideOfAirfoil_Spline
+    For higher precision use Side_Airfoil_Spline
 
     """
 
@@ -341,10 +542,40 @@ class SideOfAirfoil:
             else:                               # lower side
                 imax = np.argmin(self.y)
 
+            # build a little helper spline to find exact maximum
+            if imax > 3 and imax < (len(self.x) -3 ): 
+
+                istart = imax - 3
+                iend   = imax + 3
+                self._max_spline = Spline1D (self.x[istart:iend+1], self.y[istart:iend+1])
+
+                # nelder mead search
+                xstart = self.x[istart]
+                xend   = self.x[iend]
+                if max_y > min_y:                   # upper side 
+                    xmax = findMax (self._yFn_max, self.x[imax], bounds=(xstart, xend))
+                else:                               # lower side
+                    xmax = findMin (self._yFn_max, self.x[imax], bounds=(xstart, xend))
+                ymax = self._yFn_max (xmax)
+
+                # print (f"delta x  {xmax - self.x[imax]:.5f}" )
+                # print (f"delta y  {ymax - max_y:.5f}" )
+            else:
+                xmax = self.x[imax]
+                ymax = self.y[imax]
+
             # limit decimals to a reasonable value
-            xmax = round(self.x[imax], 7)
-            ymax = round(self.y[imax], 7)
+            xmax = round(xmax, 7)
+            ymax = round(ymax, 7)
         return xmax, ymax
+
+    def _yFn_max (self,x):
+        """ spline interpolated y values based on a x-value based on little maximum helper spline
+        """
+
+        if self._max_spline is None: 
+            raise ValueError ("Helper spline for maximum evaluation missing")
+        return self._max_spline.eval (x)
 
 
     def _moveMaxX (self, newMax):
@@ -360,7 +591,7 @@ class SideOfAirfoil:
 
 
 
-class SideOfAirfoil_Spline (SideOfAirfoil): 
+class Side_Airfoil_Spline (Side_Airfoil): 
     """ 
     1D line of an airfoil like upper, lower side, camber line, curvature etc...
     with x 0..1
@@ -392,30 +623,6 @@ class SideOfAirfoil_Spline (SideOfAirfoil):
 
 
     # ------------------ private ---------------------------
-
-
-    def _get_maximum (self): 
-        """ 
-        calculates and returns the x,y position of the maximum y value of self
-        """
-        max_y = abs(np.max(self.y))
-        min_y = abs(np.min(self.y))
-        
-        if max_y == 0.0 and min_y == 0.0:              # optimize 
-            xmax = 0.0 
-            ymax = 0.0 
-        else:
-            # nelder mead search
-            if max_y > min_y:                   # upper side 
-                xmax = findMax (self.yFn, 0.3, bounds=(0.0,1.0))
-            else:                               # lower side
-                xmax = findMin (self.yFn, 0.3, bounds=(0.0,1.0))
-            ymax = self.yFn (xmax)
-            # limit decimals to a reasonable value
-            xmax = round(xmax, 7)
-            ymax = round(ymax, 7)
-
-        return xmax, ymax
 
 
     def _moveMaxX (self, newMax):
@@ -472,12 +679,14 @@ class SideOfAirfoil_Spline (SideOfAirfoil):
 
 
 
-class SideOfAirfoil_Bezier (SideOfAirfoil): 
+class Side_Airfoil_Bezier (Side_Airfoil): 
     """ 
     1D line of an airfoil like upper, lower side based on a Bezier curce
     with x 0..1
 
     """
+
+    isJoined = False                    # self is not a joined side 
 
     def __init__ (self, px, py, name=None, nPoints = 101):
         """
@@ -504,6 +713,10 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
         # eval Bezier for u - x,y - values will be cached in 'Bezier'
         self.bezier.eval(self._u)
+
+        # the opposite side may be joined to self so LE tangent will have the same length 
+        #  -> curvature equal on  upper and lower side 
+        self._joined_side     = None    
 
 
     def _u_distribution_bezier (self, nPoints):
@@ -556,9 +769,9 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
     def controlPoints (self): 
         """ bezier control points """
         return self.bezier.points
-    def set_controilPoints(self, cp_x, cp_y):
+    def set_controlPoints(self, px_or_p, py=None):
         """ set the bezier control points"""
-        self._bezier.set_points (cp_x, cp_y)
+        self._bezier.set_points (px_or_p, py)
 
     @property
     def nPoints (self): 
@@ -581,18 +794,34 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
     @property
     def curvature (self): 
-        """returns a SideOfAirfoil with curvature in .y """
-        return SideOfAirfoil (self.x, self.bezier.curvature(self._u), name='curvature')
+        """returns a Side_Airfoil with curvature in .y """
+        return Side_Airfoil (self.x, self.bezier.curvature(self._u), name='curvature')
    
     def set_maximum (self, newX=None, newY=None): 
         """ 
         set x,y of the mx point of self 
         """
 
-        # if e.g. camber is already = 0.0, a new camber line cannot be build
         raise NotImplementedError
     
+    @property
+    def joined_side (self) -> 'Side_Airfoil_Bezier_Joined': 
+        """ a side may be joined to self to allow equal LE tangent """
+        return self._joined_side
 
+    def set_joined_side (self, aSide: 'Side_Airfoil_Bezier_Joined'):
+
+        if isinstance (aSide, Side_Airfoil_Bezier_Joined):
+            self._joined_side = aSide
+            aSide._set_p1y (- self.bezier.points_y[1])           # negative = opposite
+        else: 
+            raise ValueError ("Joined side is not of type 'Side_Airfoil_Bezier_Joined'")
+
+
+    @property
+    def has_joined_side (self) -> bool:
+        """ does self has a joined side """
+        return not self._joined_side is None 
 
     # ------------------
 
@@ -662,6 +891,8 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
         if index == 0:                          # fixed
             x, y = 0.0, 0.0 
+        elif index == 1 and self.isJoined:      #  do not change LE tangent if self is joined 
+            return px[1], py[1]
         elif index == len(px) - 2:              # not too close to TE   
             x = min (x, 0.95)       
         elif index == 1:                        # only vertical move
@@ -679,6 +910,10 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
         self.bezier.set_point (index, x,y) 
 
+        # if self has a joined side, set LE control point of it
+        if self.has_joined_side and index == 1:
+            self.joined_side._set_p1y (-y)                 # negative = opposite
+
         return x, y 
 
     @property
@@ -692,7 +927,7 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         self.bezier.set_point (-1, px[-1], y) 
 
 
-    def adapt_bezier_to (self, targetSide: SideOfAirfoil, cp_opt: list) :
+    def match_bezier_to (self, targetSide: Side_Airfoil) :
         """ 
         Optimizes self bezier to best fit to another airfoil side
         uses nelder meat root finding
@@ -708,11 +943,11 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
         i = 1
         if   len(targetSide.x) > 120:
-            step = 5
+            step = 6
         elif len(targetSide.x) > 80:
-            step = 4
+            step = 5
         else: 
-            step = 3
+            step = 4
         targ_x = []
         targ_y = []
         while i < (len(targetSide.x) -1):
@@ -723,28 +958,43 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
         #-- (start) position of control points 
 
-        ncp = len(cp_opt)
-        cp_x_start, cp_y_start = self.get_initial_bezier(targetSide, ncp)
+        ncp = self.nPoints
+        cp_x, cp_y = self.get_initial_bezier(targetSide, ncp)
+
+        self.set_controlPoints (cp_x, cp_y)
       
         #-- map control point x,y to optimization variable 
 
         vars = []
-        for icp, cp_in in enumerate (cp_opt): 
+        for icp in range (ncp): 
 
-            var_dict = {}
-            if cp_in[0]:                                # x coord of control point
+
+            if icp == 0: 
+                pass                                    # skip leading edge
+            elif icp == ncp-1:                      
+                pass                                    # skip trailing edge
+            elif icp == 1:                      
+                var_dict = {}
+                var_dict['icp']    = icp                # le tangent only y
+                var_dict['coord']  = 'y'  
+                var_dict['start']  = round(cp_y[icp],6)                
+                var_dict['bounds'] = None                
+                vars.append(var_dict)
+            else:                                       # all control points in between 
+                var_dict = {}
                 var_dict['icp']    = icp
                 var_dict['coord']  = 'x'                
-                var_dict['start']  = round(cp_x_start[icp],6) 
-                if ncp > 3 and icp == ncp-2:                        # special case: last point not too close to TE 
+                var_dict['start']  = round(cp_x[icp],6) 
+                if ncp > 3 and icp == ncp-2:            # special case: last point not too close to TE 
                     var_dict['bounds'] = (0.5, 0.95)
                 else: 
                     var_dict['bounds'] =  None                
-                vars.append(copy(var_dict))
-            if cp_in[1]:                                # y coord of control point
+                vars.append(var_dict)
+
+                var_dict = {}
                 var_dict['icp']    = icp
                 var_dict['coord']  = 'y'  
-                var_dict['start']  = round(cp_y_start[icp],6)                
+                var_dict['start']  = round(cp_y[icp],6)                
                 var_dict['bounds'] = None                
                 vars.append(copy(var_dict))
 
@@ -753,7 +1003,8 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
 
         #-- direct initial population of bezier (old values could hurt move_point during melder nead)
 
-        bezier_tmp = deepcopy (self)                # optimizer will work with this copy 
+        # bezier_tmp = deepcopy (self)                # optimizer will work with this copy 
+        bezier_tmp = self  
 
         for i, var in enumerate (vars): 
             (px, py) = bezier_tmp.bezier.points[var['icp']]
@@ -813,7 +1064,13 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
         return norm2, niter, niter >= max_iter
 
 
-    def get_initial_bezier (self, targetSide: SideOfAirfoil, ncp):
+    def set_initial_bezier (self, targetSide: Side_Airfoil, ncp):
+        """ sets inital coordinates of control points  close to target side"""
+        cp_x, cp_y = self. get_initial_bezier (targetSide, ncp)
+        self.set_controlPoints (cp_x, cp_y)
+
+
+    def get_initial_bezier (self, targetSide: Side_Airfoil, ncp):
         """ returns inital coordinates of control points """
 
         cp_x, cp_y = np.zeros(ncp), np.zeros(ncp)
@@ -840,7 +1097,29 @@ class SideOfAirfoil_Bezier (SideOfAirfoil):
             cp_y[icp]  = round(targetSide.yFn (x), 6)                 
 
         return cp_x, cp_y
-    
+
+
+
+
+class Side_Airfoil_Bezier_Joined (Side_Airfoil_Bezier): 
+    """ 
+    1D line of an airfoil like upper, lower side based on a Bezier curce
+    with x 0..1
+
+    A 'joined' side get's the LE tangent point from the master side.
+    So the two sides, upper and lower will be connected at LE having the same 
+    curvature.
+
+    """
+ 
+    isJoined = True                    # self is a joined side 
+
+    def _set_p1y (self, y): 
+        """ set the y-coordinate of P1 which is the LE tangent """
+
+        self.bezier.set_point ( 1, 0.0, y) 
+
+
 
 
 # -----------------------------------------------------------------------------
@@ -862,7 +1141,7 @@ class Geometry ():
     isBasic = True 
     description = "based on linear interpolation"
 
-    sideDefaultClass = SideOfAirfoil
+    sideDefaultClass = Side_Airfoil
 
     def __init__ (self, x : np.ndarray, y: np.ndarray):
 
@@ -872,8 +1151,8 @@ class Geometry ():
         self._x = None   
         self._y = None
 
-        self._thickness : SideOfAirfoil = None  # thickness distribution
-        self._camber    : SideOfAirfoil = None  # camber line
+        self._thickness : Side_Airfoil = None  # thickness distribution
+        self._camber    : Side_Airfoil = None  # camber line
 
         self._curvature : Curvature_of_Spline     = None  # curvature object
 
@@ -990,26 +1269,26 @@ class Geometry ():
 
 
     @property
-    def upper(self) -> 'SideOfAirfoil': 
+    def upper(self) -> 'Side_Airfoil': 
         """the upper surface as a line object - where x 0..1"""
         return self.sideDefaultClass (np.flip (self.x [0: self.iLe + 1]),
                               np.flip (self.y [0: self.iLe + 1]), name=UPPER)
             
     @property
-    def lower(self) -> 'SideOfAirfoil': 
+    def lower(self) -> 'Side_Airfoil': 
         """the lower surface as a line object - where x 0..1"""
         return self.sideDefaultClass (self.x[self.iLe:], self.y[self.iLe:], name=LOWER)
 
 
     @property
-    def camber (self) -> 'SideOfAirfoil': 
+    def camber (self) -> 'Side_Airfoil': 
         """ return the camber line """
         if self._camber is None: 
             self._eval_thickness_camber()
         return self._camber
 
     @property
-    def thickness (self) -> 'SideOfAirfoil': 
+    def thickness (self) -> 'Side_Airfoil': 
         """ the thickness distribution as a line object """
         if self._thickness is None: 
             self._eval_thickness_camber()
@@ -1112,7 +1391,7 @@ class Geometry ():
 
     def upper_new_x (self, new_x): 
         """
-        returns sideOfAirfoil having new_x and new, calculated y coordinates
+        returns side_Airfoil having new_x and new, calculated y coordinates
         
         Using linear interpolation - shall be overloaded 
         """
@@ -1128,7 +1407,7 @@ class Geometry ():
 
     def lower_new_x (self, new_x): 
         """
-        returns sideOfAirfoil having new_x and new, calculated y coordinates
+        returns side_Airfoil having new_x and new, calculated y coordinates
         
         Using linear interpolation - shall be overloaded 
         """
@@ -1208,8 +1487,14 @@ class Geometry ():
         raise NotImplementedError
     
 
-    def strak (self, geo1 : 'Geometry', geo2 : 'Geometry', blendBy):
+    def strak (self, geo1_in : 'Geometry', geo2_in : 'Geometry', blendBy):
         """ straks (blends) self out of two geometries depending on the blendBy factor"""
+
+        # create copies which have the same geomtery class as self
+        #   so result has the same accuracy like self (--> upper_new_x!)
+
+        geo1 = self.__class__ (np.copy(geo1_in.x), np.copy(geo1_in.y))
+        geo2 = self.__class__ (np.copy(geo2_in.x), np.copy(geo2_in.y))
 
         if not geo1.isNormalized: geo1.normalize()
         if not geo2.isNormalized: geo2.normalize()
@@ -1232,7 +1517,7 @@ class Geometry ():
         else:
 
             upper1 = geo1.upper_new_x (geo2.upper.x)
-            lower1 = geo1.lower_new_x (geo1.lower.x)
+            lower1 = geo1.lower_new_x (geo2.lower.x)
             upper2 = geo2.upper
             lower2 = geo2.lower
 
@@ -1253,7 +1538,7 @@ class Geometry ():
 
     def _eval_thickness_camber (self): 
         """
-        evalutes self thickness and camber distribution as SideOfAirfoil objects
+        evalutes self thickness and camber distribution as Side_Airfoil objects
         with a x-distribution of the upper side.
         
         Using linear interpolation - shall be overloaded 
@@ -1342,7 +1627,7 @@ class Geometry_Splined (Geometry):
     isBasic = False
     description = "based on spline interpolation"
 
-    sideDefaultClass = SideOfAirfoil_Spline
+    sideDefaultClass = Side_Airfoil_Spline
 
     def __init__ (self, x,y):
         super().__init__(x,y)        
@@ -1413,9 +1698,9 @@ class Geometry_Splined (Geometry):
     #-----------
 
 
-    def upper_new_x (self, new_x) -> 'SideOfAirfoil_Spline': 
+    def upper_new_x (self, new_x) -> 'Side_Airfoil_Spline': 
         """
-        returns sideOfAirfoil having new_x and new, calculated y coordinates
+        returns side_Airfoil having new_x and new, calculated y coordinates
         
         Using spline interpolation  
         """
@@ -1441,9 +1726,9 @@ class Geometry_Splined (Geometry):
 
 
 
-    def lower_new_x (self, new_x) -> 'SideOfAirfoil_Spline': 
+    def lower_new_x (self, new_x) -> 'Side_Airfoil_Spline': 
         """
-        returns sideOfAirfoil having new_x and new, calculated y coordinates
+        returns side_Airfoil having new_x and new, calculated y coordinates
         
         Using spline interpolation  
         """
@@ -1682,13 +1967,15 @@ class Geometry_Bezier (Geometry):
     isBasic = False
     description = "based on 2 Bezier curves"
 
-    sideDefaultClass = SideOfAirfoil_Spline
+    sideDefaultClass = Side_Airfoil
 
     def __init__ (self):
         super().__init__(None, None)        
 
-        self._upper      = None                 # upper side as SideOfAirfoil_Bezier object
+        self._upper      = None                 # upper side as Side_Airfoil_Bezier object
         self._lower      = None                 # lower side 
+
+        self._has_joined_sides = True          # upper and lower bezier are joined at LE 
 
     
     @property
@@ -1696,27 +1983,36 @@ class Geometry_Bezier (Geometry):
         """ true - Bezier is always normalized"""
         return True
 
+    @property
+    def has_joined_sides (self) -> bool:
+        """ are upper and lower side joined at LE? """
+        return self._has_joined_sides
 
     @property
-    def upper(self) -> 'SideOfAirfoil_Bezier' : 
-        """upper side as SideOfAirfoil_Bezier object"""
+    def upper(self) -> 'Side_Airfoil_Bezier' : 
+        """upper side as Side_Airfoil_Bezier object"""
         # overloaded
         if self._upper is None: 
             # default side
-            px = [   0,    0.0,   0.33,  1]
+            px = [   0,  0.0, 0.33,  1]
             py = [   0, 0.06, 0.12,  0]    
-            self._upper = SideOfAirfoil_Bezier (px, py, name=UPPER)
+            self._upper = Side_Airfoil_Bezier (px, py, name=UPPER)
         return self._upper 
 
     @property
-    def lower(self) -> 'SideOfAirfoil_Bezier' : 
-        """upper side as SideOfAirfoil_Bezier object"""
+    def lower(self) -> 'Side_Airfoil_Bezier' : 
+        """upper side as Side_Airfoil_Bezier object"""
         # overloaded
         if self._lower is None: 
             # default side 
             px = [   0,   0.0,  0.25,   1]
-            py = [   0, -0.04, -0.07,   0]    
-            self._lower = SideOfAirfoil_Bezier (px, py, name=LOWER)
+            py = [   0, -0.04, -0.07,   0]  
+            if self.has_joined_sides:   
+                self._lower = Side_Airfoil_Bezier_Joined (px, py, name=LOWER)
+                self._upper.set_joined_side (self._lower)
+            else: 
+                self._lower = Side_Airfoil_Bezier (px, py, name=LOWER)
+
         return self._lower 
     
     def set_newSide_for (self, curveType, px,py): 
@@ -1725,11 +2021,14 @@ class Geometry_Bezier (Geometry):
 
         if px and py:
             if curveType == UPPER: 
-                self._upper = SideOfAirfoil_Bezier (px, py, name=UPPER)
+                self._upper = Side_Airfoil_Bezier (px, py, name=UPPER)
             elif curveType == LOWER:
-                self._lower = SideOfAirfoil_Bezier (px, py, name=LOWER)
+                if self.has_joined_sides:   
+                    self._lower = Side_Airfoil_Bezier_Joined (px, py, name=LOWER)
+                    self._upper.set_joined_side (self._lower)
+                else: 
+                    self._lower = Side_Airfoil_Bezier (px, py, name=LOWER)
             self._reset_lines()
-
 
     @property
     def x (self):
@@ -1824,10 +2123,9 @@ class Geometry_Bezier (Geometry):
     # ------------------ private ---------------------------
 
 
-
-    def upper_new_x (self, new_x) -> 'SideOfAirfoil': 
+    def upper_new_x (self, new_x) -> 'Side_Airfoil': 
         """
-        returns sideOfAirfoil having new_x and new, calculated y coordinates
+        returns side_Airfoil having new_x and new, calculated y coordinates
         Using bezier interpolation  
         """
         # evaluate the corresponding y-values on upper side 
@@ -1838,12 +2136,12 @@ class Geometry_Bezier (Geometry):
 
         upper_y = np.round(upper_y, 10)
 
-        return SideOfAirfoil (new_x, upper_y, name=LOWER)
+        return Side_Airfoil (new_x, upper_y, name=LOWER)
         
 
-    def lower_new_x (self, new_x)  -> 'SideOfAirfoil': 
+    def lower_new_x (self, new_x)  -> 'Side_Airfoil': 
         """
-        returns sideOfAirfoil having new_x and new, calculated y coordinates
+        returns side_Airfoil having new_x and new, calculated y coordinates
         Using bezier interpolation  
         """
         # evaluate the corresponding y-values on lower side 
@@ -1851,18 +2149,24 @@ class Geometry_Bezier (Geometry):
  
         # !! bezier must be evaluated with u to have x,y !! 
         for i, x in enumerate (new_x):
-            lower_y[i] = self.lower.bezier.eval_y_on_x (x, fast=True)  
+
+            # first and last point from current lower to avoid numerical issues 
+            if i == 0: 
+                lower_y[i] = self.lower.y[0]
+            elif i == (len(new_x) -1):
+                lower_y[i] = self.lower.y[-1]
+            else:
+                lower_y[i] = self.lower.bezier.eval_y_on_x (x, fast=True)  
 
         lower_y = np.round(lower_y, 10)
 
-        return SideOfAirfoil (new_x, lower_y, name=LOWER)
-
+        return Side_Airfoil (new_x, lower_y, name=LOWER)
 
 
 # ------------ helper funtions  -----------------------------------
 
 
-def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier, 
+def _match_y_objectiveFn (bezier_tmp : Side_Airfoil_Bezier, 
                           targets_x, targets_y, vars_def, vars_value ):  
     """ returns norm2 value of y deviations of self to target y at x """
         
@@ -1873,7 +2177,8 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
     # set the new control point coordinates in Bezier (=None - do not change) 
     for i, var in enumerate (vars_def): 
         if var['coord'] == 'x':
-            new_value, _ = bezier_tmp.move_controlPoint_to (var['icp'] , vars_value [i], None, allow_overtook=False)    # y remains unchanged
+            # jxjo - test with overtook allowed 
+            new_value, _ = bezier_tmp.move_controlPoint_to (var['icp'] , vars_value [i], None, allow_overtook=True)    # y remains unchanged
         else: 
             _, new_value = bezier_tmp.move_controlPoint_to (var['icp'] , None, vars_value [i])    # x remains unchanged
 
@@ -1903,150 +2208,10 @@ def _match_y_objectiveFn (bezier_tmp : SideOfAirfoil_Bezier,
 
 # ------------ test functions - to activate  -----------------------------------
 
-# def compare_lower ():
-
-#     from airfoil2_examples import Root_Example, Tip_Example
-    
-#     air1 = Root_Example(geometryClass = Geometry)
-#     geo1 = air1.geo
-#     low1 = geo1.lower_new_x (geo1.upper.x)
-#     air2 = Root_Example(geometryClass = Geometry_Splined)
-#     geo2 = air2.geo
-#     low2 = geo2.lower_new_x (geo2.upper.x)
-
-#     for i in range (len(low1.y)): 
-#         print (f"{i:3} {low1.x[i]:.6f}   {low1.y[i]:.6f}  {low2.y[i]:.6f} {low1.y[i]-low2.y[i]:.7f} ")
-
-#     upp1 = geo1.upper_new_x (geo1.lower.x)
-#     upp2 = geo2.upper_new_x (geo2.lower.x)
-
-#     for i in range (len(upp1.y)): 
-#         print (f"{i:3} {upp1.x[i]:.6f}   {upp1.y[i]:.6f}  {upp2.y[i]:.6f} {upp1.y[i]-upp2.y[i]:.7f} ")
-
-
-
-# def bezierTest (): 
-
-#     from spline import print_array_compact
-
-#     px = [   0,  0.0, 0.3,   1]
-#     py = [   0, 0.06, 0.12,  0]
-
-#     bezSide = SideOfAirfoil_Bezier (px, py, nPoints=10) 
-#     u = bezSide._u
-#     checksum = np.sum(u) 
-#     print_array_compact (u, header="u")
-#     print ("checksum: %10.6f" %checksum)
-
-
-# def splineCompare ():
-
-#     # compare different splines at LE 
-
-#     import matplotlib.pyplot as plt
-#     from airfoil_examples import Root_Example, Tip_Example
-    
-#     thick =Root_Example().spline.thickness
-
-#     spl1D     = Spline1D (thick.x, thick.y)
-#     spl1D_arc = Spline1D (thick.x, thick.y, arccos=True)
-#     spl1D_arc_nat = Spline1D (thick.x, thick.y, boundary='natural', arccos=True)
-#     spl2D     = Spline2D (thick.x, thick.y)
-    
-#     # complete 2D foil spline 
-#     x2D = np.concatenate ((np.flip(thick.x), thick.x[1:]))
-#     y2D = np.concatenate ((np.flip(thick.y), -thick.y[1:]))
-#     spl2D_ref = Spline2D (x2D, y2D)
-
-#     # new x 
-#     xNew = cosinus_distribution (200, 0.9, 0.7)
-
-#     y1DNew = spl1D.eval(xNew)
-#     y1DNew_arc = spl1D_arc.eval(xNew)
-#     y1DNew_arc_nat = spl1D_arc_nat.eval(xNew)
-#     y2DNew = np.zeros(len(xNew))
-#     y2DNew_ref = np.zeros(len(xNew))
-
-#     for i, xi in enumerate (xNew):
-
-#         # find the arc position u for the desired x-value 
-#         ui = findMin (lambda u: abs(spl2D.evalx(u) - xi), 0.41, bounds=(0.0, 1), no_improve_thr=10e-10)
-#         # get new y value at this position 
-#         y2DNew[i] = spl2D.evaly(ui)
-
-#         ui = findMin (lambda u: abs(spl2D_ref.evalx(u) - xi), 0.75, bounds=(0.5, 1), no_improve_thr=10e-10)
-#         # get new y value at this position 
-#         y2DNew_ref[i] = - spl2D_ref.evaly(ui)
-
-
-#     dy1D = y1DNew - y2DNew_ref
-#     dy1D_arc = y1DNew_arc - y2DNew_ref
-#     dy1D_arc_nat = y1DNew_arc_nat - y2DNew_ref
-#     dy2D = y2DNew - y2DNew_ref
-
-#     fig, axa = plt.subplots(2, 1, figsize=(16,8))
-#     fig.subplots_adjust(left=0.05, bottom=0.05, right=0.98, top=0.95, wspace=None, hspace=0.15)
-
-#     ax1 = axa[0]
-#     ax2 = axa[1]
-#     ax1.grid(True)
-#     ax1.axis('equal')
-#     ax2.grid(True)
-#     ax2.set_xlim([ -0.001,  0.01])
-#     ax2.set_ylim([ -0.00001,  0.00001])
-
-
-#     # ax1.plot(thick.x, thick.y, '-b', label='x y')
-#     ax1.plot(xNew, y1DNew, 'xr', label='y1DNew')
-#     ax1.plot(xNew, y1DNew_arc, 'xm', label='y1DNew arccos')
-#     ax1.plot(xNew, y2DNew, 'xg', label='y2DNew')
-#     ax1.plot(xNew, y2DNew_ref, 'xb', label='y2DNew ref')
-
-#     ax2.plot(xNew, dy1D, '-r', label='delta y1DNew')
-#     ax2.plot(xNew, dy1D_arc, '-m', label='delta y1DNew arccos')
-#     # ax2.plot(xNew, dy1D_arc_nat, '-b', label='delta y1DNew arccos natural')
-#     ax2.plot(xNew, dy2D, '-g', label='delta y2DNew')
-
-#     ax1.legend()
-#     ax2.legend()
-#     plt.show()
-
-
-# def curvatureTest():
-
-#     import matplotlib.pyplot as plt
-#     from airfoil_examples import Root_Example, Tip_Example
-    
-#     air =Tip_Example()
-
-#     y = air.y
-#     x = air.x
-#     spl = Spline2D (x,y) 
-#     curv = spl.curvature (np.linspace(0,1,200))
-
-#     fig, ax = plt.subplots(1, 1, figsize=(10,5))
-#     ax.set_yscale('symlog', linthresh=1)
-#     ax.plot(spl.u, curv, "-r", label="Curvature")
-
-#     plt.show()
-
-
-
-
-
-
 
 
 if __name__ == "__main__":
 
     # ---- Test -----
-
-    # compare_lower()
-    # bezierTest()
-    # splineCompare()
-    # blendTest()
-    # lineTest()
-    # curvatureTest()
-    # u_fxy_Test()
 
     pass

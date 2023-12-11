@@ -33,7 +33,7 @@ from math_util import findRoot, interpolate
 sys.path.append(Path(__file__).parent)
 from common_utils       import *
 from spline             import Bezier
-from airfoil           import Airfoil
+from airfoil           import Airfoil, GEO_BASIC, GEO_SPLINE
 from airfoil_examples  import Root_Example, Tip_Example
 
 
@@ -559,21 +559,29 @@ class Wing:
     
 
 
-    def do_strak (self): 
+    def do_strak (self, geometry  = None): 
         """
         straks the airfoil of all wing sections having a Strak-Airfoil which is 
         created by blending with its real neighbours
+
+        Args: 
+            geometry: optional - the desired geometry of the new straked airfoils 
+                                 either GEO_BASIC or GEO_SPLINE
         """
         sec: WingSection
 
         for sec in self.wingSections:
             if sec.airfoil.isStrakAirfoil: 
+
+                # get the neighbour wing sections  with real airfoils 
                 leftSec, rightSec = self.getNeighbourSectionsHavingAirfoil(sec) 
 
                 blendBy  = (sec.norm_chord - leftSec. norm_chord) / \
                            (rightSec.norm_chord - leftSec. norm_chord)
 
-                sec.airfoil.do_strak(leftSec.airfoil,  rightSec.airfoil, blendBy)
+                # strak - set new geometry to achieve higher quality with splined airfoils 
+
+                sec.airfoil.do_strak(leftSec.airfoil,  rightSec.airfoil, blendBy, geometry)
 
 
     def do_export_airfoils (self,toDir, useNick=True, teGap_mm = None): 
@@ -583,7 +591,7 @@ class Wing:
         Optionally a te gap in mm can be set for all exported airfoils"""
         fileList  = []
         
-        self.do_strak() 
+        self.do_strak (geometry=GEO_SPLINE)          # ensure strak airfoils are uptodate and splined (quality) 
 
         sec: WingSection
         for sec in self.wingSections:
@@ -1290,7 +1298,7 @@ class Planform_Pure_Elliptical(Planform):
     Defines the outline of a unmodified (more or less) elliptical planform for
     reference purposes
     """
-    planformType  = "Pure elliptical"
+    planformType  = "Elliptical"
     isTemplate    = False
 
     def __init__(self, myWing: Wing):
@@ -2258,9 +2266,11 @@ class WingSection:
         # then create new 'Airfoil' 
 
         if dataDict: 
-            airfoil = Airfoil.onDict (dataDict, workingDir= self.wing.pathHandler.workingDir)
+            airfoil = Airfoil.onDict (dataDict, geometry=GEO_BASIC,
+                                      workingDir= self.wing.pathHandler.workingDir)
         else: 
-            airfoil = Airfoil (pathFileName= pathFileName, workingDir=workingDir)
+            airfoil = Airfoil (pathFileName= pathFileName, geometry=GEO_BASIC,
+                               workingDir=workingDir)
 
         if airfoil.isExisting:
             airfoil.load()
@@ -2270,7 +2280,7 @@ class WingSection:
             elif self.isTip:
                 airfoil = Tip_Example()
             else:
-                airfoil = Airfoil(name="<strak>")
+                airfoil = Airfoil(name="<strak>", geometry=GEO_BASIC)
                 airfoil.set_isStrakAirfoil (True)
 
         self.airfoil = airfoil 
@@ -2548,8 +2558,6 @@ class WingSection:
         right = right * self.wing.rootRe
         return (left, right)
 
-    def airfoilName (self):
-        return self.airfoil.name
     
     def airfoilNickPostfix(self): 
         """ the postfix like '-16' of airfoils nickname

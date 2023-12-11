@@ -170,7 +170,7 @@ class Export_Xflr5:
             if self.useNick and section.airfoilNick():
                 airfoilName = section.airfoilNick()
             else: 
-                airfoilName = section.airfoilName()
+                airfoilName = section.airfoil.name
             for foilName in newSectionXml.iter('Left_Side_FoilName'):
                 foilName.text = re.sub('.dat', '', airfoilName)
 

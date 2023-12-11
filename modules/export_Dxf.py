@@ -5,7 +5,7 @@ import ezdxf
 from ezdxf import enums
 from common_utils import *
 from wing_model import Wing, WingSection, Flap
-from airfoil import Airfoil
+from airfoil import Airfoil, GEO_SPLINE
 
 class Export_Dxf:
     """ 
@@ -98,7 +98,7 @@ class Export_Dxf:
         dxf.plot_title ()
 
         if self.includeAirfoils:
-            self.wing.do_strak ()                    # ensure strak airfoils are uptodate 
+            self.wing.do_strak (geometry=GEO_SPLINE)          # ensure strak airfoils are uptodate and splined (quality) 
             dxf.plot_airfoils (teGap_mm=teGap)
 
         targetDir = self.baseAndExportDir
@@ -237,7 +237,7 @@ class Dxf_Artist:
                 self.msp.add_text(airfoilText, height = fontsize).set_placement(
                                     (y_m, x_m+35), align=enums.TextEntityAlignment.CENTER)
 
-            airfoilText = sec.airfoilName()
+            airfoilText = sec.airfoil.name
             self.msp.add_text(airfoilText, height = fontsize).set_placement(
                                 (y_m, x_m+20), align=enums.TextEntityAlignment.CENTER)
 
