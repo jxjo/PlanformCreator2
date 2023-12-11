@@ -212,7 +212,7 @@ class Airfoil:
             self._geo = self._geometryClass (self.x, self.y)
         return self._geo
     
-    def set_geo (self, geometry):
+    def set_geo_strategy (self, geometry):
         """ set new geometry strategy of self
         Args: 
             geometry: either GEO_BASIC or GEO_SPLIne
@@ -726,16 +726,18 @@ class Airfoil_Bezier(Airfoil):
     isBezierBased  = True
 
 
-    def __init__(self, name = None, workingDir= None):
+    def __init__(self, name = None, workingDir= None, has_joined_sides = False):
         """
         Main constructor for new Airfoil
 
         Args:
-            :pathFileName: optional - string of existinng airfoil path and name \n
-            :name: optional - name of airfoil - no checks performed 
+            pathFileName: optional - string of existinng airfoil path and name \n
+            name: optional - name of airfoil - no checks performed 
+            has_joined_sides: upper and lower Bezier are joined at LE
         """
         super().__init__( name = name, workingDir= workingDir)
 
+        self._has_joined_sides = has_joined_sides  # upper and lower bezier are joined at LE 
 
     @property
     def isLoaded (self): 
@@ -745,8 +747,14 @@ class Airfoil_Bezier(Airfoil):
     def geo (self) -> Geometry_Bezier:
         """ the geometry strategy of self"""
         if self._geo is None: 
-            self._geo = Geometry_Bezier ()
+            self._geo = Geometry_Bezier (has_joined_sides=self._has_joined_sides)
         return self._geo
+
+    def set_geo (self, geometry: Geometry_Bezier):
+        """ set new geometry bezier object  """
+        if not isinstance (geometry, Geometry_Bezier): return 
+        self._geo = geometry  
+
 
     def set_newSide_for (self, curveType, px,py): 
         """creates either a new upper or lower side in self"""

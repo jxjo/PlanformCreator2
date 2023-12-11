@@ -210,19 +210,24 @@ class Messagebox(ctk.CTkToplevel):
 
 
 
-class MessageWindow (ctk.CTkToplevel):
-    """ a little message window during 'functionFn' is executed"""
+class Eval_With_ToolWindow (ctk.CTkToplevel):
+    """ evals functionFn and shows a tool window during excution"""
 
 
-    def __init__(self, master, 
+    def __init__(self, master : ctk.CTkFrame, 
                  functionFn,                  
-                 width: int = 300,
-                 height: int = 150,
-                 title: str = "Running ...",
-                 message: str = "This is a Messagebox!",
-                 border_width: int = 1):
+                 message: str, 
+                 width: int = 300, height: int = 150):
+        """evals functionFn and shows a tool window during excution
 
-    
+        Args:
+            master: parent frame 
+            functionFn: function to be evluated
+            message (str): message text during execution.
+            width  (optional): width of tool window. Defaults to 300.
+            height (optional): height of tool window. Defaults to 150.
+        """
+   
         super().__init__(master)
 
         bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
@@ -253,7 +258,7 @@ class MessageWindow (ctk.CTkToplevel):
         self.overrideredirect(True)                 # remove titlebar 
 
         self.message = message
-        self.border_width = border_width if border_width<6 else 5
+        self.border_width = 1
         
         # ---------------
 
@@ -269,10 +274,13 @@ class MessageWindow (ctk.CTkToplevel):
         self.grid_rowconfigure(1, weight=1)   
 
         # ---------------
-        self.after (100, self._run_function)
 
         if self.winfo_exists():
             self.grab_set()
+
+        self.after (200, self._run_function)
+
+        self.master.wait_window(self)
 
 
     def close (self): 

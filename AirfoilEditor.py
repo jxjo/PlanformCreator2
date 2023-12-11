@@ -39,7 +39,8 @@ from common_utils       import *
 
 from airfoil            import Airfoil, Airfoil_Bezier, GEO_BASIC, GEO_SPLINE
 from airfoil            import NORMAL
-from airfoil_geometry   import Geometry, Side_Airfoil_Bezier, UPPER, LOWER, Match_Side_Bezier
+from airfoil_geometry   import Geometry, Side_Airfoil_Bezier, UPPER, LOWER
+from airfoil_geometry   import Match_Geo_Bezier, Match_Side_Bezier
 
 from airfoil_examples   import Root_Example
 from airfoil_artists    import *
@@ -1638,7 +1639,7 @@ class Dialog_Blend_Airfoils (Dialog_Airfoil_Abstract):
 
         # ! see Dialog_Airfoil_Abstract for init of airfoil !
         
-        self.airfoilOrg.set_geo (GEO_BASIC)         # use linear interpolation for max speed
+        self.airfoilOrg.set_geo_strategy (GEO_BASIC)         # use linear interpolation for max speed
         self.airfoil = None 
 
         self.showModified = True 
@@ -1791,7 +1792,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         if not self.airfoilOrg.isNormalized:                        # also LE of spline at 0,0? 
             self.airfoilOrg.normalize() 
 
-        self.airfoil    = Airfoil_Bezier (name=self.airfoil.name) 
+        self.airfoil    = Airfoil_Bezier (name=self.airfoil.name, has_joined_sides=True) 
         self.airfoil.set_usedAs (DESIGN)                            # will indicate airfoil when plotted 
 
         self.showOrg = True 
@@ -1810,7 +1811,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                         lab= "Design a new airfoil based on a Bezier curve for upper and lower side.\n" + 
                              "Control points can be moved, inserted or deleted with the mouse")
         Label_Widget  (self.header_frame,r, c+3, padx= 20,  sticky = 'nw', columnspan=1,
-                        lab= "'Auto adjust' will move the control points for a best fit\n" + 
+                        lab= "'Match Bezier' will move the control points for a best fit\n" + 
                              "to the original airfoil (4 - 6 control points are currently supported)")
 
         self.header_frame.grid_columnconfigure (4, weight=1)
@@ -1825,20 +1826,23 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                                  get=self.nPoints, 
                                  set=self.set_nPoints, objId = UPPER,
                                  spin=True, step=1, lim=(3,10), width=90, lab_width=100))
-        self.add (Button_Widget (self.input_frame,r,c+3, width=90, padx=0, 
-                                 get=lambda: 'Auto adjust',
-                                 set=lambda: self.match_bezier(UPPER), 
-                                 disable=lambda: self.match_bezier_disabled(UPPER)))
+        self.add (Button_Widget (self.input_frame,r,c+3, width=100, padx=0, 
+                                 lab='Match Bezier', set=lambda: self.match_side_bezier(UPPER), 
+                                 disable=lambda: self.match_side_bezier_disabled(UPPER)))
 
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,  lab="Lower points", 
                                  get=self.nPoints, 
                                  set=self.set_nPoints, objId = LOWER,
                                  spin=True, step=1, lim=(3,10), width=90, lab_width=100))
-        self.add (Button_Widget (self.input_frame,r,c+3, width=90, padx=0, 
-                                 get=lambda: 'Auto adjust',
-                                 set=lambda: self.match_bezier(LOWER), 
-                                 disable=lambda: self.match_bezier_disabled(LOWER)))
+        self.add (Button_Widget (self.input_frame,r,c+3, width=100, padx=0, 
+                                 lab='Match Bezier', set=lambda: self.match_side_bezier(LOWER), 
+                                 disable=lambda: self.match_side_bezier_disabled(LOWER)))
+
+        # ---------------
+        self.add (Button_Widget (self.input_frame,r,c+4, width=150, padx=0, 
+                                 lab='Match Bezier Airfoil', set=self.match_geo_bezier))
+        # ---------------
 
 
         self.input_frame.grid_columnconfigure (7, weight=1)
@@ -1916,7 +1920,27 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         self.refresh()
 
 
-    def match_bezier (self, curveType): 
+    def match_geo_bezier (self): 
+        """ match bezier curves of joined upper and lower to 'original' airfoil """
+
+        opt = Match_Geo_Bezier (self.airfoil.geo, self.airfoilOrg.geo)
+
+        message = f"Matching Beziers of {UPPER} and {LOWER } side to \n\n{self.airfoilOrg.name} ..." 
+        Eval_With_ToolWindow (self, opt.run, message)
+
+        self.airfoil.set_geo (opt.geo_result)
+
+        # update diagram                                        
+        self.airfoil.reset()                                    # make splined curves like thickness invalid 
+        fireEvent  (self.ctk_root, AIRFOIL_CHANGED)             # update diagram 
+
+        # user info 
+        self._match_result_info (None, opt)
+
+
+
+
+    def match_side_bezier (self, curveType): 
         """ adapt bezier curve to 'original' airfoil """
 
         if curveType == UPPER: 
@@ -1931,8 +1955,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         opt = Match_Side_Bezier (airfoil_side, airfoil_side_target)
 
         message = f"Matching {curveType} side Bezier to \n\n{self.airfoilOrg.name} ..." 
-        msg = MessageWindow (self, opt.run, message=message)
-
+        Eval_With_ToolWindow (self, opt.run, message)
         airfoil_side.set_controlPoints (opt.bezier.points)
 
         # update diagram                                        
@@ -1946,27 +1969,30 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     def _match_result_info (self, side: Side_Airfoil_Bezier, opt: Match_Side_Bezier):
         # info message for user 
 
-        nVars       = opt._nvar
-        deviation   = opt._norm2
-        niter       = opt._niter
-        max_reached = opt._max_reached
-        ncp         = side.bezier.npoints
-        title = "Auto adjust %s side" %(side.name)
+        nvar        = opt.nvar
+        deviation   = opt.norm2
+        niter       = opt.niter
+        max_reached = opt.max_reached
+        ncp         = opt.ncp
+        if side:
+            title = f"Match Bezier {side.name} side"
+        else: 
+            title = f"Match Beziers for {UPPER} and {LOWER} side"
 
-        if   nVars >= 7:
+        if   nvar >= 7:
             good_deviation = 0.001
-        elif nVars >= 5:
+        elif nvar >= 5:
             good_deviation = 0.005
         else: 
             good_deviation = 0.01
 
         if not max_reached and deviation < good_deviation:         # 0.001
-            text = "Optimization of %d control points with %d variables successful. \n\n" %(ncp, nVars) + \
+            text = "Optimization of %d control points with %d variables successful. \n\n" %(ncp, nvar) + \
                 "y-deviation at check points: %.5f \n\n" %deviation + \
                 "Iterations needed: %d" %niter
             icon = "check"
         else:
-            text = "Optimization with %d variables not too good. \n\n" %(nVars) + \
+            text = "Optimization with %d variables not too good. \n\n" %(nvar) + \
                 "y-deviation at check points: %.5f \n\n" %deviation 
             if max_reached:
                 text = text + "Maximum number of iterations (%d) exceeded." %niter
@@ -1978,7 +2004,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         msg.get()
 
 
-    def match_bezier_disabled (self, curveType): 
+    def match_side_bezier_disabled (self, curveType): 
         # adapt bezier only for 4 and 5 point bezier 
 
         if curveType == UPPER: 

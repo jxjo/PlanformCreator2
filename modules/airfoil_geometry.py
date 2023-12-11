@@ -69,18 +69,102 @@ LOWER  = 'lower'
 # Match geometry 
 # -----------------------------------------------------------------------------
 
-class Match_Side_Bezier:
+
+class Match_Bezier:
     """ 
-    Controller for matching a Side_Airfoil with Bezier
+    Abstract superclass 
+
+    Controller for matching Bezier curves to a target which is either a 'Geometry' or a 'Side'
+
+    For 'nelder mead optimization' is used ... 
+
+    """
+    def __init__ (self):
+
+        # nelder mead results 
+        self.ncp         = None                     # number of bezier control points 
+        self.nvar        = None                     # number of optimization variables
+        self.norm2       = None                     # norm2 diviation of y points
+        self.niter       = None                     # number of iterations needed
+        self.max_reached = None                     # max number of iterations reached
+
+
+    def _map_bezier_to_variables (self): 
+        """ maps bezier control points to design variables of objective function
+        Returns: 
+            list of design variables """
+        # must be overloaded
+
+    def _map_variables_to_bezier (self, vars: list): 
+        """ maps design variables to bezier (control points)"""
+        # must be overloaded
+
+    def _deviation_to_target_applying (self, variables) -> list:
+        """returns array of deviations at target_x when variables are applied to bezier"""
+        # must be overloaded
+
+    def _objectiveFn (self, variables ):  
+        """ returns norm2 value of y deviations of self to target y at x """
+        # must be overloaded
+
+
+    def run (self) :
+        """ 
+        Optimizes self to best fit to target (either single Side or both sides)
+        uses nelder meat root finding
+        """
+      
+        #-- map control point x,y to optimization variable 
+
+        variables_start = self._map_bezier_to_variables ()
+
+        # ----- objective function
+
+        f = lambda variables : self._objectiveFn (variables) 
+
+        # ----- nelder mead find minimum --------
+
+        max_iter  = self.nvar * 80 
+
+        res, niter = nelder_mead (f, variables_start,
+                    # step=0.05, no_improve_thr=1e-5,             
+                    step=0.02, no_improve_thr=1e-5,             
+                    no_improv_break=25, max_iter=max_iter,
+                    bounds = None)
+
+        variables = res[0]
+        score = res[1]
+
+        #-- evaluate the new y values on Bezier for the target x-coordinate
+
+        devi = self._deviation_to_target_applying (variables)            
+
+        self.norm2       = np.linalg.norm (devi)           # calc the 'real' norm2 (objFun uses another) 
+        self.niter       = niter
+        self.max_reached = (niter >= max_iter)
+
+        return 
+
+
+
+class Match_Side_Bezier (Match_Bezier):
+    """ 
+    Controller for matching a single Side_Airfoil with Bezier
     """
     def __init__ (self, side : 'Side_Airfoil_Bezier', target_side: 'Side_Airfoil'):
+        """match a single Side_Bezier to a target side 
 
-        self._side      = deepcopy (side)
+        Args:
+            side (Side_Airfoil_Bezier): the side with bezier to match 
+            target_side (Side_Airfoil): the target side 
+        """
+        super().__init__ ()
 
-        self._nvar      = 0                         # number of optimization variables
-        self._norm2     = 0                         # norm2 diviation of y points
-        self._niter     = 0                         # number of iterations needed
-        self._max_reached = False                   # max number of iterations reached
+        self._bezier = deepcopy (side.bezier)
+
+        # number of design variables 
+        self.ncp     = self.bezier.npoints
+        self.nvar    = (self.ncp - 2) * 2 - 1  # excl. le, te, x of le tangent
 
         #-- selected target points for objective function
         self._targets_x, self._targets_y   = self._define_targets(target_side)    
@@ -92,7 +176,13 @@ class Match_Side_Bezier:
     @property
     def bezier (self) -> Bezier:
         """ bezier curve of self"""
-        return self._side.bezier
+        return self._bezier
+    
+    @property
+    def targets_x (self): return self._targets_x
+
+    @property
+    def targets_y (self): return self._targets_y
 
     def _define_targets(self, target_side: 'Side_Airfoil'):
         """ returns target points where deviation is tested during optimization """
@@ -160,13 +250,12 @@ class Match_Side_Bezier:
                 pass                                    # skip leading edge
             elif icp == ncp-1:                      
                 pass                                    # skip trailing edge
-            elif icp == 1:                      
-                vars.append(cp_y[icp])                  # le tangent only y
+            elif icp == 1: 
+                vars.append(cp_y[icp])              # le tangent only y
             else:                                       
                 vars.append(cp_x[icp])                  # all control points in between 
                 vars.append(cp_y[icp])
         return vars
-
 
 
     def _map_variables_to_bezier (self, vars: list): 
@@ -174,6 +263,8 @@ class Match_Side_Bezier:
 
         cp_x, cp_y = self.bezier.points_x, self.bezier.points_y
         ncp = self.bezier.npoints
+        if len(vars) == 2: 
+            pass
         ivar = 0
         for icp in range (ncp): 
             if icp == 0: 
@@ -181,7 +272,7 @@ class Match_Side_Bezier:
             elif icp == ncp-1:                      
                 pass                                    # skip trailing edge
             elif icp == 1:    
-                cp_y[icp] = vars[ivar]
+                cp_y[icp] = vars[ivar]              # le tangent 
                 ivar += 1                  
             else:                                       
                 cp_x[icp] = vars[ivar]
@@ -191,77 +282,137 @@ class Match_Side_Bezier:
         self.bezier.set_points (cp_x, cp_y)
 
 
-    def _objectiveFn (self, variables ):  
-        """ returns norm2 value of y deviations of self to target y at x """
-            
+    def _deviation_to_target_applying (self, variables):
+        """returns array of deviations at target_x when variables are applied to bezier"""
+
         self._map_variables_to_bezier (variables)
 
         # evaluate the new y values on Bezier for the target x-coordinate
-        y_new = np.zeros (len(self._targets_y))
-        for i, target_x in enumerate(self._targets_x) :
-            y_new[i] = self.bezier.eval_y_on_x(target_x, fast=False, epsilon=1e-7)
+        y_new = np.zeros (len(self.targets_y))
+        for i, x in enumerate(self.targets_x) :
+            y_new[i] = self.bezier.eval_y_on_x(x, fast=False, epsilon=1e-7)
+
+        # calculate abs difference between bezier y and target y 
+        return np.abs((y_new - self.targets_y))
+
+
+    def _objectiveFn (self, variables ):  
+        """ returns norm2 value of y deviations of self to target y at x """
+
+        # evaluate difference with new bezier out of variables
+        devi = self._deviation_to_target_applying (variables)            
 
         # calculate norm2 of the *relative* deviations 
-        devi = np.abs((y_new - self._targets_y))
-        base = np.abs(self._targets_y)
+        base = np.abs(self.targets_y)
 
         # move base so targets with a small base (at TE) don't become overweighted 
-        shift = np.max (base) * 0.4
-    
+        shift = np.max (base) * 0.4    
         norm2 = np.linalg.norm (devi / (base+shift))
 
         return norm2 
 
 
 
-    def run (self) :
-        """ 
-        Optimizes self bezier to best fit to another airfoil side
-        uses nelder meat root finding
+class Match_Geo_Bezier (Match_Bezier):
+    """ 
+    Controller for matching a airfoil 'Geometry' (upper and lower side) with 
+    joined Bezier curves of upper and lower side
+
+    self uses Match_Side_Bezier for evaluating the deviation for a single side
+    """
+    def __init__ (self, geo : 'Geometry_Bezier', target_geo: 'Geometry'):
+        super().__init__ ()
+
+        self._has_joined_sides = geo.has_joined_sides
+
+        self._match_upper = Match_Side_Bezier (geo.upper, target_geo.upper)
+        self._match_lower = Match_Side_Bezier (geo.lower, target_geo.lower)
+
+        self.nvar = self._match_upper.nvar + self._match_lower.nvar
+        self.ncp  = self._match_upper.ncp  + self._match_lower.ncp
+
+    @property
+    def geo_result (self) -> 'Geometry_Bezier':
+        """ returns a new Geometry_Bezier as result of match run 
         """
+        # get beziers of upper and lower - build new Geometry_Bezier out of them 
+        bezier_upper = self._match_upper.bezier
+        bezier_lower = self._match_lower.bezier
 
-      
-        #-- map control point x,y to optimization variable 
+        geo = Geometry_Bezier (has_joined_sides = self._has_joined_sides)
+        geo.set_newSide_for (UPPER, bezier_upper.points_x, bezier_upper.points_y)
+        geo.set_newSide_for (LOWER, bezier_lower.points_x, bezier_lower.points_y)
 
-        variables_start = self._map_bezier_to_variables ()
-        nVars = len(variables_start)
-
-        # print_array_compact (var_start, header="var_start")
-
-        # ----- objective function
-
-        f = lambda variables : self._objectiveFn (variables) 
-
-        # ----- nelder mead find minimum --------
-
-        max_iter = nVars * 70 
-
-        res, niter = nelder_mead (f, variables_start,
-                    step=0.05, no_improve_thr=1e-5,             
-                    no_improv_break=25, max_iter=max_iter,
-                    bounds = None)
-
-        variables = res[0]
-        score = res[1]
-
-        self._niter = niter
-        self._max_reached = (niter >= max_iter)
-
-        #-- finally move control points to their new position 
-            
-        self._map_variables_to_bezier (variables)
+        return geo 
 
 
-        #-- evaluate the new y values on Bezier for the target x-coordinate
+    def _map_bezier_to_variables (self): 
+        """ maps bezier control points to design variables of objective function
+        Returns: 
+            list of design variables """
 
-        y_new = np.zeros (len(self._targets_x))
-        for i, target_x in enumerate(self._targets_x) :
-            y_new[i] = self.bezier.eval_y_on_x(target_x, fast=False, epsilon=1e-7)
+        vars_upper = self._match_upper._map_bezier_to_variables()
+        vars_lower = self._match_lower._map_bezier_to_variables()
 
-        devi = np.abs((y_new - self._targets_y))        
-        self._norm2 = np.linalg.norm (devi)           # calc the 'real' norm2 (objFun uses another) 
+        # join the vars  - excluding le tangent of lower (joined beziers)
+        if self._has_joined_sides:
+            vars_lower = vars_lower [1:]
 
-        return 
+        return vars_upper + vars_lower 
+
+
+    def _map_variables_to_bezier (self, variables: list): 
+        """ maps design variables to bezier (control points)"""
+
+        nvar_upper = self._match_upper.nvar
+
+        vars_upper = variables [0:nvar_upper]
+        vars_lower = variables [nvar_upper:]
+
+        # if joined - take the negative le tangent for lower side 
+        if self._has_joined_sides:
+            vars_lower = np.insert (vars_lower, 0, -vars_upper[0])  
+
+        self._match_upper._map_variables_to_bezier (vars_upper)
+        self._match_lower._map_variables_to_bezier (vars_lower)
+
+    def _deviation_to_target_applying (self, variables) -> list:
+        """deviation array as the sum of upper and lower side"""
+
+        nvar_upper = self._match_upper.nvar
+
+        vars_upper = variables [0:nvar_upper]
+        vars_lower = variables [nvar_upper:]
+
+        # if joined - take the negative le tangent for lower side 
+        if self._has_joined_sides:
+            vars_lower = np.insert (vars_lower, 0, -vars_upper[0])  
+
+        devi_upper = self._match_upper._deviation_to_target_applying (vars_upper)
+        devi_lower = self._match_lower._deviation_to_target_applying (vars_lower)
+
+        return devi_upper + devi_lower
+    
+
+    def _objectiveFn (self, variables : list):  
+        """ returns norm2 value of y deviations of self to target y at x """
+
+        nvar_upper = self._match_upper.nvar
+
+        vars_upper = variables [0:nvar_upper]
+        vars_lower = variables [nvar_upper:]
+
+        # if joined - take the negative le tangent for lower side 
+        if self._has_joined_sides:
+            vars_lower = np.insert (vars_lower, 0, -vars_upper[0])  
+
+        norm2_upper = self._match_upper._objectiveFn (vars_upper)
+        norm2_lower = self._match_lower._objectiveFn (vars_lower)
+
+        norm2 = (norm2_upper ** 2 + norm2_lower ** 2) ** 0.5
+        # print (f"{norm2_upper:.6f}  {norm2_lower:.6f}  {norm2:.6f}")
+        return norm2
+
 
 
 
@@ -701,10 +852,10 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         """
         super().__init__(None, None, name=name)
 
-        if px and py:
-            self._bezier    = Bezier(px,py)             # the bezier curve 
-        else:
+        if px is None or py is None:
             raise ValueError ("Bezier points missing")
+        else:
+            self._bezier    = Bezier(px,py)             # the bezier curve 
 
         # Bezier needs a special u cosinus distribution as the points are bunched
         # by bezier if there is high curvature ... 
@@ -998,8 +1149,8 @@ class Side_Airfoil_Bezier (Side_Airfoil):
                 var_dict['bounds'] = None                
                 vars.append(copy(var_dict))
 
-        nVars = len(vars)
-        if nVars == 0: return 0.0, 0, False
+        nvar = len(vars)
+        if nvar == 0: return 0.0, 0, False
 
         #-- direct initial population of bezier (old values could hurt move_point during melder nead)
 
@@ -1014,8 +1165,8 @@ class Side_Airfoil_Bezier (Side_Airfoil):
 
         #-- map vars to nelder mead vars 
 
-        var_start  = [0] * nVars 
-        var_bounds = [None] * nVars 
+        var_start  = [0] * nvar 
+        var_bounds = [None] * nvar 
         for i, var in enumerate (vars): 
             var_start[i]  = var['start']
             var_bounds[i] = var ['bounds']
@@ -1028,7 +1179,7 @@ class Side_Airfoil_Bezier (Side_Airfoil):
 
         # ----- nelder mead find minimum --------
 
-        max_iter = nVars * 70 
+        max_iter = nvar * 70 
 
         res, niter = nelder_mead (f, var_start,
                     step=0.05, no_improve_thr=1e-5,             
@@ -1969,13 +2120,18 @@ class Geometry_Bezier (Geometry):
 
     sideDefaultClass = Side_Airfoil
 
-    def __init__ (self):
+    def __init__ (self, has_joined_sides = False):
+        """new Geometry based on two Bezier curves for upper and lower side
+
+        Args:
+            has_joined_sides: upper and lower Bezier are joined at LE
+        """
         super().__init__(None, None)        
 
         self._upper      = None                 # upper side as Side_Airfoil_Bezier object
         self._lower      = None                 # lower side 
 
-        self._has_joined_sides = True          # upper and lower bezier are joined at LE 
+        self._has_joined_sides = has_joined_sides  # upper and lower bezier are joined at LE 
 
     
     @property
@@ -2019,7 +2175,7 @@ class Geometry_Bezier (Geometry):
         """creates either a new upper or lower side in self
         curveType is either UPPER or LOWER """
 
-        if px and py:
+        if not px is None and not py is None:
             if curveType == UPPER: 
                 self._upper = Side_Airfoil_Bezier (px, py, name=UPPER)
             elif curveType == LOWER:
