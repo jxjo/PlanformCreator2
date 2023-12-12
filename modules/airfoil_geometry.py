@@ -867,7 +867,8 @@ class Side_Airfoil_Bezier (Side_Airfoil):
 
         # the opposite side may be joined to self so LE tangent will have the same length 
         #  -> curvature equal on  upper and lower side 
-        self._joined_side     = None    
+        self._joined_side     = None                # the other, joined side
+        self._isJoined        = False               # self is the joined one?   
 
 
     def _u_distribution_bezier (self, nPoints):
@@ -928,9 +929,6 @@ class Side_Airfoil_Bezier (Side_Airfoil):
     def nPoints (self): 
         """ number of bezier control points """
         return len(self.bezier.points)
-    def set_nPoints(self, nPoints):
-        """ set the number of x,y points"""
-        self._u = self._u_distribution_bezier(nPoints)
 
 
     @property
@@ -952,29 +950,44 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         """ 
         set x,y of the mx point of self 
         """
-
         raise NotImplementedError
-    
+
+
     @property
-    def joined_side (self) -> 'Side_Airfoil_Bezier_Joined': 
+    def joined_side (self) -> 'Side_Airfoil_Bezier': 
         """ a side may be joined to self to allow equal LE tangent """
         return self._joined_side
 
-    def set_joined_side (self, aSide: 'Side_Airfoil_Bezier_Joined'):
+    def set_joined_side (self, aSide: 'Side_Airfoil_Bezier'):
 
-        if isinstance (aSide, Side_Airfoil_Bezier_Joined):
+        if isinstance (aSide, Side_Airfoil_Bezier):
             self._joined_side = aSide
             aSide._set_p1y (- self.bezier.points_y[1])           # negative = opposite
+            self._isJoined = False
         else: 
-            raise ValueError ("Joined side is not of type 'Side_Airfoil_Bezier_Joined'")
-
+            raise ValueError ("Joined side is not of type 'Side_Airfoil_Bezier'")
 
     @property
     def has_joined_side (self) -> bool:
         """ does self has a joined side """
         return not self._joined_side is None 
 
+    @property
+    def isJoined (self) -> bool:
+        """ self is the joined side """
+        return self._isJoined 
+    def set_isJoined (self, aBool: bool):
+        self._isJoined = aBool 
+        if self._isJoined:
+            self._joined_side = None
+
     # ------------------
+
+    def _set_p1y (self, y): 
+        """ set the y-coordinate of P1 which is the LE tangent """
+
+        self.bezier.set_point ( 1, 0.0, y) 
+
 
     def insert_controlPoint_at (self, x, y): 
         """ insert a new Bezier control point at x,y - taking care of order of points 
@@ -1078,151 +1091,11 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         self.bezier.set_point (-1, px[-1], y) 
 
 
-    def match_bezier_to (self, targetSide: Side_Airfoil) :
-        """ 
-        Optimizes self bezier to best fit to another airfoil side
-        uses nelder meat root finding
-
-        Returns: 
-        :nvar:   number of optimization variables 
-        score:  y-deviation at target points 
-        niter:  number of iterations needed
-        max_reached: max number of iterations reached 
-        """
-
-        #-- define targets x,y which should fit best 
-
-        i = 1
-        if   len(targetSide.x) > 120:
-            step = 6
-        elif len(targetSide.x) > 80:
-            step = 5
-        else: 
-            step = 4
-        targ_x = []
-        targ_y = []
-        while i < (len(targetSide.x) -1):
-            targ_x.append(targetSide.x[i])
-            targ_y.append(targetSide.y[i])
-            i += step
-        # print_array_compact (targ_y, header="targ_y")
-
-        #-- (start) position of control points 
-
-        ncp = self.nPoints
-        cp_x, cp_y = self.get_initial_bezier(targetSide, ncp)
-
-        self.set_controlPoints (cp_x, cp_y)
-      
-        #-- map control point x,y to optimization variable 
-
-        vars = []
-        for icp in range (ncp): 
-
-
-            if icp == 0: 
-                pass                                    # skip leading edge
-            elif icp == ncp-1:                      
-                pass                                    # skip trailing edge
-            elif icp == 1:                      
-                var_dict = {}
-                var_dict['icp']    = icp                # le tangent only y
-                var_dict['coord']  = 'y'  
-                var_dict['start']  = round(cp_y[icp],6)                
-                var_dict['bounds'] = None                
-                vars.append(var_dict)
-            else:                                       # all control points in between 
-                var_dict = {}
-                var_dict['icp']    = icp
-                var_dict['coord']  = 'x'                
-                var_dict['start']  = round(cp_x[icp],6) 
-                if ncp > 3 and icp == ncp-2:            # special case: last point not too close to TE 
-                    var_dict['bounds'] = (0.5, 0.95)
-                else: 
-                    var_dict['bounds'] =  None                
-                vars.append(var_dict)
-
-                var_dict = {}
-                var_dict['icp']    = icp
-                var_dict['coord']  = 'y'  
-                var_dict['start']  = round(cp_y[icp],6)                
-                var_dict['bounds'] = None                
-                vars.append(copy(var_dict))
-
-        nvar = len(vars)
-        if nvar == 0: return 0.0, 0, False
-
-        #-- direct initial population of bezier (old values could hurt move_point during melder nead)
-
-        # bezier_tmp = deepcopy (self)                # optimizer will work with this copy 
-        bezier_tmp = self  
-
-        for i, var in enumerate (vars): 
-            (px, py) = bezier_tmp.bezier.points[var['icp']]
-            if var['coord'] == 'x':  px = var['start']
-            else:                    py = var['start']
-            bezier_tmp.bezier.set_point (var['icp'], px, py)
-
-        #-- map vars to nelder mead vars 
-
-        var_start  = [0] * nvar 
-        var_bounds = [None] * nvar 
-        for i, var in enumerate (vars): 
-            var_start[i]  = var['start']
-            var_bounds[i] = var ['bounds']
-
-        # print_array_compact (var_start, header="var_start")
-
-        # ----- objective function
-
-        f = lambda vars_value : _match_y_objectiveFn (bezier_tmp, targ_x, targ_y, vars, vars_value) 
-
-        # ----- nelder mead find minimum --------
-
-        max_iter = nvar * 70 
-
-        res, niter = nelder_mead (f, var_start,
-                    step=0.05, no_improve_thr=1e-5,             
-                    no_improv_break=25, max_iter=max_iter,
-                    bounds = var_bounds)
-
-        var_result = res[0]
-        score = res[1]
-
-        #-- write back result in var_dict for convinience 
-
-        for i, var in enumerate (vars): 
-            var['result'] = var_result[i]
-
-        #-- finally move control points to their new position 
-        #   print_array_compact (var_result, header="vars")
-
-        for i, var in enumerate (vars): 
-            if var['coord'] == 'x':             # allow that a point overtooks its neighbour
-                self.move_controlPoint_to (var['icp'] , var['result'], None, allow_overtook=True)    
-            else: 
-                self.move_controlPoint_to (var['icp'] , None, var['result'])    # x remains unchanged
-
-
-        #-- evaluate the new y values on Bezier for the target x-coordinate
-        y_new = np.zeros (len(targ_x))
-        for i, target_x in enumerate(targ_x) :
-            y_new[i] = self.bezier.eval_y_on_x(target_x, fast=False, epsilon=1e-7)
-
-        devi = np.abs((y_new - targ_y))        
-        norm2 = np.linalg.norm (devi)           # calc the 'real' norm2 (objFun uses another) 
-
-        return norm2, niter, niter >= max_iter
-
-
-    def set_initial_bezier (self, targetSide: Side_Airfoil, ncp):
+    def set_controlPoints_closeTo (self, targetSide: Side_Airfoil, ncp):
         """ sets inital coordinates of control points  close to target side"""
-        cp_x, cp_y = self. get_initial_bezier (targetSide, ncp)
-        self.set_controlPoints (cp_x, cp_y)
-
-
-    def get_initial_bezier (self, targetSide: Side_Airfoil, ncp):
-        """ returns inital coordinates of control points """
+        
+        if self.isJoined:                               # preserve le tangent 
+            cp_y1_sav = self.bezier.points_y[1]
 
         cp_x, cp_y = np.zeros(ncp), np.zeros(ncp)
 
@@ -1242,33 +1115,20 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         # initial y values 
         for icp, xi in enumerate (cp_x): 
             if icp == 1:                                # special case y-start value of point 1
-                x = 0.1                                 #       take y-coord near LE
+                if self.isJoined:
+                    cp_y[icp]  = cp_y1_sav              # the other side will control my le tangent   
+                else: 
+                    x = 0.2                             # take a y-coord near LE
+                    cp_y[icp]  = round(targetSide.yFn (x), 6)                 
             else: 
                 x = xi          
-            cp_y[icp]  = round(targetSide.yFn (x), 6)                 
+                cp_y[icp]  = round(targetSide.yFn (x), 6)                 
 
-        return cp_x, cp_y
+        self.set_controlPoints (cp_x, cp_y)
 
-
-
-
-class Side_Airfoil_Bezier_Joined (Side_Airfoil_Bezier): 
-    """ 
-    1D line of an airfoil like upper, lower side based on a Bezier curce
-    with x 0..1
-
-    A 'joined' side get's the LE tangent point from the master side.
-    So the two sides, upper and lower will be connected at LE having the same 
-    curvature.
-
-    """
- 
-    isJoined = True                    # self is a joined side 
-
-    def _set_p1y (self, y): 
-        """ set the y-coordinate of P1 which is the LE tangent """
-
-        self.bezier.set_point ( 1, 0.0, y) 
+        # set le tangent of the joined side 
+        if self.has_joined_side:
+            self.joined_side._set_p1y (-cp_y[1])
 
 
 
@@ -2163,11 +2023,10 @@ class Geometry_Bezier (Geometry):
             # default side 
             px = [   0,   0.0,  0.25,   1]
             py = [   0, -0.04, -0.07,   0]  
+            self._lower = Side_Airfoil_Bezier (px, py, name=LOWER)
             if self.has_joined_sides:   
-                self._lower = Side_Airfoil_Bezier_Joined (px, py, name=LOWER)
+                self._lower.set_isJoined (True) 
                 self._upper.set_joined_side (self._lower)
-            else: 
-                self._lower = Side_Airfoil_Bezier (px, py, name=LOWER)
 
         return self._lower 
     
@@ -2175,15 +2034,14 @@ class Geometry_Bezier (Geometry):
         """creates either a new upper or lower side in self
         curveType is either UPPER or LOWER """
 
-        if not px is None and not py is None:
+        if not (px is None or py is None):
             if curveType == UPPER: 
                 self._upper = Side_Airfoil_Bezier (px, py, name=UPPER)
             elif curveType == LOWER:
+                self._lower = Side_Airfoil_Bezier (px, py, name=LOWER)
                 if self.has_joined_sides:   
-                    self._lower = Side_Airfoil_Bezier_Joined (px, py, name=LOWER)
+                    self._lower.set_isJoined (True)
                     self._upper.set_joined_side (self._lower)
-                else: 
-                    self._lower = Side_Airfoil_Bezier (px, py, name=LOWER)
             self._reset_lines()
 
     @property
@@ -2269,10 +2127,10 @@ class Geometry_Bezier (Geometry):
                 nPan_lower = int(nPanels / 2)
                 nPan_upper = nPan_lower + 1 
 
-        # that's it with bezier    
-        self.upper.set_nPoints (nPan_upper + 1)
-        self.lower.set_nPoints (nPan_lower + 1)
-
+        # that's it with bezier  
+        self.upper._u_distribution_bezier(nPan_upper + 1)
+        self.lower._u_distribution_bezier(nPan_lower + 1)
+  
         # reset chached values
         self._reset_lines()
 
@@ -2319,51 +2177,8 @@ class Geometry_Bezier (Geometry):
         return Side_Airfoil (new_x, lower_y, name=LOWER)
 
 
-# ------------ helper funtions  -----------------------------------
-
-
-def _match_y_objectiveFn (bezier_tmp : Side_Airfoil_Bezier, 
-                          targets_x, targets_y, vars_def, vars_value ):  
-    """ returns norm2 value of y deviations of self to target y at x """
-        
-    # the objective function is *not* in class Side_Bezier to ensure no side effects
-
-    penalty = 0.0
-
-    # set the new control point coordinates in Bezier (=None - do not change) 
-    for i, var in enumerate (vars_def): 
-        if var['coord'] == 'x':
-            # jxjo - test with overtook allowed 
-            new_value, _ = bezier_tmp.move_controlPoint_to (var['icp'] , vars_value [i], None, allow_overtook=True)    # y remains unchanged
-        else: 
-            _, new_value = bezier_tmp.move_controlPoint_to (var['icp'] , None, vars_value [i])    # x remains unchanged
-
-        if vars_value [i] != new_value:                 # value hurted move constraint 
-            # print ("   Var %d bounds rejection: %.5F - corrected to: %.5f" %(i, vars_value [i], new_value))
-            penalty += 0.1   
-
-
-    # evaluate the new y values on Bezier for the target x-coordinate
-    y_new = np.zeros (len(targets_x))
-    for i, target_x in enumerate(targets_x) :
-        y_new[i] = bezier_tmp.bezier.eval_y_on_x(target_x, fast=False, epsilon=1e-7)
-
-
-    # calculate norm2 of the *relative* deviations 
-    devi = np.abs((y_new - targets_y))
-    base = np.abs(targets_y)
-
-    # move base so targets with a small base (at TE) don't become overweighted 
-    shift = np.max (base) * 0.4
-  
-    norm2 = np.linalg.norm (devi / (base+shift))
-
-    return norm2 + penalty * norm2
-
-
 
 # ------------ test functions - to activate  -----------------------------------
-
 
 
 if __name__ == "__main__":

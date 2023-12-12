@@ -1905,13 +1905,13 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         curveType = objId
         if curveType == UPPER: 
-            airfoil_side = self.airfoil.geo.upper
-            airfoil_side_target = self.airfoilOrg.geo.upper
+            side = self.airfoil.geo.upper
+            side_target = self.airfoilOrg.geo.upper
         else:
-            airfoil_side = self.airfoil.geo.lower
-            airfoil_side_target = self.airfoilOrg.geo.lower
+            side = self.airfoil.geo.lower
+            side_target = self.airfoilOrg.geo.lower
 
-        airfoil_side.set_initial_bezier(airfoil_side_target, nPoints)
+        side.set_controlPoints_closeTo (side_target, nPoints)
 
         # update diagram                                        
         self.airfoil.reset()                                    # make splined curves like thickness invalid 
@@ -1924,8 +1924,8 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         """ match bezier curves of joined upper and lower to 'original' airfoil """
 
         opt = Match_Geo_Bezier (self.airfoil.geo, self.airfoilOrg.geo)
+        message = f"Matching Beziers of {UPPER} and {LOWER } side\n\n to \n\n{self.airfoilOrg.name} ..." 
 
-        message = f"Matching Beziers of {UPPER} and {LOWER } side to \n\n{self.airfoilOrg.name} ..." 
         Eval_With_ToolWindow (self, opt.run, message)
 
         self.airfoil.set_geo (opt.geo_result)
@@ -1938,32 +1938,34 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         self._match_result_info (None, opt)
 
 
-
-
     def match_side_bezier (self, curveType): 
         """ adapt bezier curve to 'original' airfoil """
 
         if curveType == UPPER: 
-            airfoil_side = self.airfoil.geo.upper
-            airfoil_side_target = self.airfoilOrg.geo.upper
+            side        = self.airfoil.geo.upper
+            side_target = self.airfoilOrg.geo.upper
         else:
-            airfoil_side = self.airfoil.geo.lower
-            airfoil_side_target = self.airfoilOrg.geo.lower
+            side        = self.airfoil.geo.lower
+            side_target = self.airfoilOrg.geo.lower
 
         #---------- run optimization with nelder mead ---------------------
 
-        opt = Match_Side_Bezier (airfoil_side, airfoil_side_target)
+        opt = Match_Side_Bezier (side, side_target)
+        message = f"Matching {curveType} side Bezier\n\n to \n\n{self.airfoilOrg.name} ..." 
 
-        message = f"Matching {curveType} side Bezier to \n\n{self.airfoilOrg.name} ..." 
         Eval_With_ToolWindow (self, opt.run, message)
-        airfoil_side.set_controlPoints (opt.bezier.points)
+        # tool = Eval_With_ToolWindow2 (self, opt.run, message)
+        # opt.run ()
+        # tool.close()
+
+        side.set_controlPoints (opt.bezier.points)
 
         # update diagram                                        
         self.airfoil.reset()                                    # make splined curves like thickness invalid 
         fireEvent  (self.ctk_root, AIRFOIL_CHANGED)             # update diagram 
 
         # user info 
-        self._match_result_info (airfoil_side, opt)
+        self._match_result_info (side, opt)
 
 
     def _match_result_info (self, side: Side_Airfoil_Bezier, opt: Match_Side_Bezier):

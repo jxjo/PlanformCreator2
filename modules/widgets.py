@@ -278,9 +278,11 @@ class Eval_With_ToolWindow (ctk.CTkToplevel):
         if self.winfo_exists():
             self.grab_set()
 
-        self.after (200, self._run_function)
+        # self.after (200, self._run_function)
+        self.update()
+        self._run_function ()
 
-        self.master.wait_window(self)
+        # self.master.wait_window(self)
 
 
     def close (self): 
@@ -290,13 +292,97 @@ class Eval_With_ToolWindow (ctk.CTkToplevel):
 
     def _run_function (self):
         """ run the function ..."""
-        self.deiconify()
+        # self.deiconify()
         print ("function startet")
         self._functionFn()
         print ("function ended")
-        self.after (100, self.close)
+        # self.after (100, self.close)
+        self.close ()
 
   
+
+class Eval_With_ToolWindow2 (ctk.CTkToplevel):
+    """ evals functionFn and shows a tool window during excution"""
+
+
+    def __init__(self, master : ctk.CTkFrame, 
+                 functionFn,                  
+                 message: str, 
+                 width: int = 300, height: int = 150):
+        """evals functionFn and shows a tool window during excution
+
+        Args:
+            master: parent frame 
+            functionFn: function to be evluated
+            message (str): message text during execution.
+            width  (optional): width of tool window. Defaults to 300.
+            height (optional): height of tool window. Defaults to 150.
+        """
+   
+        super().__init__(master)
+
+        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+        self.configure (fg_color=fg_color)
+        self.configure (bg_color=bg_color)
+
+        self._functionFn = functionFn
+
+        self.width   = 250 if width<250 else width
+        self.height  = 150 if height<150 else  height
+
+        master_width  = master.winfo_width()
+        master_height = master.winfo_height()
+        if master_height < 250 or master_width < 250: 
+            master = self._root()                   # self.winfo_toplevel() doesn't work here 
+            master_width  = master.winfo_width()
+            master_height = master.winfo_height()
+        master_x      = master.winfo_x()
+        master_y      = master.winfo_y()
+
+        self.spawn_x = int(master_width  * .5 + master_x - .5 * self.width + 7)
+        self.spawn_y = int(master_height * .5 + master_y - .5 * self.height + 20)
+
+        self.after(10)
+        self.geometry(f"{self.width}x{self.height}+{self.spawn_x}+{self.spawn_y}")
+
+        self.overrideredirect(True)                 # remove titlebar 
+
+        self.message = message
+        self.border_width = 1
+        
+        # ---------------
+
+        self.message_text = ctk.CTkButton(self,  width=self.width-40, height=120, corner_radius=0, 
+                                          text=self.message, fg_color="transparent", text_color=cl_styles [STYLE_NORMAL],
+                                          hover=False, image=None) #
+        self.message_text._text_label.configure(wraplength=self.width *0.8, justify="center")
+        self.message_text.grid(row=1, column=1, sticky="nwes")
+        
+        self.grid_columnconfigure(0, weight=0)
+        self.grid_columnconfigure(1, weight=4)
+        self.grid_columnconfigure(2, weight=0)
+        self.grid_rowconfigure(1, weight=1)   
+
+        # ---------------
+
+        if self.winfo_exists():
+            self.grab_set()
+
+        # self.after (200, self._run_function)
+
+        self.update()
+
+
+    def wait (self):
+        self.master.wait_window(self)
+
+    def close (self): 
+        """close self """
+        self.grab_release()
+        self.destroy()
+
+
 
 #-------------------------------------------------------------------------------
 # Widgets  
