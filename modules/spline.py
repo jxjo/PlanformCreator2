@@ -607,7 +607,7 @@ class Bezier:
         return
 
     @property
-    def points (self): 
+    def points (self) -> list: 
         """ the control points as list of tuples of self """
         if not (self._px is None or self._py is None):
             return list(zip(self._px,self._py))   
@@ -620,14 +620,14 @@ class Bezier:
         return len (self._px) 
     
     @property
-    def points_x (self):  
+    def points_x (self) -> list:  
         """ x coordinate of control points of self """
-        return self._px
+        return list(self._px)
 
     @property
-    def points_y (self):  
+    def points_y (self) -> list:  
         """ y coordinate of control points of self """
-        return self._py
+        return list(self._py)
 
     def set_points(self, px_or_p, py=None):
         """  (re) sets the definition points of the Bezier curve

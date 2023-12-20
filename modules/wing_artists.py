@@ -37,9 +37,9 @@ class CurrentSection_Artist (Artist):
     def __init__ (self, axes, modelFn, **kwargs):
         super().__init__ (axes, modelFn, **kwargs)
 
-        # yPos limits for movement of section 
-        self._leftLimit  = None
-        self._rightLimit = None
+        # limits for movement of section 
+        self._limits_pos   = None
+        self._limits_chord = None
 
         # show mouse helper / allow drag of points 
         self.section_line_artist = None
@@ -47,6 +47,11 @@ class CurrentSection_Artist (Artist):
         self.chord_marker_anno   = None
         self.pos_marker_artist   = None
         self.pos_marker_anno     = None
+
+        self.outline_artist      = None
+
+        self._userInfo_shown     = False
+
 
     @property   
     def wing (self) -> Wing:
@@ -72,7 +77,7 @@ class CurrentSection_Artist (Artist):
         """
         if (not aLineLabel is None and aLineLabel != self._curLineLabel):    # only when changed do something
             self._curLineLabel = aLineLabel
-            if self.show:                       # view is switched on by user? 
+            if self.show and figureUpdate:                       # view is switched on by user? 
                 self.plot (figureUpdate=figureUpdate)
 
 
@@ -80,16 +85,27 @@ class CurrentSection_Artist (Artist):
         """ do plot of wing sections in the prepared axes   
         """ 
 
-        if self.curSection is None: 
-            return
-        else: 
-            # coordinates of line and limits for movement by mouse 
+        if self.curSection is None: return
+
+        # coordinates of line and limits for movement by mouse 
+        if self._norm: 
+            y_sec, x_sec =  self.curSection.norm_line()
+            self._limits_pos = self.curSection.limits_norm_yPos ()
+        else:
+            y_sec, x_sec =  self.curSection.line()
+            self._limits_pos = self.curSection.limits_yPos ()
+
+        # plot animated planform outline for trapezoid planform when changing section
+        if self.curSection.hasFixPosChord():
             if self._norm: 
-                y_sec, x_sec =  self.curSection.norm_line()
-                self._leftLimit, self._rightLimit = self.curSection.limits_norm_yPos ()
-            else:
-                y_sec, x_sec =  self.curSection.line()
-                self._leftLimit, self._rightLimit = self.curSection.limits_yPos ()
+                y, x = self.wing.planform.norm_chord_line () 
+                self._limits_chord = self.curSection.limits_normChord ()
+            else: 
+                y, x = self.wing.planform.linesPolygon()
+                self._limits_chord = self.curSection.limits_chord ()
+            p = self.ax.plot(y, x, 'None', color=cl_planform, animated=True)
+            self.outline_artist = self._add(p) 
+
 
         # plot current section as a thick line 
         p = self.ax.plot(y_sec, x_sec, '-', color=cl_wingSection_fix,  linewidth=2.5)
@@ -98,6 +114,7 @@ class CurrentSection_Artist (Artist):
         if self.mouseActive and not self.curSection.isRootOrTip:        # don't move root or tip
 
             self.show_mouseHelper (self.curSection, y_sec, x_sec)
+            self.show_mouseUserInfo ()
 
             # make section points draggable - install callback when move is finished
             self._dragManagers.append (DragManager (self.ax, self.chord_marker_artist, 
@@ -111,12 +128,25 @@ class CurrentSection_Artist (Artist):
             self._connectDrawEvent()
 
 
+    def show_mouseUserInfo (self):
+        # show info for section select #
+
+        if self.mouseActive and not self._userInfo_shown:      
+            text = 'click to on section to select, move at helper points'
+            p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
+                              zorder=9, transform=self.ax.transAxes, 
+                              horizontalalignment='center', verticalalignment='bottom')
+            self._add(p)
+            self._userInfo_shown = True 
+
+
+
     def show_mouseHelper (self, section, y_sec, x_sec): 
         """ show the helper points for section movement"""
 
         # ! animated=True must be set for all artists moving around !
-        # highlight section
 
+        # highlight section
         p = self.ax.plot (y_sec, x_sec, '--', linewidth=0.5, color= cl_wingSection_fix, animated=True) 
         
         self.section_line_artist = self._add(p) 
@@ -127,7 +157,12 @@ class CurrentSection_Artist (Artist):
         
         self.chord_marker_artist= self._add(p) 
 
-        p = self.ax.annotate('move by chord', color=cl_userHint, backgroundcolor= cl_background,
+        if self.curSection.hasFixPosChord():
+            text = 'change chord'
+        else: 
+            text = 'move by chord'
+
+        p = self.ax.annotate(text, color=cl_userHint, backgroundcolor= cl_background,
                         xy=(y_sec [0], x_sec[0]), ha='left', va= 'top', fontsize = 'small',
                         xytext=(8, -5), textcoords='offset points', animated=True)
         self._add(p)
@@ -151,7 +186,12 @@ class CurrentSection_Artist (Artist):
                          animated=True, pickradius=10)   
         self.pos_marker_artist = self._add(p)
 
-        p = self.ax.annotate('move by pos', color=cl_userHint, backgroundcolor= cl_background,
+        if self.curSection.hasFixPosChord():
+            text = 'change pos'
+        else: 
+            text = 'move by pos'
+
+        p = self.ax.annotate(text, color=cl_userHint, backgroundcolor= cl_background,
                         xy=(x, y), ha=ha, va= va, fontsize = 'small', annotation_clip=False,
                         xytext=xytext, textcoords='offset points', animated=True)
         self.pos_marker_anno = self._add(p)
@@ -164,8 +204,8 @@ class CurrentSection_Artist (Artist):
 
         # is new pos between left and right section? 
         new_yPos = xm
-        new_yPos = max (self._leftLimit,  new_yPos)
-        new_yPos = min (self._rightLimit, new_yPos)
+        new_yPos = max (self._limits_pos[0], new_yPos)
+        new_yPos = min (self._limits_pos[1], new_yPos)
         # new_yPos = round(new_yPos,1)
 
         # update new section pos
@@ -195,6 +235,16 @@ class CurrentSection_Artist (Artist):
             text = "%.1f" % x
         self.pos_marker_anno.set ( text=text)
 
+        # plot animated planform outline for trapezoid planform when changing section
+        if self.curSection.hasFixPosChord():
+            if self._norm: 
+                y, x = self.wing.planform.norm_chord_line () 
+            else: 
+                y, x = self.wing.planform.linesPolygon()
+            self.outline_artist.set_xdata(y)
+            self.outline_artist.set_ydata(x)
+            self.outline_artist.set_linestyle(':')
+
         self.draw_animated_artists()
 
 
@@ -203,26 +253,57 @@ class CurrentSection_Artist (Artist):
 
         # get new coordinates (when dragged) 
         xm,ym = self.chord_marker_artist.get_xydata()[0]
-         
-        # is new pos between left and right section 
-        new_yPos = xm
-        new_yPos = max (self._leftLimit,  new_yPos)
-        new_yPos = min (self._rightLimit, new_yPos)
 
-        # get chord at this position 
-        if self.norm: 
-            new_yPos_norm = new_yPos
+        if self.curSection.hasFixPosChord():
+
+            # trapezoid planform: "by Chord" changes diredctly the chord length of this section
+            if self.norm: 
+                new_norm_chord = ym
+                new_norm_chord = max (self._limits_chord[0], new_norm_chord)
+                new_norm_chord = min (self._limits_chord[1], new_norm_chord)
+
+                self.curSection.set_norm_chord (new_norm_chord)
+            else: 
+                y_sec, x_sec =  self.curSection.line()
+                new_chord = x_sec[1] - ym
+                new_chord = max (self._limits_chord[0], new_chord)
+                new_chord = min (self._limits_chord[1], new_chord)
+                self.curSection.set_chord (new_chord)
+
+            # plot animated planform outline for trapezoid planform when changing section
+            if self._norm: 
+                y, x = self.wing.planform.norm_chord_line () 
+            else: 
+                y, x = self.wing.planform.linesPolygon()
+            self.outline_artist.set_xdata(y)
+            self.outline_artist.set_ydata(x)
+            self.outline_artist.set_linestyle(':')
+
         else:
-            new_yPos_norm = new_yPos / self.wing.halfwingspan
-        new_norm_chord = self.wing.planform.norm_chord_function(new_yPos_norm, fast=False) 
-        # update new section pos
-        self.curSection.set_norm_chord (new_norm_chord)
+
+            # normal planform -  "by Chord" moves the section to a new chord position 
+
+            # is new pos between left and right section 
+            new_yPos = xm
+            new_yPos = max (self._limits_pos[0], new_yPos)
+            new_yPos = min (self._limits_pos[1], new_yPos)
+
+            # get chord at this position 
+            if self.norm: 
+                new_yPos_norm = new_yPos
+            else:
+                new_yPos_norm = new_yPos / self.wing.halfwingspan
+            new_norm_chord = self.wing.planform.norm_chord_function(new_yPos_norm, fast=False) 
+            # update new section pos
+            self.curSection.set_norm_chord (new_norm_chord)
+
+
+        # draw new section line 
         if self.norm: 
             y_sec, x_sec =  self.curSection.norm_line()
         else:
             y_sec, x_sec =  self.curSection.line()
 
-        # draw new section line 
         self.section_line_artist.set_xdata(y_sec)
         self.section_line_artist.set_ydata(x_sec)
 
@@ -235,6 +316,7 @@ class CurrentSection_Artist (Artist):
             self.chord_marker_anno.set ( text="%.3f" % self.curSection.norm_chord)
         else:
             self.chord_marker_anno.set ( text="%.1f" % self.curSection.chord)
+
 
         self.draw_animated_artists()
 
@@ -339,8 +421,6 @@ class Planform_Artist (Artist):
                                             callback_draw_animated = self.draw_animated_banana,
                                             callback_on_moved=self._moveCallback))
                 
-        self._show_wingData(y, x)
-
         # connect to draw event for initial plot of the animated artists all together
         self._connectDrawEvent()
 
@@ -544,31 +624,133 @@ class Planform_Artist (Artist):
         self.draw_animated_artists()
 
 
-    def _show_wingData (self, x, y):
-        """ x,y coordinates of the closed polygon"""
+# ----------------------------------
 
-        # Planform name
-        if self.planform.hingeAngle < 2.0: 
-            yText = 0.95
-            va = 'top'
-        else:
-            yText = 0.09
-            va= 'bottom'
-        p = self.ax.text (0.04, yText, self.planform.wing.name, color=cl_labelGrid, fontsize = 'x-large',
+
+class Wing_Artist (Artist):
+    """Plot the outline of the wing planform.
+    """
+
+    def __init__ (self, axes, modelFn, planform=None, **kwargs):
+        super().__init__ (axes, modelFn, **kwargs)
+
+        self.set_showLegend (False)
+
+    @property
+    def wing (self) -> Wing:
+        return self.model
+
+    @property
+    def planform (self) -> Planform:
+        return self.model.planform
+
+
+    def _plot(self):
+    
+        # planform outline 
+        x, y = self.planform.linesPolygon()
+        area, aspectRatio = self.planform.calc_area_AR (x,y)
+
+        # hinge line
+        yh, hinge = self.planform.hingeLine()
+
+        # flaaps
+        flaps = self.planform.wing.getFlaps()
+
+        for mirror in [1, -1]:
+
+            p = self.ax.plot(mirror * x, y,  '-', linewidth=0.8, color=cl_planform, label= "Planform")  
+            self._add (p)
+            p = self.ax.fill(mirror * x, y, linewidth=0, color=cl_planform, alpha=0.08)    
+            self._add(p)
+
+            flap : Flap
+            for flap in flaps:   
+
+                p = self.ax.plot(mirror * flap.y, flap.x, color = cl_planform, linewidth=0.5)
+                self._add(p)
+
+                p = self.ax.fill(mirror * flap.y, flap.x, color = cl_planform, linewidth=3, alpha=0.05)   # color from cycler 
+                self._add(p)
+
+            p = self.ax.plot(mirror * yh, hinge,   '-', linewidth=0.5, label="Hinge line", color='springgreen')
+            self._add (p)
+
+        # print data 
+        self._print_title()
+        self._print_wingData(area, aspectRatio)
+        # airfoil names          
+        section : WingSection
+        for section in self.wing.wingSections:
+            if not section.airfoil.isStrakAirfoil:
+                self._print_airfoil_names (section)
+
+
+        # set ticks 
+        self._add_xticks ([-self.planform.halfwingspan, 0, self.planform.halfwingspan])
+        self._add_yticks ([0, self.planform.rootchord])
+
+
+
+    def _print_title (self):
+        """ wing name as title"""
+
+        yText = 0.90
+        va = 'top'
+        p = self.ax.text (0.045, yText, self.planform.wing.name, color=cl_labelGrid, fontsize = 'xx-large',
                           transform=self.ax.transAxes, horizontalalignment='left', verticalalignment=va)
         self._add (p)   
 
-        # wing data 
-        area, aspectRatio = self.planform.calc_area_AR (x,y)
-        text  = "Wing span %.0f mm\n" % (self.planform.halfwingspan * 2)
-        text += "Wing area %.1f dm²\n" % (area * 2 / 10000)
-        text += "Aspect ratio %.1f\n" % (aspectRatio)
 
-        p = self.ax.text (0.99, 0.0, text, color=cl_labelGrid, # fontsize = 'small',
-                          transform=self.ax.transAxes, 
-                          horizontalalignment='right', verticalalignment='bottom')
+    def _print_wingData (self, area, aspectRatio):
+        """ print wing data """
+ 
+        xa = 0.088
+
+        if self.wing.hingeAngle > 5: 
+            ya= 0.7
+        else: 
+            ya = 0.08 
+
+        self._add (print_text (self.ax,    'Wing span','right',(xa,ya),( 0,36), cl_textHeader, xycoords='axes fraction'))
+        data = "%.0f mm" % (self.wing.halfwingspan * 2) 
+        self._add (print_text (self.ax,           data,'left' ,(xa,ya),(10,36), cl_text, xycoords='axes fraction'))
+
+        self._add (print_text (self.ax,    'Wing area','right',(xa,ya),( 0,24), cl_textHeader, xycoords='axes fraction'))
+        data = "%.1f dm²" % (area * 2 / 10000)
+        self._add (print_text (self.ax,           data,'left', (xa,ya),(10,24), cl_text, xycoords='axes fraction'))
+
+        self._add (print_text (self.ax, 'Aspect ratio','right',(xa,ya),( 0,12), cl_textHeader, xycoords='axes fraction'))
+        data = "%.1f" % (aspectRatio)
+        self._add (print_text (self.ax,           data,'left', (xa,ya),(10,12), cl_text, xycoords='axes fraction'))
+
+        self._add (print_text (self.ax,  'Hinge angle','right',(xa,ya),( 0, 0), cl_textHeader, xycoords='axes fraction'))
+        data = "%.1f °" % (self.wing.hingeAngle)
+        self._add (print_text (self.ax,           data,'left', (xa,ya),(10, 0), cl_text, xycoords='axes fraction'))
+
+
+
+    def _print_airfoil_names (self, section: WingSection): 
+        """ print airfoil name and nickname below the planform """
+
+        y, le_to_te = section.line()
+
+        marker_y = 0.04                         # in axis coordinates
+        marker_x = y[0]                         # in data coordinates
+        if section.airfoilNick():
+            nickname = "'"+ section.airfoilNick() + "'" + "\n"
+        else:
+            nickname = ''
+
+        text = nickname + section.airfoil.name
+
+        p = self.ax.text (marker_x, marker_y, text, color=cl_textHeader, backgroundcolor= cl_background,
+                          transform=self.ax.get_xaxis_transform(), fontsize='small',
+                          horizontalalignment='left', verticalalignment='bottom',
+                          rotation=90)
         self._add (p)   
-       
+
+      
 
 # ----------------------------------
 
@@ -1050,28 +1232,6 @@ class Sections_Artist (Artist):
         # activate event for clicking on line 
         if self._pickActive: 
             self._connectPickEvent ()
-            if self.mouseActive:      
-                self.show_mouseHelper ()
-
-
-    def show_mouseHelper (self):
-        """ show info for section select"""
-
-        wing : Wing = self.model
-
-        if len(wing.wingSections) > 2:
-            iSec = -(-len(wing.wingSections) // 2) - 1                # trick to round up
-
-            if self.norm:
-                y_sec, x_sec = wing.wingSections [iSec].norm_line()
-            else:
-                y_sec, x_sec = wing.wingSections [iSec].line()
-
-            p = self.ax.annotate('click to select', color=cl_userHint, fontsize = 'small',
-                    xy=(y_sec [0], (x_sec[0] + x_sec[1])/3), ha='left', va= 'top',
-                    xytext=(6, 0), textcoords='offset points')
-            self._add(p)
-
 
 
     def plot_markers (self, y, le_to_te, section: WingSection): 
@@ -1134,7 +1294,7 @@ class Sections_Artist (Artist):
             label = str(section.wing.wingSectionIndexOf (section))
 
         p = self.ax.text (marker_top_y, marker_top_x, "%s" % label, ha='center', va='bottom',
-                          color = cl_wingSection_fix, fontsize = 'large')   
+                          color = cl_wingSection_fix, fontsize = 'medium')   
         self._add (p)   
 
 
@@ -1419,8 +1579,9 @@ class AirfoilName_Artist (Artist):
 
         section : WingSection
         for section in self.wingSections:
-            y, le_to_te = section.line()
-            self.plot_markers (y, le_to_te, section)
+            if not section.airfoil.isStrakAirfoil:
+                y, le_to_te = section.line()
+                self.plot_markers (y, le_to_te, section)
             
 
     def plot_markers (self, y, le_to_te, section: WingSection): 

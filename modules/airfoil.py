@@ -103,7 +103,6 @@ class Airfoil:
             if not os.path.isfile(checkPath):
                 ErrorMsg ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
                 self._name = "-- Error --"
-                raise ValueError (f"Cannot create airfoil on '{checkPath}'")
             else:
                 self.pathFileName = pathFileName
                 self._name = os.path.splitext(os.path.basename(self.pathFileName))[0]  # load will get the real name
@@ -517,7 +516,7 @@ class Airfoil:
         """basic save of self to its pathFileName
         """
         if self.isLoaded: 
-            self._write_toFile (self.pathFileName, self.name, self.x ,self.y)
+            self._write_to_file ()
             self.set_isModified (False)
 
 
@@ -528,13 +527,19 @@ class Airfoil:
 
         Returns: 
             newPathFileName from dir and destName 
-        """        
-        newPathFileName = self.copyAs (dir = dir, destName = destName)
-        self.pathFileName =  newPathFileName
+        """     
         if destName: 
-            self.set_name (destName)
+            self.set_name (destName)  
+
+        # create dir if not exist - build new airfoil filename
+        if dir: 
+            if not os.path.isdir (dir):
+                os.mkdir(dir)
+            self.set_pathFileName (os.path.join (dir, self.name) + '.dat', noCheck=True)
+
+        self.save()
         self.set_isModified (False)
-        return newPathFileName
+        return self.pathFileName
 
 
     def cloneTo (self, dir : str = None, destName : str = None) -> 'Airfoil':
@@ -614,14 +619,13 @@ class Airfoil:
         return airfoil.pathFileName
 
 
-    def _write_toFile (self, pathFileName, destName, x ,y ):
-        # writes x,y to file in .dat-format. Directory in pathFileName must exist"
+    def _write_to_file (self):
+        """ writes .dat file of to self.pathFileName"""
 
-        # write header and coordinates
-        with open(pathFileName, 'w+') as file:
-            file.write("%s\n" % destName)
-            for i in range (len(x)):
-                file.write("%.7f %.7f\n" %(x[i], y[i]))
+        with open(self.pathFileName, 'w+') as file:
+            file.write("%s\n" % self.name)
+            for i in range (len(self.x)):
+                file.write("%.7f %.7f\n" %(self.x[i], self.y[i]))
             file.close()
 
 
@@ -629,12 +633,14 @@ class Airfoil:
         """
         Repanel self with the current values of nPointsNew, le_ and te_bunch."""
 
-        # new paenl distribution for upper and lower 
+        # new panel distribution for upper and lower 
         if not self.geo.isBasic: 
             self.geo.repanel (nPanels= self.nPanelsNew, 
                               le_bunch= self.le_bunch, te_bunch = self.te_bunch)
             
             self.set_xy (*self.geo.xy)
+        else: 
+            raise ValueError (f"{self} may not be repaneled")
 
 
     def normalize (self):
@@ -726,18 +732,25 @@ class Airfoil_Bezier(Airfoil):
     isBezierBased  = True
 
 
-    def __init__(self, name = None, workingDir= None, has_joined_sides = False):
+    def __init__(self, name = None, workingDir= None):
         """
         Main constructor for new Airfoil
 
         Args:
             pathFileName: optional - string of existinng airfoil path and name \n
             name: optional - name of airfoil - no checks performed 
-            has_joined_sides: upper and lower Bezier are joined at LE
         """
         super().__init__( name = name, workingDir= workingDir)
 
-        self._has_joined_sides = has_joined_sides  # upper and lower bezier are joined at LE 
+        self._geometryClass  = Geometry_Bezier     # geometry startegy 
+
+    @property
+    def pathFileName_bezier (self) -> str: 
+        """ pathfileName of the Bezier definition file """
+        if self.pathFileName:  
+            return os.path.splitext(self.pathFileName)[0] + ".bez"
+        else: 
+            return None 
 
     @property
     def isLoaded (self): 
@@ -747,18 +760,25 @@ class Airfoil_Bezier(Airfoil):
     def geo (self) -> Geometry_Bezier:
         """ the geometry strategy of self"""
         if self._geo is None: 
-            self._geo = Geometry_Bezier (has_joined_sides=self._has_joined_sides)
+            self._geo = self._geometryClass ()
         return self._geo
 
     def set_geo (self, geometry: Geometry_Bezier):
         """ set new geometry bezier object  """
-        if not isinstance (geometry, Geometry_Bezier): return 
+        if not isinstance (geometry, self._geometryClass): return 
         self._geo = geometry  
+
+
+    def set_xy (self, x, y):
+        """ Bezier - do nothing """
+
+        # overloaded - Bezier curve in Geometry is master of data 
+        pass
 
 
     def set_newSide_for (self, curveType, px,py): 
         """creates either a new upper or lower side in self"""
-        self.geo.set_newSide_for (self, curveType, px,py)
+        self.geo.set_newSide_for (curveType, px,py)
         self.set_isModified (True)
 
     @property
@@ -835,28 +855,27 @@ class Airfoil_Bezier(Airfoil):
 
         
 
-    def _write_toFile (self, pathFileName, airfoilName, x ,y ):
+    def _write_to_file (self):
         # writes x,y to file in 
 
         #  .dat-format (normal airfoil write 
-        super()._write_toFile (pathFileName, airfoilName, x ,y )
+        super()._write_to_file ()
 
         #  .bez-format for CAD etc and 
 
         # filename - remove .dat - add .bez 
-        bez_pathFileName = os.path.splitext(pathFileName)[0] + ".bez"
-        with open(bez_pathFileName, 'w+') as file:
+        with open(self.pathFileName_bezier, 'w+') as file:
 
             # airfoil name 
-            file.write("%s\n" % airfoilName)
+            file.write("%s\n" % self.name)
 
             file.write("Top Start\n" )
-            for p in self.upper.controlPoints:
+            for p in self.geo.upper.controlPoints:
                 file.write("%13.10f %13.10f\n" %(p[0], p[1]))
             file.write("Top End\n" )
 
             file.write("Bottom Start\n" )
-            for p in self.lower.controlPoints:
+            for p in self.geo.lower.controlPoints:
                 file.write("%13.10f %13.10f\n" %(p[0], p[1]))
             file.write("Bottom End\n" )
 

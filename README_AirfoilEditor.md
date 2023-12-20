@@ -11,18 +11,23 @@ Main features:
 * View the curvature of the airfoil surface
 * Repanel and normalize the airfoil
 * Modify the geometry parameters thickness, camber and their high points 
-* Set trailing edge gap  
+* Set trailing edge gap 
+* Merge an airfoil with another airfoil 
 * Create a Bezier based 'copy' of an airfoil 
 
 The driver for this app was to overcome some of the artefacts using xfoils geometry routines (for example used in Xflr5) when trying to create geometric 'high quality' airfoils. The focus of the app is on pure geometry work with airfoils. 
 
 ## Basic concepts
 
-Like in Xfoil a (cubic) spline is created out of the coordinates of the airfoils .dat file. Based on the spline, the geometry information like thickness and camber is evaluated.
+The `AirfoilEditor` implements different "strategies" to analyse and modify the geometry of a coordinate based airfoil definition comingg from the airfoils '.dat' file.
 
-Also the position of the 'real' leading edge, which may differ from the zero-coordinates leading edge is determined on the spline. When 'normalizing' the airfoil, this 'real' leading edge is taken in an iteration to rotate, stretch and move the airfoil to become 0,0 - 1,0 normalized.
+- 'Linear interpolation' - intermediate points between two coordinate points are evaluated with a simple linear interpolation. This is used for fast preview and basic operations
+- 'Cubic spline interpolation' - a cubic spline is built based on the airfoils coordinate points. This allows to evlauate intermediate points with high precision 
+- 'Bezier curve approximation' - an existing airfoil is approximated with two Bezier curves for upper and lower side.
 
-For thickness and camber geometry operations the airfoil (spline) is splitted into two new splines representing thickness and camber distribution. For moving the highpoint of either thickness or camber a mapping spline for the airfoil coordinates is used quite similar to approach implemented in xfoil. After these operations the airfoil is rebuild out of thickness and camber. 
+The spline interpolation is used to find the position of the 'real' leading edge, which may differ from the leading edge of the coordinates (which is the point with the smallest x-value). When 'normalizing' the airfoil, the 'real' leading edge is taken in an iteration to rotate, stretch and move the airfoil to become 0,0 - 1,0 normalized.
+
+For thickness and camber geometry operations the airfoil (spline) is splitted into two new splines representing thickness and camber distribution. For moving the highpoint of either thickness or camber a mapping spline for the airfoil coordinates is used quite similar to the approach implemented in xfoil. After these operations the airfoil is rebuild out of thickness and camber. 
 
 Repaneling is based on a modified cosinus distribution of the airfoil points on the arc of the spline. This differs from the xfoil approach but the repanel shows are 'nice' behaviour in aero calculation. 
 
@@ -45,10 +50,13 @@ A little bit hidden is the feature to define a (new) airfoil based on two Bezier
 
 The control points of the Bezier curve can be moved by mouse within their individual boundaries. 
 
-The 'Auto adjust' function performs a best match of the Bezier curve to an existing airfoil. For this a Simplex optimization (Nelder Mead) is performed to minimize the norm2 deviation between the Bezier curve and the target airfoil. 
+The 'Match' function performs a best match of the Bezier curve to an existing airfoil. For this a Simplex optimization (Nelder Mead) is performed to 
+- minimize the norm2 deviation between the Bezier curve and the target airfoil
+- align the curvature of the Bezier curve at leading and trailing to the targets curvature.  
 
 
 ![PC2](images/AirfoilEditor_bezier.png "Screenshot of Bezier curve definition")
+<sup>Dialog for Bezier curve approximation. In this example the upper Bezier curve having 7 control points was already 'Matched' using Simplex optimization. </sup>
 
 
 ##  Install

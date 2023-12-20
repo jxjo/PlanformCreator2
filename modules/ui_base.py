@@ -16,22 +16,382 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # use matplotlib
 from artist             import Plot_Toolbar
 
 
+#------- Helper function -----------------------------------------
 
-#------------------------------------------------
+def set_initialWindowSize (tkwindow,
+                           width = None, height = None,  
+                           widthFrac = None, heightFrac = None):
+    """
+    Set size and position of tkinter window in fraction of screensize
 
-def set_initialWindowSize (tkwindow, widthFrac=0.9, heightFrac=0.8):
-    """ set size and position of tkinter window in fraction of screensize"""
+    Args:
+        tkwindow: tk window to set size 
+        width:      width in px  - default 600
+        height:     height in px - default 400
+        widthFrac:  or width as fraction of screensize
+        heightFrac: or height as fraction of screensize
+    """
 
-    width  = int (tkwindow.winfo_screenwidth()  * widthFrac)
-    height = int (tkwindow.winfo_screenheight() * heightFrac) 
+    if widthFrac and heightFrac: 
+        width  = int (tkwindow.winfo_screenwidth()  * widthFrac)
+        height = int (tkwindow.winfo_screenheight() * heightFrac) 
+    
+    if width  is None: width  = 600
+    if height is None: height = 400
 
     tkwindow.minsize(int(width*0.9), int(height*0.8))
     tkwindow.geometry("%dx%d" %(width, height))
 
-    x = tkwindow.winfo_screenwidth()  // 2 - width // 2
-    y = (tkwindow.winfo_screenheight() // 2 - height // 2) // 2
+    x = (tkwindow.winfo_screenwidth()  - width)  // 2
+    y = (tkwindow.winfo_screenheight() - height) // 2  // 1.5
 
     tkwindow.geometry("+%d+%d" %(x, y))
+
+
+
+#-------------------------------------------------------------------------------
+#  Toolwindow with exec   
+#-------------------------------------------------------------------------------
+
+
+
+class ToolWindow (ctk.CTkToplevel):
+    """ shows a little tool window for a certain duration
+    
+    Function is executed in a seperate thread to allow long running tasks"""
+
+
+    def __init__(self, master : ctk.CTkFrame, 
+                 message: str,
+                 after : int = 0,
+                 duration : int = 500, 
+                 width: int = 300, height: int = 150):
+        """evals functionFn and shows a tool window during excution
+
+        Args:
+            master: parent frame 
+            functionFn: function to be evluated
+            message (str): message text during execution.
+            width  (optional): width of tool window. Defaults to 300.
+            height (optional): height of tool window. Defaults to 150.
+        """
+   
+        super().__init__(master)
+
+        self._message = message
+        self._duration = duration
+
+        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+        self.configure (fg_color=fg_color)
+        self.configure (bg_color=bg_color)
+
+        set_initialWindowSize (self, width=width, height=height)
+
+        self.overrideredirect(True)                 # make Toolwindow, remove titlebar
+        
+        # ---------------
+
+        text = self._message() if callable(self._message) else self._message 
+
+        self._msg_widget = ctk.CTkLabel(self,  width=width-40, height=120, text=text, justify="center",
+                                          fg_color="transparent", text_color=cl_styles [STYLE_NORMAL]) 
+        # self._msg_widget._text_label.configure (wraplength=width *0.8, justify="center")
+        self._msg_widget.grid(row=1, column=1, sticky="nwes")
+        
+        self.grid_columnconfigure(0, weight=0)
+        self.grid_columnconfigure(1, weight=2)
+        self.grid_columnconfigure(2, weight=0)
+        self.grid_rowconfigure(0, weight=2)   
+        self.grid_rowconfigure(1, weight=3)   
+        self.grid_rowconfigure(2, weight=1)   
+
+        # ---------------
+
+        if after == 0: 
+            self._show_it()
+        else:  
+            self.after (after, self._show_it)
+
+
+    def _show_it (self):
+        """ pop up self for time duration """
+
+        if self.winfo_exists():
+            self.grab_set()
+        self.attributes('-topmost', 1)
+        self.update ()
+
+        if self._duration > 0: 
+            self.after (self._duration, self._close)
+
+            # wait until window closed - otherwise parent program would "run away"
+            self.master.wait_window(self)
+
+
+    def _close (self): 
+        """close self """
+        self.grab_release()
+        self.destroy()
+
+
+
+class Eval_With_ToolWindow (ctk.CTkToplevel):
+    """ evals functionFn and shows a tool window during excution
+    
+    Function is executed in a seperate thread to allow long running tasks"""
+
+
+    def __init__(self, master : ctk.CTkFrame, 
+                 functionFn,                  
+                 message: str, 
+                 width: int = 300, height: int = 150):
+        """evals functionFn and shows a tool window during excution
+
+        Args:
+            master: parent frame 
+            functionFn: function to be evluated
+            message (str): message text during execution.
+            width  (optional): width of tool window. Defaults to 300.
+            height (optional): height of tool window. Defaults to 150.
+        """
+   
+        super().__init__(master)
+
+        self._functionFn = functionFn
+        self._message = message
+        self._thread = None
+
+        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+        self.configure (fg_color=fg_color)
+        self.configure (bg_color=bg_color)
+
+        set_initialWindowSize (self, width=width, height=height)
+
+        self.overrideredirect(True)                 # make Toolwindow, remove titlebar
+        
+        # ---------------
+
+        text = self._message() if callable(self._message) else self._message 
+
+        self._msg_widget = ctk.CTkLabel(self,  width=width-40, height=120, text=text, justify="center",
+                                          fg_color="transparent", text_color=cl_styles [STYLE_NORMAL]) 
+        # self._msg_widget._text_label.configure (wraplength=width *0.8, justify="center")
+        self._msg_widget.grid(row=1, column=1, sticky="nwes")
+        
+        self.grid_columnconfigure(0, weight=0)
+        self.grid_columnconfigure(1, weight=2)
+        self.grid_columnconfigure(2, weight=0)
+        self.grid_rowconfigure(0, weight=2)   
+        self.grid_rowconfigure(1, weight=3)   
+        self.grid_rowconfigure(2, weight=1)   
+
+        # ---------------
+
+        if self.winfo_exists():
+            self.grab_set()
+        self.lift()
+
+        # force immediate appearance 
+        self.update()
+
+        # start thread and polling 
+        # self._run_function ()
+        self.after (200, self._run_function)
+
+        # wait until window closed - otherwise parent program would "run away"
+        self.master.wait_window(self)
+
+
+
+    def _run_function (self):
+        """ run the function as a thread ..."""
+        import threading
+
+        print ("thread starting")
+        self._thread = threading.Thread(target=self._functionFn, args=())
+        self._thread.start()
+
+        # now poll if thread is still running 
+        self.after (300, self._check_running)
+
+
+    def _check_running (self):
+        """ thread still running - if yes - start next poll """
+        if self._thread:
+            if self._thread.is_alive(): 
+
+                # if message is a function - do live update 
+                if callable(self._message):
+                    self._msg_widget.configure(text=self._message())
+                    self.update()
+                # print ("thread alive")
+
+                # set next poll 
+                self.after (300, self._check_running)
+
+            else: 
+                # print ("thread ended")
+                self._close()
+
+
+    def _close (self): 
+        """close self """
+        self.grab_release()
+        self.destroy()
+
+
+#-------------------------------------------------------------------------------
+#  Messagebox   
+#-------------------------------------------------------------------------------
+
+
+class Messagebox(ctk.CTkToplevel):
+    """ Message in different styles - inspired vom CTKMessagebox"""
+
+    ICONS = {
+            "check": None,
+            "cancel": None,
+            "info": None,
+            "question": None,
+            "warning": None
+        }
+
+    def __init__(self, master,                  
+                 width: int = 400,
+                 height: int = 200,
+                 title: str = "Messagebox",
+                 message: str = "This is a Messagebox!",
+                 option_1: str = "Ok",
+                 option_2: str = None,
+                 option_3: str = None,
+                 button_color: str = "default",
+                 button_width: int = None,
+                 icon: str = "info",             #  "check", "cancel", "info", "question", "warning"
+                 font: tuple = None):
+        
+        super().__init__(master)
+
+        width   = 250 if width  < 250 else width
+        height  = 150 if height < 150 else height
+
+        self.after(10)
+        set_initialWindowSize (self, width=width, height=height)
+        self.transient(master)
+        self.resizable(width=False, height=False)
+                
+        self.title(title)
+        self.protocol("WM_DELETE_WINDOW", self.button_event)
+        # self.lift()
+
+        
+        # ---------------
+
+        self.grid_columnconfigure (0, weight=1)
+        self.grid_rowconfigure    (0, weight=1)  
+
+        button_width = button_width if button_width else 80 
+        
+        if button_color=="default":
+            button_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
+            # second and third button in a darker color 
+            button2_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"])
+        else:
+            button_color = button_color
+            button2_color = button_color
+                    
+        icon_img = self.load_icon(icon, (25,25)) if icon else None                    
+
+        # ---------------
+
+        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+
+        frame_mid = ctk.CTkFrame(self, bg_color=bg_color, fg_color=fg_color)
+        frame_mid.grid(row=0, column=0, columnspan=3, sticky="nwes", padx=(0,0), pady=(0,0))
+        frame_mid.grid_rowconfigure   (0, weight=1)
+        frame_mid.grid_columnconfigure(0, weight=1)
+        frame_mid.grid_columnconfigure(1, weight=6)
+        frame_mid.grid_columnconfigure(2, weight=1)
+
+        icon_widget = ctk.CTkButton(frame_mid,  width=1, height=100, corner_radius=0, text=None, font=font,
+                                            fg_color="transparent", hover=False,  image=icon_img)
+        msg_widget  = ctk.CTkButton(frame_mid,  width=1, height=100, corner_radius=0, text=message, font=font,
+                                            fg_color="transparent", text_color=cl_styles [STYLE_NORMAL], hover=False,  image=None)
+        msg_widget._text_label.configure(wraplength=width *0.8, justify="center")
+    
+        icon_widget.grid(row=0, column=0, columnspan=1, sticky="nes")
+        msg_widget.grid (row=0, column=1, columnspan=2, sticky="nwes")
+        
+        # ---------------
+
+        if option_1:
+            
+            frame_bot = ctk.CTkFrame(self, fg_color="transparent")
+            frame_bot.grid(row=1, column=0, columnspan=3, sticky="nwes", padx=(0,0))
+            frame_bot.grid_columnconfigure((0,4), weight=1)
+
+            button1_widget = ctk.CTkButton(frame_bot, text=option_1, fg_color=button_color,
+                                                    width=button_width, height=25, font=font, 
+                                                    command=lambda: self.button_event(option_1))
+            button1_widget.grid(row=0, column=1, sticky="e", padx=(30,10), pady=10)
+
+            if option_2:
+                self.button_2 = ctk.CTkButton(frame_bot, text=option_2, fg_color=button2_color,
+                                                        width=button_width, height=25, font=font, 
+                                                        command=lambda: self.button_event(option_2))
+                self.button_2.grid(row=0, column=2, sticky="e", padx=10, pady=10)
+                
+            if option_3:
+                self.button_3 = ctk.CTkButton(frame_bot, text=option_3, fg_color=button2_color,
+                                                        width=button_width, height=25, font=font, 
+                                                        command=lambda: self.button_event(option_3))
+                self.button_3.grid(row=0, column=3, sticky="e", padx=(10,0), pady=10)
+
+        # --------------
+
+        if self.winfo_exists():
+            self.grab_set()
+
+
+    def load_icon(self, icon, icon_size):
+            if icon not in self.ICONS or self.ICONS[icon] is None:
+                image_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon + '.png')
+                if not icon_size: icon_size = (25,25) 
+                self.ICONS[icon] = ctk.CTkImage(Image.open(image_path), size=icon_size)
+            return self.ICONS[icon]         
+
+
+    def get(self):
+        self.master.wait_window(self)
+        return self.event
+
+    def show (self):
+        """ pops up self it is not used with get (wait_window) - returns self """
+
+        # #todo - not the real solution ... Title bar isn't painted ...
+        self.wm_overrideredirect(True)  
+        self.deiconify()
+        self.after(100)
+        self.update_idletasks()
+        self.after(100)
+        return self
+
+    def closeIt (self): 
+        """close self from outside """
+        self.grab_release()
+        self.destroy()
+
+    def button_event(self, event=None):
+        self.grab_release()
+        self.destroy()
+        self.event = event
+
+
+#-------------------------------------------------------------------------------
+#  Higher level app / control base classes    
+#-------------------------------------------------------------------------------
 
 
 class Dialog_Abstract (ctk.CTkToplevel):
@@ -240,6 +600,11 @@ class Diagram_Abstract(ctk.CTkFrame):
         return
 
 
+    @property
+    def myApp (self):
+        """ the top level app self belongs to -can be overloaded for type info"""
+        return self.winfo_toplevel()
+
     # -----  data objects
 
     def mainObject(self):
@@ -280,7 +645,7 @@ class Diagram_Abstract(ctk.CTkFrame):
 
         # and finally show it if self is the first to show 
         if self._active: 
-            self.after_idle (self.refresh)
+            self.after_idle (self.setActive, True)
 
 
     def setup_view_frame (self):
@@ -317,8 +682,9 @@ class Diagram_Abstract(ctk.CTkFrame):
 
         # show mouse coordinates 
         r += 1
-        coords = ctk.CTkLabel (self.view_frame, textvariable=self.toolbar.mouse_coords, height=16)
-        coords.grid (row=r, column=0, columnspan= 3, sticky='w', padx=(15,10), pady=(0,2))
+        coords = ctk.CTkLabel (self.view_frame, textvariable=self.toolbar.mouse_coords, height=16,
+                               text_color=cl_styles [STYLE_DISABLED])
+        coords.grid (row=r, column=0, columnspan= 3, sticky='w', padx=(10,10), pady=(2,4))
 
 
     def create_axes (self):

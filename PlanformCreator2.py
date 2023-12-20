@@ -47,8 +47,8 @@ sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 from common_utils       import * 
 from wing_model         import Planform, Planform_Bezier_StraightTE, \
                                        Planform_DXF, Planform_Trapezoidal, Planform_Bezier         
-from ui_base            import Dialog_Abstract, Edit_Abstract, Diagram_Abstract              
-from ui_base            import set_initialWindowSize, Dialog_Settings              
+
+from ui_base            import *        
 from widgets            import * 
 from wing_artists       import *
 
@@ -56,7 +56,7 @@ from wing_artists       import *
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "1.0.2"
+AppVersion = "1.1 beta"
 
 #------------------------------------------------
 
@@ -96,7 +96,7 @@ class Edit(ctk.CTkFrame):
     # - Handles the interaction between the different sub frames
     # - informs the diagrams about changes 
     #
-    def __init__(self, master, wingFn, *args, **kwargs):
+    def __init__(self, master : 'App', wingFn, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
 
         self.myApp   = master
@@ -179,7 +179,8 @@ class Edit(ctk.CTkFrame):
         # e.g. banana changed with mouse in diagram 
         self.editPlanformType_frame.refresh()                   # banana parameters      
         # doesn't change wing data
-        # doesn't change wing sections - only changed_chord does 
+
+        self.editSectionMaster_frame.changed_planform()          # 'Defines Planform' (trapezoid) 
     
     def changed_section (self, event): 
         """ Eventhandler for changes of section data"""
@@ -193,8 +194,7 @@ class Edit(ctk.CTkFrame):
     def sectionSelected_in_diagram (self, event): 
         """ Eventhandler for changes of the current wing section selection in diagrams"""
         # refresh the wing section edit frame with new section
-        myApp : App = self.winfo_toplevel()
-        self.editSectionMaster_frame.set_curSection (myApp.curWingSectionName(), inEvent=True)
+        self.editSectionMaster_frame.set_curSection (self.myApp.curWingSectionName(), inEvent=True)
 
 
 #-------------------------------------------
@@ -275,7 +275,7 @@ class Edit_Wing_Data (Edit_Abstract_Wing):
                                  lim=(0,50), dec=1, spin=True, step=0.1, unit='%'))
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Hinge angle",   obj=self.wing, get='hingeAngle', set='set_hingeAngle',
-                                 event=WING_CHANGED, lim=(-5,45), dec=2, spin=True, step=0.1, unit="°"))
+                                 event=WING_CHANGED, lim=(-10,45), dec=2, spin=True, step=0.1, unit="°"))
         r += 1
         Blank_Widget (self,r,0, width=20, height = 15) 
         r += 1
@@ -287,7 +287,7 @@ class Edit_Wing_Data (Edit_Abstract_Wing):
         self.nick_frame.grid    (row=r, column=3, columnspan=3, sticky="nwes")
 
         self.add (Field_Widget  (self.nick_frame,0,0, lab="Airfoils nick", obj=self.wing, get='airfoilNickPrefix', set='set_airfoilNickPrefix',
-                                 event=SECTION_CHANGED, width= 60))
+                                 event=SECTION_CHANGED, width= 65))
         self.add (Field_Widget  (self.nick_frame,0,3,  obj=self.wing().rootSection, get='airfoilNickPostfix', 
                                  disable=True, width= 40))
         
@@ -312,7 +312,7 @@ class Edit_Planform_Master(Edit_Abstract_Wing):
         self.add(Header_Widget (self,0,0, lab=self.name, width=105))
         self.add(Option_Widget (self,0,1, get='planformType', set = 'set_planformType',
                                 width = 150, options=Planform.allTemplatePlanformTypes(),
-                                event=CHORD_CHANGED))
+                                event=PLANFORM_CHANGED))
 
         self.add(Label_Widget  (self,1, 0, lab= self.shortDescription))
         self.add(Blank_Widget  (self,2, 0))
@@ -547,11 +547,17 @@ class Edit_WingSection_Master(Edit_Abstract_Wing):
     """
     name = "Section"
 
+    @property
+    def myApp (self) -> 'App':
+        return super().myApp
+    
     def init(self):
 
-        # set second section as initial 
-        self.curSection : WingSection = self.wing().wingSections[1]
         self.curSectionFrame = None
+
+        # get initial section from app 
+        self.curSection = None
+        self.set_curSection (self.myApp.curWingSectionName(), initial=True)
 
         # main grid:  header frame + - sub Frame for one section  
         hfrm = ctk.CTkFrame(self, fg_color='transparent')
@@ -568,9 +574,6 @@ class Edit_WingSection_Master(Edit_Abstract_Wing):
                                             disable=self.deleteDisabled))
 
         hfrm.grid (row=0, column=0, pady=0, padx=0, sticky="w")
-
-        # init and set section data frame to current section 
-        self.set_curSection (self.curSection.name(), initial=True)
 
 
     def curSectionName(self): return self.curSection.name()
@@ -631,6 +634,15 @@ class Edit_WingSection_Master(Edit_Abstract_Wing):
         for sec in self.wing().wingSections:
             if (sec.name() == aName): return sec
         raise ValueError ("Wing section not found: ", aName )
+    
+    def changed_planform (self): 
+        """ refresh when planform changed """
+
+        if self.curSectionFrame is not None:
+            self.curSectionFrame.grid_forget()              # remove current 
+            self.curSectionFrame.destroy()
+        self.curSectionFrame = Edit_WingSection(self, self._wingFn, lambda: self.curSection, fg_color='transparent')
+        self.curSectionFrame.grid (row=1, column=0, pady=0, padx=(10,5), sticky="nwes")
 
 
     def refresh_current (self):
@@ -674,7 +686,7 @@ class Edit_WingSection(Edit_Abstract_Wing):
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
 
         self.add(Field_Widget  (self,2,0, lab="Chord", obj=self.wingSection, get='chord', set='set_chord',
-                                                lim='limits_Chord', dec=1, spin=True, step=0.5, unit=unit,
+                                                lim='limits_chord', dec=1, spin=True, step=0.5, unit=unit,
                                                 disable='isRootOrTip', event=SECTION_CHANGED))
         self.add(Field_Widget  (self,2,3, lab="Chord rel.", obj=self.wingSection, get='norm_chord', set='set_norm_chord',
                                                 lim='limits_normChord', dec=3, spin=True, step=0.01, unit='%',
@@ -684,8 +696,13 @@ class Edit_WingSection(Edit_Abstract_Wing):
                                                 lim='limits_Re', dec=0, spin=True, step=1000,
                                                 disable='isReDisabled', event=SECTION_CHANGED))
 
+        if self.wing().planform.planform_depend_on_sections:
+            self.add(Switch_Widget (self,3,3, lab="Defines planform", obj=self.wingSection , padx=5, columnspan=3,
+                                                get='hasFixPosChord', set='set_hasFixPosChord',
+                                                disable='isSet_eitherPosOrChord_disabled', event=SECTION_CHANGED))
 
-        # Blank_Widget (self,4,0) 
+        Blank_Widget (self,4,0, width=20, height = 10) 
+
         self.add(Field_Widget  (self,5,0, lab="Airfoil", width=110, get=lambda: self.wingSection().airfoil.name, 
                                 disable=True, event=SECTION_CHANGED))
         
@@ -774,29 +791,37 @@ class Diagrams(ctk.CTkTabview):
             :master: frame self belongs to
         """
         
-        self.diagrams = []
-        diagramClasses = [Diagram_Planform, Diagram_ChordDistribution, Diagram_Airfoils] 
+        self.diagrams  = []
+        diagramClasses = [Diagram_Wing, Diagram_Planform, 
+                          Diagram_ChordDistribution, Diagram_Airfoils] 
 
         # Get all subclasses of Plot_Frame and create a tab for each 
         for iDia, diaClass in enumerate (diagramClasses):
 
             tab_frame = self.add("   " + diaClass.name + "   ")
-            tab_frame.grid_columnconfigure(0, weight=0, minsize=160)
-            tab_frame.grid_columnconfigure(1, weight=1)
             tab_frame.grid_rowconfigure(0, weight=1)
 
-            # switches
-            view_frame=  ctk.CTkFrame(tab_frame)
-            view_frame.grid (row=0, column=0, padx=(0, 5), pady=(0,0), sticky='news')
-
             # plot area
-            plot_frame=  ctk.CTkFrame(tab_frame, fg_color="transparent")
-            plot_frame.grid (row=0, column=1, padx=(0,0), pady=0, sticky='wens')
+            plot_frame=  ctk.CTkFrame(tab_frame, fg_color="transparent") 
             plot_frame.grid_columnconfigure(0, weight=1)
             plot_frame.grid_rowconfigure(0, weight=1)
             
+            # settings and switches frame 
+            if diaClass == Diagram_Wing:                # full wing diagram doesn't have view frame
+                tab_frame.grid_columnconfigure(0, weight=1)
+                view_frame = None 
+                plot_frame.grid (row=0, column=0, padx=(0,0), pady=0, sticky='wens')
+            else: 
+                tab_frame.grid_columnconfigure(0, weight=0, minsize=160)
+                tab_frame.grid_columnconfigure(1, weight=1)
+                view_frame=  ctk.CTkFrame(tab_frame)    
+                view_frame.grid (row=0, column=0, padx=(0, 5), pady=(0,0), sticky='news')
+                plot_frame.grid (row=0, column=1, padx=(0,0), pady=0, sticky='wens')
+
+            
             # create the diagram in the plot frame and set first diagram active (show it)
-            self.diagrams.append (diaClass (plot_frame, wingFn, setActive=(iDia==0), view_frame=view_frame))
+            self.diagrams.append (diaClass (plot_frame, wingFn, setActive=(iDia==0), 
+                                            view_frame=view_frame))
 
         # set size of tab view titles
         self._segmented_button.configure(font=("", 16))
@@ -821,6 +846,89 @@ class Diagrams(ctk.CTkTabview):
 
 
 #-------------------------------------------------------------------------------
+# Full Wing    
+#-------------------------------------------------------------------------------
+
+
+class Diagram_Wing (Diagram_Abstract):
+    """ 
+    Frame to full wing (left and right) 
+    """
+    name = "Wing"
+
+    @property
+    def myApp (self) -> 'App':
+        return super().myApp
+
+    def wing(self) -> Wing:
+        " main data object of the diagram"
+        return self._objectFn()
+
+
+    def create_axes (self):
+        """ setup axes, axis for this plot type """
+    
+        self.ax : plt.Axes = self.figure.add_subplot()        # the pyplot axes this diagram is plotted
+        self.figure.subplots_adjust(left=0.03, bottom=0.06, right=0.98, top=0.96, wspace=None, hspace=None)
+        self.ax.tick_params (labelsize='small')
+
+        self.ax.set_xticks ([])
+        self.ax.set_yticks ([])
+
+        self.ax.grid (visible=True)
+
+
+    def setup_axes (self):
+        """ setup axes, axis for this plot type """
+
+        limy = self.ax.get_ylim()
+        if limy[0] < limy[1]: 
+            self.ax.invert_yaxis() 
+        self.ax.axis('equal')
+        # self.ax.relim()
+        self.ax.autoscale(enable=True, axis='Both')
+        # self.ax.margins(x=0.02, y= 0.1)
+
+
+    def setup_artists (self):
+        """ setup artists for this plot type """
+
+        super().setup_artists()
+        self.wingArtist     = Wing_Artist  (self.ax, self.wing, show=True)
+        # self.dxfArtist          = RefPlanform_DXF_Artist(self.ax, self.wing)
+
+    # -------- switch call back 
+
+    # -------- event handler
+
+    def setChangeBindings (self):
+        # overloaded
+        self.ctk_root.bind(WING_NEW,                 self.refresh, add='+')
+        self.ctk_root.bind(WING_CHANGED,             self.refresh, add='+')
+        self.ctk_root.bind(CHORD_CHANGED,            self.refresh, add='+')
+        self.ctk_root.bind(PLANFORM_CHANGED,         self.refresh, add='+')
+        self.ctk_root.bind(SECTION_CHANGED,          self.refresh, add='+')
+        self.ctk_root.bind(AIRFOIL_CHANGED,          self.refresh, add='+')
+
+    # -------- Callbacks from Artists 
+
+    # -------- refresh my Artists which are on 'show mode' 
+
+    def refresh(self,*_): 
+        # overloaded
+        if self._active:
+            self.wingArtist.refresh ()  
+            # self.dxfArtist.refresh      () 
+
+            # self.setup_axes()                       # maybe the axis limits changed
+            self.ax.relim()
+            self.ax.autoscale_view()
+
+            self.ax.figure.canvas.draw_idle()     # draw ony if Windows is idle!
+
+
+
+#-------------------------------------------------------------------------------
 # Planform   
 #-------------------------------------------------------------------------------
 
@@ -831,6 +939,9 @@ class Diagram_Planform (Diagram_Abstract):
     """
     name = "Planform"
 
+    @property
+    def myApp (self) -> 'App':
+        return super().myApp
 
     def wing(self) -> Wing:
         " main data object of the diagram"
@@ -898,9 +1009,10 @@ class Diagram_Planform (Diagram_Abstract):
         r += 1
         Switch_Widget (self.view_frame,r,c, lab='Elliptical', val=False, set=self._set_showReference)
 
-        if (self.wing().refPlanform_DXF): 
-            r += 1
-            Switch_Widget (self.view_frame,r,c, lab='From DXF', val=False, set=self._set_showRefDXF)
+        r += 1
+        p = Switch_Widget (self.view_frame,r,c, lab='From DXF', val=False, set=self._set_showRefDXF,
+                           disable=lambda: not self.wing().refPlanform_DXF.isValid)
+        self._dxf_widget = p 
         return r,c 
 
 
@@ -985,9 +1097,7 @@ class Diagram_Planform (Diagram_Abstract):
         """" eventhandler - current has changed from outside """
         if self._active:
             #retrieve new section name from App 
-            myApp : App = self.winfo_toplevel()
-
-            self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=False) 
+            self.curSectionArtist.set_current (self.myApp.curWingSectionName(), figureUpdate=False) 
             self.refresh_sections() 
 
     # -------- Callbacks from Artists 
@@ -1009,11 +1119,11 @@ class Diagram_Planform (Diagram_Abstract):
 
         "fire event only if new section was selected"
         if aSectionLabel != self.curSectionArtist.curLineLabel:
-            myApp : App = self.winfo_toplevel()
-            myApp.set_curWingSectionName(aSectionLabel)
+
+            self.myApp.set_curWingSectionName(aSectionLabel)
             fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
 
-            self.curSectionArtist.set_current (aSectionLabel, figureUpdate=False)  
+            self.curSectionArtist.set_current (aSectionLabel, figureUpdate=True)  
 
             self.ax.figure.canvas.draw_idle()     # draw ony if Windows is idle!
 
@@ -1023,14 +1133,16 @@ class Diagram_Planform (Diagram_Abstract):
     def setActive(self, active: bool):
         # overloaded to set active section 
         if active: 
-            myApp : App = self.winfo_toplevel()
-            self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=False)    
+            self.curSectionArtist.set_current (self.myApp.curWingSectionName(), figureUpdate=False)    
         super().setActive(active)
 
 
     def refresh(self): 
         # overloaded
         if self._active:
+
+            self._dxf_widget.refresh()
+
             self.planformArtist.refresh ()  
             self.chordLinesArtist.refresh ()  
             self.sectionsArtist.refresh ()  
@@ -1155,6 +1267,10 @@ class Diagram_ChordDistribution (Diagram_Abstract):
     """
     name = "Chord distribution"
 
+    @property
+    def myApp (self) -> 'App':
+        return super().myApp
+
     def wing(self) -> Wing:
         " main data object of the diagram"
         return self._objectFn()
@@ -1205,9 +1321,11 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         Label_Widget (self.view_frame,r,c, lab='Reference planforms', pady=(20,10))
         r += 1
         Switch_Widget (self.view_frame,r,c, lab='Elliptical', val=False, set=self._set_showReference)
-        if (self.wing().refPlanform_DXF.isValid): 
-            r += 1
-            Switch_Widget  (self.view_frame,r,c, lab='From DXF', val=False, set=self._set_showRefDXF)
+        r += 1
+        p = Switch_Widget (self.view_frame,r,c, lab='From DXF', val=False, set=self._set_showRefDXF,
+                           disable=lambda: not self.wing().refPlanform_DXF.isValid)
+        self._dxf_widget = p 
+
         return r,c 
 
 
@@ -1271,8 +1389,7 @@ class Diagram_ChordDistribution (Diagram_Abstract):
         """" eventhandler - current has changed from outside """
         if self._active:
             #retrieve new section name from App 
-            myApp : App = self.winfo_toplevel()
-            self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=True)  
+            self.curSectionArtist.set_current (self.myApp.curWingSectionName(), figureUpdate=True)  
 
     # -------- Callbacks from Artits 
 
@@ -1287,14 +1404,16 @@ class Diagram_ChordDistribution (Diagram_Abstract):
     def setActive(self, active: bool):
         # overloaded to set active section 
         if active: 
-            myApp : App = self.winfo_toplevel()
-            self.curSectionArtist.set_current (myApp.curWingSectionName(), figureUpdate=False)    
+            self.curSectionArtist.set_current (self.myApp.curWingSectionName(), figureUpdate=False)    
         super().setActive(active)
 
 
     def refresh(self): 
         # overloaded
         if self._active:
+
+            self._dxf_widget.refresh()
+
             self.chordArtist.refresh ()  
             self.chordLinesArtist.refresh ()  
             self.sectionsArtist.refresh ()  
@@ -1321,8 +1440,7 @@ class Diagram_ChordDistribution (Diagram_Abstract):
 
     def sectionPicked (self, aSectionLabel):
         # call method - the user pciked a wing section in the plot
-        myApp : App = self.winfo_toplevel()
-        myApp.set_curWingSectionName(aSectionLabel)
+        self.myApp.set_curWingSectionName(aSectionLabel)
         fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
         self.curSectionArtist.set_current (aSectionLabel, figureUpdate=True)  
 
@@ -1339,6 +1457,9 @@ class Diagram_Airfoils (Diagram_Abstract):
     name = "Airfoils"
     _show_strakedAirfoils = False
 
+    @property
+    def myApp (self) -> 'App':
+        return super().myApp
 
     def wing(self) -> Wing:
         " main data object of the diagram"
@@ -1428,16 +1549,14 @@ class Diagram_Airfoils (Diagram_Abstract):
         """" eventhandler - current has changed from outside """
         if self._active:
             #retrieve new section name from App 
-            myApp : App = self.winfo_toplevel()
-            self.airfoilArtist.set_current (myApp.curWingSectionName(), figureUpdate=True)  
+            self.airfoilArtist.set_current (self.myApp.curWingSectionName(), figureUpdate=True)  
 
     # -------- refresh my Artists which are on 'show mode' 
 
     def setActive(self, active: bool):
         # overloaded to set active section 
         if active: 
-            myApp : App = self.winfo_toplevel()
-            self.airfoilArtist.set_current (myApp.curWingSectionName(), figureUpdate=True)  
+            self.airfoilArtist.set_current (self.myApp.curWingSectionName(), figureUpdate=True)  
         super().setActive(active)
 
     def refresh(self): 
@@ -1453,8 +1572,7 @@ class Diagram_Airfoils (Diagram_Abstract):
         self.airfoilArtist.set_current (aAirfoilLabel, figureUpdate=True)  
         sectionName = aAirfoilLabel.split("@")[1].strip()
         if sectionName: 
-            myApp : App = self.winfo_toplevel()
-            myApp.set_curWingSectionName(sectionName)
+            self.myApp.set_curWingSectionName(sectionName)
             fireEvent (self.ctk_root, DIAGRAM_SECTION_SELECTED)
         else: 
             ErrorMsg ("Missing section name in airfoil label")
@@ -1712,7 +1830,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         if self.paneledPlanform.minTipChord > self.wing.tipchord:
             return STYLE_WARNING
         else: 
-            return STYLE_DISABLED
+            return STYLE_COMMENT
 
 
     def select_dir(self):
@@ -2068,9 +2186,11 @@ class App(ctk.CTk):
     def __init__(self, paramFile):
         super().__init__()
 
-        # customize Ctk 
-        # ctk.set_appearance_mode("System")                 # Modes: "System" (standard), "Dark", "Light"
-        # ctk.set_default_color_theme("blue")             # Themes: "blue" (standard), "green", "dark-blue"
+        if paramFile: 
+            message = f"Loading\n\n{os.path.basename(paramFile)}"
+        else: 
+            message = "Creating\n\na sample wing"
+        splash_window = ToolWindow(self, message, duration=0)
 
         # setup event root - so there will be a single root -> ctk root
         self.ctk_root = self
@@ -2078,9 +2198,13 @@ class App(ctk.CTk):
         # settings file handler
         self.settings = Settings()
 
-        # create the 'wing' model 
+        # create the 'wing' model - with 'splash window'
         self.paramFile = '' 
-        self.loadNewWing (paramFile, initial=True)
+        self._myWing : Wing = None
+        self.load_wing (paramFile)
+
+        # init UI for new wing 
+        self.activate_wing (initial=True)
 
         # initial size of app window 
         set_initialWindowSize(self, widthFrac=0.92, heightFrac=0.8)
@@ -2105,24 +2229,23 @@ class App(ctk.CTk):
         file_frame.grid    (row=1, column=0,               pady=(0,5), padx=(5,0), ipady=5,sticky="news")
         edit_frame.grid    (row=1, column=1,               pady=0,     padx=0, sticky="nesw")
 
+        # close splash window again after a while (tkinter draws UI) 
+        self.after (800, splash_window._close)
+
 
     def wing (self) -> Wing:
         """ encapsulates current wing. Childs should acces only via this function
         to enable a new wing to be set """
         return self._myWing
 
-    def set_wing (self, aNewWing, initial=False):
-        """ encapsulates current wing. Childs should acces only via this function
-        to enable a new wing to be set """
-        self._myWing = aNewWing
-
-        if not initial: 
-            # mega alarm - inform everything
-            fireEvent (self.ctk_root, WING_NEW)
-
     
     def curWingSectionName (self):
         """ Dispatcher for current WingSection between Edit and Diagram """
+        if self._curWingSectionName is None: 
+
+            # set second section as initial
+            self._curWingSectionName = self.wing().wingSections[1].name()        
+
         return self._curWingSectionName 
     
     def set_curWingSectionName (self, aName):
@@ -2149,14 +2272,14 @@ class App(ctk.CTk):
     #------- file functions ----------------
 
     def new (self):
-        """ reset - and start with example ddefinition"""
+        """ reset - and start with example definition"""
 
         text = "The current wing '%s' will be discarded." % self.wing().name
         msg  = Messagebox(self, title="Create new wing", message=text,
                   icon="warning", option_2="Cancel", option_1="Ok")            
         if msg.get() == "Ok":
-            self.loadNewWing ("")               # will create default winf
-
+            self.load_wing ("")               # will create default wing
+            self.activate_wing ()
 
     def open (self):
         """ open a new wing definition json and load it"""
@@ -2168,7 +2291,11 @@ class App(ctk.CTk):
                     filetypes=filetypes)
 
         if newPathFilename:                     # user pressed open
-            self.loadNewWing (newPathFilename)
+            # load new wing into model 
+            self.load_wing (newPathFilename)
+
+            # init UI with new wing 
+            self.activate_wing ()
 
 
     def save (self):
@@ -2214,17 +2341,24 @@ class App(ctk.CTk):
 
     #-------------
 
-    def loadNewWing(self, pathFilename, initial=False):
-        """loads and sets a new wing model returns - updates title """
-        
-        self.set_wing (Wing (pathFilename), initial=initial)
+    def load_wing (self, pathFilename): 
+        """ creates / loads new wing as current"""
+        self._myWing = Wing (pathFilename)
 
+    def activate_wing (self, initial=False):
+        """ activates new wing in App / UI """
+
+        pathFilename = self._myWing.paramFilePath
         if pathFilename:
             self.paramFile = PathHandler.relPath (pathFilename)
             self.settings.set('lastOpenend', self.paramFile)
         else:
             self.paramFile = ""
         self.set_title ()
+
+        if not initial: 
+            # mega alarm - inform everything
+            fireEvent (self.ctk_root, WING_NEW)
 
 
     def export_xflr5 (self): 
@@ -2319,7 +2453,6 @@ if __name__ == "__main__":
     if args.paramterfile: 
         parmFile = args.paramterfile[0]
     else: 
-        #parmFile = Settings().get('lastOpenend', default=".\\examples\\vjx.glide\\VJX.glide.pc2") 
         parmFile = Settings().get('lastOpenend', default=None) 
 
     if parmFile and not os.path.isfile (parmFile):

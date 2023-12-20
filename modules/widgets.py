@@ -28,6 +28,7 @@ ICON                = 4                           # buttonstyle for icon only bu
 
 
 STYLE_NORMAL        = 'Normal'
+STYLE_COMMENT       = 'Comment'
 STYLE_DISABLED      = 'Disabled'
 STYLE_ERROR         = 'Error'
 STYLE_HINT          = 'Hint'
@@ -37,350 +38,11 @@ STYLE_WARNING       = 'Warning'
 cl_styles ={
         STYLE_NORMAL    : ("gray10","gray95"),
         STYLE_DISABLED  : ("gray30","gray70"),
+        STYLE_COMMENT   : ("gray40","gray60"),
         STYLE_ERROR     : ("red2","red2") ,
         STYLE_HINT      : ("RoyalBlue3", "cornflower blue"),
         STYLE_WARNING   : ("DarkOrange3", "orange")
         }
-
-
-#-------------------------------------------------------------------------------
-# Pretty Messagebox   
-#-------------------------------------------------------------------------------
-
-
-class Messagebox(ctk.CTkToplevel):
-    """ Message in different styles - inspired vom CTKMessagebox"""
-
-    ICONS = {
-            "check": None,
-            "cancel": None,
-            "info": None,
-            "question": None,
-            "warning": None
-        }
-
-    def __init__(self, master,                  
-                 width: int = 400,
-                 height: int = 200,
-                 title: str = "Messagebox",
-                 message: str = "This is a Messagebox!",
-                 option_1: str = "Ok",
-                 option_2: str = None,
-                 option_3: str = None,
-                 border_width: int = 1,
-                 button_color: str = "default",
-                 button_width: int = None,
-                 icon: str = "info",             #  "check", "cancel", "info", "question", "warning"
-                 font: tuple = None):
-        
-        super().__init__(master)
-
-        self.width   = 250 if width<250 else width
-        self.height  = 150 if height<150 else  height
-
-        master_width  = master.winfo_width()
-        master_height = master.winfo_height()
-        if master_height < 250 or master_width < 250: 
-            master = self._root()                   # self.winfo_toplevel() doesn't work here 
-            master_width  = master.winfo_width()
-            master_height = master.winfo_height()
-        master_x      = master.winfo_x()
-        master_y      = master.winfo_y()
-
-        self.spawn_x = int(master_width  * .5 + master_x - .5 * self.width + 7)
-        self.spawn_y = int(master_height * .5 + master_y - .5 * self.height + 20)
-
-        self.after(10)
-        self.geometry(f"{self.width}x{self.height}+{self.spawn_x}+{self.spawn_y}")
-
-        self.title(title)
-        self.protocol("WM_DELETE_WINDOW", self.button_event)
-        self.resizable(width=False, height=False)
-
-        self.transient(master)
-
-        self.lift()
-        
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)   
-        self.x = self.winfo_x()
-        self.y = self.winfo_y()
-        self._title = title
-        self.message = message
-        self.font = font
-        self.button_width = button_width if button_width else 80 
-        self.border_width = border_width if border_width<6 else 5
-        
-
-        if button_color=="default":
-            self.button_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
-            # second and third button in a darker color 
-            self.button2_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"])
-        else:
-            self.button_color = button_color
-            self.button2_color = self.button_color
-                    
-        self.icon = self.load_icon(icon, (25,25)) if icon else None                    
-
-        # ---------------
-
-        self.bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
-        self.fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
-
-        self.frame_middle = ctk.CTkFrame(self, bg_color=self.bg_color, fg_color=self.fg_color)
-        self.frame_middle.grid(row=0, column=0, columnspan=3, sticky="nwes", padx=(0,0), pady=(0,0))
-        self.frame_middle.grid_rowconfigure   (0, weight=1)
-        self.frame_middle.grid_columnconfigure(0, weight=1)
-        self.frame_middle.grid_columnconfigure(1, weight=6)
-        self.frame_middle.grid_columnconfigure(2, weight=1)
-
-        self.message_icon = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=None, font=self.font,
-                                            fg_color="transparent", hover=False,  image=self.icon)
-        self.message_text = ctk.CTkButton(self.frame_middle,  width=1, height=100, corner_radius=0, text=self.message, font=self.font,
-                                            fg_color="transparent", text_color=cl_styles [STYLE_NORMAL], hover=False,  image=None)
-        self.message_text._text_label.configure(wraplength=self.width *0.8, justify="center")
-        self.message_icon.grid(row=0, column=0, columnspan=1, sticky="nes")
-        self.message_text.grid(row=0, column=1, columnspan=2, sticky="nwes")
-        
-
-        # ---------------
-        if option_1:
-            
-            self.frame_bottom = ctk.CTkFrame(self, fg_color="transparent")
-            self.frame_bottom.grid(row=1, column=0, columnspan=3, sticky="nwes", padx=(0,0))
-            self.frame_bottom.grid_columnconfigure((0,4), weight=1)
-
-            self.option_text_1 = option_1
-            self.button_1 = ctk.CTkButton(self.frame_bottom, text=self.option_text_1, fg_color=self.button_color,
-                                                    width=self.button_width, height=25, font=self.font, 
-                                                    command=lambda: self.button_event(self.option_text_1))
-            self.button_1.grid(row=0, column=1, sticky="e", padx=(30,10), pady=10)
-
-            if option_2:
-                self.option_text_2 = option_2      
-                self.button_2 = ctk.CTkButton(self.frame_bottom, text=self.option_text_2, fg_color=self.button2_color,
-                                                        width=self.button_width, height=25, font=self.font, 
-                                                        command=lambda: self.button_event(self.option_text_2))
-                self.button_2.grid(row=0, column=2, sticky="e", padx=10, pady=10)
-                
-            if option_3:
-                self.option_text_3 = option_3
-                self.button_3 = ctk.CTkButton(self.frame_bottom, text=self.option_text_3, fg_color=self.button2_color,
-                                                        width=self.button_width, height=25, font=self.font, 
-                                                        command=lambda: self.button_event(self.option_text_3))
-                self.button_3.grid(row=0, column=3, sticky="e", padx=(10,0), pady=10)
-
-
-        if self.winfo_exists():
-            self.grab_set()
-
-
-    def load_icon(self, icon, icon_size):
-            if icon not in self.ICONS or self.ICONS[icon] is None:
-                image_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'icons', icon + '.png')
-                if not icon_size: icon_size = (25,25) 
-                self.ICONS[icon] = ctk.CTkImage(Image.open(image_path), size=icon_size)
-            return self.ICONS[icon]         
-
-
-    def get(self):
-        self.master.wait_window(self)
-        return self.event
-
-    def show (self):
-        """ pops up self it is not used with get (wait_window) - returns self """
-
-        # #todo - not the real solution ... Title bar isn't painted ...
-        self.wm_overrideredirect(True)  
-        self.deiconify()
-        self.after(100)
-        self.update_idletasks()
-        self.after(100)
-        return self
-
-    def closeIt (self): 
-        """close self from outside """
-        self.grab_release()
-        self.destroy()
-
-    def button_event(self, event=None):
-        self.grab_release()
-        self.destroy()
-        self.event = event
-
-
-
-class Eval_With_ToolWindow (ctk.CTkToplevel):
-    """ evals functionFn and shows a tool window during excution"""
-
-
-    def __init__(self, master : ctk.CTkFrame, 
-                 functionFn,                  
-                 message: str, 
-                 width: int = 300, height: int = 150):
-        """evals functionFn and shows a tool window during excution
-
-        Args:
-            master: parent frame 
-            functionFn: function to be evluated
-            message (str): message text during execution.
-            width  (optional): width of tool window. Defaults to 300.
-            height (optional): height of tool window. Defaults to 150.
-        """
-   
-        super().__init__(master)
-
-        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
-        fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
-        self.configure (fg_color=fg_color)
-        self.configure (bg_color=bg_color)
-
-        self._functionFn = functionFn
-
-        self.width   = 250 if width<250 else width
-        self.height  = 150 if height<150 else  height
-
-        master_width  = master.winfo_width()
-        master_height = master.winfo_height()
-        if master_height < 250 or master_width < 250: 
-            master = self._root()                   # self.winfo_toplevel() doesn't work here 
-            master_width  = master.winfo_width()
-            master_height = master.winfo_height()
-        master_x      = master.winfo_x()
-        master_y      = master.winfo_y()
-
-        self.spawn_x = int(master_width  * .5 + master_x - .5 * self.width + 7)
-        self.spawn_y = int(master_height * .5 + master_y - .5 * self.height + 20)
-
-        self.after(10)
-        self.geometry(f"{self.width}x{self.height}+{self.spawn_x}+{self.spawn_y}")
-
-        self.overrideredirect(True)                 # remove titlebar 
-
-        self.message = message
-        self.border_width = 1
-        
-        # ---------------
-
-        self.message_text = ctk.CTkButton(self,  width=self.width-40, height=120, corner_radius=0, 
-                                          text=self.message, fg_color="transparent", text_color=cl_styles [STYLE_NORMAL],
-                                          hover=False, image=None) #
-        self.message_text._text_label.configure(wraplength=self.width *0.8, justify="center")
-        self.message_text.grid(row=1, column=1, sticky="nwes")
-        
-        self.grid_columnconfigure(0, weight=0)
-        self.grid_columnconfigure(1, weight=4)
-        self.grid_columnconfigure(2, weight=0)
-        self.grid_rowconfigure(1, weight=1)   
-
-        # ---------------
-
-        if self.winfo_exists():
-            self.grab_set()
-
-        # self.after (200, self._run_function)
-        self.update()
-        self._run_function ()
-
-        # self.master.wait_window(self)
-
-
-    def close (self): 
-        """close self """
-        self.grab_release()
-        self.destroy()
-
-    def _run_function (self):
-        """ run the function ..."""
-        # self.deiconify()
-        print ("function startet")
-        self._functionFn()
-        print ("function ended")
-        # self.after (100, self.close)
-        self.close ()
-
-  
-
-class Eval_With_ToolWindow2 (ctk.CTkToplevel):
-    """ evals functionFn and shows a tool window during excution"""
-
-
-    def __init__(self, master : ctk.CTkFrame, 
-                 functionFn,                  
-                 message: str, 
-                 width: int = 300, height: int = 150):
-        """evals functionFn and shows a tool window during excution
-
-        Args:
-            master: parent frame 
-            functionFn: function to be evluated
-            message (str): message text during execution.
-            width  (optional): width of tool window. Defaults to 300.
-            height (optional): height of tool window. Defaults to 150.
-        """
-   
-        super().__init__(master)
-
-        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
-        fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
-        self.configure (fg_color=fg_color)
-        self.configure (bg_color=bg_color)
-
-        self._functionFn = functionFn
-
-        self.width   = 250 if width<250 else width
-        self.height  = 150 if height<150 else  height
-
-        master_width  = master.winfo_width()
-        master_height = master.winfo_height()
-        if master_height < 250 or master_width < 250: 
-            master = self._root()                   # self.winfo_toplevel() doesn't work here 
-            master_width  = master.winfo_width()
-            master_height = master.winfo_height()
-        master_x      = master.winfo_x()
-        master_y      = master.winfo_y()
-
-        self.spawn_x = int(master_width  * .5 + master_x - .5 * self.width + 7)
-        self.spawn_y = int(master_height * .5 + master_y - .5 * self.height + 20)
-
-        self.after(10)
-        self.geometry(f"{self.width}x{self.height}+{self.spawn_x}+{self.spawn_y}")
-
-        self.overrideredirect(True)                 # remove titlebar 
-
-        self.message = message
-        self.border_width = 1
-        
-        # ---------------
-
-        self.message_text = ctk.CTkButton(self,  width=self.width-40, height=120, corner_radius=0, 
-                                          text=self.message, fg_color="transparent", text_color=cl_styles [STYLE_NORMAL],
-                                          hover=False, image=None) #
-        self.message_text._text_label.configure(wraplength=self.width *0.8, justify="center")
-        self.message_text.grid(row=1, column=1, sticky="nwes")
-        
-        self.grid_columnconfigure(0, weight=0)
-        self.grid_columnconfigure(1, weight=4)
-        self.grid_columnconfigure(2, weight=0)
-        self.grid_rowconfigure(1, weight=1)   
-
-        # ---------------
-
-        if self.winfo_exists():
-            self.grab_set()
-
-        # self.after (200, self._run_function)
-
-        self.update()
-
-
-    def wait (self):
-        self.master.wait_window(self)
-
-    def close (self): 
-        """close self """
-        self.grab_release()
-        self.destroy()
 
 
 
@@ -442,10 +104,10 @@ class Base_Widget():
 
         if isinstance (self.val, bool):                       # supported data types
            self.valType = bool
-        elif isinstance  (self.val, float) or ((not dec is None) and (dec > 0)):    
-           self.valType = float
         elif isinstance (self.val, int) or ((not dec is None) and (dec == 0)):
            self.valType = int
+        elif isinstance  (self.val, float) or ((not dec is None) and (dec > 0)):    
+           self.valType = float
         elif isinstance (self.val, str):
            self.valType = str
         else:
@@ -490,7 +152,7 @@ class Base_Widget():
 
         self.width    = width
         self.height   = height
-        if not self.width:  self.width  = 105
+        if not self.width:  self.width  = 110
         if not self.height: self.height = 25
 
         self._styleGetter = None
@@ -713,7 +375,7 @@ class Base_Widget():
                 minVal, maxVal = limits
                 val2 = max (int(minVal), int(val))
                 val  = min (int(maxVal), val2)
-            s = str(val)
+            s = str(int(val))
         elif valType == float:
             if limits: 
                 minVal, maxVal = limits
@@ -1276,13 +938,20 @@ class Option_Widget(Base_Widget):
         spin -- Boolean if entry field should have a spinner      
         spinPos -- 'below' of 'beside' - default 'beside'
     """
-    def __init__(self, *args, sticky=None, padx=None, pady=None, spinPos=None, **kwargs):
+    def __init__(self, *args, 
+                 sticky=None, 
+                 padx=None, pady=None, 
+                 spinPos=None,
+                 columnspan=None,
+                 **kwargs):
         super().__init__(*args, **kwargs)
 
         option_width = self.width 
         if padx is None: padx = (1,1)
         if pady is None: pady = 0
         if sticky is None: sticky = 'w'
+
+        if columnspan   is None: columnspan = 1
 
         # label support not active
         #if (self.label):  label_ctk = ctk.CTkLabel (self.parent, text=self.label)
@@ -1292,7 +961,7 @@ class Option_Widget(Base_Widget):
         if self.spinner:
             if spinPos == 'below':
                 # this new frame with 2 button will be below OptionMenu  
-                button_frame = ctk.CTkFrame(self.parent, fg_color="transparent")
+                button_frame = ctk.CTkFrame(self.parent, fg_color="transparent") 
                 option_frame = self.parent
             else: 
                 # this new frame with 3 widget replaces the normal entry field in grid  
@@ -1319,9 +988,11 @@ class Option_Widget(Base_Widget):
                                          width=button_width, height=button_height, 
                                          fg_color=cl_spin, text_color=cl_spin_text, text_color_disabled=cl_spin_text_disable)
             if spinPos == 'below':
-                self.mainCTk.grid (row=self.row,   column=self.column, padx=padx, pady=pady, sticky=sticky)
-                button_frame.grid_columnconfigure(0, weight=1)       
-                button_frame.grid (row=self.row+1, column=self.column, padx=padx, pady=pady, sticky='we')
+                self.mainCTk.grid (row=self.row, column=self.column, columnspan=columnspan, 
+                                   padx=padx, pady=pady, sticky=sticky)
+                button_frame.grid_columnconfigure((0,1), weight=1)       
+                button_frame.grid (row=self.row+1, column=self.column, columnspan=columnspan,
+                                   padx=padx, pady=pady, sticky='we')
                 self.prevCTk.grid (row=0, column=0, padx=(0, 2), pady=0, sticky='w')
                 self.nextCTk.grid (row=0, column=1, padx=(2, 0), pady=0, sticky='e')
             else:
@@ -1332,9 +1003,11 @@ class Option_Widget(Base_Widget):
                 self.mainCTk.grid (row=self.row, column=self.column+1, padx=(2, 2), pady=0, sticky=sticky)
                 self.nextCTk.grid (row=self.row, column=self.column+2, padx=(0, 0), pady=0, sticky=sticky)
 
-                option_frame.grid (row=self.row, column=self.column, padx=padx, pady=pady, sticky=sticky)
+                option_frame.grid (row=self.row, column=self.column, columnspan=columnspan,
+                                   padx=padx, pady=pady, sticky=sticky)
         else:
-            self.mainCTk.grid (row=self.row, column=self.column, padx=padx, pady=pady, sticky=sticky)
+            self.mainCTk.grid (row=self.row, column=self.column, columnspan=columnspan,
+                               padx=padx, pady=pady, sticky=sticky)
 
         self.set_CTkControl()
         self.set_CTkControl_state()

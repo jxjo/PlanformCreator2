@@ -21,12 +21,12 @@ cl_editing          = 'deeppink'
 cl_editing_lower    = 'orchid'
 cl_helperLine       = 'orange'
 ls_curvature        = '-'
+ls_curvature_lower  = '--'
 ls_difference       = '-.'
 ls_camber           = '--'
 ls_thickness        = ':'
 ms_points           = dict(marker='o', fillstyle='none'    , markersize=4)   # marker style for points
 ms_points_selected  = dict(marker='x', fillstyle='none'    , markersize=6)   # marker style for points
-ms_points_vline     = dict(marker='|', fillstyle='none'    , markersize=4)   # marker style for points
 ms_le               = dict(marker='o'                      , markersize=7)   # marker style for leading edge
 ms_warning          = dict(marker='o', color='orange'      , markersize=6)   # marker style for wrong points
 ms_leReal           = dict(marker='o', color='limegreen'   , markersize=6)   # marker style for real leading edge
@@ -57,13 +57,6 @@ def _color_airfoil_of (airfoil_type):
     return color 
 
 
-def _color_alphaed (color, index, n):
-    """ returns a tuple (color,alpha) with alpha dependand of the index in n """
-
-    index = min (index, n-1)
-    return (color, (n - index * 0.9) / n )
-
-
 
 # -------- concrete sub classes ------------------------
 
@@ -86,6 +79,8 @@ class Grid_Artist (Artist):
 
 class Airfoil_Artist (Artist):
     """Plot the airfoils contour  """
+
+    label_with_airfoil_type = False             # include airfoil type in label 
 
     def __init__ (self, axes, modelFn, **kwargs):
         super().__init__ (axes, modelFn, **kwargs)
@@ -131,7 +126,10 @@ class Airfoil_Artist (Artist):
             if (airfoil.isLoaded):
 
                 color = _color_airfoil_of (airfoil.usedAs)
-                label = f"{airfoil.usedAs}: {airfoil.name}"
+                if self.label_with_airfoil_type:
+                    label = f"{airfoil.usedAs}: {airfoil.name}"
+                else: 
+                    label = f"{airfoil.name}"
 
                 if airfoil.usedAs == DESIGN:
                     linewidth = 1.0
@@ -139,12 +137,9 @@ class Airfoil_Artist (Artist):
                     linewidth = 0.8
 
                 # the marker style to show points
-                if self._points and airfoil.usedAs == DESIGN:
-                    _marker_style = ms_points_vline
+                if self._points:
                     linewidth=0.5
-                elif self._points:
                     _marker_style = ms_points
-                    linewidth=0.5
                 else:  
                     _marker_style = dict()
 
@@ -197,7 +192,10 @@ class Airfoil_Artist (Artist):
         xa = 0.96
         ya = 0.96 
         yoff = - iair * 12 - 12
-        name = f"{airfoil.usedAs}: {airfoil.name}" if airfoil.usedAs else f"{airfoil.name}"  
+        if self.label_with_airfoil_type:
+            name = f"{airfoil.usedAs}: {airfoil.name}" if airfoil.usedAs else f"{airfoil.name}" 
+        else:  
+            name = f"{airfoil.name}"
 
         self._add (print_text   (self.ax, name, 'right', (xa,ya), (0, yoff), color, xycoords='axes fraction'))
 
@@ -213,8 +211,11 @@ class Airfoil_Artist (Artist):
             self._add (print_text (self.ax, 'Thickness', 'right', (xa,ya), (-85, 0), cl_textHeader, xycoords='axes fraction'))
             self._add (print_text (self.ax, 'Camber'   , 'right', (xa,ya), (-25, 0), cl_textHeader, xycoords='axes fraction'))
 
-        # airfoil data  
-        name = f"{airfoil.usedAs}: {airfoil.name}" if airfoil.usedAs else f"{airfoil.name}"  
+        # airfoil data 
+        if self.label_with_airfoil_type:  
+            name = f"{airfoil.usedAs}: {airfoil.name}" if airfoil.usedAs else f"{airfoil.name}" 
+        else:  
+            name = f"{airfoil.name}"
 
         geo = airfoil.geo
         xt, t = geo.maxThickX, geo.maxThick 
@@ -305,9 +306,10 @@ class Curvature_Artist (Airfoil_Line_Artist):
                 side : Side_Airfoil
                 for side in sides:
                     x = side.x
-                    y = side.y if side.name == UPPER else -side.y
-                    alpha = 0.8  if side.name == UPPER else 0.4
-                    p = self.ax.plot (x, y, ls_curvature, color = color, alpha=alpha, label=label, 
+                    y = side.y      # if side.name == UPPER else -side.y
+                    alpha = 0.9     # if side.name == UPPER else 0.6
+                    ls = ls_curvature if side.name == UPPER else ls_curvature_lower
+                    p = self.ax.plot (x, y, ls, color = color, alpha=alpha, label=label, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
                     self._plot_reversals (side, color)
@@ -347,28 +349,26 @@ class Curvature_Artist (Airfoil_Line_Artist):
         if upper: 
             ya = 0.96 
             ypos = 0
-            alpha = 0.8
         else: 
             ya = 0.04 
             ypos = 12 * nair + 6
-            alpha = 0.6
 
         # header 
         if iair == 0: 
-            self._add (print_text (self.ax, 'LE max'   , 'right', (xa,ya), ( 10, ypos), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax, 'TE max'   , 'right', (xa,ya), ( 45, ypos), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax, 'LE'       , 'right', (xa,ya), (  2, ypos), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax, 'TE'       , 'right', (xa,ya), ( 38, ypos), cl_textHeader, xycoords='axes fraction'))
             self._add (print_text (self.ax, 'Reversals', 'right', (xa,ya), ( 90, ypos), cl_textHeader, xycoords='axes fraction'))
 
         # airfoil data + name 
-        le_max = np.max(np.abs(curvature.y[:10]))
-        te_max = np.max(np.abs(curvature.y[-10:]))
+        le_curv = curvature.y[0]
+        te_curv = curvature.y[-1]
         nr     = len(curvature.reversals())
         yoff = ypos - iair * 12 - 12
 
-        self._add (print_text   (self.ax, name, 'right', (xa,ya), (-35, yoff), color, alpha=alpha, xycoords='axes fraction'))
-        self._add (print_number (self.ax, le_max, 0, (xa,ya), (  5, yoff), cl_text))
-        self._add (print_number (self.ax, te_max, 1, (xa,ya), ( 40, yoff), cl_text))
-        self._add (print_number (self.ax,     nr, 0, (xa,ya), ( 75, yoff), cl_text))
+        self._add (print_text   (self.ax, name, 'right', (xa,ya), (-35, yoff), color, alpha=0.8, xycoords='axes fraction'))
+        self._add (print_number (self.ax, le_curv, 0, (xa,ya), (  5, yoff), cl_text))
+        self._add (print_number (self.ax, te_curv, 1, (xa,ya), ( 40, yoff), cl_text))
+        self._add (print_number (self.ax,      nr, 0, (xa,ya), ( 75, yoff), cl_text))
 
 
 
@@ -679,15 +679,13 @@ class Thickness_Artist (Airfoil_Line_Artist):
                 linewidth=0.8
 
                 # plot camber line
-                label = camber.name if iair == 0 else None
                 p = self.ax.plot (camber.x, camber.y, ls_camber, color = color, 
-                                    linewidth= linewidth, **self._marker_style, label=label)
+                                    linewidth= linewidth, **self._marker_style)
                 self._add(p)
 
                 # plot thickness distribution line
-                label = thickness.name if iair == 0 else None
                 p = self.ax.plot (thickness.x, thickness.y, ls_thickness, color = color, 
-                                    linewidth= linewidth, **self._marker_style, label=label)
+                                    linewidth= linewidth, **self._marker_style)
                 self._add(p)
 
                 # plot marker for the max values 
@@ -695,10 +693,6 @@ class Thickness_Artist (Airfoil_Line_Artist):
                 self._mark_max_val (thickness, color)
                 self._plot_max_val (camber, airfoil.usedAs, color)
                 self._mark_max_val (camber,    color)
-
-        # suppress autoscale because of printed legend 
-        self.ax.autoscale(enable=False, axis='y')
-
 
 
     def _mark_max_val (self, airfoilLine: Side_Airfoil, color):
@@ -785,9 +779,6 @@ class Bezier_Edit_Artist (Artist):
                 if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
                     markerstyle = '.'
                     markersize = 3
-                elif ipoint == 1 and sideBezier.isJoined:
-                    markerstyle = '.'
-                    markersize = 3
                 elif sideBezier.name == UPPER:
                     markerstyle = 6
                 else: 
@@ -859,29 +850,18 @@ class Bezier_Edit_Artist (Artist):
 
             iPoint = iArtist 
 
-            # do not change LE tangent of joined side 
-            if iPoint ==1 and side.isJoined: 
-                artist_onMove.set_xdata(side.bezier.points_x[1])
-                artist_onMove.set_ydata(side.bezier.points_y[1])         
-            else: 
+            # get new coordinates (when dragged) and try to move control point 
+            x_try, y_try = artist_onMove.get_xydata()[0]
 
-                # get new coordinates (when dragged) and try to move control point 
-                x_try, y_try = artist_onMove.get_xydata()[0]
-
-                # draw all the dependand artists of this side 
-                self.draw_animated_side (side, iPoint, x_try, y_try)
-
-                # if the other side is joined, also update this one
-                if iPoint == 1 and side.has_joined_side: 
-                    if typeTag == UPPER:
-                        other_side   = self.airfoil.geo.lower
-                    else: 
-                        other_side   = self.airfoil.geo.upper
-                    self.draw_animated_side (other_side, 1, None, None)
+            # draw all the dependand artists of this side 
+            self.draw_animated_side (side, iPoint, x_try, y_try)
 
             # finally draw all animated artists
             self.draw_animated_artists ()
 
+
+            
+    
             
 
     def draw_animated_side (self, side : Side_Airfoil_Bezier, iPoint, x, y): 

@@ -12,7 +12,7 @@ Main features:
 
 * Define a planform based on chord distribution functions
 * Major further parameters are the hinge line and flap depth at root and tip
-* Add an arbitrary number of wing sections with fixed position or relative chord length
+* Add wing sections with fixed position or relative chord length
 * Generate blended airfoils for intermediate wing sections ('strak')
 * Import dxf outline of a wing as template for a wing 
 * Export wing definition and airfoils to
@@ -52,7 +52,7 @@ Different "planform types" are available for defining the depth distribution:
 - Bezier with straight trailing edge: A sub-variant of "Bezier" when the planform has a straight trailing edge. 
 - Trapezoid: For the definition of a (multiple) trapezoid wing. The chord is defined by the chord length of the individual segments.
 
-In PC2, the chord distribution is always displayed in normalized form. Both span and chord length range from 0 to 1. This has the advantage that chord distributions - even of different wing designs - can be compared with each other without distortion.
+In PC2, the chord distribution is always displayed in normalized form. Both span and chord length range from 0 to 1. This allows chord distributions - even of different wing designs - to be compared with each other without distortion.
 
 ![PC2](images/Normalized_chord_distribution.png "Varying chord distribution")
 <sup>Variations of the chord distribution using a Bezier curve  </sup>
@@ -139,7 +139,7 @@ The generated planform shouldn't be used directly for a 3D construction in the C
   
 An attempt was made to provide a simple, intuitive UI to be able to 'playfully' explore the program and the design of a new wing. 
 
-![PC2](images/PlanformCreator2_App.png "Planform Creator 2")
+![PC2](images/PlanformCreator2_App_2.png "Planform Creator 2")
 
 The upper tabs are used to switch between the different main display views. On the left (in the 'View' area) are the selection buttons to customize the selected view. A zoom and pan function allows to look at details.
 
@@ -168,6 +168,7 @@ and Install
 pip3 install numpy
 pip3 install matplotlib
 pip3 install customtkinter
+
 pip3 install termcolor
 pip3 install colorama
 pip3 install ezdxf
@@ -175,3 +176,5 @@ pip3 install ezdxf
 
  
 Have fun!
+
+jochen@jxjo.de
