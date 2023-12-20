@@ -19,7 +19,7 @@ The driver for this app was to overcome some of the artefacts using xfoils geome
 
 ## Basic concepts
 
-The `AirfoilEditor` implements different "strategies" to analyse and modify the geometry of a coordinate based airfoil definition comingg from the airfoils '.dat' file.
+The `AirfoilEditor` implements different "strategies" to analyse and modify the geometry of a coordinate based airfoil definition coming from the airfoils '.dat' file.
 
 - 'Linear interpolation' - intermediate points between two coordinate points are evaluated with a simple linear interpolation. This is used for fast preview and basic operations
 - 'Cubic spline interpolation' - a cubic spline is built based on the airfoils coordinate points. This allows to evlauate intermediate points with high precision 
