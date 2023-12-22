@@ -209,7 +209,6 @@ class Eval_With_ToolWindow (ctk.CTkToplevel):
         """ run the function as a thread ..."""
         import threading
 
-        print ("thread starting")
         self._thread = threading.Thread(target=self._functionFn, args=())
         self._thread.start()
 
@@ -226,13 +225,11 @@ class Eval_With_ToolWindow (ctk.CTkToplevel):
                 if callable(self._message):
                     self._msg_widget.configure(text=self._message())
                     self.update()
-                # print ("thread alive")
 
                 # set next poll 
                 self.after (300, self._check_running)
 
             else: 
-                # print ("thread ended")
                 self._close()
 
 
@@ -532,7 +529,6 @@ class Edit_Abstract (ctk.CTkFrame):
         # refresh typically based on changed events 
         for widget in self.widgets:
             if isinstance(widget, Base_Widget): widget.refresh()
-            # print ("  - refresh in ", self.__class__.__name__," for %s widgets" % len(self.widgets))
 
 
 

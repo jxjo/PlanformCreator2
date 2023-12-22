@@ -877,7 +877,7 @@ class Bezier_Edit_Artist (Artist):
             helper_artist = self.helper_lower_artist
         
         # set new bezier points  - will be checked for valid x,y 
-        x, y = side.move_controlPoint_to(iPoint, x, y, allow_overtook=True)
+        x, y = side.move_controlPoint_to(iPoint, x, y)
 
         # draw the cotrol point which is moved
         artist_onMove.set_xdata(x)

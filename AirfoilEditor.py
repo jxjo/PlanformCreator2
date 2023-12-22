@@ -52,7 +52,7 @@ from ui_base            import *
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "1.1 beta"
+AppVersion = "1.1.0"
 
 
 # tk change events for updating mainly plots or vice versa 

@@ -371,6 +371,7 @@ class Base_Widget():
         elif valType == str:  
             s = val
         elif valType == int:
+            val = int (round(val,0))                 # ensure float will be rounded - not cutted
             if limits: 
                 minVal, maxVal = limits
                 val2 = max (int(minVal), int(val))

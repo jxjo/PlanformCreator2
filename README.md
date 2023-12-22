@@ -74,7 +74,7 @@ A little speciality is the so called "banana function". It allows to bent the wi
 <sup>Modifying the flap depth distribution with the 'banana function'</sup>
 </p>
 
-### Wing Sections
+### Wing sections
 
 The airfoils of the wing are defined at 'wing sections'. A wing always has at least 2 wing sections - at root and wing tip. In between, any number of wing sections can be created. There are two types of wing sections, which are defined by their ...
 - span position: The wing section always remains at this position, even if, the wing span or chord distribution is changed
@@ -87,11 +87,11 @@ Finally, a wing section can be assigned to a "flap group". The flaps defined in 
 
 ### Airfoils
 
-A wing section can either be assigned a fixed airfoil or the airfoil can be left open. In this case, a 'strak' (or 'blended') airfoil is created for this wing Section by blending the left and right neighboring airfoils. The "blending ratio" is derived from the ratio of the respective chord length of the wing Sections.
+A wing section can either be assigned a fixed airfoil or the airfoil can be left open. In this case, a 'strak' (or 'blended') airfoil is created for this wing Section by blending the left and right neighboring airfoils. The "blending ratio" is derived from the ratio of the respective chord length of the wing sections.
 
 ![PC2](images/Wing_sections_and_Airfoils.png "Wing sections and airfoils")
 
-<sup>The wing Sections of a wing with the corresponding airfoils. The airfoil at 'section 3' is created by blending JX-GP-100 and JX-GP-055. The airfoils have a "nick name" - here "GP" - to ease readability.  </sup>
+<sup>Wing sections with the corresponding airfoils. The airfoil at 'section 3' is created by blending JX-GP-100 and JX-GP-055. The airfoils have a "nick name" - here "GP" - to ease readability.  </sup>
 </p>
 
 The airfoils can either be viewed in normal, normed scale or in their 'real' scale within their wing sections:

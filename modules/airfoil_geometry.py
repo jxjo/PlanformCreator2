@@ -1019,10 +1019,8 @@ class Side_Airfoil_Bezier (Side_Airfoil):
             return None    
 
 
-    def move_controlPoint_to (self, index, x, y, allow_overtook=False): 
-        """ move Bezier control point to x,y - taking care of order of points. If 'allow_overtook' the new point
-        may overtook its neighbour. 
-
+    def move_controlPoint_to (self, index, x, y): 
+        """ move Bezier control point to x,y - taking care of order of points. 
         If x OR y is None, the coordinate is not changed
 
         Returns x, y of new (corrected) position """
@@ -1035,8 +1033,6 @@ class Side_Airfoil_Bezier (Side_Airfoil):
 
         if index == 0:                          # fixed
             x, y = 0.0, 0.0 
-        elif index == len(px) - 2:              # not too close to TE   
-            x = min (x, 0.95)       
         elif index == 1:                        # only vertical move
             x = 0.0 
             if py[index] > 0: 
@@ -1046,9 +1042,9 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         elif index == len(px) - 1:              # do not move TE gap   
             x = 1.0 
             y = py[index]                       
-        elif not allow_overtook:                      # not too close to neighbour, do not allow to swap position  
-            x = min (x, px[index+1] - 0.03)
-            x = max (x, px[index-1] + 0.03)
+        else:                      
+            x = max (x, 0.01)       
+            x = min (x, 0.99)
 
         self.bezier.set_point (index, x,y) 
 
