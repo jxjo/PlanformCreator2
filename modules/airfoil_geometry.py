@@ -57,6 +57,7 @@ import logging
 from math_util import * 
 from copy import copy, deepcopy
 from spline import Spline1D, Spline2D, Bezier
+from spline import HicksHenne
 from spline import print_array_compact
 
 from common_utils import ErrorMsg
@@ -93,7 +94,7 @@ class Match_Bezier:
 
     @property
     def norm2 (self):
-        """ norm2 deviation of of current bezier to targets at target_x"""
+        """ norm2 deviation of current bezier to targets at target_x"""
         devi = self._deviation_to_target()
         return np.linalg.norm (devi)
 
@@ -212,7 +213,7 @@ class Match_Side_Bezier (Match_Bezier):
         self.ntarget = len(self._targets_x) 
 
         self._target_le_curv = target_le_curv               # also take curvature at le into account
-        self._max_te_curv    = max_te_curv                  # also take curvature ta te into account
+        self._max_te_curv    = max_te_curv                  # also take curvature at te into account
 
 
     @property
@@ -375,8 +376,21 @@ class Match_Side_Bezier (Match_Bezier):
             # print("delta_le ", delta_le)
 
         # if a max te curvature defined, add this to objective
-        if self._target_le_curv:
-            delta = abs(self.bezier.curvature(1.0) - abs(self._max_te_curv))
+        if self._max_te_curv:
+
+            cur_curv_te   = self.bezier.curvature(1.0)
+
+            if self._max_te_curv >= 0.0: 
+                if cur_curv_te >= 0.0: 
+                    delta = cur_curv_te - self._max_te_curv
+                else:
+                    delta = - cur_curv_te
+            else: 
+                if cur_curv_te < 0.0:  
+                    delta = - (cur_curv_te - self._max_te_curv)
+                else:
+                    delta = cur_curv_te
+            # delta = abs(self.bezier.curvature(1.0) - abs(self._max_te_curv))
             if delta > 0: 
                 obj += delta/500                    # add empirical normalized delta     
                 # print("delta_le ", delta_le/500, "  delta te ", delta/200)
@@ -433,7 +447,7 @@ class Curvature_Abstract:
 
     @property
     def max_at_le (self) -> float: 
-        """ max value of curvature at LE  """
+        """ max value of curvature around LE  (index +-2) """
         max = np.amax(np.abs(self.curvature [self.iLe-2: self.iLe+3]))
 
         return max
@@ -780,8 +794,6 @@ class Side_Airfoil_Spline (Side_Airfoil):
         return self._spline
 
 
-
-
     def yFn (self,x):
         """ returns interpolated y values based on a x-value
         """
@@ -889,8 +901,7 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         te_du_end = 0.5                             # size of last du compared to linear du
         te_du_growth = 1.4                          # how fast panel size will grow 
 
-        le_du_start = 0.8
-                                   # size of first du compared to linear du
+        le_du_start = 0.8                           # size of first du compared to linear du                       
         le_du_growth = 1.1                          # how fast panel size will grow 
 
         nPanels = nPoints - 1
@@ -960,6 +971,14 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         set x,y of the mx point of self 
         """
         raise NotImplementedError
+
+
+    def yFn (self,x):
+        """ returns evaluated y values based on a x-value - in high precision
+        """
+        logging.debug (f"{self} eval y on x={x}")
+        return self.bezier.eval_y_on_x (x, fast=False)
+
 
     # ------------------
 
@@ -1091,6 +1110,74 @@ class Side_Airfoil_Bezier (Side_Airfoil):
                 cp_y[icp]  = round(targetSide.yFn (x), 6)                 
 
         self.set_controlPoints (cp_x, cp_y)
+
+
+
+class Side_Airfoil_HicksHenne (Side_Airfoil): 
+    """ 
+    1D line of an airfoil like upper, lower side based on a seed and hh bump functions
+    """
+
+    def __init__ (self, seed_x, seed_y, hhs, name):
+        """
+        1D line of an airfoil like upper, lower side based on a seed and hh bump functions
+
+        Parameters
+        ----------
+        seed_x, seed_y : coordinates of side 1 line, x = 0..1 
+        hhs : list of hicks henne functions  
+        name : either UPPER or LOWER
+             
+        """
+        super().__init__(None, None, name=name)
+
+        if not hhs:
+            self._hhs = []
+        else:
+            self._hhs = hhs                         # the hicks henne functions
+
+        if seed_x is None or seed_y is None:
+            raise ValueError ("seed coordinates for hicks henne side are missing")
+        else:
+            self._seed_x    = seed_x            
+            self._seed_y    = seed_y            
+
+
+    @property
+    def hhs(self) -> list:
+        """ returns the hicks henne functions of self"""
+        return self._hhs
+
+    def set_hhs (self, hhs : list):
+        """ set the hicks henne functions of self"""
+        self._hhs = hhs
+
+    @property
+    def nhhs (self): 
+        """ number of hicks henne functions """
+        return len(self.hhs)
+
+
+    @property
+    def x (self) -> np.ndarray:
+        # overloaded - master is seed 
+        return self._seed_x
+    
+    @property
+    def y (self)  -> np.ndarray: 
+        # overloaded  - sum up hicks henne functions to seed_y
+
+        if self._y is None: 
+            self._y = self._seed_y
+            hh : HicksHenne
+
+            for hh in self._hhs: 
+                self._y = self._y + hh.eval (self.x)
+
+        return self._y
+        # return self._seed_y
+
+    # ------------------
 
 
 
@@ -2139,6 +2226,68 @@ class Geometry_Bezier (Geometry):
         lower_y = np.round(lower_y, 10)
 
         return Side_Airfoil (new_x, lower_y, name=LOWER)
+
+
+
+
+class Geometry_HicksHenne (Geometry): 
+    """ 
+    Geometry based on a seed airfoil and hicks henne bump (hh) functions for upper and lower side 
+    """
+    
+    isBasic = False
+    description = "based on a seed and hicks henne functions"
+
+    sideDefaultClass = Side_Airfoil
+
+    def __init__ (self, seed_x : np.ndarray, seed_y : np.ndarray):
+        """new Geometry based on a seed airfoil and hicks henne bump (hh) functions for upper and lower side"""
+        super().__init__(None, None)        
+
+        self._seed_x     = seed_x
+        self._seed_y     = seed_y 
+        self._upper      = None                 # upper side as Side_Airfoil_HicksHenne object
+        self._lower      = None                 # lower side 
+
+    @property
+    def upper(self) -> 'Side_Airfoil_HicksHenne': 
+        """the upper surface as a Side_Airfoil_HicksHenne object - where x 0..1"""
+        # overloaded
+        if self._upper is None: 
+            iLe = int(np.argmin (self._seed_x))
+            upper_x = np.flip (self._seed_x [0: iLe + 1])
+            upper_y = np.flip (self._seed_y [0: iLe + 1])
+            self._upper = Side_Airfoil_HicksHenne (upper_x, upper_y, [], name=UPPER)
+        return self._upper 
+            
+    @property
+    def lower(self) -> 'Side_Airfoil_HicksHenne': 
+        """the lower surface as a Side_Airfoil_HicksHenne object - where x 0..1"""
+        # overloaded
+        if self._lower is None: 
+            iLe = int(np.argmin (self._seed_x))
+            lower_x = self._seed_x [iLe:]
+            lower_y = self._seed_y [iLe:]
+            self._lower = Side_Airfoil_HicksHenne (lower_x, lower_y, [], name=LOWER)
+        return self._lower 
+            
+    @property
+    def x (self):
+        # overloaded  - take from hicks henne 
+        return np.concatenate ((np.flip(self.upper.x), self.lower.x[1:]))
+
+    @property
+    def y (self):
+        # overloaded  - take from hcks henne  
+        return np.concatenate ((np.flip(self.upper.y), self.lower.y[1:]))
+    
+    @property
+    def nPoints (self): 
+        """ number of coordinate points"""
+        return len (self.upper.x) + len (self.lower.x) - 1
+
+
+    # ------------------ private ---------------------------
 
 
 

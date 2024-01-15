@@ -697,7 +697,7 @@ class Bezier:
 
     def eval (self, u, der=0):
         """
-        Evaluate self. Results will be cached for some u and control points 
+        Evaluate self. Results will be cached for same u and control points 
 
         Parameters
         ----------
@@ -763,21 +763,20 @@ class Bezier:
 
         else: 
 
-            # nelder mead
-            # u = findMin (lambda u: abs(self._eval(self._px,u) - x), 0.5, bounds=(0, 1), \
-            #              no_improve_thr=no_improve_thr) 
-
-            if x < 0.05:                    # good start value für newton iteration 
-                u0 = 0.05
-            elif x > 0.95:
-                u0 = 0.95
+            if x == self._eval_1D(self._px,0.0):    # avoid numerical issues of Newton 
+                u = 0.0
             else: 
-                u0 = x 
+                if x < 0.05:                        # good start value für newton iteration 
+                    u0 = 0.05
+                elif x > 0.95:
+                    u0 = 0.95
+                else: 
+                    u0 = x                          # first estimation 
 
-            # find u value for x
-            u, niter  = newton (lambda u: self._eval_1D(self._px,u) - x,
-                        lambda u: self._eval_1D(self._px,u, der=1) , u0, 
-                        epsilon=epsilon, max_iter=20, bounds=(0.0,1.0))
+                # find u value for x
+                u, niter  = newton (lambda u: self._eval_1D(self._px,u) - x,
+                            lambda u: self._eval_1D(self._px,u, der=1) , u0, 
+                            epsilon=epsilon, max_iter=20, bounds=(0.0,1.0))
 
             # eval y for u value
             y =  self._eval_1D (self._py, u)
@@ -898,6 +897,86 @@ class Bezier:
         return bezier
 
 
+
+#------------ Hicks Henne  -----------------------------------
+
+# although Hicks Henne bump functions are no 'splines' it is implmented here for 
+#    not to have an extra module   
+
+
+# class for evaluating a single hicks henne function  
+
+class HicksHenne: 
+    """
+    Hicks Henne function defined by strength, location and width  
+    """
+
+    def __init__ (self, strength : float, location : float, width : float):
+        """
+        Hicks Henne function defined by strength, location and width 
+        """
+
+        self._strength = strength                         
+        self._location = location
+        self._width    = width
+
+        self._x  = None                         # cached x,y results
+        self._y  = None
+
+
+    def eval (self, x):
+        """
+        Evaluate self. Results will be cached for same x  
+
+        Parameters
+        ----------
+        x :   Scalar or an array of x 0..1 at which to return the value of hh
+
+        Returns
+        -------
+        y : Scalar or an array representing the evaluated values
+        """
+
+        if np.array_equal (x, self._x) and (not self._x is None) :
+            y = self._y 
+        else: 
+            y = self._eval_y (x)
+
+        if not np.isscalar(x):      
+            self._x = x
+            self._y = y
+        return y
+
+
+    def _eval_y (self, x):
+        #
+        #                Hicks Henne Core
+        #
+
+        if x is None or (np.isscalar(x) and (x > 1.0 or x < 0.0)):
+            raise ValueError ("Hicks Henne: x = %s not valid " %x)
+
+        # init result (array)
+        if np.isscalar(x):
+            y = 0.0
+        else: 
+            y = np.zeros (np.size(x))
+
+        t1 = self._location
+        t2 = self._width
+        st = self._strength
+
+        t1 = min (t1, 0.999)
+        t1 = max (t1, 0.001)
+        t2 = max (t2, 0.01)
+        power = math.log10 (0.5) / math.log10 (t1)
+
+        # eval Hicks Henne - Fortran: y(i) = st * sin (pi * x(i) **power)**t2
+
+        y = st * np.power (np.sin ( math.pi * np.power(x, power)), t2)
+        y = np.round (y, 10)
+
+        return y
 
 
 

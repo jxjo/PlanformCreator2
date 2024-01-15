@@ -38,7 +38,8 @@ sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 
 from common_utils       import * 
 
-from airfoil            import Airfoil, Airfoil_Bezier, GEO_BASIC, GEO_SPLINE
+from airfoil            import Airfoil, Airfoil_Bezier, Airfoil_Hicks_Henne
+from airfoil            import GEO_BASIC, GEO_SPLINE
 from airfoil            import NORMAL
 from airfoil_geometry   import Geometry, Side_Airfoil_Bezier, UPPER, LOWER
 from airfoil_geometry   import Match_Side_Bezier
@@ -784,6 +785,8 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
 
         super().setup_artists ()
 
+        self.airfoilArtist.set_show_bezier (False)          # this is done bei bezierArtist
+
 
     def re_create_axes (self):
         """ re create axes to add/remove curvature diagram """
@@ -837,8 +840,10 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
     @property
     def show_original(self) -> bool: return self._show_original
     def set_show_original (self, aBool):
-        self._show_original = aBool
+        self._show_original = aBool                         # will filter self.airfoils 
         self.airfoilArtist.refresh(figureUpdate=True)
+        if self.curvatureArtist:
+            self.curvatureArtist.refresh(figureUpdate=True)
 
     @property
     def show_diff(self) -> bool: return self._show_diff
@@ -1340,7 +1345,7 @@ class Dialog_Normalize (Dialog_Airfoil_Abstract):
     """
     name        ='Normalize airfoil'
     nameExt     ='-norm'
-    widthFrac   = 0.46
+    widthFrac   = 0.48
     heightFrac  = 0.32
 
     def init (self):
@@ -1731,7 +1736,7 @@ class Dialog_Blend_Airfoils (Dialog_Airfoil_Abstract):
     def select_airfoil(self):
         """ select airfoil with explorer and load it if possible """
 
-        filetypes  = [('dat files', '*.dat')]
+        filetypes  = [('Airfoil files', '*.dat')]
     
         newPathFilename = filedialog.askopenfilename(
                     title='Select airfoil file',
@@ -1821,16 +1826,20 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         if not self.airfoilOrg.isNormalized:                        # also LE of spline at 0,0? 
             self.airfoilOrg.normalize() 
 
-        self.airfoil    = Airfoil_Bezier (name=self.airfoil.name) 
+        self.airfoil    = Airfoil_Bezier (name=self.airfoil.name)   # a new sample bezier
+        self.airfoil.set_usedAs (DESIGN)                            # will indicate airfoil when plotted 
 
         # check for existing .bez file for airfoil 
         loaded =  self._load_bezier_ifExist (self.airfoilOrg.pathFileName) 
         if loaded:                                                  # delayed message - we are in init 
-            message= f"Bezier definition red from \n\n {self.airfoil.pathFileName_bezier}"
+            message= f"Bezier definition red from \n\n" + \
+                     f"{os.path.basename(self.airfoil.pathFileName_bezier)}"
             ToolWindow (self, message, after=1000, duration=1500)
 
-        self.airfoil.set_usedAs (DESIGN)                            # will indicate airfoil when plotted 
-        self.airfoil.set_isModified(True)           
+            self.airfoil.set_isModified(False)
+        else:  
+            self.airfoil.set_isLoaded (True)                        # the sample is loaded          
+            self.airfoil.set_isModified(True)           
         super().refresh()                                           # airfoil modified - save warning          
 
 
@@ -2297,11 +2306,17 @@ class AirfoilEditor ():
             ErrorMsg ("Could not add %s to airfoil list" % aPathFileName )
 
     def _getAirfoilFiles_sameDir (self, anAirfoilFile): 
-        """ returns the list of airfoilFiles in the same directory as anAirfoilFile"""
+        """ 
+        Returns the list of airfoilFiles path in the same directory as anAirfoilFile
+        All .dat, .bez and .hicks files are collected 
+        """
 
         if os.path.isfile (anAirfoilFile):
             airfoil_dir = os.path.dirname(anAirfoilFile)
-            airfoil_files = fnmatch.filter(os.listdir(airfoil_dir), '*.dat')
+            dat_files = fnmatch.filter(os.listdir(airfoil_dir), '*.dat')
+            bez_files = fnmatch.filter(os.listdir(airfoil_dir), '*.bez')
+            hh_files  = fnmatch.filter(os.listdir(airfoil_dir), '*.hicks')
+            airfoil_files = dat_files + bez_files + hh_files
             airfoil_files = [os.path.normpath(os.path.join(airfoil_dir, f)) \
                                 for f in airfoil_files if os.path.isfile(os.path.join(airfoil_dir, f))]
             return sorted (airfoil_files)
@@ -2311,7 +2326,7 @@ class AirfoilEditor ():
 
     def _set_title(self):
         """ sets window title of self """
-        self.main.title (AppName + "  v" + str(AppVersion) + "  [" + self.curAirfoil().name + "]")
+        self.main.title (AppName + "  v" + str(AppVersion) + "  [" + self.curAirfoil().fileName + "]")
 
 
     def edit_settings (self):
@@ -2325,7 +2340,7 @@ class AirfoilEditor ():
     def open (self):
         """ open a new wairfoil and load it"""
 
-        filetypes  = [('Airfoil files', '*.dat')]
+        filetypes  = [('Airfoil files', '*.dat'), ('Bezier files', '*.bez'), ('Hicks Henne files', '*.hicks')]
         newPathFilenames = filedialog.askopenfilenames(
                     title='Select one or more airfoils',
                     initialdir=os.getcwd(),
@@ -2346,14 +2361,21 @@ class AirfoilEditor ():
             if pathFilename == "Root_Example":
                 airfoil = Root_Example()
             else:
-                airfoil = Airfoil(pathFileName=pathFilename, geometry=GEO_BASIC)
-                airfoil.set_usedAs (NORMAL)
+                extension = os.path.splitext(pathFilename)[1]
+                if extension == ".bez":
+                    airfoil = Airfoil_Bezier (pathFileName=pathFilename)
+                elif extension == ".hicks":
+                    airfoil = Airfoil_Hicks_Henne (pathFileName=pathFilename)
+                else: 
+                    airfoil = Airfoil(pathFileName=pathFilename, geometry=GEO_BASIC)
+            airfoil.set_usedAs (NORMAL)
         airfoil.load()
 
-        self.curAirfoilFile = airfoil.pathFileName
-        if self.main:                               # during startup there is no main 
-            self.set_curAirfoil (airfoil, initial=initial)
-            self._set_title()
+        if airfoil.isLoaded:                            # could have been error in loading
+            self.curAirfoilFile = airfoil.pathFileName
+            if self.main:                               # during startup there is no main 
+                self.set_curAirfoil (airfoil, initial=initial)
+                self._set_title()
 
 
     def ok_return(self): 
@@ -2388,7 +2410,7 @@ if __name__ == "__main__":
 
     # init logger 
 
-    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.WARNING) # filename='myapp.log', 
+    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG) # filename='myapp.log', 
     # suppress debug messages from these modules 
     logging.getLogger('matplotlib.font_manager').disabled = True
     logging.getLogger('PIL.PngImagePlugin').disabled = True

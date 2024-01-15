@@ -14,7 +14,10 @@ from common_utils       import *
 
 from airfoil            import Airfoil, Airfoil_Bezier
 from airfoil            import NORMAL, SEED,SEED_DESIGN, REF1, REF2, DESIGN, FINAL
-from airfoil_geometry   import Side_Airfoil, Side_Airfoil_Bezier, Curvature_Abstract, UPPER, LOWER
+from airfoil_geometry   import Side_Airfoil, Side_Airfoil_Bezier, Side_Airfoil_HicksHenne
+from airfoil_geometry   import Curvature_Abstract, UPPER, LOWER
+
+from spline             import HicksHenne
 
 cl_planform         = 'whitesmoke'
 cl_editing          = 'deeppink'
@@ -86,10 +89,11 @@ class Airfoil_Artist (Artist):
         super().__init__ (axes, modelFn, **kwargs)
 
         self._points = False                    # show point marker 
-        self._show_bezier = False               # draw Bezier control points and helper line
+        self._show_bezier = True                # draw Bezier control points and helper line
+        self._show_hicksHenne = True            # draw hicks henne bumbs 
         self.set_showLegend('extended')         # show  legend with airfoil data 
 
-
+ 
     @property
     def points(self): return self._points
     def set_points (self, aBool): self._points = aBool 
@@ -97,6 +101,10 @@ class Airfoil_Artist (Artist):
     @property
     def show_bezier(self): return self._show_bezier
     def set_show_bezier (self, aBool): self._show_bezier = aBool 
+
+    @property
+    def show_hicksHenne(self): return self._show_hicksHenne
+    def set_show_hicksHenne (self, aBool): self._show_hicksHenne = aBool 
 
 
     def set_current (self, aLineLabel, figureUpdate=False):
@@ -149,17 +157,22 @@ class Airfoil_Artist (Artist):
 
                 if airfoil.isBezierBased and self.show_bezier: 
                     self.draw_controlPoints (airfoil, self._get_color(p))
+                    self._plot_title ('Bezier based', va='top', ha='left', wspace=0.05, hspace=0.05)
+
+                if airfoil.isHicksHenneBased and self.show_hicksHenne: 
+                    self.draw_hicksHenne (airfoil, self._get_color(p))
+                    self._plot_title ('Hicks Henne based', va='top', ha='left', wspace=0.05, hspace=0.05)
 
                 self._cycle_color()                             # in colorycle are pairs  - move to next
 
                 if self._pickActive: 
                     self._makeObjectPickable (p)
 
-            # print a table for the max values 
-            if self.showLegend == 'extended':
-                self._print_values (iair, airfoil, color)
-            elif self.showLegend == 'normal':
-                self._print_name (iair, airfoil, color)
+                # print a table for the max values 
+                if self.showLegend == 'extended':
+                    self._print_values (iair, airfoil, color)
+                elif self.showLegend == 'normal':
+                    self._print_name (iair, airfoil, color)
 
         # suppress autoscale because of printed legend 
         self.ax.autoscale(enable=False, axis='y')
@@ -184,6 +197,32 @@ class Airfoil_Artist (Artist):
             y = sideBezier.bezier.points_y
             p = self.ax.plot (x,y, linestyle, linewidth=linewidth, marker=markerstyle, markersize=markersize, color=color) 
             self._add(p)
+
+
+    def draw_hicksHenne (self, airfoil: Airfoil_Bezier, color):
+        """ draw Bezier control Points of airfoil """
+
+        linewidth   = 0.7
+        linestyle   = '-'
+
+        side : Side_Airfoil_HicksHenne
+
+        for side in [airfoil.geo.upper, airfoil.geo.lower]:
+        # side = airfoil.geo.upper
+
+            if side.name == UPPER:
+                linestyle   = '--'
+                delta_y =  0.1
+            else:
+                linestyle   = '--'
+                delta_y = -0.1
+
+            hh : HicksHenne
+            for hh in side.hhs:
+                x = side.x 
+                y = hh.eval (x) * 10 + delta_y
+                p = self.ax.plot (x,y, linestyle, linewidth=linewidth ) 
+                self._add(p)
 
 
     def _print_name (self, iair, airfoil: Airfoil, color):

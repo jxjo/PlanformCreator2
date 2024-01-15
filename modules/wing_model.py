@@ -2632,7 +2632,7 @@ class WingSection:
         else: 
             teGap = None 
 
-        filePathName = self.airfoil.copyAs(dir=toDir, destName = newName, teGap = teGap)
+        filePathName = self.airfoil.save_copyAs(dir=toDir, destName = newName, teGap = teGap)
 
         return os.path.basename(filePathName) 
         

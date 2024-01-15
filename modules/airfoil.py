@@ -6,13 +6,14 @@
 
 """
 from typing import Type
+import logging
 
 import os
 from pathlib import Path
 import numpy as np
 from math_util import * 
 from common_utils import * 
-from airfoil_geometry import Geometry_Splined, Geometry, Geometry_Bezier
+from airfoil_geometry import Geometry_Splined, Geometry, Geometry_Bezier, Geometry_HicksHenne
 from airfoil_geometry import Side_Airfoil, Side_Airfoil_Bezier, UPPER, LOWER
 
 
@@ -46,6 +47,7 @@ class Airfoil:
     isEdited            = False
     isExample           = False                      # vs. Example_Airfoil 
     isBezierBased       = False
+    isHicksHenneBased   = False
 
 
     def __init__(self, x= None, y = None, name = None,
@@ -59,7 +61,7 @@ class Airfoil:
             name: optional         - name of airfoil - no checks performed 
             x,y: optional          - the coordinates of airfoil 
             geometry: optional     - the geometry staretegy either GEO_BASIC, GEO_SPLNE...
-            workingDir: optional   - base directoty whre pathFileName is relative 
+            workingDir: optional   - base directoty where pathFileName is relative 
         """
 
         self.pathFileName = None
@@ -459,7 +461,16 @@ class Airfoil:
         else:
             return None
 
-        
+    @property
+    def pathName (self):
+        """
+        directory pathname of airfoil like '..\\myAirfoils\\'
+        """
+        if not self.pathFileName is None: 
+            return os.path.dirname(self.pathFileName) 
+        else:
+            return None
+
 
     def load (self, fromPath = None):
         """
@@ -542,21 +553,28 @@ class Airfoil:
         return self.pathFileName
 
 
-    def cloneTo (self, dir : str = None, destName : str = None) -> 'Airfoil':
-        """
-        return a copy of self with dir and destName (the airfoil can be renamed).
-        The new airfoil is *not* saved to file but it's directory will be created if not exist 
 
-        Args:
+    def save_copyAs (self, dir = None, destName = None, teGap=None ):
+        """
+        Write a copy of self to destPath and destName (the airfoil can be renamed).
+        Self remains with its current values.
+        Optionally a new teGap may be defined for the exported airfoil  
+
+        Args: 
             dir: -optional- new directory for the airfoil 
-            destName: - optional- new name - if none, name of self will be taken 
-            nameExt: -optional- a name extension which will be appended to the new name 
+            destName: - optional- new name
+            teGap: -optional- new TE gap in x,y coordinates 
 
         Returns: 
-            new Airfoil  
+            newPathFileName from dir and destName 
         """        
 
-        if not self.isLoaded: self.load()
+        # te gap name extension 
+        if teGap is not None: 
+            teText = '_te=%.2f' % (teGap * 100)                 # te thickness in percent
+        else: 
+            teText = ''
+        destName = destName + teText if destName else None 
 
         # determine (new) airfoils name  if not provided
         if not destName:
@@ -579,36 +597,10 @@ class Airfoil:
         else: 
             newPathFileName = destName + '.dat'
 
-        airfoil = Airfoil.asCopy (self, name=destName, pathFileName=newPathFileName)
-        
-        return airfoil
-    
-
-
-    def copyAs (self, dir = None, destName = None, teGap=None ):
-        """
-        Write a copy of self to destPath and destName (the airfoil can be renamed).
-        Self remains with its current values.
-        Optionally a new teGap may be defined for the exported airfoil  
-
-        Args: 
-            dir: -optional- new directory for the airfoil 
-            destName: - optional- new name
-            teGap: -optional- new TE gap in x,y coordinates 
-
-        Returns: 
-            newPathFileName from dir and destName 
-        """        
-
-        # te gap name extension 
-        if teGap is not None: 
-            teText = '_te=%.2f' % (teGap * 100)                 # te thickness in percent
-        else: 
-            teText = ''
-        destName = destName + teText if destName else None 
-
         # create temp new airfoil 
-        airfoil = self.cloneTo (dir = dir, destName = destName )
+        if not self.isLoaded: self.load()
+
+        airfoil = Airfoil.asCopy (self, name=destName, pathFileName=newPathFileName)
 
         if teGap is not None: 
             airfoil.set_teGap_perc (teGap * 100)
@@ -732,17 +724,18 @@ class Airfoil_Bezier(Airfoil):
     isBezierBased  = True
 
 
-    def __init__(self, name = None, workingDir= None):
+    def __init__(self, name = None, pathFileName=None, workingDir= None):
         """
-        Main constructor for new Airfoil
+        Main constructor for new Bezier Airfoil
 
         Args:
-            pathFileName: optional - string of existinng airfoil path and name \n
+            pathFileName: optional - string of existinng airfoil path and name 
             name: optional - name of airfoil - no checks performed 
         """
-        super().__init__( name = name, workingDir= workingDir)
+        super().__init__( name = name, pathFileName=pathFileName, workingDir=workingDir)
 
-        self._geometryClass  = Geometry_Bezier     # geometry startegy 
+        self._geometryClass  = Geometry_Bezier      # geometry startegy 
+        self._isLoaded       = False                # bezier definition loaded? 
 
     @property
     def pathFileName_bezier (self) -> str: 
@@ -754,7 +747,10 @@ class Airfoil_Bezier(Airfoil):
 
     @property
     def isLoaded (self): 
-        return True
+        # overloaded
+        return self._isLoaded
+    def set_isLoaded (self, aBool: bool):
+        self._isLoaded = aBool
 
     @property
     def geo (self) -> Geometry_Bezier:
@@ -796,13 +792,24 @@ class Airfoil_Bezier(Airfoil):
     def reset (self): 
         """ make child curves like thickness or camber invalid """
         self.geo._reset_lines()
-    
-    def load_bezier (self, fromPath):
+
+
+    def load (self):
         """
-        Loads bezier deinition from file. 
+        Overloaded: Loads bezier definition instead of .dat from file" 
+        """    
+
+        return self.load_bezier()
+
+    def load_bezier (self, fromPath=None):
+        """
+        Loads bezier definition from file. 
         pathFileName must be set before or fromPath must be defined.
         Load doesn't change self pathFileName
         """    
+
+        if fromPath is None: 
+            fromPath = self.pathFileName
 
         with open(fromPath, 'r') as file:            
 
@@ -840,9 +847,9 @@ class Airfoil_Bezier(Airfoil):
                         if "bottom" in line and curveType == UPPER: raise ValueError ("Missing 'Bottom Top'") 
                         self.set_newSide_for (curveType, px,py)
                     else:     
-                        splitline = line.strip().split(" ",1)
+                        splitline = line.strip().split()
                         if len(splitline) == 1:                        # couldn't split line - try tab as separator
-                            splitline = line.strip().split("\t",1)
+                            splitline = line.strip().split("\t")
                         if len(splitline) >= 2:                     
                             px.append (float(splitline[0].strip()))
                             py.append (float(splitline[1].strip()))
@@ -851,6 +858,10 @@ class Airfoil_Bezier(Airfoil):
             return 0 
          
         self._name = new_name
+        self._isLoaded = True 
+
+        logging.debug (f"Bezier definition for {self.name} loaded")
+
         return True  
 
         
@@ -880,6 +891,177 @@ class Airfoil_Bezier(Airfoil):
             file.write("Bottom End\n" )
 
             file.close()
+
+
+
+
+#------------------------------------------------------
+
+class Airfoil_Hicks_Henne(Airfoil):
+    """ 
+
+    Airfoil based on a seed airfoil and hicks henne bump (hh) functions for upper and lower side 
+
+    """
+
+    isHicksHenneBased  = True
+
+
+    def __init__(self, name = None, pathFileName=None, workingDir= None):
+        """
+        Main constructor for new Airfoil
+
+        Args:
+            pathFileName: optional - string of existinng airfoil path and name \n
+            name: optional - name of airfoil - no checks performed 
+        """
+        super().__init__( name = name, pathFileName=pathFileName, workingDir=workingDir)
+
+        self._geometryClass  = Geometry_HicksHenne  # geometry strategy 
+        self._isLoaded       = False                # hicks henne definition loaded? 
+
+    @property
+    def pathFileName_hh (self) -> str: 
+        """ pathfileName of the hh definition file """
+        if self.pathFileName:  
+            return os.path.splitext(self.pathFileName)[0] + ".hicks"
+        else: 
+            return None 
+
+    @property
+    def isLoaded (self): 
+        # overloaded
+        return self._isLoaded
+
+    @property
+    def geo (self) -> Geometry_HicksHenne:
+        """ the geometry strategy of self"""
+        return self._geo
+
+    def set_geo (self, geometry: Geometry_Bezier):
+        """ set new geometry hicks henne object  """
+        if not isinstance (geometry, self._geometryClass): return 
+        self._geo = geometry  
+
+
+    def set_xy (self, x, y):
+        """ hh - do nothing """
+
+        # overloaded - hh geometry is master of data 
+        pass
+
+    @property
+    def x (self):
+        # overloaded  - take from geometry hh 
+        return self.geo.x
+
+    @property
+    def y (self):
+        # overloaded  - take from geometry hh  (seed airfoil and hicks henne are added)
+        return self.geo.y
+
+    # -----------------
+
+    def reset (self): 
+        """ make child curves like thickness or camber invalid """
+        self.geo._reset_lines()
+
+
+    def load (self):
+        """
+        Overloaded: Loads bezier definition instead of .dat from file" 
+        """    
+
+        return self.load_hh()
+
+    def load_hh (self, fromPath=None):
+        """
+        Loads hicks henne definition from file. 
+        """    
+
+        if fromPath is None: 
+            fromPath = self.pathFileName
+
+        seed_foilName, top_hhs, bot_hhs = self._read_hh_file (fromPath)
+
+        if seed_foilName: 
+            seed_pathFileName = os.path.join(self.pathName, seed_foilName+'.dat')
+            seed_foil = Airfoil (pathFileName=seed_pathFileName)
+            seed_foil.load ()
+
+            if seed_foil.isLoaded: 
+                self._geo = Geometry_HicksHenne (seed_foil.x, seed_foil.y)
+                self._geo.upper.set_hhs (top_hhs)
+                self._geo.lower.set_hhs (bot_hhs)
+
+                self._isLoaded = True 
+                logging.debug (f"Hicks Henne definition for {self.name} loaded")
+            else: 
+                ErrorMsg (f"Hicks Henne seed airfoil {seed_pathFileName} couldn't be loaded ")
+
+
+    def _read_hh_file (self, fromPath):
+        """
+        reads hicks henne definition from file. 
+        """    
+
+        from spline import HicksHenne
+
+        with open(fromPath, 'r') as file:            
+
+            file_lines = file.readlines()
+
+        
+        # format of bezier airfoil file 
+
+        # 'seed airfoil name'
+        # Top Start
+        # 0.000_strength_0000000 0.0000_location_00000 0.0000_width_00000
+        # ...
+        # Top End
+        # Bottom Start
+        # ...
+        # Bottom End
+        seed_name = ''                           #  name of seed airfoil 
+        top_hhs = []
+        bot_hhs = []
+        curveType = None
+
+        try: 
+            hhs = []
+            for i, line in enumerate(file_lines):
+                line = line.lower()
+                if i == 0:
+                    seed_name = line.strip()
+                else: 
+                    if "start" in line:
+                        if "top" in line: 
+                            curveType = UPPER
+                        else:
+                            curveType = LOWER 
+                        hhs = []
+                    elif "end" in line:
+                        if not curveType : raise ValueError("Start line missing")
+                        if "top"    in line and curveType == LOWER: raise ValueError ("Missing 'Bottom End'")  
+                        if "bottom" in line and curveType == UPPER: raise ValueError ("Missing 'Bottom Top'") 
+
+                        if curveType == LOWER:
+                            bot_hhs = hhs
+                        else: 
+                            top_hhs = hhs 
+                        curveType = None
+                    else:     
+                        splitline = line.split()
+                        if len(splitline) == 3:                     
+                            strength = float(splitline[0].strip())
+                            location = float(splitline[1].strip())
+                            width    = float(splitline[2].strip())
+                            hhs.append (HicksHenne (strength, location, width ))
+        except ValueError as e:
+            ErrorMsg ("While reading Hicks Henne file '%s': %s " %(fromPath,e ))   
+         
+        return seed_name, top_hhs, bot_hhs   
+
 
 
 

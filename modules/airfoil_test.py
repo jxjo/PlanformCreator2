@@ -204,7 +204,7 @@ class Test_Airfoil:
 
         teGap_perc = 1
         destName = 'huhu'
-        newPathFileName = airfoil.copyAs (dir=str(p_tmp), destName=destName, teGap=teGap_perc/100)
+        newPathFileName = airfoil.save_copyAs (dir=str(p_tmp), destName=destName, teGap=teGap_perc/100)
 
         new_airfoil = Airfoil (pathFileName=newPathFileName)
         new_airfoil.load()
@@ -246,8 +246,34 @@ class Test_Airfoil_Bezier:
         assert airfoil.nPanels == 200
         assert airfoil.isNormalized       
         assert airfoil.teGap_perc == 0.0
-        assert geo.le_real           == (0.0, 0.0)
+        assert geo.le_real == (0.0, 0.0)
 
+        # u default distribution  
+
+        assert len(geo.upper._u) == 101
+        assert round(sum(geo.upper._u),6) == 50.732829
+
+        # eval y on u
+
+        checksum = 0.0 
+        u = np.linspace (0.0, 1.0, 10)
+        y = [0] * 10 
+        for i in range(len(u)):
+            y[i] = geo.upper.bezier.eval_y (u[i])
+            checksum += y[i]
+        print (y)
+
+        # eval y on x
+
+        checksum = 0.0 
+        x = np.linspace (0.0, 1.0, 10)
+        y = [0] * 10 
+        for i in range(len(x)):
+            y[i] = geo.upper.yFn (x[i])
+            checksum += y[i]
+        print (y)
+
+        
         # thickness, camber 
 
         assert geo.thickness.maximum == (0.3140345, 0.111065)
