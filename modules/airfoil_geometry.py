@@ -215,12 +215,18 @@ class Match_Side_Bezier (Match_Bezier):
         self._target_le_curv = target_le_curv               # also take curvature at le into account
         self._max_te_curv    = max_te_curv                  # also take curvature at te into account
 
+        self._isUpper = target_side.name == UPPER           # upper side?
 
     @property
     def bezier (self) -> Bezier:
         """ bezier curve of self"""
         return self._bezier
 
+    @property
+    def isUpper (self):
+        """ is upper side?"""
+        return self._isUpper
+    
     @property
     def ncp (self) -> int:
         """ number of contro points"""
@@ -378,7 +384,11 @@ class Match_Side_Bezier (Match_Bezier):
         # if a max te curvature defined, add this to objective
         if self._max_te_curv:
 
-            cur_curv_te   = self.bezier.curvature(1.0)
+            # ! curvature on side_upper is negative !
+            if self.isUpper: 
+                cur_curv_te   = -self.bezier.curvature(1.0)
+            else:
+                cur_curv_te   = self.bezier.curvature(1.0)
 
             if self._max_te_curv >= 0.0: 
                 if cur_curv_te >= 0.0: 
@@ -391,9 +401,9 @@ class Match_Side_Bezier (Match_Bezier):
                 else:
                     delta = cur_curv_te
             # delta = abs(self.bezier.curvature(1.0) - abs(self._max_te_curv))
-            if delta > 0: 
-                obj += delta/500                    # add empirical normalized delta     
-                # print("delta_le ", delta_le/500, "  delta te ", delta/200)
+            if delta > 0.2: 
+                obj += delta/1000                    # add empirical normalized delta     
+                print("delta_te ", delta, self._max_te_curv, cur_curv_te)
 
         # counter of objective evaluations (for entertainment)
         self._nevals += 1
@@ -963,7 +973,10 @@ class Side_Airfoil_Bezier (Side_Airfoil):
 
     @property
     def curvature (self): 
-        """returns a Side_Airfoil with curvature in .y """
+        """returns a Side_Airfoil with curvature in .y 
+        !! as side is going from 0..1 the upper side has negative value 
+        !! compared to curvature of airfoil which is 1..0..1
+        """
         return Side_Airfoil (self.x, self.bezier.curvature(self._u), name='curvature')
    
     def set_maximum (self, newX=None, newY=None): 

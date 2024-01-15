@@ -156,8 +156,9 @@ class Airfoil_Artist (Artist):
                 self._add (p)
 
                 if airfoil.isBezierBased and self.show_bezier: 
-                    self.draw_controlPoints (airfoil, self._get_color(p))
-                    self._plot_title ('Bezier based', va='top', ha='left', wspace=0.05, hspace=0.05)
+                    if not airfoil.usedAs == DESIGN:            # a seperate artist will show 
+                        self.draw_controlPoints (airfoil, self._get_color(p))
+                        self._plot_title ('Bezier based', va='top', ha='left', wspace=0.05, hspace=0.05)
 
                 if airfoil.isHicksHenneBased and self.show_hicksHenne: 
                     self.draw_hicksHenne (airfoil, self._get_color(p))

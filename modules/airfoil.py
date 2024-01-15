@@ -149,38 +149,6 @@ class Airfoil:
             return None 
         
 
-    @classmethod
-    def asCopy (cls, sourceAirfoil: 'Airfoil', pathFileName = None, 
-                name=None, nameExt=None,
-                geometry=None) -> 'Airfoil':
-        """
-        Alternate constructor for new Airfoil based on another airfoil  
-
-        Args:
-            sourceAirfoil: the source airfoil to copy
-            pathFileName: optional - string of existinng airfoil path and name 
-            name: optional         - name of airfoil - no checks performed 
-            nameExt: -optional     - will be appended to self.name (if name is not provided)
-            geometry: optional     - the geometry staretegy either GEO_BASIC, GEO_SPLNE...
-        """
-        if pathFileName is None and name is None: 
-            pathFileName = sourceAirfoil.pathFileName
-
-        if name is None:
-            name = sourceAirfoil.name + nameExt if nameExt else sourceAirfoil.name
-
-        x = np.copy (sourceAirfoil.x)               # initial coordinates
-        y = np.copy (sourceAirfoil.y)
-
-        geometry = geometry if geometry else sourceAirfoil._geometryClass
-
-        airfoil =  cls(x = x, y = y, name = name, 
-                       pathFileName = pathFileName, 
-                       geometry = geometry )
-        return airfoil 
-
-
-
     def _save (self, airfoilDict):
         """ stores the variables into the dataDict - returns the filled dict"""
         
@@ -600,7 +568,7 @@ class Airfoil:
         # create temp new airfoil 
         if not self.isLoaded: self.load()
 
-        airfoil = Airfoil.asCopy (self, name=destName, pathFileName=newPathFileName)
+        airfoil = self.asCopy (name=destName, pathFileName=newPathFileName)
 
         if teGap is not None: 
             airfoil.set_teGap_perc (teGap * 100)
@@ -609,6 +577,32 @@ class Airfoil:
         airfoil.save ()
 
         return airfoil.pathFileName
+
+
+    def asCopy (self, pathFileName = None, 
+                name=None, nameExt=None,
+                geometry=None) -> 'Airfoil':
+        """
+        returns a copy of self 
+
+        Args:
+            pathFileName: optional - string of existinng airfoil path and name 
+            name: optional         - name of airfoil - no checks performed 
+            nameExt: -optional     - will be appended to self.name (if name is not provided)
+            geometry: optional     - the geometry staretegy either GEO_BASIC, GEO_SPLNE...
+        """
+        if pathFileName is None and name is None: 
+            pathFileName = self.pathFileName
+
+        if name is None:
+            name = self.name + nameExt if nameExt else self.name
+
+        geometry = geometry if geometry else self._geometryClass
+
+        airfoil =  Airfoil (x = np.copy (self.x), y = np.copy (self.y), 
+                            name = name, pathFileName = pathFileName, 
+                            geometry = geometry )
+        return airfoil 
 
 
     def _write_to_file (self):
@@ -756,13 +750,13 @@ class Airfoil_Bezier(Airfoil):
     def geo (self) -> Geometry_Bezier:
         """ the geometry strategy of self"""
         if self._geo is None: 
-            self._geo = self._geometryClass ()
+            self._geo = Geometry_Bezier ()
         return self._geo
 
     def set_geo (self, geometry: Geometry_Bezier):
         """ set new geometry bezier object  """
-        if not isinstance (geometry, self._geometryClass): return 
-        self._geo = geometry  
+        # do nothing as only Geometry_Bezier is supported
+        pass
 
 
     def set_xy (self, x, y):
@@ -815,9 +809,7 @@ class Airfoil_Bezier(Airfoil):
 
             file_lines = file.readlines()
 
-        
         # format of bezier airfoil file 
-
         # Top Start
         # 0.0000000000000000 0.0000000000000000
         # ...
@@ -893,6 +885,36 @@ class Airfoil_Bezier(Airfoil):
             file.close()
 
 
+    def asCopy (self, pathFileName = None, 
+                name=None, nameExt=None,
+                geometry=None) -> 'Airfoil':
+        """
+        returns a copy of self 
+
+        Args:
+            pathFileName: optional - string of existinng airfoil path and name 
+            name: optional         - name of airfoil - no checks performed 
+            nameExt: -optional     - will be appended to self.name (if name is not provided)
+            geometry: - not supported - 
+        """
+        # overloaded as Bezier needs a special copy, no other geometry supported
+
+        if pathFileName is None and name is None: 
+            pathFileName = self.pathFileName
+
+        if name is None:
+            name = self.name + nameExt if nameExt else self.name
+
+        if geometry is not None: 
+            raise ValueError ("Airfoil_Bezier does not support new geometry class")
+
+        airfoil =  Airfoil_Bezier (name = name, pathFileName = pathFileName)
+
+        airfoil.geo.upper.set_controlPoints (self.geo.upper.controlPoints)
+        airfoil.geo.lower.set_controlPoints (self.geo.lower.controlPoints)
+        airfoil.set_isLoaded (True)
+
+        return airfoil 
 
 
 #------------------------------------------------------

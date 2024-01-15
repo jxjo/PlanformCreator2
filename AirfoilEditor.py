@@ -99,7 +99,12 @@ class Edit_Abstract_Airfoil (Edit_Abstract):
     def geo (self) -> Geometry:
         """ geometry of self.airfoil"""
         return self.airfoil().geo 
-    
+
+    @property
+    def myApp (self) -> 'AirfoilEditor':
+        """ the top level app self belongs to -can be overloaded for type info"""
+        return super().myApp
+
     def changed_airfoil (self, dummy): 
         self.refresh()
 
@@ -165,7 +170,10 @@ class Edit_File_Menu(Edit_Abstract_Airfoil):
             return os.path.basename(self.myApp.curAirfoilFile)  
 
     def set_curAirfoilFileName (self, newFileName): 
-        
+        # set new current airfoil bei filename 
+
+        self.myApp.refresh_airfoilFiles()
+
         for aPathFileName in self.myApp.airfoilFiles:
             if newFileName == os.path.basename(aPathFileName):
 
@@ -187,8 +195,8 @@ class Edit_Airfoil_Data(Edit_Abstract_Airfoil):
 
         r, c = 0, 0 
         self.add (Header_Widget (self,r,c,   width= 70, columnspan= 2, lab=self.name))
-        self.add (Button_Widget  (self,r,c+3, lab='Modify geometry', width=110, padx= (30,0), columnspan=4, sticky='w', 
-                                set=self.modify_airfoil ))
+        self.add (Button_Widget (self,r,c+3, lab='Modify geometry', width=110, padx= (30,0), columnspan=4, sticky='w', 
+                                 set=self.modify_airfoil, disable=self.is_modify_airfoil_disabled ))
 
         r += 1
         Blank_Widget (self, r,0)    
@@ -220,8 +228,11 @@ class Edit_Airfoil_Data(Edit_Abstract_Airfoil):
         self.wait_window (dialog)
 
         if dialog.return_OK: 
-            self.myApp.add_toAirfoilFiles (dialog.return_newAirfoilPathFileName)
+            self.myApp.set_curAirfoilPathFileName (dialog.return_newAirfoilPathFileName)
 
+    def is_modify_airfoil_disabled (self):
+        """ disable modify button"""
+        return self.airfoil().isBezierBased or self.airfoil().isHicksHenneBased
 
 
 
@@ -230,10 +241,6 @@ class Edit_Curvature(Edit_Abstract_Airfoil):
     Frame to edit main data of the airfoil like thickness. This is just the header
     """
     name = "Curvature"
-
-    @property
-    def myApp (self) -> 'AirfoilEditor':
-        return super().myApp
 
     @property
     def curvature_threshold (self): 
@@ -276,12 +283,6 @@ class Edit_Specials (Edit_Abstract_Airfoil):
     """
     name = "Specials"
 
-    @property
-    def myApp (self) -> 'AirfoilEditor':
-        return super().myApp
-
-    
-
     def init (self):
 
         r, c = 0, 0 
@@ -308,7 +309,7 @@ class Edit_Specials (Edit_Abstract_Airfoil):
         self.wait_window (dialog)
 
         if dialog.return_OK: 
-            self.myApp.add_toAirfoilFiles (dialog.return_newAirfoilPathFileName)
+            self.myApp.set_curAirfoilPathFileName (dialog.return_newAirfoilPathFileName)
 
     def blend_airfoils (self): 
         """ Open dialog to blend airfoil with another one  """
@@ -317,7 +318,7 @@ class Edit_Specials (Edit_Abstract_Airfoil):
         self.wait_window (dialog)
 
         if dialog.return_OK: 
-            self.myApp.add_toAirfoilFiles (dialog.return_newAirfoilPathFileName)
+            self.myApp.set_curAirfoilPathFileName (dialog.return_newAirfoilPathFileName)
 
 
 
@@ -332,8 +333,9 @@ class Edit_Panels(Edit_Abstract_Airfoil):
 
         r, c = 0, 0 
         self.add (Header_Widget (self,r,c, width= 70, lab=self.name, columnspan= 2))
-        self.add (Button_Widget  (self,r,c+3, lab='Repanel', width=80, padx= (10,0), columnspan=2, sticky='w', 
-                                 set=self.repanel_airfoil, text_style=lambda: self.style_repanel() ))
+        self.add (Button_Widget (self,r,c+3, lab='Repanel', width=80, padx= (10,0), columnspan=2, sticky='w', 
+                                 set=self.repanel_airfoil, text_style=lambda: self.style_repanel(),
+                                 disable=self.is_modify_airfoil_disabled ))
 
         r += 1
         Blank_Widget (self, r,0)    
@@ -399,7 +401,11 @@ class Edit_Panels(Edit_Abstract_Airfoil):
         self.wait_window (dialog)
 
         if dialog.return_OK: 
-            self.myApp.add_toAirfoilFiles (dialog.return_newAirfoilPathFileName)
+            self.myApp.set_curAirfoilPathFileName (dialog.return_newAirfoilPathFileName)
+
+    def is_modify_airfoil_disabled (self):
+        """ disable modify button"""
+        return self.airfoil().isBezierBased or self.airfoil().isHicksHenneBased
 
 
 
@@ -416,7 +422,8 @@ class Edit_Coordinates(Edit_Abstract_Airfoil):
         self.add (Header_Widget (self,r,c,   width=95, lab=self.name, columnspan= 2))
         c += 3
         self.add(Button_Widget  (self,r,c, lab='Normalize', width=80, padx= (10,0), columnspan=2, sticky='w', 
-                                 set=self.normalize_airfoil, text_style=lambda: self.style_normalize() ))
+                                 set=self.normalize_airfoil, text_style=lambda: self.style_normalize(),
+                                 disable=self.is_modify_airfoil_disabled ))
 
         r = 1
         Blank_Widget (self, r,0)    
@@ -450,7 +457,12 @@ class Edit_Coordinates(Edit_Abstract_Airfoil):
         self.wait_window (dialog)
 
         if dialog.return_OK: 
-            self.myApp.add_toAirfoilFiles (dialog.return_newAirfoilPathFileName)
+            self.myApp.set_curAirfoilPathFileName (dialog.return_newAirfoilPathFileName)
+
+
+    def is_modify_airfoil_disabled (self):
+        """ disable modify button"""
+        return self.airfoil().isBezierBased or self.airfoil().isHicksHenneBased
 
 
     def messageText (self): 
@@ -785,7 +797,7 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
 
         super().setup_artists ()
 
-        self.airfoilArtist.set_show_bezier (False)          # this is done bei bezierArtist
+        # self.airfoilArtist.set_show_bezier (False)          # this is done bei bezierArtist
 
 
     def re_create_axes (self):
@@ -1058,15 +1070,21 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
 
         self.return_newAirfoilPathFileName = None   # return value for parent
 
+        airfoilOrg_in : Airfoil = airfoilFn()
+
         # make a copy of original airfoil as splined airfoil
 
-        # self.airfoilOrg = Airfoil.asCopy (airfoilFn(), geometry=GEO_SPLINE) 
-        self.airfoilOrg = Airfoil.asCopy (airfoilFn()) 
+        self.airfoilOrg = airfoilOrg_in.asCopy() 
         self.airfoilOrg.set_usedAs (NORMAL)
 
         # and a copy of original airfoil as splined airfoil, normalized - as working copy 
 
-        self.airfoil    = Airfoil.asCopy (airfoilFn(), nameExt=self.nameExt, geometry=GEO_SPLINE) 
+        try:                            # normal airfoil - allows new geometry
+            self.airfoil    = airfoilOrg_in.asCopy (nameExt=self.nameExt, geometry=GEO_SPLINE)
+
+        except:                         # bezier or hh does not allow new geometry
+            self.airfoil    = airfoilOrg_in.asCopy (nameExt=self.nameExt)
+
         self.airfoil.set_usedAs (DESIGN)
         self.hasbeen_normalized = False
         if not self.airfoil.isNormalized:                    # also LE of spline at 0,0? 
@@ -1749,7 +1767,7 @@ class Dialog_Blend_Airfoils (Dialog_Airfoil_Abstract):
             self.airfoilBlend.set_usedAs (REF1)
 
             # initial result airfoil 
-            self.airfoil = Airfoil.asCopy (self.airfoilOrg, nameExt=self.nameExt, geometry=GEO_BASIC) 
+            self.airfoil = self.airfoilOrg.asCopy (nameExt=self.nameExt, geometry=GEO_BASIC) 
             self.airfoil.set_usedAs (DESIGN)
 
             # initial blend - will refresh 
@@ -1826,20 +1844,11 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         if not self.airfoilOrg.isNormalized:                        # also LE of spline at 0,0? 
             self.airfoilOrg.normalize() 
 
-        self.airfoil    = Airfoil_Bezier (name=self.airfoil.name)   # a new sample bezier
-        self.airfoil.set_usedAs (DESIGN)                            # will indicate airfoil when plotted 
+        if not self.airfoil.isBezierBased:                          # create a dummy bezier airfoil
+            self.airfoil= Airfoil_Bezier (name=self.airfoil.name)   # a new sample bezier
+            self.airfoil.set_isLoaded(True)                         # treat sample as loaded 
+            self.airfoil.set_usedAs (DESIGN)                        # will indicate airfoil when plotted 
 
-        # check for existing .bez file for airfoil 
-        loaded =  self._load_bezier_ifExist (self.airfoilOrg.pathFileName) 
-        if loaded:                                                  # delayed message - we are in init 
-            message= f"Bezier definition red from \n\n" + \
-                     f"{os.path.basename(self.airfoil.pathFileName_bezier)}"
-            ToolWindow (self, message, after=1000, duration=1500)
-
-            self.airfoil.set_isModified(False)
-        else:  
-            self.airfoil.set_isLoaded (True)                        # the sample is loaded          
-            self.airfoil.set_isModified(True)           
         super().refresh()                                           # airfoil modified - save warning          
 
 
@@ -1876,8 +1885,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         r = 0
         c += 2
-        Header_Widget (self.input_frame,r,c,   padx=0, lab= "Target airfoil")
-        Label_Widget  (self.input_frame,r,c+1, padx=20, pady=10, lab= "sides with curvature to match")
+        Header_Widget (self.input_frame,r,c,   padx=0, lab= f"Target '{self.airfoilOrg.name}'")
         r +=1
         target_frame = ctk.CTkFrame(self.input_frame, fg_color="transparent")
         target_frame.grid(row=r, column=c, columnspan=2, sticky="nwe", padx=10, pady=(0,10))
@@ -1885,14 +1893,9 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         self._init_target_frame (target_frame) 
 
         self.input_frame.grid_columnconfigure (1, weight=1)
-        self.input_frame.grid_columnconfigure (3, weight=3)
+        self.input_frame.grid_columnconfigure (3, weight=4)
 
-        # ---- buttons are in super class - add additional open button 
-
-        Button_Widget (self.button_frame,0,0, lab='Open .bez', set=self.open_bez, style=SECONDARY, 
-                       padx=(0,50), width=90)
-
-        # ----------- Diagram frame at the end ---------------
+        # ----------- init Diagram frame at the end ---------------
 
         self.diagram_frame  = Diagram_Airfoil_Bezier (self.edit_frame, 
                                     self.airfoilOrg, self.airfoil, size=(12,5.2),
@@ -1912,12 +1915,13 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         c +=1
         Label_Widget  (frame,r,c, padx=20, lab= "Ctrl Points", width=60, columnspan=1, text_style=STYLE_NORMAL)
         c +=2
-        Blank_Widget  (frame, r,c, width=30)
+        Blank_Widget  (frame, r,c, width=10)
         c += 1
         Label_Widget  (frame,r,c, padx=10, lab= "LE  curvature  TE", width=90, columnspan=3 , text_style=STYLE_COMMENT)
-        # Label_Widget  (frame,r,c, padx=20, lab= "LE", width=40, columnspan=1, text_style=STYLE_COMMENT)
-        # c +=2
-        # Label_Widget  (frame,r,c, padx=20, lab= "TE", width=40, columnspan=1, text_style=STYLE_COMMENT)
+        c +=4
+        Blank_Widget  (frame, r,c, width=30)
+        c +=1
+        Label_Widget  (frame,r,c, padx=10, lab= "Deviation Bezier to target ", width=50, columnspan=2 , text_style=STYLE_COMMENT)
 
         frame.grid_columnconfigure (c+2, weight=1)
         r +=1
@@ -1935,6 +1939,12 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             self.add (Field_Widget  (frame,r,c, get=self.curv_at_le, objId = sideName,width=50, dec=0))
             c +=2
             self.add (Field_Widget  (frame,r,c, get=self.curv_at_te, objId = sideName,width=50, dec=1))
+            c +=3
+            self.add (Field_Widget  (frame,r,c, get=self.deviation_norm2, objId = sideName,width=70, dec=5))
+            c +=1
+            self.add (Button_Widget (frame,r,c, width=100, padx=20, objId = sideName,
+                                    lab=f"Match {sideName}", set=self.match_side_bezier, 
+                                    disable=self.match_side_bezier_disabled))
         c = 0 
         r += 1
         self.add (Field_Widget  (frame,r,c,   lab="TE gap", obj=self.airfoil, 
@@ -1951,10 +1961,6 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         Label_Widget  (frame,r,c, padx= 0, lab= "Side", width=80, columnspan=1, text_style=STYLE_NORMAL)
         c +=1
         Label_Widget  (frame,r,c, padx=10, lab= "LE  curvature  TE", width=90, columnspan=3 , text_style=STYLE_COMMENT)
-        c +=4
-        Blank_Widget  (frame, r,c, width=30)
-        c +=1
-        Label_Widget  (frame,r,c, padx=10, lab= "Deviation Bezier to target ", width=50, columnspan=2 , text_style=STYLE_COMMENT)
 
         frame.grid_columnconfigure (c+5, weight=1)
         r +=1
@@ -1968,12 +1974,6 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             self.add (Field_Widget  (frame,r,c, val=curv.y[0], width=50, dec=0))
             c +=2
             self.add (Field_Widget  (frame,r,c, val=curv.y[-1],width=50, dec=1))
-            c +=3
-            self.add (Field_Widget  (frame,r,c, get=self.deviation_norm2, objId = sideName,width=70, dec=5))
-            c +=1
-            self.add (Button_Widget (frame,r,c, width=100, padx=20, objId = sideName,
-                                    lab=f"Match {sideName}", set=self.match_side_bezier, 
-                                    disable=self.match_side_bezier_disabled))
 
         c = 0 
         r += 1
@@ -2060,17 +2060,11 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         deviation   = matcher.norm2
         niter       = matcher.niter
         max_reached = matcher.max_reached
-        ncp         = matcher.ncp
         ntarget     = matcher.ntarget
         nevals      = matcher.get_nevals()
         title = f"Match Bezier {side.name} side"
 
-        if   nvar >= 7:
-            good_deviation = 0.001
-        elif nvar >= 5:
-            good_deviation = 0.005
-        else: 
-            good_deviation = 0.01
+        good_deviation = 0.001
 
         if deviation < good_deviation:         
             text = f"Optimization with {nvar} variables successful. \n\n"  \
@@ -2121,27 +2115,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             self.nameWidget.refresh()
             self.refresh()
 
-
-    def _load_bezier_ifExist (self, pathFileName_org: str): 
-        # load a bezier curves deinition if exist for self airfoil
-
-        loaded = False
-        fileName, fileExtension = os.path.splitext(pathFileName_org)
-
-        if fileExtension.casefold() == ".dat".casefold():
-            pathFileName_bez = fileName + ".bez"
-            if os.path.isfile(pathFileName_bez):
-                loaded = self.airfoil.load_bezier(pathFileName_bez)
-
-                if loaded: 
-                    self.airfoil.set_pathFileName (pathFileName_org)
-                else: 
-                    msg = Messagebox (self, title="Reading Bezier file", icon='cancel',
-                                      message= f"Could not load {pathFileName_bez}.\n\nError in file format.")
-                    msg.get()
-
-        return loaded
-    
+   
 
     def _save_fileTypes (self):
         # returns the fileTypes for save message
@@ -2285,6 +2259,7 @@ class AirfoilEditor ():
         to enable a new airfoil to be set """
         return self._curAirfoil
 
+
     def set_curAirfoil (self, aNew, initial=False):
         """ encapsulates current airfoil. Childs should acces only via this function
         to enable a new airfoil to be set """
@@ -2293,17 +2268,21 @@ class AirfoilEditor ():
         if not initial: 
             fireEvent (self.ctk_root, AIRFOIL_NEW)
 
-    def add_toAirfoilFiles (self, aPathFileName):
-        """ inserts a new airfoilPathFileName to the list right after current airfoil"""
+    def refresh_airfoilFiles (self):
+        """ refreshes the list of airfoil files in current directory"""
+        self.airfoilFiles = self._getAirfoilFiles_sameDir (self.curAirfoil().pathFileName)
 
-        try: 
-            curIndex = self.airfoilFiles.index (self.curAirfoil().pathFileName)
-            
-            if not aPathFileName in self.airfoilFiles: 
-                self.airfoilFiles.insert (curIndex + 1, aPathFileName)
-            self.loadNewAirfoil (aPathFileName)
-        except: 
-            ErrorMsg ("Could not add %s to airfoil list" % aPathFileName )
+
+    def set_curAirfoilPathFileName (self, newPathFileName): 
+        # set new current airfoil by pathFileName 
+
+        self.refresh_airfoilFiles()
+        
+        for aPathFileName in self.airfoilFiles:
+            if newPathFileName == aPathFileName:
+                self.loadNewAirfoil (aPathFileName)
+                break
+
 
     def _getAirfoilFiles_sameDir (self, anAirfoilFile): 
         """ 

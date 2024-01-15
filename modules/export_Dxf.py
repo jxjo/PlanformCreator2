@@ -256,7 +256,7 @@ class Dxf_Artist:
             # te gap in mm? if yes scale it to normed ... do it
             if not teGap_mm is None and teGap_mm >= 0.0: 
                 teGap = teGap_mm / sec.chord
-                airfoil = Airfoil.asCopy (sec.airfoil)
+                airfoil = sec.airfoil.asCopy ()
                 airfoil.set_teGap_perc(teGap * 100)
             else: 
                 airfoil = sec.airfoil
