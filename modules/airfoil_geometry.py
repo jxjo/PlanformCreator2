@@ -377,9 +377,11 @@ class Match_Side_Bezier (Match_Bezier):
 
         # if a target le curvature defined, add this to objective
         if self._target_le_curv:
-            delta_le = abs ( abs(self._target_le_curv) - abs(self.bezier.curvature(0.0) ))
-            obj += delta_le / 2000                 # add empirical normalized delta 
-            # print("delta_le ", delta_le)
+            target  = abs(self._target_le_curv)
+            current = abs(self.bezier.curvature(0.0))
+            devi    = abs(target - current) / target
+            if devi > 0.001:                            # = 0.1% 
+                obj += devi / 10                        # empirical - reduce influence  
 
         # if a max te curvature defined, add this to objective
         if self._max_te_curv:
@@ -401,9 +403,9 @@ class Match_Side_Bezier (Match_Bezier):
                 else:
                     delta = cur_curv_te
             # delta = abs(self.bezier.curvature(1.0) - abs(self._max_te_curv))
-            if delta > 0.2: 
-                obj += delta/1000                    # add empirical normalized delta     
-                print("delta_te ", delta, self._max_te_curv, cur_curv_te)
+            # if delta > 0.2: 
+                # obj += delta**2/5000                    # add empirical normalized delta     
+                # print("delta_te ", delta, self._max_te_curv, cur_curv_te)
 
         # counter of objective evaluations (for entertainment)
         self._nevals += 1
@@ -456,11 +458,32 @@ class Curvature_Abstract:
         return self._iLe
 
     @property
-    def max_at_le (self) -> float: 
-        """ max value of curvature around LE  (index +-2) """
-        max = np.amax(np.abs(self.curvature [self.iLe-2: self.iLe+3]))
-
+    def max_around_le (self) -> float: 
+        """ max value of curvature around LE  (index +-3) """
+        max = np.amax(np.abs(self.curvature [self.iLe-3: self.iLe+4]))
         return max
+
+    @property
+    def best_around_le (self) -> float: 
+        """ estimation of best value for le if maximum is not at le """
+        return (self.max_around_le + self.at_le) / 2
+
+    @property
+    def max_upper_le (self) -> float: 
+        """ max value of curvature around LE upper side"""
+        max = np.amax(np.abs(self.curvature [self.iLe-3: self.iLe+1]))
+        return max
+
+    @property
+    def max_lower_le (self) -> float: 
+        """ max value of curvature around LE lower side"""
+        max = np.amax(np.abs(self.curvature [self.iLe: self.iLe+4]))
+        return max
+
+    @property
+    def at_le (self) -> float: 
+        """ max value of curvature at LE"""
+        return self.curvature [self.iLe]
 
     @property
     def at_upper_te (self) -> float: 
@@ -557,7 +580,7 @@ class Curvature_of_Bezier (Curvature_Abstract):
         self._upper_side = upper
         self._lower_side = lower
 
-        self._iLe    = len (upper.x) - 1
+        self._iLe    = len (upper.x) 
 
     @property
     def upper (self): 
@@ -1116,11 +1139,11 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         # initial y values 
         for icp, xi in enumerate (cp_x): 
             if icp == 1:                                # special case y-start value of point 1
-                x = 0.2                             # take a y-coord near LE
+                x = 0.2                                 # take a y-coord near LE
                 cp_y[icp]  = round(targetSide.yFn (x), 6)                 
             else: 
-                x = xi          
-                cp_y[icp]  = round(targetSide.yFn (x), 6)                 
+                x = xi                                  # add 20% to y for control point 
+                cp_y[icp]  = round(targetSide.yFn (x), 6) * 1.2                
 
         self.set_controlPoints (cp_x, cp_y)
 

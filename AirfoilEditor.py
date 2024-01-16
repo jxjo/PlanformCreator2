@@ -1818,7 +1818,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             geo     = self.airfoil.geo
             geoOrg  = self.airfoilOrg.geo
             self._matcher_upper = Match_Side_Bezier (geo.upper, geoOrg.upper, 
-                                                     target_le_curv=geoOrg.curvature.max_at_le,
+                                                     target_le_curv=geoOrg.curvature.best_around_le,
                                                      max_te_curv   =geoOrg.curvature.at_upper_te)
         return self._matcher_upper
 
@@ -1829,7 +1829,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             geo     = self.airfoil.geo
             geoOrg  = self.airfoilOrg.geo
             self._matcher_lower = Match_Side_Bezier (geo.lower, geoOrg.lower, 
-                                                     target_le_curv=geoOrg.curvature.max_at_le,
+                                                     target_le_curv=geoOrg.curvature.best_around_le,
                                                      max_te_curv   =geoOrg.curvature.at_lower_te)
         return self._matcher_lower
 
@@ -1846,6 +1846,8 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         if not self.airfoil.isBezierBased:                          # create a dummy bezier airfoil
             self.airfoil= Airfoil_Bezier (name=self.airfoil.name)   # a new sample bezier
+            self.set_nPoints(5, UPPER)
+            self.set_nPoints(5, LOWER)
             self.airfoil.set_isLoaded(True)                         # treat sample as loaded 
             self.airfoil.set_usedAs (DESIGN)                        # will indicate airfoil when plotted 
 
@@ -1885,7 +1887,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         r = 0
         c += 2
-        Header_Widget (self.input_frame,r,c,   padx=0, lab= f"Target '{self.airfoilOrg.name}'")
+        Header_Widget (self.input_frame,r,c,   padx=0, lab= f"Target   '{self.airfoilOrg.name}'")
         r +=1
         target_frame = ctk.CTkFrame(self.input_frame, fg_color="transparent")
         target_frame.grid(row=r, column=c, columnspan=2, sticky="nwe", padx=10, pady=(0,10))
@@ -1974,6 +1976,9 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             self.add (Field_Widget  (frame,r,c, val=curv.y[0], width=50, dec=0))
             c +=2
             self.add (Field_Widget  (frame,r,c, val=curv.y[-1],width=50, dec=1))
+            c +=2
+            self.add (Label_Widget (frame,r,c, padx=(30,0), lab=self.curv_warning, objId=sideName,
+                                    width=100, columnspan=1, text_style=STYLE_WARNING))
 
         c = 0 
         r += 1
@@ -1994,6 +1999,20 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         if objId == UPPER:  curv = self.airfoil.geo.curvature.upper
         else:               curv = self.airfoil.geo.curvature.lower
         return curv.y[-1]
+
+    def curv_warning (self, objId):
+        """ warning text if curv around le of target differs on upper and lower """
+        warn = ""
+        if objId == UPPER:  
+            max = self.airfoilOrg.geo.curvature.max_upper_le
+        else: 
+            max = self.airfoilOrg.geo.curvature.max_lower_le
+        at_le = self.airfoilOrg.geo.curvature.at_le
+        best  = self.airfoilOrg.geo.curvature.best_around_le
+        if max != at_le: 
+            warn = f"max around LE is {max:.0f}, going for {best:.0f}" 
+        return warn
+
 
     def deviation_norm2 (self, objId):
         """ norm2 deviation current bezier to target"""
@@ -2089,9 +2108,9 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         # adapt bezier only for 4 and 5 point bezier 
 
         if objId == UPPER: 
-            return self.airfoil.geo.upper.nPoints < 4 or self.airfoil.geo.upper.nPoints > 7 
+            return self.airfoil.geo.upper.nPoints < 4 or self.airfoil.geo.upper.nPoints > 8 
         else:
-            return self.airfoil.geo.lower.nPoints < 4 or self.airfoil.geo.lower.nPoints > 7 
+            return self.airfoil.geo.lower.nPoints < 4 or self.airfoil.geo.lower.nPoints > 8 
 
 
     def open_bez(self): 
