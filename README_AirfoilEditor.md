@@ -102,5 +102,8 @@ pip3 install colorama
 pip3 install ezdxf
 ```
 
- 
+> [!TIP]
+ For Windows: Use the "Open with ..." Explorer command to connect the 'AirfoilEditor.exe' to file extension '.dat'. Later a double click on an airfoil .dat-file will open the AirfoilEditor and you can browse through the files in the directory (if you are using the Python version, create a little batch job to open the .dat file)  
+
+
 Have fun!
