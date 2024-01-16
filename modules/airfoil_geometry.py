@@ -101,15 +101,18 @@ class Match_Bezier:
 
     # -------- public 
 
+    def reset (self):
+        """ reset statistic infos"""
+        self.niter       = 0                        # number of iterations needed
+        self.max_reached = False                    # max number of iterations reached
+        self._nevals     = 0                        # current number of objective function evals
+
     def run (self) :
         """ 
         Optimizes self to best fit to target (either single Side or both sides)
         uses nelder meat root finding
         """
-
-        self.niter       = 0                        # number of iterations needed
-        self.max_reached = False                    # max number of iterations reached
-        self._nevals     = 0                        # current number of objective function evals
+        self.reset()
 
         #-- (start) position of control points 
 
@@ -320,8 +323,8 @@ class Match_Side_Bezier (Match_Bezier):
                 ivar += 1                  
             else:                                       
                 vars[ivar] = cp_x[icp]                  # x value of control point
-                bounds[ivar] = (0.01, 0.99)
-                ivar += 1                  
+                bounds[ivar] = (0.01, 0.95)             # right bound not too close to TE
+                ivar += 1                               #    to avoid curvature peaks 
                 vars[ivar] = cp_y[icp]                  # y value of control point
                 ivar += 1                  
         return vars, bounds 
@@ -386,12 +389,13 @@ class Match_Side_Bezier (Match_Bezier):
         # if a max te curvature defined, add this to objective
         if self._max_te_curv:
 
-            # ! curvature on side_upper is negative !
+            # ! curvature on bezier side_upper is negative !
             if self.isUpper: 
                 cur_curv_te   = -self.bezier.curvature(1.0)
             else:
                 cur_curv_te   = self.bezier.curvature(1.0)
 
+            # current should be between 0.0 and target te curvature 
             if self._max_te_curv >= 0.0: 
                 if cur_curv_te >= 0.0: 
                     delta = cur_curv_te - self._max_te_curv
@@ -402,9 +406,9 @@ class Match_Side_Bezier (Match_Bezier):
                     delta = - (cur_curv_te - self._max_te_curv)
                 else:
                     delta = cur_curv_te
-            # delta = abs(self.bezier.curvature(1.0) - abs(self._max_te_curv))
-            # if delta > 0.2: 
-                # obj += delta**2/5000                    # add empirical normalized delta     
+            if delta > 0.5: 
+                # only apply a soft penalty for real outliers
+                obj += delta**2/5000                # add empirical  delta     
                 # print("delta_te ", delta, self._max_te_curv, cur_curv_te)
 
         # counter of objective evaluations (for entertainment)

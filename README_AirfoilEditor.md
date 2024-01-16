@@ -19,11 +19,13 @@ The driver for this app was to overcome some of the artefacts using xfoils geome
 
 ## Basic concepts
 
-The `AirfoilEditor` implements different "strategies" to analyse and modify the geometry of a coordinate based airfoil definition coming from the airfoils '.dat' file.
+The `AirfoilEditor` implements different "strategies" to represent the geometry of an airfoil:
 
-- 'Linear interpolation' - intermediate points between two coordinate points are evaluated with a simple linear interpolation. This is used for fast preview and basic operations
-- 'Cubic spline interpolation' - a cubic spline is built based on the airfoils coordinate points. This allows to evlauate intermediate points with high precision 
-- 'Bezier curve approximation' - an existing airfoil is approximated with two Bezier curves for upper and lower side.
+- 'Linear interpolation' -  Based on the point coordinates coming from the airfoils '.dat' file, intermediate points are evaluated with a simple linear interpolation. This is used for fast preview and basic operations.
+- 'Cubic spline interpolation' - A cubic spline is built based on the point coordinates coming from the airfoils '.dat' file. The spline allows to evlauate intermediate points with high precision 
+nelder mead
+- 'Bezier curve' - An airfoil is represented by two Bezier curves for upper and lower side of the airfoil. A nelder mead optimization allows to approximate the Bezier curves to an existing airfoil.
+- 'Hicks Henne' - Hicks Henne bump functions are applied to a "seed airfoil" to achieve a new shape (in development for Xoptfoil2)  
 
 The spline interpolation is used to find the position of the 'real' leading edge, which may differ from the leading edge of the coordinates (which is the point with the smallest x-value). When 'normalizing' the airfoil, the 'real' leading edge is taken in an iteration to rotate, stretch and move the airfoil to become 0,0 - 1,0 normalized.
 
@@ -46,17 +48,38 @@ As the curvature changes from very high values at the leading edge to very low v
 
 ## Bezier based airfoils 
 
-A little bit hidden is the feature to define a (new) airfoil based on two Bezier curves for upper and lower side (The Bezier functionality was some pre-work for Bezier based airfoil optimization)  
+Beside '.dat'-files the Airfoil Editor seamlessly displays '.bez'-Files defining an Bezier based airfoil. 
 
-The control points of the Bezier curve can be moved by mouse within their individual boundaries. 
+![PC2](images/AirfoilEditor_bezier1.png "Screenshot of Bezier curve definition")
 
-The 'Match' function performs a best match of the Bezier curve to an existing airfoil. For this a Simplex optimization (Nelder Mead) is performed to 
+A '.bez'-file defines the x,y coordinates of the Bezier control points and looks like: 
+```
+JX-GT-15
+Top Start
+ 0.0000000000  0.0000000000
+ 0.0000000000  0.0120189628
+ 0.0681109425  0.1240586151
+ 0.6435307964  0.0748001854
+ 1.0000000000  0.0000000000
+Top End
+Bottom Start
+ 0.0000000000  0.0000000000
+ 0.0000000000 -0.0222920000
+ 0.3333333333 -0.0240468000
+ 1.0000000000  0.0000000000
+Bottom End
+````
+
+
+A little bit hidden is the feature to define a (new) airfoil based on two Bezier curves for upper and lower side. The Bezier editor allows to move the control points of the curve by mouse.
+
+The 'Match' function performs a best match of the Bezier curve to an existing airfoil. For this a simplex optimization (Nelder Mead) is performed to 
 - minimize the norm2 deviation between the Bezier curve and the target airfoil
 - align the curvature of the Bezier curve at leading and trailing to the targets curvature.  
 
 
 ![PC2](images/AirfoilEditor_bezier.png "Screenshot of Bezier curve definition")
-<sup>Dialog for Bezier curve approximation. In this example the upper Bezier curve having 7 control points was already 'Matched' using Simplex optimization. </sup>
+<sup>Dialog for Bezier curve approximation. In this example the upper Bezier curve having 6 control points was 'matched' to the target airfoil at 4 controil points (Leading andtrailing edge are fixed). </sup>
 
 
 ##  Install

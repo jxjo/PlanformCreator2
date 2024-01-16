@@ -53,7 +53,7 @@ from ui_base            import *
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "1.1.0"
+AppVersion = "1.2"
 
 
 # tk change events for updating mainly plots or vice versa 
@@ -1868,7 +1868,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                              text_style=STYLE_COMMENT)
         Label_Widget  (self.header_frame,r, c+3, padx= 20,  sticky = 'nw', columnspan=1,
                         lab= "'Match Bezier' will move the control points for a best fit\n" + 
-                             "to the original airfoil (4 - 7 control points are currently supported)",
+                             "to the original airfoil. Currently 4 - 8 control points currently supported.",
                              text_style=STYLE_COMMENT)
 
         self.header_frame.grid_columnconfigure (4, weight=1)
@@ -1977,7 +1977,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             c +=2
             self.add (Field_Widget  (frame,r,c, val=curv.y[-1],width=50, dec=1))
             c +=2
-            self.add (Label_Widget (frame,r,c, padx=(30,0), lab=self.curv_warning, objId=sideName,
+            self.add (Label_Widget (frame,r,c, padx=(10,0), lab=self.curv_warning, objId=sideName,
                                     width=100, columnspan=1, text_style=STYLE_WARNING))
 
         c = 0 
@@ -2002,15 +2002,18 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
     def curv_warning (self, objId):
         """ warning text if curv around le of target differs on upper and lower """
-        warn = ""
+        warn = []
+        at_le = self.airfoilOrg.geo.curvature.at_le
+        best  = self.airfoilOrg.geo.curvature.best_around_le
         if objId == UPPER:  
             max = self.airfoilOrg.geo.curvature.max_upper_le
         else: 
             max = self.airfoilOrg.geo.curvature.max_lower_le
-        at_le = self.airfoilOrg.geo.curvature.at_le
-        best  = self.airfoilOrg.geo.curvature.best_around_le
         if max != at_le: 
-            warn = f"max around LE is {max:.0f}, going for {best:.0f}" 
+            warn = [f"max around LE is {max:.0f}"]
+        if best != at_le: 
+            warn.append(f"target will be {best:.0f}")
+            warn = ", ".join (warn) 
         return warn
 
 
@@ -2060,6 +2063,8 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             matcher = self.matcher_lower
             side    =self.airfoil.geo.lower
 
+        matcher.reset()                                         # reset statitic info 
+
         #---------- run optimization with nelder mead ---------------------
 
         messageFn = lambda: (f"Matching {sideName} side Bezier to \n\n{self.airfoilOrg.name} \n\n\n"
@@ -2075,7 +2080,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     def _match_result_info (self, side: Side_Airfoil_Bezier, matcher: Match_Side_Bezier):
         # info message for user 
 
-        nvar        = matcher.nvar
+        ncp_var     = matcher.ncp - 2
         deviation   = matcher.norm2
         niter       = matcher.niter
         max_reached = matcher.max_reached
@@ -2086,11 +2091,11 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         good_deviation = 0.001
 
         if deviation < good_deviation:         
-            text = f"Optimization with {nvar} variables successful. \n\n"  \
+            text = f"Optimization at {ncp_var} control points successful. \n\n"  \
                    f"y-deviation at {ntarget} test points: {deviation:.5f} \n\n\n" 
             icon = "check"
         else:
-            text = f"Optimization with {nvar} variables not too good. \n\n" \
+            text = f"Optimization at {ncp_var} control points not too good. \n\n" \
                    f"y-deviation at {ntarget} test points: {deviation:.5f} \n\n\n" 
             icon = "info"
 
@@ -2408,7 +2413,7 @@ if __name__ == "__main__":
 
     # init logger 
 
-    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG) # filename='myapp.log', 
+    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.WARNING)  # DEBUG or WARNING
     # suppress debug messages from these modules 
     logging.getLogger('matplotlib.font_manager').disabled = True
     logging.getLogger('PIL.PngImagePlugin').disabled = True
@@ -2431,7 +2436,7 @@ if __name__ == "__main__":
     # command line arguments? 
     
     parser = argparse.ArgumentParser(prog=AppName, description='View and edit an airfoil')
-    parser.add_argument("airfoil", nargs='*', help="Airfoil .dat file to show")
+    parser.add_argument("airfoil", nargs='*', help="Airfoil .dat or .bez file to show")
     args = parser.parse_args()
 
     if args.airfoil: 
