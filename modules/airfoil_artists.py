@@ -157,7 +157,7 @@ class Airfoil_Artist (Artist):
 
                 if airfoil.isBezierBased and self.show_bezier: 
                     if not airfoil.usedAs == DESIGN:            # a seperate artist will show 
-                        self.draw_controlPoints (airfoil, self._get_color(p))
+                        self.draw_bezier (airfoil, self._get_color(p))
                         self._plot_title ('Bezier based', va='top', ha='left', wspace=0.05, hspace=0.05)
 
                 if airfoil.isHicksHenneBased and self.show_hicksHenne: 
@@ -182,22 +182,34 @@ class Airfoil_Artist (Artist):
         if self._pickActive: self._connectPickEvent ()
 
 
-    def draw_controlPoints(self, airfoil: Airfoil_Bezier, color):
+    def draw_bezier(self, airfoil: Airfoil_Bezier, color):
         """ draw Bezier control Points of airfoil """
 
-        markersize  = 6
         linewidth   = 0.7
         linestyle   = ':'
 
         for sideBezier in [airfoil.geo.upper, airfoil.geo.lower]:
-            if sideBezier.name == UPPER:
-                markerstyle = 6
-            else: 
-                markerstyle = 7
+
             x = sideBezier.bezier.points_x
             y = sideBezier.bezier.points_y
-            p = self.ax.plot (x,y, linestyle, linewidth=linewidth, marker=markerstyle, markersize=markersize, color=color) 
+            p = self.ax.plot (x,y, linestyle, linewidth=linewidth, color=color) 
             self._add(p)
+
+            for ipoint, cpoint in enumerate (sideBezier.controlPoints):
+
+                markersize = 6
+                if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
+                    markerstyle = '.'
+                    markersize = 3
+                elif sideBezier.name == UPPER:
+                    markerstyle = 6
+                else: 
+                    markerstyle = 7
+
+                p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, 
+                                  color=color, alpha=0.5) 
+                self._add(p)
+
 
 
     def draw_hicksHenne (self, airfoil: Airfoil_Bezier, color):

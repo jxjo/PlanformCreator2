@@ -447,8 +447,8 @@ class Edit_Coordinates(Edit_Abstract_Airfoil):
         r += 1
         Blank_Widget (self, r,c)
         r += 1
-        self.add(Label_Widget  (self,r, c, columnspan=9, padx= 5, text_style = 'Warning',
-                                lab= lambda: self.messageText()))
+        self.add(Label_Widget  (self,r, c, columnspan=9, padx= 5, text_style = self.style_normalize,
+                                lab= self.messageText))
 
     def normalize_airfoil (self): 
         """open normalize dialog window - create new noramlized airfoil on demand"""
@@ -473,6 +473,9 @@ class Edit_Coordinates(Edit_Abstract_Airfoil):
             text.append("- Leading edge is not at 0,0")
         if self.geo.te[0] != 1.0 or self.geo.te[2] != 1.0 : 
            text.append("- Trailing edge is not at 1")
+
+        if not text and self.geo.isSymmetrical: 
+            text.append("- Airfoil is symmetrical")
         
         text = '\n'.join(text)
         return text 
@@ -495,7 +498,8 @@ class Edit_Coordinates(Edit_Abstract_Airfoil):
     def style_normalize (self): 
         """ text style of the normalize button"""
         if len(self.messageText()) > 0: 
-            return 'Warning'
+            if not self.geo.isSymmetrical:
+                return 'Warning'
 
 
 
@@ -1897,6 +1901,11 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         self.input_frame.grid_columnconfigure (1, weight=1)
         self.input_frame.grid_columnconfigure (3, weight=4)
 
+         # ---- buttons are in super class - add additional open button 
+
+        Button_Widget (self.button_frame,0,0, lab='Open .bez', set=self.open_bez, style=SECONDARY, 
+                       padx=(0,50), width=90)
+
         # ----------- init Diagram frame at the end ---------------
 
         self.diagram_frame  = Diagram_Airfoil_Bezier (self.edit_frame, 
@@ -2133,6 +2142,10 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                                  message= "Could not load '%s'.\n\nError in file format." %newPathFilename,
                                  icon='cancel')
                 msg.get()
+
+            else: 
+                self._matcher_upper = None      # controller object to match side         
+                self._matcher_lower = None      # controller object to match side      
 
             fireEvent  (self.ctk_root, AIRFOIL_CHANGED)              # update diagram 
             self.title ("Design Bezier airfoil  [" + self.airfoil.name + "]")
