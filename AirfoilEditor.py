@@ -2015,11 +2015,17 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         at_le = self.airfoilOrg.geo.curvature.at_le
         best  = self.airfoilOrg.geo.curvature.best_around_le
         if objId == UPPER:  
-            max = self.airfoilOrg.geo.curvature.max_upper_le
+            max  = self.airfoilOrg.geo.curvature.max_upper_le
+            bump = self.airfoilOrg.geo.curvature.bump_at_upper_le
         else: 
             max = self.airfoilOrg.geo.curvature.max_lower_le
+            bump = self.airfoilOrg.geo.curvature.bump_at_lower_le
+
         if max != at_le: 
             warn = [f"max around LE is {max:.0f}"]
+        elif bump:
+            warn = [f"bump close to LE"]
+
         if best != at_le: 
             warn.append(f"target will be {best:.0f}")
             warn = ", ".join (warn) 

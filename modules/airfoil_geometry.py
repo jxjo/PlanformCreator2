@@ -374,7 +374,7 @@ class Match_Side_Bezier:
             current = abs(self.bezier.curvature(0.0))
             devi    = abs(target - current) / target
             if devi > 0.001:                            # = 0.1% 
-                obj += devi / 20 # 10                   # empirical - reduce influence  
+                obj += devi / 15 # 10                   # empirical - reduce influence  
 
         # if a max te curvature defined, add this to objective
         if self._max_te_curv:
@@ -398,7 +398,7 @@ class Match_Side_Bezier:
                     delta = cur_curv_te
             if delta > 0.5: 
                 # only apply a soft penalty for real outliers
-                obj += delta**2/5000                # add empirical  delta     
+                obj += delta**2/500 #2000                # add empirical  delta     
                 # print("delta_te ", delta, self._max_te_curv, cur_curv_te)
 
         # counter of objective evaluations (for entertainment)
@@ -460,7 +460,13 @@ class Curvature_Abstract:
     @property
     def best_around_le (self) -> float: 
         """ estimation of best value for le if maximum is not at le """
-        return (self.max_around_le + self.at_le) / 2
+        if self.bump_at_upper_le:                           # mean value without bump 
+            best = (self.curvature [self.iLe] + self.curvature [self.iLe-2]) / 2 
+        elif self.bump_at_lower_le:
+            best = (self.curvature [self.iLe] + self.curvature [self.iLe+2]) / 2 
+        else:                                               # mean value of le and max 
+            best = (self.max_around_le + self.at_le) / 2
+        return best
 
     @property
     def max_upper_le (self) -> float: 
@@ -473,6 +479,16 @@ class Curvature_Abstract:
         """ max value of curvature around LE lower side"""
         max = np.amax(np.abs(self.curvature [self.iLe: self.iLe+4]))
         return max
+
+    @property
+    def bump_at_upper_le (self) -> bool: 
+        """ is there a curvature bump at LE upper side"""
+        return self.curvature [self.iLe-1] < self.curvature [self.iLe-2] 
+
+    @property
+    def bump_at_lower_le (self) -> bool: 
+        """ is there a curvature bump at LE lower side"""
+        return self.curvature [self.iLe+1] < self.curvature [self.iLe+2] 
 
     @property
     def at_le (self) -> float: 
