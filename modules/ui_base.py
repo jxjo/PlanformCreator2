@@ -190,6 +190,7 @@ class Eval_With_ToolWindow (ctk.CTkToplevel):
         # ---------------
 
         if self.winfo_exists():
+            self.wait_visibility()                      # Linux needs wait ... (thanks Thomas) 
             self.grab_set()
         self.lift()
 
