@@ -362,10 +362,12 @@ class Match_Side_Bezier:
         devi = self._deviation_to_target ()            
 
         # calculate norm2 of the *relative* deviations 
-        base = np.abs(self.targets_y)
+
+        base = np.abs(self.targets_y)               # target is base value for deviation 
+        base = (base / np.max (base) ) * 0.02       # norm the base 
 
         # move base so targets with a small base (at TE) don't become overweighted 
-        shift = np.max (base) * 0.7 # 0.6 # 0.4    
+        shift = np.max (base) * 0.2 # * 0.7 # 0.6 # 0.4    
         obj = np.linalg.norm (devi / (base+shift))
 
         # if a target le curvature defined, add this to objective
@@ -374,7 +376,7 @@ class Match_Side_Bezier:
             current = abs(self.bezier.curvature(0.0))
             devi    = abs(target - current) / target
             if devi > 0.001:                            # = 0.1% 
-                obj += devi / 15 # 10                   # empirical - reduce influence  
+                obj += devi / 10 # 10                   # empirical - reduce influence  
 
         # if a max te curvature defined, add this to objective
         if self._max_te_curv:
@@ -460,12 +462,15 @@ class Curvature_Abstract:
     @property
     def best_around_le (self) -> float: 
         """ estimation of best value for le if maximum is not at le """
-        if self.bump_at_upper_le:                           # mean value without bump 
+
+        if self.max_around_le > self.at_le:                   # mean value of max and curv at le  
+            best = (self.max_around_le + self.at_le) / 2
+        elif self.bump_at_upper_le:                           # mean value without bump 
             best = (self.curvature [self.iLe] + self.curvature [self.iLe-2]) / 2 
         elif self.bump_at_lower_le:
             best = (self.curvature [self.iLe] + self.curvature [self.iLe+2]) / 2 
-        else:                                               # mean value of le and max 
-            best = (self.max_around_le + self.at_le) / 2
+        else:                                                  # mean value of le and max 
+            best = self.at_le
         return best
 
     @property
@@ -2131,7 +2136,7 @@ class Geometry_Bezier (Geometry):
         """ true if lower = - upper"""
         # overlaoded - for Bezier check control points 
         if self.upper.bezier.points_x == self.lower.bezier.points_x: 
-            if self.upper.bezier.points_y == -self.lower.bezier.points_y:
+            if self.upper.bezier.points_y == [-y for y in self.lower.bezier.points_y]:
                 return True 
         return False 
     

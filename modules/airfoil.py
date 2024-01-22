@@ -823,10 +823,10 @@ class Airfoil_Bezier(Airfoil):
         try: 
             px, py = [], []
             for i, line in enumerate(file_lines):
-                line = line.lower()
                 if i == 0:
                     new_name = line.strip()
                 else: 
+                    line = line.lower()
                     if "start" in line:
                         if "top" in line: 
                             curveType = UPPER
