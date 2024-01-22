@@ -1166,9 +1166,11 @@ class Side_Airfoil_Bezier (Side_Airfoil):
             if icp == 1:                                # special case y-start value of point 1
                 x = 0.2                                 # take a y-coord near LE
                 cp_y[icp]  = round(targetSide.yFn (x), 6)                 
+            elif icp == ncp - 1:                        # te - take last y 
+                cp_y[icp]  = round(targetSide.y[-1],7)                 
             else: 
                 x = xi                                  # add 20% to y for control point 
-                cp_y[icp]  = round(targetSide.yFn (x), 6) * 1.2                
+                cp_y[icp]  = round(targetSide.yFn (x), 6) * 1.3                
 
         self.set_controlPoints (cp_x, cp_y)
 

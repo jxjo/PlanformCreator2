@@ -1962,7 +1962,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                                 get='teGap_perc', set='set_teGap_perc', step=0.01,
                                 spin=True, width=90, lab_width=70, unit="%", dec=2,
                                 event=self.changed_te_gap))
-        Label_Widget (frame,r,c+3, padx=0, columnspan=8, lab= "= moves last Bezier point up/down")
+        Label_Widget (frame,r,c+3, padx=0, columnspan=8, lab= "= move last Bezier point up/down (Match will overwrite)")
 
 
     def _init_target_frame (self, frame : ctk.CTkFrame): 

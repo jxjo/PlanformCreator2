@@ -43,7 +43,7 @@ def set_initialWindowSize (tkwindow,
     tkwindow.geometry("%dx%d" %(width, height))
 
     x = (tkwindow.winfo_screenwidth()  - width)  // 2
-    y = (tkwindow.winfo_screenheight() - height) // 2  // 1.5
+    y = ((tkwindow.winfo_screenheight() - height) // 2 ) // 2.0 # more up (Windows bar)
 
     tkwindow.geometry("+%d+%d" %(x, y))
 
