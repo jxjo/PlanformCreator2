@@ -403,6 +403,15 @@ class Match_Side_Bezier:
                 obj += delta**2/500 #2000                # add empirical  delta     
                 # print("delta_te ", delta, self._max_te_curv, cur_curv_te)
 
+        # penalty for bezier control points crossing each other 
+        
+        for ip in range (self.bezier.npoints):
+            if ip > 1 and ip < (self.bezier.npoints - 2): 
+                dist_x =  self.bezier.points_x[ip+1] - self.bezier.points_x[ip] 
+                if dist_x < 0.03: 
+                    print (ip, dist_x)
+                    obj *= 1.0 + abs (dist_x - 0.03) 
+
         # counter of objective evaluations (for entertainment)
         self._nevals += 1
 
