@@ -410,7 +410,7 @@ class Match_Side_Bezier:
                 dist_x =  self.bezier.points_x[ip+1] - self.bezier.points_x[ip] 
                 if dist_x < 0.03: 
                     # print (ip, dist_x)
-                    obj *= 1.0 + abs (dist_x - 0.03) * 0.2
+                    obj *= 1.0 + abs (dist_x - 0.03) * 0.4
 
         # counter of objective evaluations (for entertainment)
         self._nevals += 1
@@ -1602,15 +1602,18 @@ class Geometry ():
         # Scale airfoil so that it has a length of 1 
         #  - there are mal formed airfoils with different TE on upper and lower
         #    scale both to 1.0  
-        scale_upper = 1.0 / xn[0]
-        scale_lower = 1.0 / xn[-1]
+        if xn[0] != 1.0 or xn[-1] != 1.0: 
+            scale_upper = 1.0 / xn[0]
+            scale_lower = 1.0 / xn[-1]
 
-        ile = np.argmin (xn)
-        for i in range (len(xn)):
-            if i <= ile:
-               xn[i] = xn[i] * scale_upper
-            else: 
-               xn[i] = xn[i] * scale_lower
+            ile = np.argmin (xn)
+            for i in range (len(xn)):
+                if i <= ile:
+                    xn[i] = xn[i] * scale_upper
+                    yn[i] = yn[i] * scale_upper
+                else: 
+                    xn[i] = xn[i] * scale_lower
+                    yn[i] = yn[i] * scale_lower
 
         # due to numerical issues ensure 0 is 0.0 ..
         xn[ile] = 0.0 
@@ -1618,8 +1621,8 @@ class Geometry ():
         xn[0]   = 1.0 
         xn[-1]  = 1.0
 
-        self._x = np.round (xn, 10)
-        self._y = np.round (yn, 10) 
+        self._x = np.round (xn, 10) + 0.0
+        self._y = np.round (yn, 10) + 0.0 
         # re-init 
         self._reset_lines()                     # the child lines like thickness
         self._reset_spline()                    # the spline (if exists)
@@ -1654,6 +1657,17 @@ class Geometry ():
 
         blendBy = max (0.0, blendBy)
         blendBy = min (1.0, blendBy)
+
+        # optimze edge cases 
+
+        if blendBy == 0:
+            self._x = geo1.x
+            self._y = geo1.y
+            return
+        elif blendBy == 1.0:
+            self._x = geo2.x
+            self._y = geo2.y
+            return
       
         # the leading airfoil is the one with higher share
 
@@ -1819,9 +1833,11 @@ class Geometry_Splined (Geometry):
         """ true if LE of x,y cordinates nearly equal to the real (splined) leading edge.
             If not the airfoil should be repaneled...! """
 
+        epsilon=5e-7                            # not too strict because of airfoil le artefacts (JX-GP-033)
+
         xle, yle   = self.le
         xleS, yleS = self.le_real
-        if abs(xle-xleS) > 0.00001 or abs(yle-yleS) > 0.00001: 
+        if abs(xle-xleS) > epsilon or abs(yle-yleS) > epsilon: 
             return False
         else: 
             return True
@@ -1922,15 +1938,24 @@ class Geometry_Splined (Geometry):
         # on numeric issues (decimals) 
         # there try to iterate to a good result 
 
+        epsilon=1e-9                    # a little smaller then is _isLE_close...
+        isNormalized = False
         n = 0
-        while not self.isNormalized and n < 10:
-            n += 1
 
-            if n > 1: 
-                logging.debug (f"{self} normalize spline iteration")
+        while not isNormalized and n < 10:
+            n += 1
 
             self.repanel () 
             super().normalize()
+
+            # is real and splined le close enough
+            xle, yle   = self.le
+            xleS, yleS = self.le_real
+            norm2 = np.linalg.norm ([abs(xle-xleS), abs(yle-yleS)])
+            if norm2 < epsilon:
+                isNormalized = True
+
+            logging.debug (f"{self} normalize spline iteration #{n} - norm2: {norm2:.7f}")
 
         return True
 
@@ -2062,6 +2087,7 @@ class Geometry_Splined (Geometry):
         # exact determination of root  = scalar product = 0.0 
         try: 
             uLe = findRoot (self.scalarProductFn, self.spline.u[iLeGuess-1] , bounds=(0.4, 0.6)) 
+            # logging.debug (f"{self} le_find u={uLe}")
         except: 
             uLe = self.spline.u [iLeGuess]
             print ("Warn: Le not found - taking geometric Le")

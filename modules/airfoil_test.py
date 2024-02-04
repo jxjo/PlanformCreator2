@@ -81,8 +81,8 @@ class Test_Airfoil:
 
         # thickness, camber 
 
-        assert geo.thickness.maximum == (0.2903379, 0.076502)
-        assert geo.camber.maximum    == (0.4153376, 0.0170051)
+        assert geo.thickness.maximum == (0.2903377, 0.0765021)
+        assert geo.camber.maximum    == (0.4154117, 0.0170003)
 
         geo.set_maxThick  (0.08)
         assert round(geo.maxThick,4) == 0.08
@@ -103,10 +103,13 @@ class Test_Airfoil:
 
         # normalize, repanel 
 
-        assert geo.le == (0.0, 0.0) 
-        assert geo.le_real == (0.0, 3.8e-06) 
+        airfoil = Root_Example(geometry = GEO_SPLINE)
+        geo : Geometry_Splined = airfoil.geo
 
-        assert not geo.normalize(), "should be False because no normalizaton needed"
+        assert geo.le == (0.0, 0.0) 
+        assert geo.le_real == (0.0, 1.29e-05)          
+
+        assert geo.normalize(), "should be True because normalizaton needed"
         assert geo.isNormalized
         assert geo.le == (0.0, 0.0) 
 
@@ -159,11 +162,15 @@ class Test_Airfoil:
         airfoil1 = Root_Example(geometry = GEO_SPLINE)
         airfoil2 = Tip_Example (geometry = GEO_SPLINE)
 
+        # as airfoil1 and 2 are not normalized thickness would differ a little 
+        airfoil1.normalize()
+        airfoil2.normalize()
+
         airfoil.do_strak (airfoil1, airfoil2, blendBy=0.0)
         assert airfoil1.maxThickness == airfoil.maxThickness
 
         airfoil.do_strak (airfoil1, airfoil2, blendBy=0.5)
-        assert airfoil.maxThickness == 7.3015
+        assert airfoil.maxThickness == 7.30151
         y30_splined = airfoil.y[30]
 
         airfoil.do_strak (airfoil1, airfoil2, blendBy=1.0)

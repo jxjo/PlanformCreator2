@@ -194,7 +194,7 @@ class Airfoil:
 
 
     def set_xy (self, x, y):
-        """ set new coordinates - will reset self"""
+        """ set new coordinates """
 
         if not x is None: 
             x = x if isinstance(x,np.ndarray) else np.asarray (x)
@@ -207,6 +207,7 @@ class Airfoil:
         self._y     = y  
 
         self._geo    = None
+
         self.set_isModified (True)
 
 
@@ -638,6 +639,8 @@ class Airfoil:
         normalized = self.geo.normalize() 
 
         if normalized:
+
+            # load new coordinates from geo 
             self.set_xy (self.geo.x, self.geo.y)
         return normalized 
 
