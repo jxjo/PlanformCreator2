@@ -53,7 +53,7 @@ from ui_base            import *
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "1.2"
+AppVersion = "1.2.1"
 
 
 # tk change events for updating mainly plots or vice versa 
@@ -1076,16 +1076,19 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
 
         airfoilOrg_in : Airfoil = airfoilFn()
 
-        # make a copy of original airfoil as splined airfoil
+        # make a copy of original airfoil as splined airfoil - if possible (not for Bezier) 
 
-        self.airfoilOrg = airfoilOrg_in.asCopy() 
+        try: 
+            self.airfoilOrg = airfoilOrg_in.asCopy(geometry=GEO_SPLINE) 
+        except: 
+            self.airfoilOrg = airfoilOrg_in.asCopy() 
+
         self.airfoilOrg.set_usedAs (NORMAL)
 
         # and a copy of original airfoil as splined airfoil, normalized - as working copy 
 
         try:                            # normal airfoil - allows new geometry
             self.airfoil    = airfoilOrg_in.asCopy (nameExt=self.nameExt, geometry=GEO_SPLINE)
-
         except:                         # bezier or hh does not allow new geometry
             self.airfoil    = airfoilOrg_in.asCopy (nameExt=self.nameExt)
 
