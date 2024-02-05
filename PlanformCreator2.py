@@ -240,12 +240,12 @@ class Edit_Wing(Edit_Abstract_Wing):
         self.dataFrame = Edit_Wing_Data (self, self._wingFn, fg_color='transparent')
         self.dataFrame.grid (row=1, column=0, columnspan=5, pady=0, padx=(10,5), sticky="news")
 
+
     def refresh(self):
         # overloaded to refresh also child frame with data
         super().refresh()
         self.dataFrame.refresh()
 
-        
 #-------------------------------------------
 
 class Edit_Wing_Data (Edit_Abstract_Wing):
@@ -413,31 +413,69 @@ class Edit_Planform_Bezier(Edit_Abstract_Wing):
         self.grid_columnconfigure   (0, weight=0)
         self.grid_rowconfigure      (6, weight=1)
 
-        r = 0 
-        self.add (Field_Widget  (self,r,0, lab="Root tangent", obj=self.planform, 
+        r = 0         
+        self.field_root_angle = Field_Widget  (self,r,0, lab="Root tangent", obj=self.planform, 
                                     get='tangentAngle_root', set='set_tangentAngle_root', unit='°',
-                                    event=CHORD_CHANGED, lim=(-20,0), dec=1, spin=True, step=0.1))
-        self.add (Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
+                                    event=CHORD_CHANGED, lim=(-20,0), dec=3, spin=True, step=0.1)
+
+        self.field_root_length = Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
                                     get='tangentLength_root', set='set_tangentLength_root',
-                                    event=CHORD_CHANGED, lim=(0.1,1), dec=2, spin=True, step=0.01))
+                                    event=CHORD_CHANGED, lim=(0.1,1), dec=3, spin=True, step=0.01)
         r += 1
-        self.add (Field_Widget  (self,r,0, lab="Tip tangent", obj=self.planform, 
+        self.field_tip_angle = Field_Widget  (self,r,0, lab="Tip tangent", obj=self.planform, 
                                     get='tangentAngle_tip', unit='°',
-                                    event=CHORD_CHANGED, dec=1, spin=True))
-        self.add (Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
+                                    event=CHORD_CHANGED, dec=3, spin=True)
+        self.field_tip_length = Field_Widget  (self,r,3, lab="length", lab_width=60, obj=self.planform, 
                                     get='tangentLength_tip', set='set_tangentLength_tip',
-                                    event=CHORD_CHANGED, lim=(0.1,1), dec=2, spin=True, step=0.01))
+                                    event=CHORD_CHANGED, lim=(0.1,1), dec=3, spin=True, step=0.01)
+        r += 1   
+        self.checkbox_var = ctk.BooleanVar()  # This variable will track the state of the checkbox
+        self.checkbox = ctk.CTkCheckBox(self, text="use elliptic tangents", variable=self.checkbox_var, command=self.on_checkbox_change)
+        self.checkbox.grid(row=r, column=1)
+ 
         r += 1
         Blank_Widget (self,r,0,  height= 20)
 
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Banana height", obj=self.planform, 
                                     get='banana_p1x', set='set_banana_p1x',  
-                                    event=CHORD_CHANGED, lim=(-0.1,0.1),dec=2, spin=True, step=0.01))
+                                    event=CHORD_CHANGED, lim=(-0.1,0.1),dec=3, spin=True, step=0.01))
         self.add (Field_Widget  (self,r,3, lab="position", lab_width=60, obj=self.planform, 
                                     get='banana_p1y', set='set_banana_p1y',
-                                    event=CHORD_CHANGED, lim=(0.1,0.9), dec=2, spin=True, step=0.01))
+                                    event=CHORD_CHANGED, lim=(0.1,0.9), dec=3, spin=True, step=0.01))
         
+    def on_checkbox_change(self):
+        is_checked = self.checkbox_var.get()
+
+        if is_checked:
+            tangent_length = 0.55228474983
+            self.planform().set_tangentLength_root(tangent_length)
+            self.planform().set_tangentLength_tip(tangent_length)
+            self.planform().set_tangentAngle_root(0)
+
+            # Update the display of the widgets with the new values
+            self.field_root_length.mainCTk.delete(0, tk.END)
+            self.field_root_length.mainCTk.insert(0, str(tangent_length))
+            self.field_tip_length.mainCTk.delete(0, tk.END)
+            self.field_tip_length.mainCTk.insert(0, str(tangent_length))
+            self.field_root_angle.mainCTk.delete(0, tk.END)
+            self.field_root_angle.mainCTk.insert(0, "0.0")
+
+            # Trigger chord change event
+            self.event_generate('<<CHORD_CHANGED>>', when="tail")
+
+            # Disable the Field_Widgets
+            self.field_root_angle._set_CTkControl_state(widgetCTk=self.field_root_angle.mainCTk, disable=True)
+            self.field_root_length._set_CTkControl_state(widgetCTk=self.field_root_length.mainCTk, disable=True)
+            self.field_tip_angle._set_CTkControl_state(widgetCTk=self.field_tip_angle.mainCTk, disable=True)
+            self.field_tip_length._set_CTkControl_state(widgetCTk=self.field_tip_length.mainCTk, disable=True)
+        else:
+            # Enable the Field_Widgets
+            self.field_root_angle._set_CTkControl_state(widgetCTk=self.field_root_angle.mainCTk, disable=False)
+            self.field_root_length._set_CTkControl_state(widgetCTk=self.field_root_length.mainCTk, disable=False)
+            self.field_tip_angle._set_CTkControl_state(widgetCTk=self.field_tip_angle.mainCTk, disable=False)
+            self.field_tip_length._set_CTkControl_state(widgetCTk=self.field_tip_length.mainCTk, disable=False)
+
 
 
 class Edit_Planform_Trapezoid (Edit_Abstract_Wing):
