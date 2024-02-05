@@ -231,7 +231,7 @@ class Spline1D:
             A[i] = h[i]  / (h[i] + h[i+1])
 
         C = np.zeros (n-1) 
-        for i in range(n-1):                  
+        for i in range(1, n-1):                  
             C[i] = h[i]  / (h[i-1] + h[i])
 
         return A, B, C
