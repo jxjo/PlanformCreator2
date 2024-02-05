@@ -448,7 +448,9 @@ class Edit_Planform_Bezier(Edit_Abstract_Wing):
         is_checked = self.checkbox_var.get()
 
         if is_checked:
+            # https://stackoverflow.com/questions/14169234/the-relation-of-the-bezier-curve-and-ellipse
             tangent_length = 0.55228474983
+            
             self.planform().set_tangentLength_root(tangent_length)
             self.planform().set_tangentLength_tip(tangent_length)
             self.planform().set_tangentAngle_root(0)
