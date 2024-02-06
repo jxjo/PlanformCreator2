@@ -428,7 +428,8 @@ class Edit_Planform_Bezier(Edit_Abstract_Wing):
                                     get='tangentLength_tip', set='set_tangentLength_tip',
                                     event=CHORD_CHANGED, lim=(0.1,1), dec=2, spin=True, step=0.01))
         r += 1
-        Blank_Widget (self,r,0,  height= 20)
+        self.add(Button_Widget (self,r,1, lab='Set elliptical', width=110, columnspan=2, 
+                                    style=SUPTLE, set=self.set_elliptical, padx=2, pady=(5,15)))
 
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Banana height", obj=self.planform, 
@@ -438,6 +439,12 @@ class Edit_Planform_Bezier(Edit_Abstract_Wing):
                                     get='banana_p1y', set='set_banana_p1y',
                                     event=CHORD_CHANGED, lim=(0.1,0.9), dec=2, spin=True, step=0.01))
         
+
+    def set_elliptical (self): 
+        """ set bezier planform t be elliptical"""
+        self.planform().set_elliptical()
+        self.refresh ()
+        fireEvent (self.ctk_root, CHORD_CHANGED)
 
 
 class Edit_Planform_Trapezoid (Edit_Abstract_Wing):

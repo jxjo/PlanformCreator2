@@ -1119,6 +1119,19 @@ class Planform_Bezier(Planform):
         dy = aLength * np.sin (angle * np.pi / 180.0)
         self.set_p2x (self._px[3] + dy)
 
+
+    def set_elliptical (self):
+        """ sets the tangents so that planform becoms elliptical """
+
+        # see https://stackoverflow.com/questions/14169234/the-relation-of-the-bezier-curve-and-ellipse
+
+        tangent_length = 0.55228474983
+        
+        self.set_tangentLength_root(tangent_length)
+        self.set_tangentLength_tip(tangent_length)
+        self.set_tangentAngle_root(0)
+
+
     # Banana quadratic Bezier free definition points 
 
     @property                                   
