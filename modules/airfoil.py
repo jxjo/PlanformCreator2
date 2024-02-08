@@ -85,7 +85,7 @@ class Airfoil:
         self._geo            = None              # selfs instance of geometry
 
         self._nPanelsNew     = 200               # repanel: no of panels 
-        self._le_bunch       = 0.86              # repanel: panel bunch at leading edge
+        self._le_bunch       = 0.82              # repanel: panel bunch at leading edge
         self._te_bunch       = 0.7   	         # repanel: panel bunch at trailing edge
 
         self._polarSets      = None              # polarSets which are defined from outside 

@@ -135,7 +135,7 @@ class Spline1D:
         if n != len(y): 
             raise ValueError('Spline: Length of x,y is different')
             
-        if arccos:           # test of a arccos distribution to avoid oscillation at LE          
+        if arccos:           # arccos distribution to avoid oscillation at LE          
             self.x = np.arccos(1.0 - x) * 2.0 / np.pi     
             self._arccos = True 
         else:
@@ -322,9 +322,7 @@ class Spline1D:
 
         Returns
         -------
-        y : ndarray or list of ndarrays
-            An array of values representing the spline function evaluated at
-            the points in ``x``.  .
+        y : scalar or ndarray representing the spline function evaluated at x.
         """
 
         if isinstance(x, float): 
@@ -354,7 +352,6 @@ class Spline1D:
 
         if self._arccos: 
             x = np.arccos(1.0 - x) * 2.0 / np.pi                   # acos(1.d0 - x(i)) * 2.d0 / pi 
-            # copy x???        
 
         # get the index j of x in the function intervals of self 
         j = min(bisect.bisect(self.x, x)-1, len(self.x) -2)
@@ -371,7 +368,8 @@ class Spline1D:
 
     def curvature (self, xin):
         """
-        Evaluate the curvature of self.
+        Eval
+        uate the curvature of self.
 
         Parameters
         ----------
@@ -405,7 +403,6 @@ class Spline2D:
              
         boundary : Type of boundary condition  - either 
            
-            'quadratic'  - the first and last segement ist parabolic 
             'notaknot'   - at the first and last interior break, 
                            even the third derivative is continuous - defalt 
             'natural'    - the second derivate at start and end is zero 
@@ -1103,10 +1100,13 @@ class HicksHenne:
 
 #     print("Spline 2D test")
 
-#     input_x = [-2.5, -1.5,  0.0, 2.5, 5.0, 6.5, 3.0, 0.0, -0.5]
-#     input_y = [ 0.7,  0.0, -0.1,   5, 6.5, 4.0, 4.5, 2.0, -2.0]
+#     input_x = [  0, 0.5,  2,  3,  4,  5,  7]  
+#     input_y = [  0,  3,  0,  2,  0,  2,  0]  
 
-#     unew = np.linspace(0, 1 , 500)
+#     # input_x = [-2.5, -1.5,  0.0, 2.5, 5.0, 6.5, 3.0, 0.0, -0.5]
+#     # input_y = [ 0.7,  0.0, -0.1,   5, 6.5, 4.0, 4.5, 2.0, -2.0]
+
+#     unew = np.linspace(0, 1 , 100)
 
 #     spl = Spline2D (input_x, input_y, boundary='notaknot')
 #     x, y = spl.eval (unew)
@@ -1121,27 +1121,26 @@ class HicksHenne:
 #     plt.plot(unew, curv,  "-r", label="curvature")
 
 
-#     # scipy 
-#     # from scipy.interpolate import splprep, splev
-#     # tck, u = splprep([input_x, input_y], s=0.0, k=3)
-#     # x2, y2 = splev(unew, tck, der=0)
+#     from scipy.interpolate import splprep, splev
+#     tck, u = splprep([input_x, input_y], s=0.0, k=3)
+#     x2, y2 = splev(unew, tck, der=0)
 #     # plt.plot(x2, y2, "-b", label="SciPy")
 #     # plt.grid(True)
-#     # plt.axis("equal")
 #     # plt.legend()
 
 
-#     # dx, dy   = splev(unew, tck, der=1)
-#     # ddx, ddy = splev(unew, tck, der=2)
+#     dx, dy   = splev(unew, tck, der=1)
+#     ddx, ddy = splev(unew, tck, der=2)
 
-#     # deriv2 = dx * ddy - dy * ddx
-#     # # get curvature from derivative 2
-#     # n = dx**2 + dy**2
-#     # curv2 = deriv2 / n**(3./2.)
-#     # plt.plot(unew, curv2, "-g", label="scipy curvature")
+#     deriv2 = dx * ddy - dy * ddx
+#     # get curvature from derivative 2
+#     n = dx**2 + dy**2
+#     curv2 = deriv2 / n**(3./2.)
+#     plt.plot(unew, curv2, "-g", label="scipy curvature")
 
 #     plt.grid(True)
 #     plt.legend()
+#     plt.show()
 
 
 if __name__ == '__main__':

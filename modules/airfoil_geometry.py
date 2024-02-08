@@ -950,14 +950,14 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         # Bezier needs a special u cosinus distribution as the points are bunched
         # by bezier if there is high curvature ... 
         self._u = None
-        self.set_u_distribution(nPoints)
+        self.set_panel_distribution(nPoints)
 
         # eval Bezier for u - x,y - values will be cached in 'Bezier'
         self.bezier.eval(self._u)
 
 
-    def set_u_distribution (self, nPoints):
-        """ set a new u-distribution with nPoints for self """
+    def set_panel_distribution (self, nPoints):
+        """ set a new panel (=u) - distribution with nPoints for self """
 
         # a special distribution for Bezier curve to achieve a similar bunching to splined airfoils
 
@@ -1602,11 +1602,11 @@ class Geometry ():
         # Scale airfoil so that it has a length of 1 
         #  - there are mal formed airfoils with different TE on upper and lower
         #    scale both to 1.0  
+        ile = np.argmin (xn)
         if xn[0] != 1.0 or xn[-1] != 1.0: 
             scale_upper = 1.0 / xn[0]
             scale_lower = 1.0 / xn[-1]
 
-            ile = np.argmin (xn)
             for i in range (len(xn)):
                 if i <= ile:
                     xn[i] = xn[i] * scale_upper
@@ -2022,10 +2022,10 @@ class Geometry_Splined (Geometry):
         logging.debug (f"{self} repanel {nPan_upper} {nPan_lower}")
         
         # new distribution for upper and lower - points = +1 
-        u_cos_upper = cosinus_distribution (nPan_upper+1, le_bunch, te_bunch)
+        u_cos_upper = self._get_panel_distribution (nPan_upper+1, le_bunch, te_bunch)
         u_new_upper = np.abs (np.flip(u_cos_upper) -1) * self.uLe
 
-        u_cos_lower = cosinus_distribution (nPan_lower+1, le_bunch, te_bunch)
+        u_cos_lower = self._get_panel_distribution (nPan_lower+1, le_bunch, te_bunch)
         u_new_lower = u_cos_lower * (1- self.uLe) + self.uLe
 
         # add new upper and lower 
@@ -2040,10 +2040,60 @@ class Geometry_Splined (Geometry):
         # reset the child lines, keep current spline as it was the master
         self._reset_lines()
 
+        # repanel could lead to a slightly different le 
+        super().normalize()                    # do not do iteration in self.normalize
 
 
 
     # ------------------ private ---------------------------
+
+
+    def _get_panel_distribution (self, nPoints, le_bunch, te_bunch):
+        """ 
+        returns cosinues similar panel (=u) distribution with nPoints 0..1
+        
+        Args: 
+        nPoints : new number of coordinate points
+        le_bunch : 0..1  where 1 is the full cosinus bunch at leading edge - 0 no bunch 
+        te_bunch : 0..1  where 1 is the full cosinus bunch at trailing edge - 0 no bunch 
+        """
+
+        # first leading edge - take a cosinus distribution
+
+        ufacStart = 0.1 - le_bunch * 0.1
+        ufacStart = max(0.0, ufacStart)
+        ufacStart = min(0.5, ufacStart)
+        ufacEnd   = 0.65  # slightly more        # 0.25 = constant size towards te 
+
+        beta = np.linspace(ufacStart, ufacEnd , nPoints) * np.pi
+        u    = (1.0 - np.cos(beta)) * 0.5
+
+        # trailing edge area 
+
+        te_du_end = 1 - te_bunch * 0.9          # relative size of the last panel - smallest 0.1
+        te_du_growth = 1.2                      # growth rate going towars le 
+
+        du = np.diff(u,1)                       # the differences  
+        
+        ip = len(du) - 1
+        du_ip = te_du_end * du[ip]              # size of the last panel  
+        while du_ip < du[ip]:                   # run forward until size reaches normal size
+            du[ip] = du_ip
+            ip -= 1
+            du_ip *= te_du_growth
+
+        # rebuild u array and normalize to 0..1
+        u  = np.zeros(nPoints)
+        for ip, du_ip in enumerate(du):
+            u[ip+1] = u[ip] + du_ip 
+        u = u / u[-1]
+
+        # ensure 0.0 and 1.0 
+        u[0]  = u[0].round(10)
+        u[-1] = u[-1].round(10)
+
+        return u
+
 
 
     def _reset_spline (self):
@@ -2077,21 +2127,21 @@ class Geometry_Splined (Geometry):
             self.repanel (nPan_upper=nPan_upper,nPan_lower=nPan_lower)
 
             # repanel could lead to a slightly different le 
-            self.normalize()
+            # self.normalize()
 
 
     def _le_find (self):
         """ returns u (arc) value of leading edge based on scalar product tangent and te vector = 0"""
 
         iLeGuess = np.argmin (self.x)          # first guess for Le point 
+
         # exact determination of root  = scalar product = 0.0 
         try: 
             uLe = findRoot (self.scalarProductFn, self.spline.u[iLeGuess-1] , bounds=(0.4, 0.6)) 
             # logging.debug (f"{self} le_find u={uLe}")
         except: 
             uLe = self.spline.u [iLeGuess]
-            print ("Warn: Le not found - taking geometric Le")
-
+            logging.warning (f"{self} LE not found - taking geometric LE u={uLe}")
         return uLe
 
 
@@ -2294,8 +2344,8 @@ class Geometry_Bezier (Geometry):
                 nPan_upper = nPan_lower + 1 
 
         # that's it with bezier  
-        self.upper.set_u_distribution(nPan_upper + 1)
-        self.lower.set_u_distribution(nPan_lower + 1)
+        self.upper.set_panel_distribution(nPan_upper + 1)
+        self.lower.set_panel_distribution(nPan_lower + 1)
   
         # reset chached values
         self._reset_lines()

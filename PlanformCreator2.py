@@ -442,9 +442,9 @@ class Edit_Planform_Bezier(Edit_Abstract_Wing):
 
     def set_elliptical (self): 
         """ set bezier planform t be elliptical"""
-        self.planform().set_elliptical()
-        self.refresh ()
-        fireEvent (self.ctk_root, CHORD_CHANGED)
+        self.planform().set_elliptical()            # the 'logic' is handled in model object Planform_Bezier
+        self.refresh ()                             # refresh all widgets of self (push)
+        fireEvent (self.ctk_root, CHORD_CHANGED)    # refresh diagram (separated from edit frames)
 
 
 class Edit_Planform_Trapezoid (Edit_Abstract_Wing):
