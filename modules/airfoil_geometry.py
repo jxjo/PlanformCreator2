@@ -376,7 +376,7 @@ class Match_Side_Bezier:
             current = abs(self.bezier.curvature(0.0))
             devi    = abs(target - current) / target
             if devi > 0.001:                            # = 0.1% 
-                obj += devi / 10 # 10                   # empirical - reduce influence  
+                obj += devi / 5 # 10                    # empirical - reduce influence  
 
         # if a max te curvature defined, add this to objective
         if self._max_te_curv:
