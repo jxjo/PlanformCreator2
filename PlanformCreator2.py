@@ -269,10 +269,10 @@ class Edit_Wing_Data (Edit_Abstract_Wing):
                                  lim=(1,800), dec=1, spin=True, step=1, unit=unit))
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Flap at root",  obj=self.wing, get='flapDepthRoot', set='set_flapDepthRoot',
-                                 event=PLANFORM_CHANGED, lim=(0,50), dec=1, spin=True, step=0.1, unit='%'))
+                                 event=WING_CHANGED, lim=(0,80), dec=1, spin=True, step=0.1, unit='%'))
         self.add (Field_Widget  (self,r,3, lab="Flap at tip",   obj=self.wing, get='flapDepthTip', set='set_flapDepthTip',
-                                 event=PLANFORM_CHANGED,            
-                                 lim=(0,50), dec=1, spin=True, step=0.1, unit='%'))
+                                 event=WING_CHANGED,            
+                                 lim=(0,80), dec=1, spin=True, step=0.1, unit='%'))
         r += 1
         self.add (Field_Widget  (self,r,0, lab="Hinge angle",   obj=self.wing, get='hingeAngle', set='set_hingeAngle',
                                  event=WING_CHANGED, lim=(-10,45), dec=2, spin=True, step=0.1, unit="°"))
