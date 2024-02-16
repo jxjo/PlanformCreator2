@@ -1145,7 +1145,7 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         """ returns y value of the last bezier control point which is half the te gap"""
         return self.bezier.points_y[-1]
     
-    def set_te_gap (self, y): 
+    def set_teGap (self, y): 
         """ set te Bezier control point to y to change te gap """
         px = self.bezier.points_x
         self.bezier.set_point (-1, px[-1], y) 
@@ -1359,6 +1359,11 @@ class Geometry ():
         return  self.y[0] - self.y[-1]
 
     @property
+    def leRadius (self): 
+        """ leading edge radius which is the reciprocal of curvature at le """
+        return  1.0 / self.curvature.at_le
+
+    @property
     def nPanels (self): 
         """ number of panels """
         return self.nPoints - 1
@@ -1516,6 +1521,39 @@ class Geometry ():
 
 
 
+    def set_leRadius (self, factor, xBlend = 0.1):
+        """ set le radius.
+         The procedere is based on xfoil allowing to define a blending distance from le.
+
+        Arguments: 
+            factor:   to increase/decrease le radius 
+            xblend:   the blending distance from leading edge 0.001..1 - Default 0.1
+        """
+
+        # currently le must be at 0,0 - te must be at 1,gap/2 (normalized airfoil) 
+        if not self.isNormalized: 
+            self.normalize ()
+            if not self.isNormalized: 
+                ErrorMsg ("Airfoil can't be normalized. LE radius can't be set.")
+                return  
+        
+        xBlend = min( max( xBlend , 0.001 ) , 1.0 )
+
+        # go over each thickness point, changing the thickness appropriately
+
+        for i in range(len(self.thickness.x)):
+
+            # thickness factor tails off exponentially away from trailing edge
+            arg = min (self.thickness.x[i] / xBlend, 15.0)
+            srfac = (abs (factor)) ** 0.5 
+            tfac = 1.0 - (1.0 - srfac) * np.exp(-arg)
+
+            self.thickness.y [i] = self.thickness.y [i] * tfac
+
+        self._rebuildFromThicknessCamber ()
+
+
+
     def set_maxThick (self, newY): 
         """ change max thickness"""
         self.thickness.set_maximum(newY=newY)
@@ -1596,8 +1634,10 @@ class Geometry ():
         sina  = np.sin (-angle) 
 
         for i in range (len(xn)):
-            xn[i] = xn[i] * cosa - yn[i] * sina
-            yn[i] = xn[i] * sina + yn[i] * cosa
+            xni = xn[i]
+            yni = yn[i]
+            xn[i] = xni * cosa - yni * sina
+            yn[i] = xni * sina + yni * cosa
          
         # Scale airfoil so that it has a length of 1 
         #  - there are mal formed airfoils with different TE on upper and lower
@@ -2309,8 +2349,8 @@ class Geometry_Bezier (Geometry):
     def set_teGap (self, newGap): 
         """ set trailing edge gap to new value which is in y"""
         #overloaded to directly manipulate Bezier
-        self.upper.set_te_gap (  newGap / 2)
-        self.lower.set_te_gap (- newGap / 2)
+        self.upper.set_teGap (  newGap / 2)
+        self.lower.set_teGap (- newGap / 2)
 
 
     @property

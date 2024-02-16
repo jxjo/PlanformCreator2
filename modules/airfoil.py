@@ -305,7 +305,21 @@ class Airfoil:
         newGap = min(5.0, newGap)
         self.geo.set_teGap (newGap / 100)
         self.set_xy(*self.geo.xy)
-        
+
+
+    @property
+    def leRadius_perc (self):
+        """ leading edge radius in % which is the reciprocal of curvature at le """
+        return self.geo.leRadius * 100
+    
+    def set_leRadius_perc (self, newRadius: float): 
+        """ set leading edge radius in % which is the reciprocal of curvature at le """
+        newRadius = min(10,   newRadius)
+        newRadius = max(0.1,  newRadius)
+        factor = newRadius / self.leRadius_perc
+        self.geo.set_leRadius (factor)
+        self.set_xy(*self.geo.xy)
+
 
     @property
     def maxThickness (self): 

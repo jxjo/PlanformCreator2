@@ -195,14 +195,14 @@ class Edit_Airfoil_Data(Edit_Abstract_Airfoil):
 
         r, c = 0, 0 
         self.add (Header_Widget (self,r,c,   width= 70, columnspan= 2, lab=self.name))
-        self.add (Button_Widget (self,r,c+3, lab='Modify geometry', width=110, padx= (30,0), columnspan=4, sticky='w', 
+        self.add (Button_Widget (self,r,c+3, lab='Modify geometry', width=110, padx= (40,0), columnspan=4, sticky='w', 
                                  set=self.modify_airfoil, disable=self.is_modify_airfoil_disabled ))
 
         r += 1
         Blank_Widget (self, r,0)    
         c += 1                                  # left blank colum to inset the fields 
         self.add (Field_Widget  (self,r,c, columnspan= 8 ,lab='Name', obj=self.airfoil, get='name',
-                                 width=190, lab_width=80, justify='left'))
+                                 width=200, lab_width=80, justify='left'))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="Thickness", obj=self.airfoil, 
                                 get='maxThickness', width=50, lab_width=80, unit="%", dec=2))
@@ -216,6 +216,8 @@ class Edit_Airfoil_Data(Edit_Abstract_Airfoil):
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="TE gap", obj=self.airfoil, 
                                 get='teGap_perc', width=50, lab_width=80, unit="%", dec=2))
+        self.add (Field_Widget  (self,r,c+3, lab="LE radius", obj=self.airfoil, 
+                                get='leRadius_perc', width=50, lab_width=60, unit="%", dec=2))
         r += 1
         self.add (Label_Widget  (self,r,c, padx=5,  pady=(3,3), lab=lambda : "Data " + self.airfoil().geo.description))
  
@@ -1098,7 +1100,7 @@ class Dialog_Airfoil_Abstract (Dialog_Abstract):
             self.hasbeen_normalized = self.airfoil.normalize ()    # ensure exact le based on spline
 
         self.airfoil.set_isModified (False)                  # initial now save needed
-        title  = self.name +"   [" + self.airfoil.name + "]"
+        title  = self.name +"   [" + self.airfoilOrg.name + "]"
 
         super().__init__(master, workingDir=workingDir, title=title, *args, **kwargs)
 
@@ -1538,7 +1540,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
             lab = "New airfoil normalized " + self.airfoil.geo.description
         else: 
             lab = "New airfoil " + self.airfoil.geo.description
-        Label_Widget (self.input_frame,r,c, padx=0, lab= lab, columnspan = 4,
+        Label_Widget (self.input_frame,r,c, padx=0, lab= lab, columnspan = 5,
                       text_style=STYLE_COMMENT)
 
         r += 1
@@ -1546,26 +1548,31 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="Thickness", obj=self.airfoil, 
                                 get='maxThickness', set='set_maxThickness', step=0.01, 
-                                spin=True, width=95, lab_width=70, unit="%", dec=2,
+                                spin=True, width=100, lab_width=70, unit="%", dec=2,
                                 event=self.change_event))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
                                 get='maxThicknessX', set='set_maxThicknessX', step=0.1, 
-                                spin=True, width=95, unit="%", dec=1,
+                                spin=True, width=100, unit="%", dec=1,
                                 event=self.change_event))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="Camber", obj=self.airfoil, 
                                 get='maxCamber', set='set_maxCamber', disable= 'isSymmetric',  
-                                spin=True, width=95, lab_width=70, unit="%", dec=2, step=0.01,
+                                spin=True, width=100, lab_width=70, unit="%", dec=2, step=0.01,
                                 event=self.change_event))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
                                 get='maxCamberX', set='set_maxCamberX', disable= 'isSymmetric',  
-                                spin=True, width=95, unit="%", dec=1, step=0.1,
+                                spin=True, width=100, unit="%", dec=1, step=0.1,
                                 event=self.change_event))
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="TE gap", obj=self.airfoil, 
                                 get='teGap_perc', set='set_teGap_perc', step=0.01,
-                                spin=True, width=95, lab_width=70, unit="%", dec=2,
+                                spin=True, width=100, lab_width=70, unit="%", dec=2,
                                 event=self.change_event))
+        self.add (Field_Widget  (self.input_frame,r,c+3, lab="LE radius", obj=self.airfoil, 
+                                get='leRadius_perc', set='set_leRadius_perc', step=0.1,
+                                spin=True, width=100, lab_width=60, unit="%",  dec=2,
+                                event=self.change_event))
+        Label_Widget  (self.input_frame,r,c+6 , padx=5, lab= "blend width 10%", columnspan = 1)
 
         # fields for chord length xy mm 
 
