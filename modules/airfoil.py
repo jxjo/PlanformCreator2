@@ -328,9 +328,8 @@ class Airfoil:
     def set_maxThickness(self,newVal): 
         """ set max thickness in %"""
         if newVal < 0.5: newVal = 0.5               # do not allow thickness < 0,5% 
-
         self.geo.set_maxThick (newVal/100.0)
-        self.set_xy (self.geo.x, self.geo.y)
+        self.rebuild_from_thicknessCamber()
 
 
     @property
@@ -340,7 +339,7 @@ class Airfoil:
     def set_maxThicknessX(self,newVal): 
         """ set max thickness x-position in %"""
         self.geo.set_maxThickX (newVal/100.0)
-        self.set_xy (self.geo.x, self.geo.y)
+        self.rebuild_from_thicknessCamber()
 
 
     @property
@@ -350,7 +349,7 @@ class Airfoil:
     def set_maxCamber(self,newVal): 
         """ set max camber in %"""
         self.geo.set_maxCamb (newVal/100.0)
-        self.set_xy (self.geo.x, self.geo.y)
+        self.rebuild_from_thicknessCamber()
 
 
     @property
@@ -361,7 +360,22 @@ class Airfoil:
     def set_maxCamberX(self,newVal): 
         """ set max camber x-position in %"""
         self.geo.set_maxCambX (newVal/100.0)
-        self.set_xy (self.geo.x, self.geo.y)
+        self.rebuild_from_thicknessCamber()
+
+
+    def rebuild_from_thicknessCamber(self):
+        """ 
+        rebuilds self out of thickness and camber distribution in Geometry
+        which were modified directly eg. with mouse - avoid re-spline 
+        """
+
+        self.geo._rebuild_from_thicknessCamber ()        # new build of x,y in geo
+
+        self._x = self.geo.x
+        self._y = self.geo.y
+
+        self.geo.set_xy_org (self._x, self._y)          # update the copy of x,y in geo 
+
 
     @property
     def isSymmetric(self):

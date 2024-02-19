@@ -15,7 +15,7 @@ from common_utils       import *
 from airfoil            import Airfoil, Airfoil_Bezier
 from airfoil            import NORMAL, SEED,SEED_DESIGN, REF1, REF2, DESIGN, FINAL
 from airfoil_geometry   import Side_Airfoil, Side_Airfoil_Bezier, Side_Airfoil_HicksHenne
-from airfoil_geometry   import Curvature_Abstract, UPPER, LOWER
+from airfoil_geometry   import Curvature_Abstract, UPPER, LOWER, THICKNESS, CAMBER
 
 from spline             import HicksHenne
 
@@ -285,8 +285,8 @@ class Airfoil_Artist (Artist):
 class Airfoil_Line_Artist (Artist):
     """Superclass for plotting a line like curvature of upper and lower side of an airfoil
     """
-    def __init__ (self, axes, modelFn, onPick=None, show=False, showMarker=True):
-        super().__init__ (axes, modelFn, onPick=onPick, show=show, showMarker=showMarker)
+    def __init__ (self, axes, modelFn, **kwargs):
+        super().__init__ (axes, modelFn, **kwargs)
 
         self._upper  = True                     # including upper and lower lines 
         self._lower  = True
@@ -742,22 +742,14 @@ class Thickness_Artist (Airfoil_Line_Artist):
 
                 # plot marker for the max values 
                 self._plot_max_val (thickness, airfoil.usedAs, color)
-                self._mark_max_val (thickness, color)
-                self._plot_max_val (camber, airfoil.usedAs, color)
-                self._mark_max_val (camber,    color)
-
-
-    def _mark_max_val (self, airfoilLine: Side_Airfoil, color):
-        # indicate max. value of camber or thickness line 
-        p = self.ax.plot (*(airfoilLine.maximum), color=color, **ms_point)
-        self._add(p)
+                self._plot_max_val (camber,    airfoil.usedAs, color)
 
 
     def _plot_max_val (self, airfoilLine: Side_Airfoil, airfoil_type, color):
         # indicate max. value of camber or thickness line 
         x, y = airfoilLine.maximum
         if airfoil_type == DESIGN:
-            text = "New "
+            text = ""
             color = cl_helperLine
         else:
             text = ""
@@ -770,6 +762,178 @@ class Thickness_Artist (Airfoil_Line_Artist):
                                 xytext=(3, 3), textcoords='offset points', color = color)
             self._add (p)   
 
+
+
+class Thickness_Edit_Artist (Airfoil_Line_Artist):
+    """
+    Plot thickness, camber line of an airfoil, print max values
+    Move highpoints of thickness and camber by mouse  
+    """
+
+    def __init__ (self, axes, modelFn, **kwargs):
+        super().__init__ (axes, modelFn, **kwargs)
+
+
+        self.thickness_artist        = None          # artist to thickness line 
+        self.thickness_max_artist    = None          # artist to move thickness highpoint 
+        self.thickness_marker_artist = None          # artist to move thickness highpoint 
+        self.camber_artist           = None          # artist to camber line 
+        self.camber_max_artist       = None          # artist to move camber highpoint 
+        self.camber_marker_artist    = None          # artist to move camber highpoint 
+
+        self.set_showLegend(False)                   # show  legend with airfoil data 
+
+
+    def _deleteMyPlots(self):
+        super()._deleteMyPlots()
+        
+        self.ax.relim()                              # make sure all the data fits
+
+        self.thickness_artist        = None          # artist to thickness line 
+        self.thickness_max_artist    = None          # artist to move thickness highpoint 
+        self.thickness_marker_artist = None          # artist to move thickness highpoint 
+        self.camber_artist           = None          # artist to camber line 
+        self.camber_max_artist       = None          # artist to move camber highpoint 
+        self.camber_marker_artist    = None          # artist to move camber highpoint 
+
+    @property
+    def airfoil (self) -> Airfoil:
+        return self.model [0]
+
+
+        
+    def _plot (self): 
+
+        if not self.airfoil.isLoaded: return 
+
+        color = _color_airfoil_of (self.airfoil.usedAs)
+        linewidth=0.8
+
+        # thickness line and max point for mouse 
+
+        thickness = self.airfoil.thickness                   # use fast airfoil geometry calc
+        p = self.ax.plot (thickness.x, thickness.y, ls_thickness, color = color, 
+                            linewidth= linewidth, **self._marker_style, animated=True)
+        self.thickness_artist = self._add(p)
+
+        x, y = thickness.maximum
+        p = self.ax.plot (x, y, color=cl_userHint, **ms_point, animated=True)        
+        self.thickness_max_artist = self._add(p)
+
+        p = self.ax.annotate("%.2f%% at %.1f%%" % (y * 100, x *100), (x, y), fontsize='small',
+                               xytext=(3, 3), textcoords='offset points', color = cl_userHint, animated = True)
+        self.thickness_marker_artist = self._add (p)   
+
+        self._dragManagers.append (DragManager (self.ax, self.thickness_max_artist,
+                    typeTag = thickness.name, 
+                    callback_draw_animated  = self.draw_animated,
+                    callback_on_moved       = self._moveCallback)) 
+
+
+        # camber line and max point for mouse 
+
+        camber    = self.airfoil.camber                      # use fast airfoil geometry calc
+        p = self.ax.plot (camber.x, camber.y, ls_camber, color = color, 
+                            linewidth= linewidth, **self._marker_style, animated=True)
+        self.camber_artist = self._add(p)
+
+        x, y = camber.maximum
+        p = self.ax.plot (x, y, color=cl_userHint, **ms_point, animated=True)        
+        self.camber_max_artist = self._add(p)
+
+        p = self.ax.annotate("%.2f%% at %.1f%%" % (y * 100, x *100), (x, y), fontsize='small',
+                               xytext=(3, 3), textcoords='offset points', color = cl_userHint, animated = True)
+        self.camber_marker_artist = self._add (p)   
+
+        self._dragManagers.append (DragManager (self.ax, self.camber_max_artist,
+                    typeTag = camber.name, 
+                    callback_draw_animated  = self.draw_animated,
+                    callback_on_moved       = self._moveCallback)) 
+        
+
+
+        # connect to draw event for initial plot of the animated artists all together
+        self._connectDrawEvent()
+
+        self.show_mouseHelper ()
+
+        # suppress autoscale 
+        # self.ax.set_ylim(bottom=0.0)
+        self.ax.autoscale(enable=False, axis='y')
+
+
+
+    def show_mouseHelper (self):
+        # show user info for mouse helper 
+        text = 'move highpoints with mouse'
+        p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
+                    transform=self.ax.transAxes, horizontalalignment='center', verticalalignment='bottom')
+        self._add(p)
+
+
+
+    def draw_animated (self, artist_onMove=None, iArtist = None , typeTag=None): 
+        """ call back when point is moving - draw and update lines """
+
+        if artist_onMove is not None and iArtist is not None: 
+            
+            if typeTag == THICKNESS:
+                line          = self.airfoil.thickness
+                line_artist   = self.thickness_artist
+                marker_artist = self.thickness_marker_artist 
+
+            else: 
+                line          = self.airfoil.camber
+                line_artist   = self.camber_artist
+                marker_artist = self.camber_marker_artist 
+
+            # get new coordinates (when dragged) and try to move control point 
+            x_try, y_try = artist_onMove.get_xydata()[0]
+
+            x = min (0.6, max (0.1, x_try))
+
+            if typeTag == THICKNESS:
+                y = min (0.5, max (0.01, y_try))            # if 0.0 line could be restored
+            else:
+                y = min (0.5, max (0.001, y_try))           # if 0.0 line could be restored
+
+            # set new max points  - will be checked for valid x,y 
+            line.set_maximum (x, y)
+
+            # draw the point which is moved
+            artist_onMove.set_xdata(x)
+            artist_onMove.set_ydata(y)
+
+            # draw the line 
+            line_artist.set_xdata(line.x)
+            line_artist.set_ydata(line.y)
+
+            # marker pos update 
+            marker_artist.xy = (x,y)
+            marker_artist.set_text ("%.2f%% at %.1f%%" % (y * 100, x *100))
+
+            # finally draw all animated artists
+            self.draw_animated_artists ()
+
+
+
+
+    def _plot_max_val (self, airfoilLine: Side_Airfoil, airfoil_type, color):
+        # indicate max. value of camber or thickness line 
+        x, y = airfoilLine.maximum
+        if airfoil_type == DESIGN:
+            text = ""
+            color = cl_helperLine
+        else:
+            text = ""
+            color = color
+        p = self.ax.plot (x, y, color=color, **ms_point)
+        self._add(p)
+
+        if airfoil_type == DESIGN:
+            p = self.ax.annotate(text + "%.2f%% at %.1f%%" % (y * 100, x *100), (x, y), fontsize='small',
+                                xytext=(3, 3), textcoords='offset points', color = color)
+            self._add (p)   
 
 
 class Bezier_Edit_Artist (Artist):
@@ -786,10 +950,7 @@ class Bezier_Edit_Artist (Artist):
         self.helper_lower_artist   = None      
         self.bezier_upper_artist   = None          # the artist to draw bezier curve
         self.bezier_lower_artist   = None
-
-        self.thickness_artist      = None
-        self.camber_artist         = None
-        
+       
         self.set_showLegend(False)  
 
 
@@ -798,7 +959,7 @@ class Bezier_Edit_Artist (Artist):
 
     def _deleteMyPlots(self):
         super()._deleteMyPlots()
-        # clear up 
+        
         self.ax.relim()                            # make sure all the data fits
 
         self.points_upper_artist   = []            # the artists of bezier control points
@@ -807,8 +968,6 @@ class Bezier_Edit_Artist (Artist):
         self.helper_lower_artist   = None      
         self.bezier_upper_artist   = None          # the artist to draw bezier curve
         self.bezier_lower_artist   = None
-        self.thickness_artist      = None
-        self.camber_artist         = None
 
     @property
     def airfoil (self) -> Airfoil_Bezier:

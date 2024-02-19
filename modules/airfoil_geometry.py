@@ -63,8 +63,10 @@ from spline import print_array_compact
 from common_utils import ErrorMsg
 
 
-UPPER  = 'upper'
-LOWER  = 'lower'
+UPPER       = 'upper'
+LOWER       = 'lower'
+THICKNESS   = 'thickness'
+CAMBER      = 'camber'
 
 
 
@@ -781,7 +783,7 @@ class Side_Airfoil:
         min_y = abs(np.min(self.y))
         
         if max_y == 0.0 and min_y == 0.0:              # optimize 
-            xmax = 0.0 
+            xmax = 0.5 
             ymax = 0.0 
         else: 
             if max_y > min_y:                   # upper side 
@@ -1304,6 +1306,15 @@ class Geometry ():
     @property
     def xy (self):
         return self.x, self.y
+    
+
+    def set_xy_org (self, x, y):
+        """ set coordinates of the (master) airfoil of self """
+
+        # ensure copy of x,y and being numpy 
+        self._x_org     = np.asarray (x)
+        self._y_org     = np.asarray (y)  
+
 
     @property
     def iLe (self) -> int: 
@@ -1550,29 +1561,29 @@ class Geometry ():
 
             self.thickness.y [i] = self.thickness.y [i] * tfac
 
-        self._rebuildFromThicknessCamber ()
+        self._rebuild_from_thicknessCamber ()
 
 
 
     def set_maxThick (self, newY): 
         """ change max thickness"""
         self.thickness.set_maximum(newY=newY)
-        self._rebuildFromThicknessCamber()
+        self._rebuild_from_thicknessCamber()
 
     def set_maxThickX (self,newX): 
         """ change max thickness x position"""
         self.thickness.set_maximum(newX=newX)
-        self._rebuildFromThicknessCamber()
+        self._rebuild_from_thicknessCamber()
 
     def set_maxCamb (self, newY): 
         """ change max camber"""
         self.camber.set_maximum(newY=newY)
-        self._rebuildFromThicknessCamber()
+        self._rebuild_from_thicknessCamber()
 
     def set_maxCambX (self,newX): 
         """ change max camber x position"""
         self.camber.set_maximum(newX=newX)
-        self._rebuildFromThicknessCamber()
+        self._rebuild_from_thicknessCamber()
 
 
     def upper_new_x (self, new_x): 
@@ -1772,9 +1783,9 @@ class Geometry ():
         # thickness and camber can now easily calculated 
 
         self._thickness = self.sideDefaultClass (upper.x, (upper.y - lower.y), 
-                                            name='Thickness distribution')
+                                            name=THICKNESS)
         self._camber    = self.sideDefaultClass (upper.x, (upper.y + lower.y) / 2.0, 
-                                            name='Camber line')
+                                            name=CAMBER)
 
         # for symmetric airfoil with unclean data set camber line to 0 
         if np.max(self._camber._y) < 0.00001: 
@@ -1786,7 +1797,7 @@ class Geometry ():
         return 
 
 
-    def _rebuildFromThicknessCamber(self):
+    def _rebuild_from_thicknessCamber(self):
         """ rebuilds self out of thickness and camber distribution """
 
         # x values of camber and thickness must be equal
@@ -1806,7 +1817,7 @@ class Geometry ():
         self._x = np.concatenate ((np.flip(x_upper), x_lower[1:]))
         self._y = np.concatenate ((np.flip(y_upper), y_lower[1:]))
 
-        # rseet only curvature 
+        # reset only curvature 
         self._curvature = None
 
 
@@ -2142,7 +2153,7 @@ class Geometry_Splined (Geometry):
         self._uLe        = None                  # u value at LE 
 
 
-    def _rebuildFromThicknessCamber(self):
+    def _rebuild_from_thicknessCamber(self):
         """ rebuilds self out of thickness and camber distribution """
         # overloaded to reset spline
 
@@ -2151,7 +2162,7 @@ class Geometry_Splined (Geometry):
         nPan_upper = self.iLe
         nPan_lower = self.nPanels - nPan_upper
 
-        super()._rebuildFromThicknessCamber()
+        super()._rebuild_from_thicknessCamber()
 
         # reset spline so it will be rebuild out of new coordinates
 

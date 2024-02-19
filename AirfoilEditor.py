@@ -60,6 +60,7 @@ AppVersion = "1.2.1"
 
 AIRFOIL_NEW                 = "<<AIRFOIL_NEW>>"                
 AIRFOIL_CHANGED             = "<<AIRFOIL_CHANGED>>"
+AIRFOIL_CHANGED_IN_ARTIST   = "<<AIRFOIL_CHANGED_IN_ARTIST>>"      # airfoil was changed in diagram by mouse 
 BEZIER_CHANGED              = "<<BEZIER_CHANGED>>"                 # bezier curve was changed in app
 BEZIER_CHANGED_IN_ARTIST    = "<<BEZIER_CHANGED_IN_ARTIST>>"       # bezier curve was changed in artist
 
@@ -1052,6 +1053,119 @@ class Diagram_Airfoil_Mini (Diagram_Abstract):
 
 
 
+
+class Diagram_Airfoil_Edit (Diagram_Abstract):
+    """ 
+    plots the airfoil with two free axes (airfoil and thickness & camber)
+
+    thicknees & camber line can be moved by mouse ) 
+    """
+    name = "Thickness and Camber"
+
+    def __init__(self, master, objectFn, show_thickness=True, *args, **kwargs):
+        super().__init__( master, objectFn, *args, **kwargs)
+
+        self._show_thickness = show_thickness
+
+
+    def airfoils(self):
+        """ list with airfoil(s) self is working on """
+        return self.mainObjects()
+
+    @property
+    def airfoil_edited (self) -> Airfoil:
+        """ the airfoil which can be edited """
+        airfoil : Airfoil
+        for airfoil in self.airfoils():
+            if airfoil.usedAs == DESIGN:
+                return airfoil 
+        return None
+
+    @property
+    def airfoil_original (self) -> Airfoil:
+        """ the original airfoil"""
+        airfoil : Airfoil
+        for airfoil in self.airfoils():
+            if airfoil.usedAs != DESIGN:
+                return airfoil 
+        return None
+
+    def create_axes (self):
+        """ setup 2 axes for airfoil, thickness, curvature etc."""
+
+        if self._show_thickness:
+            gs = GridSpec(2, 1, height_ratios=[5, 5])
+            self.ax1 = self.figure.add_subplot(gs[:-1, :])          # top, full   - airfoil
+            self.ax2 = self.figure.add_subplot(gs[ -1, :])          # lower, full - thickness
+        else: 
+            gs = GridSpec(1, 1)
+            self.ax1 = self.figure.add_subplot(gs[:, :])            # full
+            self.ax2 = None
+
+
+        self.figure.subplots_adjust(left=0.02, bottom=0.08, right=0.98, top=0.97, wspace=0.07, hspace=0.15)
+
+    def setup_axes(self):
+        """ setup axes, axis, artiss for this plot type """
+
+        # airfoil contour 
+        self.ax1.tick_params (labelbottom=True, labelleft=False, labelsize='small')
+        self.ax1.autoscale(enable=False, axis='both')
+        self.ax1.set_xlim([-0.05,1.05])
+        self.ax1.axis('equal')
+        self.ax1.grid (visible=True)
+        
+        # additional plot 
+        self.ax2.tick_params (labelbottom=True, labelleft=False, labelsize='small')
+        self.ax2.autoscale(enable=False, axis='both')
+        self.ax2.set_xlim([-0.05,1.05])
+        self.ax2.set_ylim([-0.05, 0.2])
+        self.ax2.axis('equal')
+        self.ax2.grid (visible=True)
+
+
+    def setup_artists(self):
+        """ setup axes, axis, artists for this plot type """
+        super().setup_artists()
+
+        # airfoil is list to prepare for multiple airfoils to view         
+        self.airfoilArtist = Airfoil_Artist (self.ax1, self.airfoils, show=True)
+
+        self.thicknessArtist = Thickness_Edit_Artist (self.ax2,[self.airfoil_edited], show=True,
+                                                        onMove=self.changed_line_in_artist)
+        self.originalArtist  = Thickness_Artist (self.ax2,[self.airfoil_original], show=True)
+
+
+    def setup_switches(self, r=0, c=0):
+        """ no switches"""
+        return r, c
+    
+    # -------- call back from diagram 
+    
+    def changed_line_in_artist(self):
+        # call back from diagram 
+
+        self.airfoil_edited.rebuild_from_thicknessCamber()
+
+        self.airfoilArtist.refresh()
+        self.figure.canvas.set_cursor = lambda cursor: None     # matplotlib hack: suppress busy cursor
+        self.figure.canvas.draw()
+
+        # inform entry fields
+        fireEvent  (self.ctk_root, AIRFOIL_CHANGED_IN_ARTIST)    
+
+    # -------- refresh my Artists which are on 'show mode' 
+
+    def refresh(self): 
+        # overloaded
+        self.airfoilArtist.refresh ()  
+        self.thicknessArtist.refresh ()  
+        self.originalArtist.refresh()
+
+        self.ax1.figure.canvas.draw_idle()    # draw ony if Windows is idle!
+
+
+
 #-------------------------------------------------------------------------------
 # Dialogs for smaller tasks   
 #-------------------------------------------------------------------------------
@@ -1518,10 +1632,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
         r = 0 
         Header_Widget (self.header_frame,r,c, pady=0, lab= "Modify geometry", sticky = 'nw', width=100)
         
-        Switch_Widget (self.header_frame,r,c+1, padx=(30,30), lab='Show modified airfoil',
-                       get=lambda: self.showModified, set=self.set_showModified)
-
-        Label_Widget  (self.header_frame,r, c+2, padx= 15, sticky = 'nw', columnspan=1,
+        Label_Widget  (self.header_frame,r, c+2, padx= (30,15), sticky = 'nw', columnspan=1,
                         lab= "For geometry modifications a spline is created with the existing points.\n" + \
                              "Thickness and camber distribution is evaluated based on this spline.",
                              text_style=STYLE_COMMENT)
@@ -1547,7 +1658,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
         Blank_Widget (self.input_frame, r,10, height=5)
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="Thickness", obj=self.airfoil, 
-                                get='maxThickness', set='set_maxThickness', step=0.01, 
+                                get='maxThickness', set='set_maxThickness', step=0.1, 
                                 spin=True, width=100, lab_width=70, unit="%", dec=2,
                                 event=self.change_event))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
@@ -1557,7 +1668,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
         r += 1
         self.add (Field_Widget  (self.input_frame,r,c,   lab="Camber", obj=self.airfoil, 
                                 get='maxCamber', set='set_maxCamber', disable= 'isSymmetric',  
-                                spin=True, width=100, lab_width=70, unit="%", dec=2, step=0.01,
+                                spin=True, width=100, lab_width=70, unit="%", dec=2, step=0.1,
                                 event=self.change_event))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="at", lab_width=20, obj=self.airfoil, 
                                 get='maxCamberX', set='set_maxCamberX', disable= 'isSymmetric',  
@@ -1612,9 +1723,13 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
 
         # ----------- setup diagram frame at the end ---------------
 
-        self.diagram_frame = Diagram_Airfoil_Mini (self.edit_frame, self.airfoilList, 
+        self.diagram_frame = Diagram_Airfoil_Edit (self.edit_frame, self.airfoilList, 
                                                    size=(7.0,6.0))
         self.diagram_frame.grid(row=1, column=1, sticky="nwes")
+
+
+        # ----------- register change event from diagram / mouse move  ---------------
+        self.ctk_root.bind(AIRFOIL_CHANGED_IN_ARTIST, self.refresh, add='+')
 
 
 
@@ -1627,16 +1742,8 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
 
 
     def airfoilList (self):
-        if self.showModified: 
-            return [self.airfoilOrg, self.airfoil]
-        else: 
-            return [self.airfoilOrg]
+        return [self.airfoilOrg, self.airfoil]
 
-
-    def set_showModified (self, aBool):
-        self.showModified = aBool
-        self.refresh ('') 
-                    
 
     def refresh(self, dummy):
         self.diagram_frame.refresh()
