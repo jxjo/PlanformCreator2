@@ -2451,7 +2451,8 @@ class AirfoilEditor ():
         """
 
         if os.path.isfile (anAirfoilFile):
-            airfoil_dir = os.path.dirname(anAirfoilFile)
+            airfoil_dir = os.path.dirname(anAirfoilFile) 
+            if airfoil_dir == '': airfoil_dir = '.'
             dat_files = fnmatch.filter(os.listdir(airfoil_dir), '*.dat')
             bez_files = fnmatch.filter(os.listdir(airfoil_dir), '*.bez')
             hh_files  = fnmatch.filter(os.listdir(airfoil_dir), '*.hicks')
