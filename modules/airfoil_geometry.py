@@ -818,6 +818,7 @@ class Side_Airfoil:
             ymax = round(ymax, 7)
         return xmax, ymax
 
+
     def _yFn_max (self,x):
         """ spline interpolated y values based on a x-value based on little maximum helper spline
         """

@@ -37,7 +37,9 @@ class Example_Airfoil (Airfoil):
     def load(self):
         # over loaded to read airfoil from code  and not from file
         file_lines = self._getCoordinates ()
-        self._loadLines (file_lines)
+
+        self._name, self._x, self._y = self._loadLines(file_lines)
+
 
         # class name to identify example airfoil from code  
         if self.pathFileName is None: 

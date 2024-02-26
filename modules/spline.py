@@ -921,6 +921,20 @@ class HicksHenne:
         self._y  = None
 
 
+    @property
+    def strength (self) -> float: 
+        return self._strength 
+
+    @property
+    def location (self) -> float: 
+        return self._location 
+
+    @property
+    def width (self) -> float: 
+        return self._width 
+
+
+
     def eval (self, x):
         """
         Evaluate self. Results will be cached for same x  

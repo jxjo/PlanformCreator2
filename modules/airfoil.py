@@ -487,12 +487,12 @@ class Airfoil:
             f = open(sourcePathFile, 'r')
             file_lines = f.readlines()
             f.close()
-            self._loadLines(file_lines)
+            self._name, self._x, self._y = self._loadLines(file_lines)
 
 
     def _loadLines (self, file_lines):
 
-        # read the lines of the airfoil file into self x,y
+        # returns the name and x,y (np array) of the airfoil file 
 
         x = []
         y = []
@@ -515,9 +515,9 @@ class Airfoil:
                     xvalPrev = xval 
                     yvalPrev = yval 
             else: 
-                self._name = line.strip()
-        self._x = np.asarray (x)
-        self._y = np.asarray (y)
+                name = line.strip()
+
+        return name, np.asarray (x), np.asarray (y)
 
 
     def save (self):
@@ -1035,12 +1035,11 @@ class Airfoil_Hicks_Henne(Airfoil):
         if fromPath is None: 
             fromPath = self.pathFileName
 
-        seed_foilName, top_hhs, bot_hhs = self._read_hh_file (fromPath)
+        seed_foilName, seed_x, seed_y, top_hhs, bot_hhs = self._read_hh_file (fromPath)
 
         if seed_foilName: 
-            seed_pathFileName = os.path.join(self.pathName, seed_foilName+'.dat')
-            seed_foil = Airfoil (pathFileName=seed_pathFileName)
-            seed_foil.load ()
+
+            seed_foil = Airfoil (x=seed_x, y=seed_y, name=seed_foilName)
 
             if seed_foil.isLoaded: 
                 self._geo = Geometry_HicksHenne (seed_foil.x, seed_foil.y)
@@ -1050,7 +1049,7 @@ class Airfoil_Hicks_Henne(Airfoil):
                 self._isLoaded = True 
                 logging.debug (f"Hicks Henne definition for {self.name} loaded")
             else: 
-                ErrorMsg (f"Hicks Henne seed airfoil {seed_pathFileName} couldn't be loaded ")
+                ErrorMsg (f"Hicks Henne seed airfoil {seed_foilName} couldn't be loaded ")
 
 
     def _read_hh_file (self, fromPath):
@@ -1066,15 +1065,18 @@ class Airfoil_Hicks_Henne(Airfoil):
 
         
         # format of bezier airfoil file 
-
-        # 'seed airfoil name'
         # Top Start
-        # 0.000_strength_0000000 0.0000_location_00000 0.0000_width_00000
+        # 0.000strength000000000 0.0000location0000000  0.0000width0000000
         # ...
         # Top End
         # Bottom Start
-        # ...
+        # ... 
         # Bottom End
+        # Seedfoil Start 
+        # 'seed airfoil name'
+        #  1.000000 0.000000
+        #  ...      ...
+            
         seed_name = ''                           #  name of seed airfoil 
         top_hhs = []
         bot_hhs = []
@@ -1083,37 +1085,45 @@ class Airfoil_Hicks_Henne(Airfoil):
         try: 
             hhs = []
             for i, line in enumerate(file_lines):
-                line = line.lower()
-                if i == 0:
-                    seed_name = line.strip()
-                else: 
-                    if "start" in line:
-                        if "top" in line: 
-                            curveType = UPPER
-                        else:
-                            curveType = LOWER 
-                        hhs = []
-                    elif "end" in line:
-                        if not curveType : raise ValueError("Start line missing")
-                        if "top"    in line and curveType == LOWER: raise ValueError ("Missing 'Bottom End'")  
-                        if "bottom" in line and curveType == UPPER: raise ValueError ("Missing 'Bottom Top'") 
 
-                        if curveType == LOWER:
-                            bot_hhs = hhs
-                        else: 
-                            top_hhs = hhs 
-                        curveType = None
-                    else:     
-                        splitline = line.split()
-                        if len(splitline) == 3:                     
-                            strength = float(splitline[0].strip())
-                            location = float(splitline[1].strip())
-                            width    = float(splitline[2].strip())
-                            hhs.append (HicksHenne (strength, location, width ))
+                line = line.lower()
+
+                if "seedfoil start" in line:
+
+                    seed_name, x, y = self._loadLines (file_lines [i+1:])
+
+                elif "start" in line:
+
+                    if "top" in line: 
+                        curveType = UPPER
+                    else:
+                        curveType = LOWER 
+                    hhs = []
+
+                elif "end" in line:
+
+                    if not curveType : raise ValueError("Start line missing")
+                    if "top"    in line and curveType == LOWER: raise ValueError ("Missing 'Bottom End'")  
+                    if "bottom" in line and curveType == UPPER: raise ValueError ("Missing 'Bottom Top'") 
+
+                    if curveType == LOWER:
+                        bot_hhs = hhs
+                    else: 
+                        top_hhs = hhs 
+                    curveType = None
+
+                else:     
+
+                    splitline = line.split()
+                    if len(splitline) == 3:                     
+                        strength = float(splitline[0].strip())
+                        location = float(splitline[1].strip())
+                        width    = float(splitline[2].strip())
+                        hhs.append (HicksHenne (strength, location, width ))
         except ValueError as e:
             ErrorMsg ("While reading Hicks Henne file '%s': %s " %(fromPath,e ))   
          
-        return seed_name, top_hhs, bot_hhs   
+        return seed_name, x, y, top_hhs, bot_hhs   
 
 
 

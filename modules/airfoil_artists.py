@@ -161,7 +161,7 @@ class Airfoil_Artist (Artist):
                         self._plot_title ('Bezier based', va='top', ha='left', wspace=0.05, hspace=0.05)
 
                 if airfoil.isHicksHenneBased and self.show_hicksHenne: 
-                    self.draw_hicksHenne (airfoil, self._get_color(p))
+                    self.draw_hicksHenne (airfoil)
                     self._plot_title ('Hicks Henne based', va='top', ha='left', wspace=0.05, hspace=0.05)
 
                 self._cycle_color()                             # in colorycle are pairs  - move to next
@@ -212,8 +212,8 @@ class Airfoil_Artist (Artist):
 
 
 
-    def draw_hicksHenne (self, airfoil: Airfoil_Bezier, color):
-        """ draw Bezier control Points of airfoil """
+    def draw_hicksHenne (self, airfoil: Airfoil_Bezier):
+        """ draw hicks henne functions of airfoil """
 
         linewidth   = 0.7
         linestyle   = '-'
@@ -226,16 +226,41 @@ class Airfoil_Artist (Artist):
             if side.name == UPPER:
                 linestyle   = '--'
                 delta_y =  0.1
+                va = 'top'
             else:
                 linestyle   = '--'
                 delta_y = -0.1
+                va = 'bottom'
 
             hh : HicksHenne
-            for hh in side.hhs:
+            for ih, hh in enumerate(side.hhs):
+
+                # plot hh function 
                 x = side.x 
-                y = hh.eval (x) * 10 + delta_y
-                p = self.ax.plot (x,y, linestyle, linewidth=linewidth ) 
+                y = hh.eval (x) 
+                p = self.ax.plot (x,y * 10 + delta_y, linestyle, linewidth=linewidth ) 
                 self._add(p)
+
+                # plot maximum marker 
+                x = hh.location
+                y = hh.strength  * 10 + delta_y
+                color =self._get_color (p) 
+                p = self.ax.plot (x, y, color=color, **ms_point)
+                self._add(p)
+
+                p = self.ax.annotate(f'{ih+1}', (x, y), fontsize='small',
+                    xytext=(3, 3), textcoords='offset points', color = color)
+                self._add(p)
+
+            # print info text 
+                
+            xa = 0.005 
+            ya = delta_y * 1.5
+            text = f'{side.name} {len(side.hhs)} Hicks Henne functions'
+            self._add (self.ax.annotate(text, xy=(xa,ya), xytext=(0, 0), va=va, ha='left',
+                       xycoords='data', textcoords='offset points', fontsize='small',
+                       color = cl_textHeader, alpha=1))
+
 
 
     def _print_name (self, iair, airfoil: Airfoil, color):
