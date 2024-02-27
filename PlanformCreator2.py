@@ -132,7 +132,7 @@ class Edit(ctk.CTkFrame):
         self.ctk_root.bind(PLANFORM_CHANGED,         self.changed_planform, add='+')
         self.ctk_root.bind(SECTION_CHANGED,          self.changed_section, add='+')
 
-        self.ctk_root.bind(PLANFORM_CHANGED_BY_MOUSE,self.changed_planform, add='+')
+        self.ctk_root.bind(PLANFORM_CHANGED_BY_MOUSE,self.changed_planform_by_mouse, add='+')
         self.ctk_root.bind(WING_CHANGED_BY_MOUSE,    self.changed_wing, add='+')
 
         # bindings from plot diagrams 
@@ -173,15 +173,19 @@ class Edit(ctk.CTkFrame):
             self.editSectionMaster_frame.refresh_current()    # e.g. section position (wingSpan) 
             self.editPlanformType_frame.refresh()             # Bezier parameters
 
+
+    def changed_planform_by_mouse (self, event): 
+        """ Eventhandler for changes of planform by mouse in diagram e.g. banana"""
+
+        self.editPlanformType_frame.refresh()                   # banana parameters      
+
+
     def changed_planform (self, event): 
         """ Eventhandler for changes of planform data"""
 
-        # e.g. banana changed with mouse in diagram 
-        self.editPlanformType_frame.refresh()                   # banana parameters      
-        # doesn't change wing data
-
         self.editSectionMaster_frame.changed_planform()          # 'Defines Planform' (trapezoid) 
-    
+
+
     def changed_section (self, event): 
         """ Eventhandler for changes of section data"""
         # doesn't change wing data
@@ -2430,8 +2434,6 @@ class App(ctk.CTk):
 
 if __name__ == "__main__":
 
-    # init colorama
-    just_fix_windows_console()
 
     InfoMsg("Starting %s ..." % App.name)
 

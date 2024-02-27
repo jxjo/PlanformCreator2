@@ -2545,12 +2545,9 @@ class AirfoilEditor ():
 
 if __name__ == "__main__":
 
-    # init colorama
-    just_fix_windows_console()
-
     # init logger 
 
-    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)  # DEBUG or WARNING
+    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.WARNING)  # DEBUG or WARNING
     # suppress debug messages from these modules 
     logging.getLogger('matplotlib.font_manager').disabled = True
     logging.getLogger('PIL.PngImagePlugin').disabled = True

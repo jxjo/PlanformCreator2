@@ -6,11 +6,14 @@ Common Utility functions for convinience
 """
 
 from termcolor import colored
-from colorama import just_fix_windows_console
 import os
 from pathlib import Path
 import json
+import platform
 
+if platform.system() == 'Windows': 
+    from colorama import just_fix_windows_console
+    just_fix_windows_console()                          # colored terminal output for WIndows  
 
 
 #------------------------------------------------------------------------------
@@ -19,9 +22,6 @@ import json
 
 print_disabled = False
 trace_disabled = True
-
-# init colorama
-just_fix_windows_console()
 
 
 def my_print(message):
