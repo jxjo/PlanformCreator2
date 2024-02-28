@@ -56,13 +56,13 @@ from wing_artists       import *
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "1.2.1"
+AppVersion = "1.2.2"
 
 #------------------------------------------------
 
 cl_background               = ('#EBEBEB','#242424')                     # background color in diagrams
 
-#   change events for updating mainly plots
+# change events for updating diagrams and vice versa entry fields 
 
 WING_NEW                    = "<<WING_NEW>>"                #tk event types
 WING_CHANGED                = "<<WING_CHANGED>>"             

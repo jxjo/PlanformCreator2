@@ -53,10 +53,10 @@ from ui_base            import *
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "1.2.1"
+AppVersion = "1.2.2"
 
 
-# tk change events for updating mainly plots or vice versa 
+# tk change events for updating diagrams or vice versa entry fields  
 
 AIRFOIL_NEW                 = "<<AIRFOIL_NEW>>"                
 AIRFOIL_CHANGED             = "<<AIRFOIL_CHANGED>>"

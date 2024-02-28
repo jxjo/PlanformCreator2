@@ -82,6 +82,16 @@ The 'Match' function performs a best match of the Bezier curve to an existing ai
 <sup>Dialog for Bezier curve approximation. In this example the upper Bezier curve having 6 control points was 'matched' to the target airfoil at 4 controil points (Leading andtrailing edge are fixed). </sup>
 
 
+## Hicks-Henne based airfoils 
+
+Hicks-Henne “bump” functions are applied to a base aerofoil and add a linear combination of single-signed sine functions to deform its upper and lower surfaces to create a new aerofoil shape.
+They are used in the airfoil optimizer Xoptfoil2 as an alternative to Bezier curves to create new airfoil designs. 
+
+The Airfoil Editor allows to visualize the Hicks-Henne functions which were applied to an airfoil. For this a special file format '.hicks' is used to interchange with Xoptfoil2.
+
+![PC2](images/AirfoilEditor_Hicks-Henne.png "Screenshot of Hicks-Henne based airfoil")
+<sup>Visualization of the Hicks-Henne bump functions, which were applied to the upper and lower side of the airfoil</sup>
+
 ##  Install
 
 The 'Airfoil Editor' is part of the 'Planform Creator 2' repository. 

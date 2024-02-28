@@ -364,6 +364,8 @@ class Curvature_Artist (Airfoil_Line_Artist):
 
     def _plot (self): 
 
+        from math_util  import derivative1
+
         nairfoils = len(self.airfoils)
         if nairfoils == 0: return 
         
@@ -383,20 +385,31 @@ class Curvature_Artist (Airfoil_Line_Artist):
                 side : Side_Airfoil
                 for side in sides:
                     x = side.x
-                    y = side.y      # if side.name == UPPER else -side.y
-                    alpha = 0.9     # if side.name == UPPER else 0.6
+                    y = side.y      
+                    alpha = 0.9     
                     ls = ls_curvature if side.name == UPPER else ls_curvature_lower
                     p = self.ax.plot (x, y, ls, color = color, alpha=alpha, label=label, 
                                       linewidth= linewidth, **self._marker_style)
                     self._add(p)
                     self._plot_reversals (side, color)
 
+                    # experimental: plot derivative1 of curvature ('spikes')
+                    p = self.ax.plot (x, -derivative1(x,y), ls, color = 'red', alpha=alpha, label=label, 
+                                      linewidth= 0.5, **self._marker_style)
+                    self._add(p)
+
                     # print a table for the max values 
                     if self.showLegend == 'extended':
                         self._print_values (iair, nairfoils, airfoil.name, side, side.name==UPPER, color)
 
+
         self._plot_title (self.name, va='top', ha='center', wspace=0.1, hspace=0.05)
 
+        # experimental
+        p = self.ax.text (0.05, 0.05, "Derivative of curvature (experimental)", color='darkred' , 
+                          fontsize = 'small', transform=self.ax.transAxes, 
+                          horizontalalignment='left', verticalalignment='bottom')
+        self._add (p)   
 
 
     def _plot_reversals (self, line : Side_Airfoil, color):
