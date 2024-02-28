@@ -87,6 +87,47 @@ def panel_angles (x,y):
     return angles 
 
 
+
+#------------ derivative -----------------------------------
+
+
+def derivative1 (x, y):
+        """
+        evaluate first derivative of polyline (x,y)
+        using Backward, center, forward adapted difference approximation
+        """
+
+        #     npt = size(x)        
+        #     do i = 1, npt
+        #       if (i == 1) then                                                 ! forward
+        #         derivative1(i) = (y(i+1) - y(i))/ (x(i+1) - x(i)) 
+        #       else if (i ==npt) then                                           ! backward
+        #         derivative1(i) = (y(i) - y(i-1))/ (x(i) - x(i-1))
+        #       else                                                             ! center
+        #         h       = x(i+1) - x(i)
+        #         h_minus = x(i) - x(i-1)
+        #         hr      = h / h_minus 
+        #         derivative1(i) = (y(i+1) - hr*hr*y(i-1) -(1-hr*hr)*y(i))/ (h * (1.d0 +hr)) 
+        #       end if 
+        #     end do
+
+        npt = len(x)
+        der1 = np.zeros (npt)
+        for i in range(len(x)):
+            if i == 0: 
+                der1[i] = (y[i+1] - y[i]) / (x[i+1] - x[i])
+            elif i == npt-1:
+                der1[i] = (y[i] - y[i-1]) / (x[i] - x[i-1])
+            else: 
+                h = x[i+1] - x[i]
+                h_minus = x[i] - x[i-1]
+                hr = h / h_minus
+                der1[i] = (y[i+1] - hr**2 * y[i-1] -(1 - hr**2) * y[i]) / (h * (1+hr))
+        return der1
+                     
+
+
+
 #------------ Bisection - find index  -----------------------------------
 
 def bisection(array,value):
@@ -171,6 +212,7 @@ def bisection_fn (f,a,b,N, tolerance=None):
             return None
 
     return (a_n + b_n)/2, n
+
 
 
 #------------ Newton iteration - find Root  -----------------------------------
