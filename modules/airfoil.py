@@ -841,6 +841,7 @@ class Airfoil_Bezier(Airfoil):
             file_lines = file.readlines()
 
         # format of bezier airfoil file 
+        # <airfoil name> 
         # Top Start
         # 0.0000000000000000 0.0000000000000000
         # ...
@@ -1035,7 +1036,9 @@ class Airfoil_Hicks_Henne(Airfoil):
         if fromPath is None: 
             fromPath = self.pathFileName
 
-        seed_foilName, seed_x, seed_y, top_hhs, bot_hhs = self._read_hh_file (fromPath)
+        foilName, seed_foilName, seed_x, seed_y, top_hhs, bot_hhs = self._read_hh_file (fromPath)
+
+        self.set_name (foilName)
 
         if seed_foilName: 
 
@@ -1065,6 +1068,8 @@ class Airfoil_Hicks_Henne(Airfoil):
 
         
         # format of bezier airfoil file 
+
+        # <airfoil name> 
         # Top Start
         # 0.000strength000000000 0.0000location0000000  0.0000width0000000
         # ...
@@ -1076,9 +1081,10 @@ class Airfoil_Hicks_Henne(Airfoil):
         # 'seed airfoil name'
         #  1.000000 0.000000
         #  ...      ...
-            
-        seed_name = ''                           #  name of seed airfoil 
-        top_hhs = []
+
+        name = ''                                # name of airfoil  
+        seed_name = ''                           # name of seed airfoil 
+        top_hhs = []                             # array of hh functions 
         bot_hhs = []
         curveType = None
 
@@ -1086,25 +1092,29 @@ class Airfoil_Hicks_Henne(Airfoil):
             hhs = []
             for i, line in enumerate(file_lines):
 
-                line = line.lower()
+                line_low = line.lower()
 
-                if "seedfoil start" in line:
+                if i == 0: 
+
+                    name = line.strip()
+
+                elif "seedfoil start" in line_low:
 
                     seed_name, x, y = self._loadLines (file_lines [i+1:])
 
-                elif "start" in line:
+                elif "start" in line_low:
 
-                    if "top" in line: 
+                    if "top" in line_low: 
                         curveType = UPPER
                     else:
                         curveType = LOWER 
                     hhs = []
 
-                elif "end" in line:
+                elif "end" in line_low:
 
                     if not curveType : raise ValueError("Start line missing")
-                    if "top"    in line and curveType == LOWER: raise ValueError ("Missing 'Bottom End'")  
-                    if "bottom" in line and curveType == UPPER: raise ValueError ("Missing 'Bottom Top'") 
+                    if "top"    in line_low and curveType == LOWER: raise ValueError ("Missing 'Bottom End'")  
+                    if "bottom" in line_low and curveType == UPPER: raise ValueError ("Missing 'Bottom Top'") 
 
                     if curveType == LOWER:
                         bot_hhs = hhs
@@ -1123,7 +1133,7 @@ class Airfoil_Hicks_Henne(Airfoil):
         except ValueError as e:
             ErrorMsg ("While reading Hicks Henne file '%s': %s " %(fromPath,e ))   
          
-        return seed_name, x, y, top_hhs, bot_hhs   
+        return name, seed_name, x, y, top_hhs, bot_hhs   
 
 
 
