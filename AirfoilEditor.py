@@ -959,6 +959,16 @@ class Diagram_LeTe_Mini (Diagram_Abstract):
     def setup_switches(self, r=0, c=0):
         """ no switches"""
         return r, c
+    
+    # -------- event handler
+
+    def setChangeBindings (self):
+        # overloaded
+        self.ctk_root.bind(AIRFOIL_CHANGED, self.changed_airfoil, add='+')
+
+    def changed_airfoil(self, dummy): 
+        """ Eventhandler for changes of airfoil"""
+        self.refresh()
 
     # -------- refresh my Artists which are on 'show mode' 
 
