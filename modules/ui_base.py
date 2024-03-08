@@ -402,7 +402,7 @@ class Dialog_Abstract (ctk.CTkToplevel):
     widthFrac  = 0.75
     heightFrac = 0.70
 
-    def __init__(self, master, workingDir=None, title=None, *args, **kwargs):
+    def __init__(self, master, myApp=None, workingDir=None, title=None, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
 
         self.transient(master)
@@ -425,6 +425,11 @@ class Dialog_Abstract (ctk.CTkToplevel):
         self.workingDir = workingDir                        # the default directory for file activities
         self.ctk_root = self.winfo_toplevel()               # root for change events
 
+        if myApp:
+            self._myApp = myApp
+        else:
+            self._myApp = self.winfo_toplevel()
+
         # Init UI, widgets, grid
 
         self.init()
@@ -436,6 +441,12 @@ class Dialog_Abstract (ctk.CTkToplevel):
         # self.resizable(False, False)                        
         self.focus_set()
         self.protocol("WM_DELETE_WINDOW", self.destroy)
+
+
+    @property
+    def myApp (self):
+        """ the top level app self belongs to -can be overloaded for type info"""
+        return self._myApp
 
 
     def init (self):
@@ -740,7 +751,7 @@ class Dialog_Settings (Dialog_Abstract):
     Dialog to edit app settings
     """
     name       = "Edit settings"
-    widthFrac  = 0.30
+    widthFrac  = 0.25
     heightFrac = 0.40
 
     def __init__(self, master,  name= None, *args, **kwargs):
@@ -756,7 +767,6 @@ class Dialog_Settings (Dialog_Abstract):
         # Header 
         c = 0 
         r = 0 
-        # Header_Widget (self.header_frame,r,c, pady=0, lab= "Normalize Airfoil", sticky = 'nw', width=100)
         
         Label_Widget  (self.edit_frame,r, c, padx= 30, pady=(20,15), sticky = 'nw',
                         lab= "The following will be applied with the next restart")
@@ -774,12 +784,20 @@ class Dialog_Settings (Dialog_Abstract):
         self.add (Field_Widget  (self.edit_frame,r,c, lab="Scaling of App size", lab_width=100, width=80, padx= 50, pady=5,
                                  obj=self, get='window_scaling', set="set_window_scaling", dec=2))
 
+        # allow additional setitngs in sub class
+        r = self._add_settings (r+1)
+
         # close  
-        r += 1
         self.edit_frame.grid_rowconfigure (r, weight=1)
         r += 1
         Button_Widget (self.edit_frame,r,c, lab='Close', set=self.ok, 
                        columnspan=2, width=100, sticky="w", pady=20, padx=(200,0))
+
+
+    def _add_settings (self, r):
+        """ add additional settings """
+        # to be overloaded
+        return r
 
 
     @property

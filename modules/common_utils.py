@@ -228,8 +228,7 @@ class Settings (Parameters):
 
         Args:
             :key: the key to look for       \n
-            :default: the value if key is missing
-            :msg: if True a log message will be printed when a value is missing 
+            :value: the value to set 
         """
         dataDict = self.get_dataDict ()
 

@@ -49,6 +49,12 @@ class Airfoil:
     isBezierBased       = False
     isHicksHenneBased   = False
 
+    # defaults for panelling - can be overwritten from Settings 
+
+    nPanels_default     = 160                       # repanel: no of panels 
+    le_bunch_default    = 0.86                      # repanel: panel bunch at leading edge
+    te_bunch_default    = 0.7   	                # repanel: panel bunch at trailing edge
+
 
     def __init__(self, x= None, y = None, name = None,
                  geometry : Type[Geometry]  = GEO_SPLINE, 
@@ -84,9 +90,9 @@ class Airfoil:
         self._geometryClass  = geometry          # geometry startegy 
         self._geo            = None              # selfs instance of geometry
 
-        self._nPanelsNew     = 200               # repanel: no of panels 
-        self._le_bunch       = 0.82              # repanel: panel bunch at leading edge
-        self._te_bunch       = 0.7   	         # repanel: panel bunch at trailing edge
+        self._nPanelsNew     = None              # repanel: no of panels - init via default
+        self._le_bunch       = None              # repanel: panel bunch at leading edge
+        self._te_bunch       = None   	         # repanel: panel bunch at trailing edge
 
         self._polarSets      = None              # polarSets which are defined from outside 
 
@@ -395,7 +401,10 @@ class Airfoil:
     @property
     def nPanelsNew (self): 
         """ number of panels when being repaneled"""
-        return self._nPanelsNew
+        if self._nPanelsNew is None: 
+            return self.nPanels_default
+        else: 
+            return self._nPanelsNew 
     def set_nPanelsNew (self, newVal): 
         """ set number of panels and repanel"""
         newVal = max (40,  newVal)
@@ -406,7 +415,10 @@ class Airfoil:
     @property
     def le_bunch (self): 
         """ leading edge bunch of panels"""
-        return self._le_bunch
+        if self._le_bunch is None: 
+            return self.le_bunch_default
+        else: 
+            return self._le_bunch
     def set_le_bunch (self, newVal): 
         """ set leading edge bunch of panels and repanel"""
         self._le_bunch = newVal
@@ -415,7 +427,10 @@ class Airfoil:
     @property
     def te_bunch (self): 
         """ trailing edge bunch of panels"""
-        return self._te_bunch
+        if self._te_bunch is None: 
+            return self.te_bunch_default
+        else: 
+            return self._te_bunch
     def set_te_bunch (self, newVal): 
         """ set trailing edge bunch of panels and repanel"""
         self._te_bunch = newVal

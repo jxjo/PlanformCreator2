@@ -400,7 +400,7 @@ class Edit_Panels(Edit_Abstract_Airfoil):
         """ Open repanel dialog - if 'OK' the new repaneled airfoil will be insert to the list 
         of airfoils and set to current """
 
-        dialog = Dialog_Repanel (self, self._airfoilFn )
+        dialog = Dialog_Repanel (self, self._airfoilFn, myApp=self.myApp )
         self.wait_window (dialog)
 
         if dialog.return_OK: 
@@ -606,11 +606,13 @@ class Diagram_Airfoil (Diagram_Abstract):
 
         # airfoil is list to prepare for multiple airfoils to view 
         
-        self.airfoilArtist   = Airfoil_Artist   (self.ax1,     self.airfoils, show=True)
-        self.thicknessArtist = Thickness_Artist (self.ax1,     self.airfoils, show=False)
+        self.airfoilArtist   = Airfoil_Artist (self.ax1, self.airfoils, show=True)
+        self.airfoilArtist.set_show_title (True)            # title like "Bezier based.." 
+
+        self.thicknessArtist = Thickness_Artist (self.ax1, self.airfoils, show=False)
 
         if self.ax2: 
-            self.curvatureArtist = Curvature_Artist (self.ax2,     self.airfoils, show=True)
+            self.curvatureArtist = Curvature_Artist (self.ax2, self.airfoils, show=True)
             self.curvatureArtist.set_lower(self.show_lower)
             self.curvatureArtist.set_upper(self.show_upper)
         else: 
@@ -764,11 +766,14 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
     """
     name = "Bezier Airfoil"
 
-    def __init__(self, master, airfoilOrg, airfoilBezier, *args, **kwargs):
+    def __init__(self, master, airfoilOrg : Airfoil, airfoilBezier : Airfoil_Bezier, *args, **kwargs):
 
         self._airfoilBezier : Airfoil_Bezier = airfoilBezier
 
-        self._show_original   = True 
+        if airfoilOrg.isBezierBased:                    # if original is Bezier don't show per default
+            self._show_original   = False 
+        else: 
+            self._show_original   = True 
         self._show_diff       = False
         self.bezierArtist     = None
         self.diffArtist       = None 
@@ -804,7 +809,7 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
 
         super().setup_artists ()
 
-        # self.airfoilArtist.set_show_bezier (False)          # this is done bei bezierArtist
+        self.airfoilArtist.set_show_title (False)       # switch off "Bezier based" of original 
 
 
     def re_create_axes (self):
@@ -1180,6 +1185,73 @@ class Diagram_Airfoil_Edit (Diagram_Abstract):
 # Dialogs for smaller tasks   
 #-------------------------------------------------------------------------------
 
+class Dialog_Airfoil_Settings (Dialog_Settings):
+
+    heightFrac = 0.45
+
+
+    def _add_settings(self, r):
+
+        # Header 
+        c = 0 
+        
+        Label_Widget  (self.edit_frame,r, c, padx= 30, pady=(20,15), sticky = 'nw',
+                        lab= "Default values for re-panelling an airfoil")
+
+        # Settings 
+        r += 1
+        self.add (Field_Widget  (self.edit_frame,r,c, lab="No of panels", lab_width=100, width=80, padx= 50, pady=5,
+                                 obj=self, get='nPanels_default', set="set_nPanels_default", dec=0))
+        r += 1
+        self.add (Field_Widget  (self.edit_frame,r,c, lab="LE bunch", lab_width=100, width=80, padx= 50, pady=5,
+                                 obj=self, get='le_bunch_default', set="set_le_bunch_default", dec=2))
+        r += 1
+        self.add (Field_Widget  (self.edit_frame,r,c, lab="TE bunch", lab_width=100, width=80, padx= 50, pady=5,
+                                 obj=self, get='te_bunch_default', set="set_te_bunch_default", dec=2))
+
+        r += 1
+        return r
+    
+
+    @property
+    def nPanels_default (self):
+        return fromDict (self.settings_dict, 'nPanels_default', default=Airfoil.nPanels_default, msg=False) 
+    def set_nPanels_default (self, newVal):
+        if newVal is not None: 
+            newVal = max (40,  newVal)
+            newVal = min (500, newVal) 
+            newVal= int (newVal)
+            Airfoil.nPanels_default = newVal 
+
+        toDict(self.settings_dict, 'nPanels_default', newVal)
+        self.refresh()
+
+
+    @property
+    def le_bunch_default (self):
+        return fromDict (self.settings_dict, 'le_bunch_default', default=Airfoil.le_bunch_default, msg=False) 
+    def set_le_bunch_default (self, newVal):
+        if newVal is not None: 
+            newVal = max (0.0, newVal)
+            newVal = min (1.0, newVal) 
+            Airfoil.le_bunch_default = newVal 
+        toDict(self.settings_dict, 'le_bunch_default', newVal)
+        self.refresh()
+
+
+    @property
+    def te_bunch_default (self):
+        return fromDict (self.settings_dict, 'te_bunch_default', default=Airfoil.te_bunch_default, msg=False) 
+    def set_te_bunch_default (self, newVal):
+        if newVal is not None: 
+            newVal = max (0.0, newVal)
+            newVal = min (1.0, newVal) 
+            Airfoil.te_bunch_default = newVal 
+        toDict(self.settings_dict, 'te_bunch_default', newVal)
+        self.refresh()
+    
+
+
 
 class Dialog_Airfoil_Abstract (Dialog_Abstract):
     """ 
@@ -1438,6 +1510,9 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
                                 event=self.change_event, lim=(50,500), dec=0, spin=True, step=10))
         self.add (Label_Widget (self.input_frame,r,c+3  , columnspan = 1, 
                                 lab= lambda: "equals %d points" % self.airfoil.nPoints))
+        
+        self.add(Button_Widget (self.input_frame,r,c+4, lab='Change defaults', width=110, columnspan=3, 
+                                sticky='w', style=SUPTLE, padx=(3,10),set=self.change_defaults))
 
         self.input_frame.grid_columnconfigure (8, weight=2)
 
@@ -1481,6 +1556,12 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
         else: 
             return 'Disabled'
 
+    def change_defaults (self):
+        """ change panelling defaults by calling Settings dialog """
+
+        self.myApp.edit_settings()
+        self.airfoil.repanel()
+        self.refresh()
 
     def refresh(self, *_):
 
@@ -2332,6 +2413,11 @@ class AirfoilEditor ():
         self.isModal   = not self.parentApp is None
         self.return_OK = True
 
+        # get defaults from settings file 
+
+        Airfoil.nPanels_default  = Settings().get('nPanels_default',  default=Airfoil.nPanels_default)
+        Airfoil.le_bunch_default = Settings().get('le_bunch_default', default=Airfoil.le_bunch_default)
+        Airfoil.te_bunch_default = Settings().get('te_bunch_default', default=Airfoil.te_bunch_default)
 
         # create windows 
 
@@ -2482,7 +2568,8 @@ class AirfoilEditor ():
     def edit_settings (self):
         """ file menu edit settings """
 
-        Dialog_Settings(self.main, name=self.name)
+        dialog = Dialog_Airfoil_Settings(self.main, name=self.name)
+        self.main.wait_window (dialog)
 
 
     #------- file functions ----------------
