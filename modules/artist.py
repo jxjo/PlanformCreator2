@@ -247,7 +247,7 @@ class Artist():
             try:
                 p.remove()
             except:
-                print (" -!- ups - artist %snot found" %p)
+                print (" -!- ups - artist %s not found" %p)
         self._myPlots = []
     
         self._remove_myticks ()                         # remove ticks self added to axis
@@ -286,14 +286,21 @@ class Artist():
 
     def _add(self, aPlot):
         """ add matplotlib artist to artists of self"""
+
+        art = None 
+
         if isinstance (aPlot, PathCollection):      # scatter returns PathCollection 
             art = aPlot
         elif isinstance (aPlot, list):              # .plot returns list - take first element
             art = aPlot [0]
         else:
             art = aPlot
-        self._myPlots.append(art)
+        
+        if not art is None: self._myPlots.append(art)
+
         return art
+
+
 
     def _plotLegend(self):
         """ shows the legend """

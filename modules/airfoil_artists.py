@@ -37,6 +37,8 @@ ms_point            = dict(marker='+'                      , markersize=8)   # m
 
 
 
+# -------- helper functions ------------------------
+
 
 def _color_airfoil_of (airfoil_type):
     """ returns the plot color for airfoil depending on its type """
@@ -61,7 +63,91 @@ def _color_airfoil_of (airfoil_type):
 
 
 
+def _plot_bezier_point_marker (ax, side : Side_Airfoil_Bezier, ipoint, color, animated=False):
+    """
+    Plot a single marker for a bezier control point
+    returns: plt marker artist  
+    """
+
+    markersize = 6
+    if ipoint == 0 or ipoint == (len(side.controlPoints)-1):
+        markerstyle = '.'
+        markersize = 3
+    elif side.name == UPPER:
+        markerstyle = 6
+    else: 
+        markerstyle = 7
+
+    x,y = side.controlPoints[ipoint]
+
+    if animated: 
+        alpha = 1
+    else: 
+        alpha = 0.4
+
+    p =  ax.plot (x,y , marker=markerstyle, markersize=markersize, 
+                 color=color, alpha=alpha, animated=animated) 
+    return p
+
+
+
+def _plot_bezier_point_number (ax, side : Side_Airfoil_Bezier, ipoint, color, animated=False):
+    """
+    Plot a single marker for a bezier control point
+    returns: plt text artist  
+    """
+
+    if side.name == UPPER:
+        va = 'bottom'
+        yn = 8
+    else:
+        va = 'top'
+        yn = -8
+
+    x,y = side.controlPoints[ipoint]
+
+    p = None 
+
+    if ipoint == 0 :                            # point 0 draw to the left 
+        p = ax.annotate(f'{ipoint+1}', (x,y) , va='center', ha='right', fontsize='small',
+            xytext=(-10, 0), textcoords='offset points', 
+            color = color, backgroundcolor= cl_background, animated=animated)
+    elif ipoint > 0: 
+        p = ax.annotate(f'{ipoint+1}', (x,y), va=va, ha='center', fontsize='small',
+            xytext=(0, yn), textcoords='offset points', 
+            color = color, backgroundcolor= cl_background, animated=animated)
+    return p
+
+
+def _plot_bezier_side_title (ax, side : Side_Airfoil_Bezier):
+    """
+    Plot info text about bezier curve of one side 
+    returns: plt text artist  
+    """
+
+    if side.name == UPPER:
+        delta_y =  0.1
+        va = 'bottom'
+    else:
+        delta_y = -0.1
+        va = 'top'
+
+    xa = 0.005 
+    ya = delta_y * 1.5
+    text = f'{side.name} {side.nPoints} Bezier control points'
+    p = ax.annotate(text, xy=(xa,ya), xytext=(0, 0), va=va, ha='left',
+                xycoords='data', textcoords='offset points', fontsize='small',
+                color = cl_textHeader, alpha=1)
+    return p 
+
+
+
+
+
+
+
 # -------- concrete sub classes ------------------------
+
 
 class Grid_Artist (Artist):
     """shows the grid in the axis
@@ -88,9 +174,8 @@ class Airfoil_Artist (Artist):
     def __init__ (self, axes, modelFn, **kwargs):
         super().__init__ (axes, modelFn, **kwargs)
 
+        self._show_title = False                # show title like 'Bezier based' 
         self._points = False                    # show point marker 
-        self._show_bezier = True                # draw Bezier control points and helper line
-        self._show_hicksHenne = True            # draw hicks henne bumbs 
         self.set_showLegend('extended')         # show  legend with airfoil data 
 
  
@@ -99,12 +184,8 @@ class Airfoil_Artist (Artist):
     def set_points (self, aBool): self._points = aBool 
 
     @property
-    def show_bezier(self): return self._show_bezier
-    def set_show_bezier (self, aBool): self._show_bezier = aBool 
-
-    @property
-    def show_hicksHenne(self): return self._show_hicksHenne
-    def set_show_hicksHenne (self, aBool): self._show_hicksHenne = aBool 
+    def show_title(self): return self._show_title
+    def set_show_title (self, aBool): self._show_title = aBool 
 
 
     def set_current (self, aLineLabel, figureUpdate=False):
@@ -155,14 +236,16 @@ class Airfoil_Artist (Artist):
                                   linewidth= linewidth,  **_marker_style)
                 self._add (p)
 
-                if airfoil.isBezierBased and self.show_bezier: 
+                if airfoil.isBezierBased: 
                     if not airfoil.usedAs == DESIGN:            # a seperate artist will show 
                         self.draw_bezier (airfoil, self._get_color(p))
-                        self._plot_title ('Bezier based', va='top', ha='left', wspace=0.05, hspace=0.05)
+                        if self.show_title: 
+                            self._plot_title ('Bezier based', va='top', ha='left', wspace=0.05, hspace=0.05)
 
-                if airfoil.isHicksHenneBased and self.show_hicksHenne: 
+                if airfoil.isHicksHenneBased: 
                     self.draw_hicksHenne (airfoil)
-                    self._plot_title ('Hicks Henne based', va='top', ha='left', wspace=0.05, hspace=0.05)
+                    if self.show_title: 
+                        self._plot_title ('Hicks Henne based', va='top', ha='left', wspace=0.05, hspace=0.05)
 
                 self._cycle_color()                             # in colorycle are pairs  - move to next
 
@@ -188,28 +271,34 @@ class Airfoil_Artist (Artist):
         linewidth   = 0.7
         linestyle   = ':'
 
-        for sideBezier in [airfoil.geo.upper, airfoil.geo.lower]:
+        for side in [airfoil.geo.upper, airfoil.geo.lower]:
 
-            x = sideBezier.bezier.points_x
-            y = sideBezier.bezier.points_y
+            # print info text about bezier curve 
+
+            if self.show_title:
+                p = _plot_bezier_side_title (self.ax, side)
+                self._add(p)
+
+            # plot bezier control points with connecting line 
+
+            x = side.bezier.points_x
+            y = side.bezier.points_y
             p = self.ax.plot (x,y, linestyle, linewidth=linewidth, color=color) 
             self._add(p)
 
-            for ipoint, cpoint in enumerate (sideBezier.controlPoints):
+            for ipoint in range (side.nPoints):
 
-                markersize = 6
-                if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
-                    markerstyle = '.'
-                    markersize = 3
-                elif sideBezier.name == UPPER:
-                    markerstyle = 6
-                else: 
-                    markerstyle = 7
+                # plot bezier control point marker 
 
-                p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, 
-                                  color=color, alpha=0.5) 
+                p = _plot_bezier_point_marker(self.ax, side, ipoint, color)
                 self._add(p)
 
+                # print point number  
+
+                p = _plot_bezier_point_number (self.ax, side, ipoint, color)
+                self._add(p)
+
+            
 
 
     def draw_hicksHenne (self, airfoil: Airfoil_Bezier):
@@ -253,13 +342,14 @@ class Airfoil_Artist (Artist):
                 self._add(p)
 
             # print info text 
-                
-            xa = 0.005 
-            ya = delta_y * 1.5
-            text = f'{side.name} {len(side.hhs)} Hicks Henne functions'
-            self._add (self.ax.annotate(text, xy=(xa,ya), xytext=(0, 0), va=va, ha='left',
-                       xycoords='data', textcoords='offset points', fontsize='small',
-                       color = cl_textHeader, alpha=1))
+
+            if self.show_title:    
+                xa = 0.005 
+                ya = delta_y * 1.5
+                text = f'{side.name} {len(side.hhs)} Hicks Henne functions'
+                self._add (self.ax.annotate(text, xy=(xa,ya), xytext=(0, 0), va=va, ha='left',
+                        xycoords='data', textcoords='offset points', fontsize='small',
+                        color = cl_textHeader, alpha=1))
 
 
 
@@ -1000,8 +1090,10 @@ class Bezier_Edit_Artist (Artist):
         
         self.ax.relim()                            # make sure all the data fits
 
-        self.points_upper_artist   = []            # the artists of bezier control points
-        self.points_lower_artist   = []   
+        self.marker_upper_artist   = []            # the artists of bezier control points
+        self.marker_lower_artist   = []   
+        self.number_upper_artist   = []            # the artists of bezier control points number
+        self.number_lower_artist   = []   
         self.helper_upper_artist   = None          # artist to draw helper line 
         self.helper_lower_artist   = None      
         self.bezier_upper_artist   = None          # the artist to draw bezier curve
@@ -1016,31 +1108,24 @@ class Bezier_Edit_Artist (Artist):
         """ do plot of bezier control points and bezier curve 
         """
 
-        for sideBezier in [self.airfoil.geo.upper, self.airfoil.geo.lower]:
+        for side in [self.airfoil.geo.upper, self.airfoil.geo.lower]:
 
-            # plot bezier control points  
+            # plot bezier control points marker and their number  
 
-            points_artist = []
+            marker_artist = []
+            number_artist = []
+            for ipoint in range (side.nPoints):
 
-            for ipoint, cpoint in enumerate (sideBezier.controlPoints):
+                p = _plot_bezier_point_marker (self.ax, side, ipoint, cl_userHint, animated=True)
+                marker_artist.append (self._add(p))
 
-                markersize = 6
-                if ipoint == 0 or ipoint == (len(sideBezier.controlPoints)-1):
-                    markerstyle = '.'
-                    markersize = 3
-                elif sideBezier.name == UPPER:
-                    markerstyle = 6
-                else: 
-                    markerstyle = 7
-
-                p = self.ax.plot (*cpoint, marker=markerstyle, markersize=markersize, 
-                                  color=cl_userHint, animated=True) 
-                points_artist.append (self._add(p))
+                p = _plot_bezier_point_number (self.ax, side, ipoint, cl_userHint, animated=True)
+                number_artist.append (self._add(p))
 
             # plot bezier helper line between control points 
                 
-            x = sideBezier.bezier.points_x
-            y = sideBezier.bezier.points_y
+            x = side.bezier.points_x
+            y = side.bezier.points_y
             p = self.ax.plot (x,y, ':', linewidth=0.7, color=cl_userHint, animated=True) 
             helper_artist = self._add(p)
 
@@ -1053,22 +1138,24 @@ class Bezier_Edit_Artist (Artist):
                 _marker_style = dict()
                 linewidth= 0.8
 
-            p = self.ax.plot (sideBezier.x, sideBezier.y, linestyle= 'None', linewidth=linewidth,   # 'None' not visible 
+            p = self.ax.plot (side.x, side.y, linestyle= 'None', linewidth=linewidth,   # 'None' not visible 
                               color=cl_editing, **_marker_style, animated=True ) 
             bezier_artist  = self._add(p) 
 
             # remind artist - activate dragManager per side 
-            if sideBezier.name == UPPER:
-                self.points_upper_artist = points_artist
+            if side.name == UPPER:
+                self.marker_upper_artist = marker_artist
+                self.number_upper_artist = number_artist
                 self.helper_upper_artist = helper_artist
                 self.bezier_upper_artist = bezier_artist 
             else: 
-                self.points_lower_artist = points_artist
+                self.marker_lower_artist = marker_artist
+                self.number_lower_artist = number_artist
                 self.helper_lower_artist = helper_artist
                 self.bezier_lower_artist = bezier_artist 
                 
-            self._dragManagers.append (DragManager (self.ax, points_artist,
-                                typeTag = sideBezier.name, 
+            self._dragManagers.append (DragManager (self.ax, marker_artist,
+                                typeTag = side.name, 
                                 callback_draw_animated  = self.draw_animated,
                                 callback_shiftCtrlClick = self.handle_shiftCtrlClick,
                                 callback_on_moved       = self._moveCallback)) 
@@ -1103,25 +1190,24 @@ class Bezier_Edit_Artist (Artist):
             x_try, y_try = artist_onMove.get_xydata()[0]
 
             # draw all the dependand artists of this side 
-            self.draw_animated_side (side, iPoint, x_try, y_try)
+            self.update_animated_side (side, iPoint, x_try, y_try)
 
             # finally draw all animated artists
             self.draw_animated_artists ()
 
+          
 
-            
-    
-            
-
-    def draw_animated_side (self, side : Side_Airfoil_Bezier, iPoint, x, y): 
-        """ call back when point is moving - draw and update Bezier """
+    def update_animated_side (self, side : Side_Airfoil_Bezier, iPoint, x, y): 
+        """ update Bezier and plot artists of side """
 
         if side.name == UPPER:
-            artist_onMove = self.points_upper_artist[iPoint]
+            artist_onMove = self.marker_upper_artist[iPoint]
+            number_onMove = self.number_upper_artist[iPoint]
             bezier_artist = self.bezier_upper_artist
             helper_artist = self.helper_upper_artist
         else:  
-            artist_onMove = self.points_lower_artist[iPoint]
+            artist_onMove = self.marker_lower_artist[iPoint]
+            number_onMove = self.number_lower_artist[iPoint]
             bezier_artist = self.bezier_lower_artist
             helper_artist = self.helper_lower_artist
         
@@ -1129,8 +1215,12 @@ class Bezier_Edit_Artist (Artist):
         x, y = side.move_controlPoint_to(iPoint, x, y)
 
         # draw the cotrol point which is moved
-        artist_onMove.set_xdata(x)
-        artist_onMove.set_ydata(y)
+        artist_onMove.xy = (x,y)
+        number_onMove.xy = (x,y)
+        # artist_onMove.set_xdata(x)
+        # artist_onMove.set_ydata(y)
+        # number_onMove.set_xdata(x)
+        # number_onMove.set_ydata(y)
 
         # draw helper line between control points 
         helper_artist.set_xdata(side.bezier.points_x)
@@ -1150,17 +1240,17 @@ class Bezier_Edit_Artist (Artist):
 
         updateBezier = False 
         if typeTag == UPPER:
-            points_artist = self.points_upper_artist
+            marker_artist = self.marker_upper_artist
+            number_artist = self.number_upper_artist
             bezier_artist = self.bezier_upper_artist
             helper_artist = self.helper_upper_artist
-            sideBezier    = self.airfoil.geo.upper
-            markerstyle = 6
+            side          = self.airfoil.geo.upper
         elif typeTag == LOWER: 
-            points_artist = self.points_lower_artist
+            marker_artist = self.marker_lower_artist
+            number_artist = self.number_lower_artist
             bezier_artist = self.bezier_lower_artist
             helper_artist = self.helper_lower_artist
-            sideBezier   = self.airfoil.geo.lower
-            markerstyle = 7
+            side          = self.airfoil.geo.lower
         else: 
             return
 
@@ -1173,33 +1263,45 @@ class Bezier_Edit_Artist (Artist):
                 return
             
             # new control point - insert according x-coordinate, x,y will be checked
-            i_insert, x, y = sideBezier.insert_controlPoint_at (event.xdata, event.ydata)
-            if not i_insert is None: 
-                # create artist for the new point 
-                p = self.ax.plot (x, y, marker=markerstyle, color=cl_userHint, 
-                                  markersize=6,  animated=True) 
-                self._add(p)
-                points_artist.insert (i_insert, p[0])
-                updateBezier = True 
+            i_insert, x, y = side.insert_controlPoint_at (event.xdata, event.ydata)
+
+            updateBezier = not i_insert is None 
 
         elif event.key == 'shift' and iArtist:
 
             # remove control Point on which shift-click was made
-            i_delete = sideBezier.delete_controlPoint_at (index = iArtist)
-            if i_delete is not None:
-                artist = points_artist [iArtist]
-                self._myPlots.remove(artist)                # remove from my lists 
-                points_artist.remove(artist)
-                artist.remove()                             # finally matplotlib remove 
-                updateBezier = True 
+            i_delete = side.delete_controlPoint_at (index = iArtist)
+
+            updateBezier = not i_delete is None 
 
         if updateBezier: 
             # update Bezier now, so redraw wil use the new curve 
-            bezier_artist.set_xdata(sideBezier.x)
-            bezier_artist.set_ydata(sideBezier.y)
-            helper_artist.set_xdata(sideBezier.bezier.points_x)
-            helper_artist.set_ydata(sideBezier.bezier.points_y)
+            bezier_artist.set_xdata(side.x)
+            bezier_artist.set_ydata(side.y)
+            helper_artist.set_xdata(side.bezier.points_x)
+            helper_artist.set_ydata(side.bezier.points_y)
 
+            # delete marker and their number - and rebuild  
+
+            for artist in marker_artist:
+                self._myPlots.remove(artist)                # remove from my lists 
+                artist.remove()                             # finally matplotlib remove 
+            for artist in number_artist:
+                self._myPlots.remove(artist)                # remove from my lists 
+                artist.remove()                             # finally matplotlib remove 
+
+            marker_artist.clear()                           # keep list alive 
+            number_artist.clear()
+            for ipoint in range (side.nPoints):
+
+                p = _plot_bezier_point_marker (self.ax, side, ipoint, cl_userHint, animated=True)
+                marker_artist.append (self._add(p))
+
+                p = _plot_bezier_point_number (self.ax, side, ipoint, cl_userHint, animated=True)
+                number_artist.append (self._add(p))
+
+            # finally re-draw all 
+                
             bezier_artist.set_linestyle('--')
             self.draw_animated_artists ()
             bezier_artist.set_linestyle('None')
