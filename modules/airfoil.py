@@ -324,7 +324,7 @@ class Airfoil:
         newRadius = max(0.1,  newRadius)
         factor = newRadius / self.leRadius_perc
         self.geo.set_leRadius (factor)
-        self.set_xy(*self.geo.xy)
+        self.rebuild_from_thicknessCamber()
 
 
     @property

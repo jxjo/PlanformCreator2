@@ -8,6 +8,7 @@ The "Artists" to plot a airfoil object on a matplotlib axes
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 
 from artist             import *
 from common_utils       import *
@@ -46,7 +47,7 @@ def _color_airfoil_of (airfoil_type):
     if airfoil_type == DESIGN:
         color = 'deeppink'
     elif airfoil_type == NORMAL:
-        color = 'aquamarine'
+        color = 'turquoise' # 'aquamarine'
     elif airfoil_type == FINAL:
         color = 'springgreen'
     elif airfoil_type == SEED:
@@ -119,24 +120,27 @@ def _plot_bezier_point_number (ax, side : Side_Airfoil_Bezier, ipoint, color, an
     return p
 
 
-def _plot_bezier_side_title (ax, side : Side_Airfoil_Bezier):
+def _plot_side_title (ax : plt.Axes, side : Side_Airfoil):
     """
     Plot info text about bezier curve of one side 
     returns: plt text artist  
     """
 
     if side.name == UPPER:
-        delta_y =  0.1
-        va = 'bottom'
-    else:
-        delta_y = -0.1
+        y = 0.88
         va = 'top'
+    else:
+        y = 0.12
+        va = 'bottom'
+    x = 0.05 
 
-    xa = 0.005 
-    ya = delta_y * 1.5
-    text = f'{side.name} {side.nPoints} Bezier control points'
-    p = ax.annotate(text, xy=(xa,ya), xytext=(0, 0), va=va, ha='left',
-                xycoords='data', textcoords='offset points', fontsize='small',
+    if side.isBezier:
+        text = f'{side.nPoints} control points'
+    elif side.isHicksHenne:
+        text = f'{side.nhhs} functions'
+
+    p = ax.text(x,y, text, va=va, ha='left',
+                transform= ax.transAxes,  fontsize='small',
                 color = cl_textHeader, alpha=1)
     return p 
 
@@ -227,13 +231,15 @@ class Airfoil_Artist (Artist):
 
                 # the marker style to show points
                 if self._points:
-                    linewidth=0.5
+                    linewidth = 0.5
+                    linestyle = '-'
                     _marker_style = ms_points
                 else:  
-                    _marker_style = dict()
+                    linestyle = '-'
+                    _marker_style = dict()  
 
-                p = self.ax.plot (airfoil.x, airfoil.y, '-', color = color, label=label, 
-                                  linewidth= linewidth,  **_marker_style)
+                p = self.ax.plot (airfoil.x, airfoil.y, color=color, label=label, 
+                                  linewidth=linewidth, linestyle=linestyle, **_marker_style)
                 self._add (p)
 
                 if airfoil.isBezierBased: 
@@ -276,7 +282,7 @@ class Airfoil_Artist (Artist):
             # print info text about bezier curve 
 
             if self.show_title:
-                p = _plot_bezier_side_title (self.ax, side)
+                p = _plot_side_title (self.ax, side)
                 self._add(p)
 
             # plot bezier control points with connecting line 
@@ -315,11 +321,9 @@ class Airfoil_Artist (Artist):
             if side.name == UPPER:
                 linestyle   = '--'
                 delta_y =  0.1
-                va = 'top'
             else:
                 linestyle   = '--'
                 delta_y = -0.1
-                va = 'bottom'
 
             hh : HicksHenne
             for ih, hh in enumerate(side.hhs):
@@ -344,12 +348,8 @@ class Airfoil_Artist (Artist):
             # print info text 
 
             if self.show_title:    
-                xa = 0.005 
-                ya = delta_y * 1.5
-                text = f'{side.name} {len(side.hhs)} Hicks Henne functions'
-                self._add (self.ax.annotate(text, xy=(xa,ya), xytext=(0, 0), va=va, ha='left',
-                        xycoords='data', textcoords='offset points', fontsize='small',
-                        color = cl_textHeader, alpha=1))
+                p = _plot_side_title (self.ax, side)
+                self._add(p)
 
 
 
@@ -373,10 +373,12 @@ class Airfoil_Artist (Artist):
         xa = 0.98
         ya = 0.96 
 
+        sc = get_font_size() / 10                    # scale pos depending on font size 
+
         # header 
         if iair == 0: 
-            self._add (print_text (self.ax, 'Thickness', 'right', (xa,ya), (-85, 0), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax, 'Camber'   , 'right', (xa,ya), (-25, 0), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax, 'Thickness', 'right', (xa,ya), (-85*sc, 0), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax, 'Camber'   , 'right', (xa,ya), (-25*sc, 0), cl_textHeader, xycoords='axes fraction'))
 
         # airfoil data 
         if self.label_with_airfoil_type:  
@@ -388,12 +390,12 @@ class Airfoil_Artist (Artist):
         xt, t = geo.maxThickX, geo.maxThick 
         xc, c = geo.maxCambX,  geo.maxCamb
 
-        yoff = - iair * 12 - 12
-        self._add (print_text   (self.ax, name, 'right', (xa,ya), (-135, yoff), color, xycoords='axes fraction'))
-        self._add (print_number (self.ax,  t, 2, (xa,ya), (-100, yoff), cl_text, asPercent=True))
-        self._add (print_number (self.ax, xt, 1, (xa,ya), ( -70, yoff), cl_text, asPercent=True))
-        self._add (print_number (self.ax,  c, 2, (xa,ya), ( -30, yoff), cl_text, asPercent=True))
-        self._add (print_number (self.ax, xc, 1, (xa,ya), (   0, yoff), cl_text, asPercent=True))
+        yoff = - iair * (12*sc) - (12*sc)
+        self._add (print_text   (self.ax, name, 'right', (xa,ya), (-135*sc, yoff), color, xycoords='axes fraction'))
+        self._add (print_number (self.ax,  t, 2, (xa,ya), (-100*sc, yoff), cl_text, asPercent=True))
+        self._add (print_number (self.ax, xt, 1, (xa,ya), ( -70*sc, yoff), cl_text, asPercent=True))
+        self._add (print_number (self.ax,  c, 2, (xa,ya), ( -30*sc, yoff), cl_text, asPercent=True))
+        self._add (print_number (self.ax, xc, 1, (xa,ya), (   0*sc, yoff), cl_text, asPercent=True))
 
 
 
@@ -496,7 +498,7 @@ class Curvature_Artist (Airfoil_Line_Artist):
         self._plot_title (self.name, va='top', ha='center', wspace=0.1, hspace=0.05)
 
         # experimental
-        p = self.ax.text (0.05, 0.05, "Derivative of curvature (experimental)", color='darkred' , 
+        p = self.ax.text (0.05, 0.05, "Derivative of curvature (experimental)", color='firebrick' , 
                           fontsize = 'small', transform=self.ax.transAxes, 
                           horizontalalignment='left', verticalalignment='bottom')
         self._add (p)   
@@ -872,6 +874,15 @@ class Thickness_Artist (Airfoil_Line_Artist):
                 self._plot_max_val (thickness, airfoil.usedAs, color)
                 self._plot_max_val (camber,    airfoil.usedAs, color)
 
+                # plot le circle 
+
+                le_radius = airfoil.leRadius_perc / 100
+                circle = Circle ((le_radius,0), le_radius, linewidth=0.5, fill=False, 
+                                     ec=color, alpha=0.8)
+                p = self.ax.add_artist (circle) 
+                self._add(p)
+
+
 
     def _plot_max_val (self, airfoilLine: Side_Airfoil, airfoil_type, color):
         # indicate max. value of camber or thickness line 
@@ -909,7 +920,9 @@ class Thickness_Edit_Artist (Airfoil_Line_Artist):
         self.camber_max_artist       = None          # artist to move camber highpoint 
         self.camber_marker_artist    = None          # artist to move camber highpoint 
 
-        self.set_showLegend(False)                   # show  legend with airfoil data 
+        self._mouseInfo_wasShown     = False         # user info shown? 
+
+        self.set_showLegend(False)                   # show legend with airfoil data 
 
 
     def _deleteMyPlots(self):
@@ -978,12 +991,18 @@ class Thickness_Edit_Artist (Airfoil_Line_Artist):
                     callback_draw_animated  = self.draw_animated,
                     callback_on_moved       = self._moveCallback)) 
         
+        # plot le circle 
+
+        le_radius = self.airfoil.leRadius_perc / 100
+        circle = Circle ((le_radius,0), le_radius, fill=False, ec=color, alpha=0.8, animated=True)
+        p = self.ax.add_artist (circle) 
+        self._add(p)
 
 
         # connect to draw event for initial plot of the animated artists all together
         self._connectDrawEvent()
 
-        self.show_mouseHelper ()
+        self.show_mouseInfo ()
 
         # suppress autoscale 
         # self.ax.set_ylim(bottom=0.0)
@@ -991,13 +1010,16 @@ class Thickness_Edit_Artist (Airfoil_Line_Artist):
 
 
 
-    def show_mouseHelper (self):
-        # show user info for mouse helper 
-        text = 'move highpoints with mouse'
-        p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
-                    transform=self.ax.transAxes, horizontalalignment='center', verticalalignment='bottom')
-        self._add(p)
+    def show_mouseInfo (self):
+        """ show user info for mouse helper """
 
+        # show only once 
+        if not self._mouseInfo_wasShown:
+            text = 'move highpoints with mouse'
+            p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
+                        transform=self.ax.transAxes, horizontalalignment='center', verticalalignment='bottom')
+            self._add(p)
+            self._mouseInfo_wasShown = True
 
 
     def draw_animated (self, artist_onMove=None, iArtist = None , typeTag=None): 
@@ -1021,9 +1043,9 @@ class Thickness_Edit_Artist (Airfoil_Line_Artist):
             x = min (0.6, max (0.1, x_try))
 
             if typeTag == THICKNESS:
-                y = min (0.5, max (0.01, y_try))            # if 0.0 line could be restored
+                y = min (0.5, max (0.01, y_try))            # if 0.0 line couldn't be restored
             else:
-                y = min (0.5, max (0.001, y_try))           # if 0.0 line could be restored
+                y = min (0.5, max (0.001, y_try))           # if 0.0 line couldn't be restored
 
             # set new max points  - will be checked for valid x,y 
             line.set_maximum (x, y)
@@ -1046,24 +1068,6 @@ class Thickness_Edit_Artist (Airfoil_Line_Artist):
 
 
 
-    def _plot_max_val (self, airfoilLine: Side_Airfoil, airfoil_type, color):
-        # indicate max. value of camber or thickness line 
-        x, y = airfoilLine.maximum
-        if airfoil_type == DESIGN:
-            text = ""
-            color = cl_helperLine
-        else:
-            text = ""
-            color = color
-        p = self.ax.plot (x, y, color=color, **ms_point)
-        self._add(p)
-
-        if airfoil_type == DESIGN:
-            p = self.ax.annotate(text + "%.2f%% at %.1f%%" % (y * 100, x *100), (x, y), fontsize='small',
-                                xytext=(3, 3), textcoords='offset points', color = color)
-            self._add (p)   
-
-
 class Bezier_Edit_Artist (Artist):
     """Plot upper and lower Bezier curve - drag control points with mouse    """
 
@@ -1078,7 +1082,9 @@ class Bezier_Edit_Artist (Artist):
         self.helper_lower_artist   = None      
         self.bezier_upper_artist   = None          # the artist to draw bezier curve
         self.bezier_lower_artist   = None
-       
+
+        self._mouseInfo_artist     = False         # user info artist
+
         self.set_showLegend(False)  
 
 
@@ -1163,15 +1169,20 @@ class Bezier_Edit_Artist (Artist):
         # connect to draw event for initial plot of the animated artists all together
         self._connectDrawEvent()
 
-        self.show_mouseHelper ()
+        self.show_mouseInfo ()
+
+        return 
 
 
-    def show_mouseHelper (self):
-        # show info for section select #
-        text = 'ctrl+click to add, shift+click to remove point'
+
+    def show_mouseInfo (self):
+        """ show user info for mouse helper """
+
+        # will be removed after first mouse move 
+        text = 'move points with mouse, ctrl+click to add, shift+click to remove'
         p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
                     transform=self.ax.transAxes, horizontalalignment='center', verticalalignment='bottom')
-        self._add(p)
+        self._mouseInfo_artist = p
 
 
     def draw_animated (self, artist_onMove=None, iArtist = None , typeTag=None): 
@@ -1195,7 +1206,12 @@ class Bezier_Edit_Artist (Artist):
             # finally draw all animated artists
             self.draw_animated_artists ()
 
-          
+            # remove mouse info after first move 
+            if self._mouseInfo_artist is not None: 
+                self._mouseInfo_artist.remove()  
+                self._mouseInfo_artist = None
+                      
+     
 
     def update_animated_side (self, side : Side_Airfoil_Bezier, iPoint, x, y): 
         """ update Bezier and plot artists of side """

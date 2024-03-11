@@ -769,7 +769,7 @@ class Dialog_Settings (Dialog_Abstract):
         r = 0 
         
         Label_Widget  (self.edit_frame,r, c, padx= 30, pady=(20,15), sticky = 'nw',
-                        lab= "The following will be applied with the next restart")
+                        lab= "The following options will be applied with the next restart")
 
         # Settings 
         r += 1
@@ -783,6 +783,11 @@ class Dialog_Settings (Dialog_Abstract):
         r += 1
         self.add (Field_Widget  (self.edit_frame,r,c, lab="Scaling of App size", lab_width=100, width=80, padx= 50, pady=5,
                                  obj=self, get='window_scaling', set="set_window_scaling", dec=2))
+
+        r += 1
+        self.add (Field_Widget  (self.edit_frame,r,c, lab="Plot font size", lab_width=100, width=80, padx= 50, pady=5,
+                                 spin=True, dec=0, lim=(8,15), step=1, 
+                                 obj=self, get='plot_font_size', set="set_plot_font_size"))
 
         # allow additional setitngs in sub class
         r = self._add_settings (r+1)
@@ -831,6 +836,13 @@ class Dialog_Settings (Dialog_Abstract):
         toDict(self.settings_dict, 'window_scaling', aVal)        
         self.refresh()
 
+    @property
+    def plot_font_size (self):
+        return fromDict (self.settings_dict, 'plot_font_size', default=10, msg=False)
+    def set_plot_font_size (self, aVal):
+        if aVal is None: aVal = 10
+        toDict(self.settings_dict, 'plot_font_size', aVal)        
+        self.refresh()
 
     def ok (self):
         # to over load and do ok actions

@@ -18,7 +18,7 @@ from cycler import cycler
 import tkinter as tk
 
 cl_background       = '#101010'
-cl_labelGrid        = '#D0D0D0'
+cl_labelGrid        = '#A0A0A0'    
 cl_axes             = '#606060'
 cl_text             = '#D0D0D0'
 cl_textHeader       = '#808080'
@@ -55,6 +55,8 @@ def print_text  (ax : plt.Axes , text, ha, xy, xytext, color, alpha=1.0, xycoord
     return p
 
 
+# -------- matplotlib defaults ------------------------
+
 # plt.rcParams.update({'figure.dpi': 180})
 plt.rcParams.update({'font.size': 10})                       # default font.size: 10.0
 plt.rcParams.update({'font.weight': 'light'})   
@@ -78,6 +80,18 @@ plt.rcParams.update({'axes.grid': False})                   # display grid or no
 plt.rcParams.update({'grid.linewidth': 0.8})                # in points         
 plt.rcParams.update({'grid.color': cl_labelGrid})           
 plt.rcParams.update({'grid.alpha': 0.2})                    # transparency, between 0.0 and 1.0  
+
+
+def set_font_size (aSize): 
+    """ set the default plot font size"""
+    aSize = min (15, aSize) 
+    aSize = max ( 8, aSize)
+    plt.rcParams.update({'font.size': aSize})
+
+
+def get_font_size ():
+    """ returns the default plot font zize"""
+    return plt.rcParams['font.size']
 
 
 

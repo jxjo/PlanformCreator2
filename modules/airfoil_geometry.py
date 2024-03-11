@@ -647,6 +647,9 @@ class Side_Airfoil:
 
     """
 
+    isBezier        = False
+    isHicksHenne    = False
+
     def __init__ (self, x,y, name=None):
 
         self._x         = x
@@ -932,6 +935,8 @@ class Side_Airfoil_Bezier (Side_Airfoil):
     1D line of an airfoil like upper, lower side based on a Bezier curve with x 0..1
     """
 
+    isBezier        = True
+
     def __init__ (self, px, py, name=None, nPoints = 101):
         """
         1D line of an airfoil like upper, lower side based on a Bezier curve with x 0..1
@@ -1193,6 +1198,8 @@ class Side_Airfoil_HicksHenne (Side_Airfoil):
     1D line of an airfoil like upper, lower side based on a seed and hh bump functions
     """
 
+    isHicksHenne    = True
+
     def __init__ (self, seed_x, seed_y, hhs, name):
         """
         1D line of an airfoil like upper, lower side based on a seed and hh bump functions
@@ -1272,8 +1279,10 @@ class Geometry ():
 
     """
 
-    isBasic = True 
-    description = "based on linear interpolation"
+    isBasic         = True 
+    isBezier        = False
+    isHicksHenne    = False
+    description     = "based on linear interpolation"
 
     sideDefaultClass = Side_Airfoil
 
@@ -1542,13 +1551,6 @@ class Geometry ():
             xblend:   the blending distance from leading edge 0.001..1 - Default 0.1
         """
 
-        # currently le must be at 0,0 - te must be at 1,gap/2 (normalized airfoil) 
-        if not self.isNormalized: 
-            self.normalize ()
-            if not self.isNormalized: 
-                ErrorMsg ("Airfoil can't be normalized. LE radius can't be set.")
-                return  
-        
         xBlend = min( max( xBlend , 0.001 ) , 1.0 )
 
         # go over each thickness point, changing the thickness appropriately
@@ -1559,8 +1561,9 @@ class Geometry ():
             arg = min (self.thickness.x[i] / xBlend, 15.0)
             srfac = (abs (factor)) ** 0.5 
             tfac = 1.0 - (1.0 - srfac) * np.exp(-arg)
-
             self.thickness.y [i] = self.thickness.y [i] * tfac
+
+        self.thickness._reset()                         # reset thickness spline 
 
         self._rebuild_from_thicknessCamber ()
 
@@ -1843,8 +1846,8 @@ class Geometry_Splined (Geometry):
     The 2D spline is used to get the best approximation of the airfoil e.g. for re-paneling
     """
 
-    isBasic = False
-    description = "based on spline interpolation"
+    isBasic         = False 
+    description     = "based on spline interpolation"
 
     sideDefaultClass = Side_Airfoil_Spline
 
@@ -2252,8 +2255,9 @@ class Geometry_Bezier (Geometry):
     Geometry based on two Bezier curves for upper and lower side
     """
     
-    isBasic = False
-    description = "based on 2 Bezier curves"
+    isBasic         = False 
+    isBezier        = True
+    description     = "based on 2 Bezier curves"
 
     sideDefaultClass = Side_Airfoil
 
@@ -2452,8 +2456,9 @@ class Geometry_HicksHenne (Geometry):
     Geometry based on a seed airfoil and hicks henne bump (hh) functions for upper and lower side 
     """
     
-    isBasic = False
-    description = "based on a seed and hicks henne functions"
+    isBasic         = False 
+    isHicksHenne    = True
+    description     = "based on a seed and hicks henne functions"
 
     sideDefaultClass = Side_Airfoil
 

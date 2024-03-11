@@ -49,6 +49,7 @@ from airfoil_artists    import *
 
 from widgets            import *
 from ui_base            import *
+from artist             import set_font_size
 
 #------------------------------------------------
 
@@ -558,7 +559,7 @@ class Diagram_Airfoil (Diagram_Abstract):
             self.ax1 : plt.Axes = self.figure.add_subplot(gs[0])
             self.ax2 = None
 
-        self.figure.subplots_adjust(left=0.04, bottom=0.06, right=0.98, top=0.97, wspace=None, hspace=0.10)
+        self.figure.subplots_adjust(left=0.05, bottom=0.06, right=0.98, top=0.96, wspace=None, hspace=0.10)
 
 
 
@@ -609,7 +610,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.airfoilArtist   = Airfoil_Artist (self.ax1, self.airfoils, show=True)
         self.airfoilArtist.set_show_title (True)            # title like "Bezier based.." 
 
-        self.thicknessArtist = Thickness_Artist (self.ax1, self.airfoils, show=False)
+        self.thicknessArtist = Thickness_Artist (self.ax1, self.airfoils, show=self.show_camber)
 
         if self.ax2: 
             self.curvatureArtist = Curvature_Artist (self.ax2, self.airfoils, show=True)
@@ -618,6 +619,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         else: 
             self.curvatureArtist = None
 
+        self.airfoilArtist.set_showLegend ('normal')
 
     def re_create_axes (self):
         """ re create axes to add/remove curvature diagram """
@@ -703,6 +705,7 @@ class Diagram_Airfoil (Diagram_Abstract):
     @property
     def show_upper(self) -> bool: return self._show_upper
     def set_show_upper (self, aBool):
+        """ show on/off upper curvature """ 
         self._show_upper = aBool
         # show on/off curvature diagram 
         if (not self.ax2 and aBool) or (self.ax2 and not self.show_lower and not self.show_upper):
@@ -716,6 +719,7 @@ class Diagram_Airfoil (Diagram_Abstract):
     @property
     def show_lower(self) -> bool: return self._show_lower
     def set_show_lower (self, aBool):
+        """ show on/off lower curvature""" 
         self._show_lower = aBool
         # show on/off curvature diagram 
         if (not self.ax2 and aBool) or (self.ax2 and not self.show_lower and not self.show_upper):
@@ -1772,7 +1776,7 @@ class Dialog_Geometry (Dialog_Airfoil_Abstract):
                                 event=self.change_event))
         self.add (Field_Widget  (self.input_frame,r,c+3, lab="LE radius", obj=self.airfoil, 
                                 get='leRadius_perc', set='set_leRadius_perc', step=0.1,
-                                spin=True, width=100, lab_width=60, unit="%",  dec=2,
+                                spin=True, width=100, lab_width=60, unit="%",  dec=3,
                                 event=self.change_event))
         Label_Widget  (self.input_frame,r,c+6 , padx=5, lab= "blend width 10%", columnspan = 1)
 
@@ -2410,6 +2414,7 @@ class AirfoilEditor ():
         self.parentApp = parentApp
         self.ctk_root  = None                       # will be set later 
         self.main      = None                       # the topLevel widget 
+        self.diagram   = None                       # diagram widget 
         self.isModal   = not self.parentApp is None
         self.return_OK = True
 
@@ -2470,7 +2475,6 @@ class AirfoilEditor ():
         main.grid_columnconfigure(1, weight=1)
 
         switches_frame.grid  (row=0, column=0, pady=(5,5), padx=(5,0), ipady=5,sticky="news")
-        # diagram_frame.grid   (row=0, column=1, pady=(5,5), padx=(5,5), sticky="news")
         file_frame.grid      (row=1, column=0, pady=(0,5), padx=(5,0), ipady=5,sticky="news")
         edit_frame.grid      (row=1, column=1, pady=0,     padx=0,     sticky="nesw")
 
@@ -2494,8 +2498,8 @@ class AirfoilEditor ():
         edit_Specials_frame.grid (row=0, column=4, pady=(0,5), padx=(5,5), ipadx=10, sticky="news")
 
 
-        diagram_frame  = Diagram_Airfoil  (main, self.curAirfoil, view_frame=switches_frame, size=[20,8])
-        diagram_frame.grid   (row=0, column=1, pady=(5,5), padx=(5,5), sticky="news")
+        self.diagram  = Diagram_Airfoil  (main, self.curAirfoil, view_frame=switches_frame, size=[20,8])
+        self.diagram.grid   (row=0, column=1, pady=(5,5), padx=(5,5), sticky="news")
 
         # start App - run mainloop if self is not modal otherise control is at parent
         
@@ -2570,6 +2574,11 @@ class AirfoilEditor ():
 
         dialog = Dialog_Airfoil_Settings(self.main, name=self.name)
         self.main.wait_window (dialog)
+
+        Airfoil.nPanels_default  = Settings().get('nPanels_default',  default=Airfoil.nPanels_default)
+        Airfoil.le_bunch_default = Settings().get('le_bunch_default', default=Airfoil.le_bunch_default)
+        Airfoil.te_bunch_default = Settings().get('te_bunch_default', default=Airfoil.te_bunch_default)
+
 
 
     #------- file functions ----------------
@@ -2663,6 +2672,11 @@ if __name__ == "__main__":
     if scaling != 1.0: 
         ctk.set_window_scaling(scaling)  # scaling of window
         NoteMsg ("Window size is scaled to %.2f" %scaling)
+
+    # set matpltlib defauls 
+        
+    set_font_size (Settings().get('plot_font_size', default=10))
+
 
     # command line arguments? 
     

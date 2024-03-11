@@ -51,6 +51,7 @@ from wing_model         import Planform, Planform_Bezier_StraightTE, \
 from ui_base            import *        
 from widgets            import * 
 from wing_artists       import *
+from artist             import set_font_size
 
 
 #------------------------------------------------
@@ -2347,8 +2348,8 @@ class App(ctk.CTk):
     def edit_settings (self):
         """ file menu edit settings """
 
-        Dialog_Settings(self)
-
+        dialog = Dialog_Settings (self, name=self.name)
+        self.wait_window (dialog)
 
     #-------------
 
@@ -2451,6 +2452,11 @@ if __name__ == "__main__":
     if scaling != 1.0: 
         ctk.set_window_scaling(scaling)  # scaling of window
         NoteMsg ("Window size is scaled to %.2f" %scaling)
+
+    # set matpltlib defauls 
+        
+    set_font_size (Settings().get('plot_font_size', default=10))
+
 
     # paramter file as argument?  
 
