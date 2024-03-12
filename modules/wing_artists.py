@@ -1483,10 +1483,10 @@ class Airfoil_Artist (Artist):
             nickname = ''
         name = section.airfoil.name + nickname + "  @ " + section.name() 
         y = np.amin(y) * 0.3
-        x = np.amax(x) * 0.8
+        x = np.amax(x) 
 
         p = self.ax.annotate(name, color=color, 
-                xy=(x, y), xycoords='data', ha='left', va= 'top',
+                xy=(x, y), xycoords='data', ha='right', va= 'top',
                 xytext=(0, -50), textcoords='offset points')
         self._add(p)
 
@@ -1494,14 +1494,15 @@ class Airfoil_Artist (Artist):
     def _print_values (self, iair, airfoil: Airfoil, section: WingSection, color):
          # print thickness, camber in a little table in upper left corner , position relative in pixel 
  
-        xa = 0.84
+        sc = get_font_size() / 10                    # scale pos depending on font size 
+        xa = 0.84 - (sc - 1.0) / 4
         ya = 0.96 
 
         # header 
         if iair == 0: 
-            self._add (print_text (self.ax, 'Thickness', 'right', (xa,ya), ( 15, 0), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax,    'Camber', 'right', (xa,ya), ( 75, 0), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax,   'Section',  'left', (xa,ya), (115, 0), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax, 'Thickness', 'right', (xa,ya), ( 15*sc, 0), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax,    'Camber', 'right', (xa,ya), ( 75*sc, 0), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax,   'Section',  'left', (xa,ya), (115*sc, 0), cl_textHeader, xycoords='axes fraction'))
 
         # section data  
         if section.airfoilNick():
@@ -1515,27 +1516,28 @@ class Airfoil_Artist (Artist):
         xt, t = geo.maxThickX, geo.maxThick 
         xc, c = geo.maxCambX,  geo.maxCamb
 
-        yoff = - iair * 12 - 12
-        self._add (print_text   (self.ax, name, 'right', (xa,ya), (-35, yoff), color, xycoords='axes fraction'))
+        yoff = - iair * (12*sc) - (12*sc)
+        self._add (print_text   (self.ax, name, 'right', (xa,ya), (-35*sc, yoff), color, xycoords='axes fraction'))
         self._add (print_number (self.ax,  t, 2, (xa,ya), (  0, yoff), cl_text, asPercent=True))
-        self._add (print_number (self.ax, xt, 1, (xa,ya), ( 30, yoff), cl_text, asPercent=True))
-        self._add (print_number (self.ax,  c, 2, (xa,ya), ( 70, yoff), cl_text, asPercent=True))
-        self._add (print_number (self.ax, xc, 1, (xa,ya), (100, yoff), cl_text, asPercent=True))
-        self._add (print_text   (self.ax, sect,  'left', (xa,ya), (115, yoff), cl_text, xycoords='axes fraction'))
+        self._add (print_number (self.ax, xt, 1, (xa,ya), ( 30*sc, yoff), cl_text, asPercent=True))
+        self._add (print_number (self.ax,  c, 2, (xa,ya), ( 70*sc, yoff), cl_text, asPercent=True))
+        self._add (print_number (self.ax, xc, 1, (xa,ya), (100*sc, yoff), cl_text, asPercent=True))
+        self._add (print_text   (self.ax, sect,  'left', (xa,ya), (115*sc, yoff), cl_text, xycoords='axes fraction'))
 
 
 
     def _print_size (self, iair, airfoil: Airfoil, section: WingSection, color):
-         # print section sizes in a little table in upper left corner , position relative in pixel 
+         # print section sizes in a little table in upper right corner , position relative in pixel 
  
-        xa = 0.86
+        sc = get_font_size() / 10                    # scale pos depending on font size 
+        xa = 0.84 - (sc - 1.0) / 4
         ya = 0.96 
 
         # header 
         if iair == 0: 
-            self._add (print_text (self.ax,   'Width', 'right', (xa,ya), ( 20, 0), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax,  'Height', 'right', (xa,ya), ( 70, 0), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax, 'Section',  'left', (xa,ya), ( 90, 0), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax,   'Width', 'right', (xa,ya), ( 20*sc, 0), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax,  'Height', 'right', (xa,ya), ( 70*sc, 0), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax, 'Section',  'left', (xa,ya), ( 90*sc, 0), cl_textHeader, xycoords='axes fraction'))
 
         # section data  
         if section.airfoilNick():
@@ -1549,11 +1551,11 @@ class Airfoil_Artist (Artist):
         width  = f"{section.chord:.1f}mm"
         sect   = section.name() 
 
-        yoff = - iair * 12 - 12
-        self._add (print_text   (self.ax,   name, 'right', (xa,ya),(-35, yoff),   color, xycoords='axes fraction'))
-        self._add (print_text   (self.ax,  width, 'right', (xa,ya), (20, yoff), cl_text, xycoords='axes fraction'))
-        self._add (print_text   (self.ax, height, 'right', (xa,ya), (70, yoff), cl_text, xycoords='axes fraction'))
-        self._add (print_text   (self.ax,   sect,  'left', (xa,ya), (90, yoff), cl_text, xycoords='axes fraction'))
+        yoff = - iair * (12*sc) - (12*sc)
+        self._add (print_text   (self.ax,   name, 'right', (xa,ya),(-35*sc, yoff),   color, xycoords='axes fraction'))
+        self._add (print_text   (self.ax,  width, 'right', (xa,ya), (20*sc, yoff), cl_text, xycoords='axes fraction'))
+        self._add (print_text   (self.ax, height, 'right', (xa,ya), (70*sc, yoff), cl_text, xycoords='axes fraction'))
+        self._add (print_text   (self.ax,   sect,  'left', (xa,ya), (90*sc, yoff), cl_text, xycoords='axes fraction'))
 
 
 

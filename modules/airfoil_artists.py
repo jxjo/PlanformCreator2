@@ -243,9 +243,14 @@ class Airfoil_Artist (Artist):
                                   linewidth=linewidth, linestyle=linestyle, **_marker_style)
                 self._add (p)
 
+                # fill airfoil if it's only one 
+                if len(airfoils) == 1:                    
+                    p = self.ax.fill (airfoil.x, airfoil.y, facecolor=color, alpha=0.1)
+                    self._add(p)
+
                 if airfoil.isBezierBased: 
                     if not airfoil.usedAs == DESIGN:            # a seperate artist will show 
-                        self.draw_bezier (airfoil, self._get_color(p))
+                        self.draw_bezier (airfoil, color)
                         if self.show_title: 
                             self._plot_title ('Bezier based', va='top', ha='left', wspace=0.05, hspace=0.05)
 
@@ -487,7 +492,7 @@ class Curvature_Artist (Airfoil_Line_Artist):
                     self._plot_reversals (side, color)
 
                     # experimental: plot derivative1 of curvature ('spikes')
-                    p = self.ax.plot (x, -derivative1(x,y), ls, color = 'firebrick', alpha=alpha, label=label, 
+                    p = self.ax.plot (x, -derivative1(x,y), ls, color = 'red', alpha=alpha, label=label, 
                                       linewidth= 0.8, **self._marker_style)
                     self._add(p)
 
