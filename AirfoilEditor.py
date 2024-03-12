@@ -551,7 +551,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         """ setup 2 axes for airfoil and its curvature  """
 
         if self.show_upper or self.show_lower:
-            gs = GridSpec(2, 1, height_ratios=[5, 4])
+            gs = GridSpec(2, 1, height_ratios=[6, 4])
             self.ax1 : plt.Axes = self.figure.add_subplot(gs[0])
             self.ax2 : plt.Axes = self.figure.add_subplot(gs[1])
         else:

@@ -10,11 +10,13 @@ The "Artists" to plot a wing object on a matplotlib axes
 from common_utils import *
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+import matplotlib.colors as mc
 from matplotlib.collections import PathCollection
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk 
 
 from cycler import cycler  
+import colorsys
+
 import tkinter as tk
 
 cl_background       = '#101010'
@@ -92,6 +94,24 @@ def set_font_size (aSize):
 def get_font_size ():
     """ returns the default plot font zize"""
     return plt.rcParams['font.size']
+
+
+def adjust_lightness(color, amount=1.0):
+    """
+    Lightens the given color by multiplying by the given amount.
+    Input can be matplotlib color string, hex string, or RGB tuple.
+
+    Examples:
+    >> lighten_color('g', 0.3)
+    >> lighten_color('#F034A3', 0.6)
+    >> lighten_color((.3,.55,.1), 0.5)
+    """    
+    try:
+        c = mc.cnames[color]
+    except:
+        c = color
+    c = colorsys.rgb_to_hls(*mc.to_rgb(c))
+    return colorsys.hls_to_rgb(c[0], max(0, min(1, amount * c[1])), c[2])
 
 
 
