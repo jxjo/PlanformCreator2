@@ -170,7 +170,7 @@ class Settings (Parameters):
 
     settingsFilePath = None                     # the filePath of the settings
 
-    def __init__ (self, appName='', nameExtension='', fileExtension= '.json', msg=False):
+    def __init__ (self):
         """ 
         object to handle i/o of settings parameters 
         

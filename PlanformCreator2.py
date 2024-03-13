@@ -2198,17 +2198,21 @@ class App(ctk.CTk):
     def __init__(self, paramFile):
         super().__init__()
 
+        self.initial_geometry   = None                # window geometry at th ebginning
+        self._curWingSectionName = None               # Dispatcher field between Diagram and Edit
+        self.ctk_root = self                          # setup single event root -> ctk root
+
         if paramFile: 
             message = f"Loading\n\n{os.path.basename(paramFile)}"
         else: 
             message = "Creating\n\na sample wing"
         splash_window = ToolWindow(self, message, duration=0)
 
-        # setup event root - so there will be a single root -> ctk root
-        self.ctk_root = self
+        # initial size of app window 
+        geometry = Settings().get('window_geometry', None)
+        set_initialWindowSize(self, widthFrac=0.92, heightFrac=0.8, geometry=geometry)
+        self.after (2000, self.save_win_geometry)    # get geoemtry after startup geometry management
 
-        # settings file handler
-        self.settings = Settings()
 
         # create the 'wing' model - with 'splash window'
         self.paramFile = '' 
@@ -2217,11 +2221,6 @@ class App(ctk.CTk):
 
         # init UI for new wing 
         self.activate_wing (initial=True)
-
-        # initial size of app window 
-        set_initialWindowSize(self, widthFrac=0.92, heightFrac=0.8)
-
-        self._curWingSectionName = None                 # Dispatcher field between Diagram and Edit
 
         # intercept app close by user  
         self.protocol("WM_DELETE_WINDOW", self.onExit)
@@ -2243,6 +2242,10 @@ class App(ctk.CTk):
 
         # close splash window again after a while (tkinter draws UI) 
         self.after (800, splash_window._close)
+
+        # here we go         
+        self.mainloop() 
+
 
 
     def wing (self) -> Wing:
@@ -2318,7 +2321,7 @@ class App(ctk.CTk):
             if saveOk:
                 text = "Wing successfully saved ...    " 
                 Messagebox(self, title="Save wing", message=text, icon="check", option_1="Ok", width=300, height=150)  
-                self.settings.set('lastOpenend', self.paramFile)
+                Settings().set('lastOpenend', self.paramFile)
             else:
                 text = "Paramteres couldn't be saved to '%s'" % self.paramFile
                 Messagebox(self, title="Save wing", message=text, icon="cancel", option_1="Close", width=300, height=150)  
@@ -2340,7 +2343,7 @@ class App(ctk.CTk):
                 self.set_title ()
                 text = "Wing saved to \n\n'%s'" % newPathFilename
                 Messagebox(self, title="Save wing", message=text, icon="check", option_1="Ok")  
-                self.settings.set('lastOpenend', self.paramFile)
+                Settings().set('lastOpenend', self.paramFile)
             else: 
                 text = "Wing couldn't be saved to '%s'" % newPathFilename
                 Messagebox(self, title="Save wing", message=text, icon="cancel", option_1="Ok")  
@@ -2363,7 +2366,7 @@ class App(ctk.CTk):
         pathFilename = self._myWing.paramFilePath
         if pathFilename:
             self.paramFile = PathHandler.relPath (pathFilename)
-            self.settings.set('lastOpenend', self.paramFile)
+            Settings().set('lastOpenend', self.paramFile)
         else:
             self.paramFile = ""
         self.set_title ()
@@ -2409,9 +2412,29 @@ class App(ctk.CTk):
                 self.wing().refPlanform_DXF.set_dxfPathFilename (None) 
                 fireEvent(self.ctk_root, PLANFORM_CHANGED)
 
+
+    def save_win_geometry (self): 
+        """ save the geometry to compare it when window will be closed """
+
+        if self.state() == 'zoomed':
+            self.initial_geometry = 'zoomed'
+        else: 
+            self.initial_geometry = self.winfo_geometry()
+
+
     def onExit(self): 
         """ interception of user closing the app - check for changes made"""
 
+        # save window size and position to settings 
+        if self.state() == 'zoomed':
+            cur_geometry = 'zoomed'
+        else: 
+            cur_geometry = self.winfo_geometry()
+        if cur_geometry != self.initial_geometry:
+            Settings().set('window_geometry', cur_geometry)
+
+
+        # save changes? 
         if self.wing().hasChanged(): 
 
             message = "There are unsaved changes.\n\n" + \
@@ -2475,6 +2498,4 @@ if __name__ == "__main__":
             Settings().set('lastOpenend', None) 
             parmFile = None
 
-    myApp = App(parmFile)
-    myApp.mainloop()
- 
+    App(parmFile)

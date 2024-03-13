@@ -20,7 +20,7 @@ from airfoil_geometry   import Curvature_Abstract, UPPER, LOWER, THICKNESS, CAMB
 
 from spline             import HicksHenne
 
-cl_planform         = 'whitesmoke'
+cl_fill             = 'whitesmoke'
 cl_editing          = 'deeppink'
 cl_editing_lower    = 'orchid'
 cl_helperLine       = 'orange'
@@ -180,16 +180,27 @@ class Airfoil_Artist (Artist):
 
         self._show_title = False                # show title like 'Bezier based' 
         self._points = False                    # show point marker 
-        self.set_showLegend('normal')         # show  legend with airfoil data 
+        self._show_panels = False               # show ony panels 
+        self.set_showLegend('normal')           # show legend with/without airfoil data 
 
  
     @property
     def points(self): return self._points
-    def set_points (self, aBool): self._points = aBool 
+    def set_points (self, aBool): 
+        self._points = aBool 
+        if self._points: 
+            self.set_show_panels (False)
 
     @property
     def show_title(self): return self._show_title
     def set_show_title (self, aBool): self._show_title = aBool 
+
+    @property
+    def show_panels(self): return self._show_panels
+    def set_show_panels (self, aBool): 
+        self._show_panels = aBool 
+        if self._show_panels: 
+            self.set_points (False)
 
 
     def set_current (self, aLineLabel, figureUpdate=False):
@@ -229,13 +240,18 @@ class Airfoil_Artist (Artist):
                 else: 
                     label = f"{airfoil.name}"
 
-                # the marker style to show points
-                if self._points:
+                # the marker style 
+                if self.points:
                     linewidth = 0.5
-                    linestyle = '-'
+                    linestyle = 'None'
                     _marker_style = ms_points
+                elif self.show_panels:                  # plot black marker to simulate panels        
+                    linewidth = 1.5  
+                    linestyle = '-'
+                    _marker_style = dict(marker='o', fillstyle='full', markersize=4, 
+                                         mfc=cl_background, mec=cl_background)  
                 else:  
-                    linewidth = 1.2 # 0.8
+                    linewidth = 1.2  
                     linestyle = '-'
                     _marker_style = dict()  
 
@@ -244,7 +260,7 @@ class Airfoil_Artist (Artist):
                 self._add (p)
 
                 # fill airfoil if it's only one 
-                if len(airfoils) == 1:                    
+                if len(airfoils) == 1 and not self.show_panels:                    
                     p = self.ax.fill (airfoil.x, airfoil.y, facecolor=color, alpha=0.1)
                     self._add(p)
 
@@ -457,7 +473,12 @@ class Curvature_Artist (Airfoil_Line_Artist):
     def __init__ (self, axes, modelFn, **kwargs):
         super().__init__ (axes, modelFn, **kwargs)
 
-        self.set_showLegend('extended')         # show  legend with airfoil data 
+        self._show_derivative = False           # show derivative of curvature 
+        self.set_showLegend('extended')         # show legend with/without curvature data 
+
+    @property
+    def show_derivative(self): return self._show_derivative
+    def set_show_derivative (self, aBool): self._show_derivative = aBool 
 
 
     def _plot (self): 
@@ -491,10 +512,11 @@ class Curvature_Artist (Airfoil_Line_Artist):
                     self._add(p)
                     self._plot_reversals (side, color)
 
-                    # experimental: plot derivative1 of curvature ('spikes')
-                    p = self.ax.plot (x, -derivative1(x,y), ls, color = 'red', alpha=alpha, label=label, 
-                                      linewidth= 0.8, **self._marker_style)
-                    self._add(p)
+                    # plot derivative1 of curvature ('spikes')
+                    if self.show_derivative:
+                        p = self.ax.plot (x, -derivative1(x,y), ls, color = 'red', alpha=alpha, label=label, 
+                                        linewidth= 0.8, **self._marker_style)
+                        self._add(p)
 
                     # print a table for the max values 
                     if self.showLegend == 'extended':
@@ -503,11 +525,12 @@ class Curvature_Artist (Airfoil_Line_Artist):
 
         self._plot_title (self.name, va='top', ha='center', wspace=0.1, hspace=0.05)
 
-        # experimental
-        p = self.ax.text (0.05, 0.05, "Derivative of curvature (experimental)", color='firebrick' , 
-                          fontsize = 'small', transform=self.ax.transAxes, 
-                          horizontalalignment='left', verticalalignment='bottom')
-        self._add (p)   
+        # print derivative legend 
+        if self.show_derivative:
+            p = self.ax.text (0.05, 0.05, "Derivative of curvature", color='firebrick' , 
+                            fontsize = 'small', transform=self.ax.transAxes, 
+                            horizontalalignment='left', verticalalignment='bottom')
+            self._add (p)   
 
 
     def _plot_reversals (self, line : Side_Airfoil, color):
@@ -740,7 +763,7 @@ class Thickness_Artist (Airfoil_Line_Artist):
 
         if not len(airfoils) : return 
 
-        for iair, airfoil in enumerate (airfoils):
+        for airfoil in airfoils:
             if (airfoil.isLoaded ):
 
                 # use fast airfoil geometry calc
@@ -770,15 +793,16 @@ class Thickness_Artist (Airfoil_Line_Artist):
                 # plot le circle 
 
                 le_radius = airfoil.leRadius_perc / 100
-                circle = Circle ((le_radius,0), le_radius, linewidth=0.5, fill=False, 
-                                     ec=color, alpha=0.8)
+                circle = Circle ((le_radius,0), le_radius, linewidth=1, fill=False, 
+                                     ec=adjust_lightness(color,1.2))
                 p = self.ax.add_artist (circle) 
                 self._add(p)
 
 
 
     def _plot_max_val (self, airfoilLine: Side_Airfoil, airfoil_type, color):
-        # indicate max. value of camber or thickness line 
+        """ indicate max. value of camber or thickness line """
+
         x, y = airfoilLine.maximum
         if airfoil_type == DESIGN:
             text = ""
@@ -786,13 +810,21 @@ class Thickness_Artist (Airfoil_Line_Artist):
         else:
             text = ""
             color = color
-        p = self.ax.plot (x, y, color=color, **ms_point)
-        self._add(p)
 
-        # if airfoil_type == DESIGN:
-        p = self.ax.annotate(text + "%.2f%% at %.1f%%" % (y * 100, x *100), (x, y), fontsize='small',
-                            xytext=(4, 4), textcoords='offset points', color = color)
-        self._add (p)   
+        # symmetrical and camber? 
+        if airfoilLine.name == CAMBER and y == 0.0: 
+            p = self.ax.annotate("No camber - symmetrical", (0.3, 0), fontsize='small',
+                                xytext=(4, 4), textcoords='offset points', color = color)
+            self._add (p) 
+        # normal 
+        else:  
+            # marker 
+            p = self.ax.plot (x, y, color=color, **ms_point)        
+            self._add(p)
+            # values 
+            p = self.ax.annotate(text + "%.2f%% at %.1f%%" % (y * 100, x *100), (x, y), fontsize='small',
+                                xytext=(4, 4), textcoords='offset points', color = color)
+            self._add (p)   
 
 
 

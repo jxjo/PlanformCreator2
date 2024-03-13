@@ -5,6 +5,7 @@
 Highlevel abstract base classes for UI like Dialog, Edit frame or DIagram frame
 
 """
+import platform
 from tkinter import Frame
 import customtkinter as ctk
 from widgets            import *
@@ -18,9 +19,10 @@ from artist             import Plot_Toolbar
 
 #------- Helper function -----------------------------------------
 
-def set_initialWindowSize (tkwindow,
+def set_initialWindowSize (tkwindow : ctk.CTkToplevel,
                            width = None, height = None,  
-                           widthFrac = None, heightFrac = None):
+                           widthFrac = None, heightFrac = None,
+                           geometry=None):
     """
     Set size and position of tkinter window in fraction of screensize
 
@@ -30,23 +32,35 @@ def set_initialWindowSize (tkwindow,
         height:     height in px - default 400
         widthFrac:  or width as fraction of screensize
         heightFrac: or height as fraction of screensize
+        geometry:   gemetry string like "1551x846+144+67" or "zoomed"
     """
 
-    if widthFrac and heightFrac: 
-        width  = int (tkwindow.winfo_screenwidth()  * widthFrac)
-        height = int (tkwindow.winfo_screenheight() * heightFrac) 
-    
-    if width  is None: width  = 600
-    if height is None: height = 400
+    if geometry is not None and geometry !='zoomed':     # default window size if no settings
+        tkwindow.geometry(geometry)
+    else: 
+ 
+        if widthFrac and heightFrac: 
+            width  = int (tkwindow.winfo_screenwidth()  * widthFrac)
+            height = int (tkwindow.winfo_screenheight() * heightFrac) 
+        
+        if width  is None: width  = 600
+        if height is None: height = 400
 
-    tkwindow.minsize(int(width*0.9), int(height*0.8))
-    tkwindow.geometry("%dx%d" %(width, height))
+        tkwindow.minsize(int(width*0.9), int(height*0.8))
+        tkwindow.geometry("%dx%d" %(width, height))
 
-    x = (tkwindow.winfo_screenwidth()  - width)  // 2
-    y = ((tkwindow.winfo_screenheight() - height) // 2 ) // 2.0 # more up (Windows bar)
+        x = (tkwindow.winfo_screenwidth()  - width)  // 2
+        y = ((tkwindow.winfo_screenheight() - height) // 2 ) // 2.0 # more up (Windows bar)
 
-    tkwindow.geometry("+%d+%d" %(x, y))
+        tkwindow.geometry("+%d+%d" %(x, y))
 
+        if geometry == 'zoomed':                    # maximize window 
+            if platform.system() == 'Windows': 
+                # handle ctk bug with zoomed
+                # main.state('zoomed')
+                tkwindow._state_before_windows_set_titlebar_color = 'zoomed'
+            else:                                   # Linux
+                tkwindow.attributes('-zoomed', True)
 
 
 #-------------------------------------------------------------------------------

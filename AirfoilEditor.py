@@ -527,17 +527,19 @@ class Diagram_Airfoil (Diagram_Abstract):
             projectFn: function to get project
         """
 
-        self._show_points = False          # switch to show airfoil points
-        self._show_upper  = False          # switch to show upper curvature
-        self._show_lower  = False          # switch to show lower curvature
-        self._show_camber = False          # switch to show camber / thickness
-        self._show_logScale = True        # switch to have log scale for curvature 
-        self._log_widget : Switch_Widget = None   # log switch widget
+        self._show_points = False                   # switch to show airfoil points
+        self._show_upper  = False                   # switch to show upper curvature
+        self._show_lower  = False                   # switch to show lower curvature
+        self._show_camber = False                   # switch to show camber / thickness
+        self._show_logScale = True                  # switch to have log scale for curvature 
+        self._show_derivative = False               # switch to show derivative of curvature 
+
+        self._log_widget : Switch_Widget = None     # log switch widget
+        self._deriv_widget : Switch_Widget = None   # derivative switch widget
 
         self.airfoilArtist   = None
         self.thicknessArtist = None
         self.curvatureArtist = None
-
 
         super().__init__(master, objectFn, view_frame = view_frame, *args, **kwargs)
 
@@ -608,14 +610,19 @@ class Diagram_Airfoil (Diagram_Abstract):
         # airfoil is list to prepare for multiple airfoils to view 
         
         self.airfoilArtist   = Airfoil_Artist (self.ax1, self.airfoils, show=True)
+        self.airfoilArtist.set_points(self.show_points)
         self.airfoilArtist.set_show_title (True)            # title like "Bezier based.." 
 
         self.thicknessArtist = Thickness_Artist (self.ax1, self.airfoils, show=self.show_camber)
+        self.thicknessArtist.set_points (self.show_points)
+        
 
         if self.ax2: 
             self.curvatureArtist = Curvature_Artist (self.ax2, self.airfoils, show=True)
             self.curvatureArtist.set_lower(self.show_lower)
             self.curvatureArtist.set_upper(self.show_upper)
+            self.curvatureArtist.set_show_derivative(self.show_derivative)          
+            self.curvatureArtist.set_points (self.show_points)
         else: 
             self.curvatureArtist = None
 
@@ -676,6 +683,10 @@ class Diagram_Airfoil (Diagram_Abstract):
         self._log_widget = Switch_Widget (self.view_frame,r,c, lab='log scale y', 
                        get=lambda: self.show_logScale, set=self.set_show_logScale,
                        disable=lambda: not (self.show_upper or self.show_lower))
+        r += 1
+        self._deriv_widget = Switch_Widget (self.view_frame,r,c, lab='Derivative', 
+                       get=lambda: self.show_derivative, set=self.set_show_derivative,
+                       disable=lambda: not (self.show_upper or self.show_lower))
         return r, c
 
 
@@ -691,10 +702,11 @@ class Diagram_Airfoil (Diagram_Abstract):
     def set_show_points (self, aBool): 
         self._show_points = True
         self.airfoilArtist.set_points (aBool)
-        self.airfoilArtist.refresh (figureUpdate=True) 
         if self.curvatureArtist:
             self.curvatureArtist.set_points (aBool)
-            self.curvatureArtist.refresh (figureUpdate=True) 
+        if self.thicknessArtist:
+            self.thicknessArtist.set_points (aBool)
+        self.refresh()
 
     @property
     def show_camber(self) -> bool: return self._show_camber
@@ -713,6 +725,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         if self.curvatureArtist:
             self.curvatureArtist.set_upper(aBool)
         self._log_widget.refresh()
+        self._deriv_widget.refresh()
         self.refresh()
 
 
@@ -727,6 +740,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         if self.curvatureArtist:
             self.curvatureArtist.set_lower(aBool)
         self._log_widget.refresh()
+        self._deriv_widget.refresh()
         self.refresh()
 
 
@@ -736,6 +750,14 @@ class Diagram_Airfoil (Diagram_Abstract):
         self._show_logScale = aBool
         self.setup_axes()
         self.refresh()
+
+    @property
+    def show_derivative(self): return self._show_derivative
+    def set_show_derivative (self, aBool): 
+        if self.curvatureArtist:
+            self._show_derivative = aBool 
+            self.curvatureArtist.set_show_derivative(aBool)
+            self.refresh()
 
 
     # -------- event handler
@@ -2417,6 +2439,7 @@ class AirfoilEditor ():
         self.diagram   = None                       # diagram widget 
         self.isModal   = not self.parentApp is None
         self.return_OK = True
+        self.initial_geometry = None                # window geometry at th ebginning
 
         # get defaults from settings file 
 
@@ -2424,11 +2447,12 @@ class AirfoilEditor ():
         Airfoil.le_bunch_default = Settings().get('le_bunch_default', default=Airfoil.le_bunch_default)
         Airfoil.te_bunch_default = Settings().get('te_bunch_default', default=Airfoil.te_bunch_default)
 
-        # create windows 
+        # create windows - set window size or maximized 
 
         if self.isModal: 
-            # modal - inherit ctk mode from parent
-            main = ctk.CTkToplevel (parentApp)
+
+            main = ctk.CTkToplevel (parentApp)          # modal - inherit ctk mode from parent
+
             set_initialWindowSize (main, widthFrac=0.80, heightFrac=0.75)
             main.transient (parentApp)
             # bug fix titlebar color https://github.com/TomSchimansky/CustomTkinter/issues/1930
@@ -2438,11 +2462,16 @@ class AirfoilEditor ():
             self.return_newAirfoilName         = None   # return value for parent
 
         else: 
+
             main = ctk.CTk()  
-            set_initialWindowSize(main, widthFrac=0.85, heightFrac=0.75)
+
+            geometry = Settings().get('window_geometry', None)
+            set_initialWindowSize(main, widthFrac=0.85, heightFrac=0.75, geometry=geometry)
+            main.after (2000, self.save_win_geometry)    # get geoemtry after startup geometry management
 
         self.main = main 
         self.ctk_root = main        
+
 
         # check and load the passed airfoil(s)
 
@@ -2502,7 +2531,7 @@ class AirfoilEditor ():
         self.diagram.grid   (row=0, column=1, pady=(5,5), padx=(5,5), sticky="news")
 
         # start App - run mainloop if self is not modal otherise control is at parent
-        
+
         if not self.isModal: 
             main.protocol("WM_DELETE_WINDOW", self.onExit)  # intercept app close by user 
             main.mainloop() 
@@ -2640,9 +2669,28 @@ class AirfoilEditor ():
             self.onExit()
 
 
+    def save_win_geometry (self): 
+        """ save the geometry to compare it when window will be closed """
+
+        if self.main.state() == 'zoomed':
+            self.initial_geometry = 'zoomed'
+        else: 
+            self.initial_geometry = self.main.winfo_geometry()
+
+
     def onExit(self): 
         """ interception of user closing the app - check for changes made"""
         self.ctk_root = None
+
+        if not self.isModal:
+            # store window pos and size in settings if user changed it 
+            if self.main.state() == 'zoomed':
+                cur_geometry = 'zoomed'
+            else: 
+                cur_geometry = self.main.winfo_geometry()
+            if cur_geometry != self.initial_geometry:
+                Settings().set('window_geometry', cur_geometry)
+
         self.main.destroy()
 
 
