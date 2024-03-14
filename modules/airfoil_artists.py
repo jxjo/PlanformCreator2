@@ -259,6 +259,12 @@ class Airfoil_Artist (Artist):
                                   linewidth=linewidth, linestyle=linestyle, **_marker_style)
                 self._add (p)
 
+                # plot real le - airfoil must be loaded as GEO_SPLINE!
+                # p = self.ax.plot (airfoil.geo.le, linestyle='None', 
+                #                   marker='o', fillstyle='full', markersize=6, 
+                #                   mfc='red', mec='red')
+                # self._add (p)
+
                 # fill airfoil if it's only one 
                 if len(airfoils) == 1 and not self.show_panels:                    
                     p = self.ax.fill (airfoil.x, airfoil.y, facecolor=color, alpha=0.1)
@@ -568,9 +574,9 @@ class Curvature_Artist (Airfoil_Line_Artist):
 
         # header 
         if iair == 0: 
-            self._add (print_text (self.ax, 'LE'       , 'right', (xa,ya), (  2*sc, ypos), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax, 'TE'       , 'right', (xa,ya), ( 38*sc, ypos), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax, 'Reversals', 'right', (xa,ya), ( 85*sc, ypos), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax, 'LE'    , 'right', (xa,ya), (  2*sc, ypos), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax, 'TE'    , 'right', (xa,ya), ( 38*sc, ypos), cl_textHeader, xycoords='axes fraction'))
+            self._add (print_text (self.ax, 'Revers', 'right', (xa,ya), ( 80*sc, ypos), cl_textHeader, xycoords='axes fraction'))
 
         # airfoil data + name 
         le_curv = curvature.y[0]
@@ -578,10 +584,11 @@ class Curvature_Artist (Airfoil_Line_Artist):
         nr     = len(curvature.reversals())
         yoff = ypos - iair * 12 - 12
 
-        self._add (print_text   (self.ax, name, 'right', (xa,ya), (-35*sc, yoff), color, alpha=0.8, xycoords='axes fraction'))
+        if nair > 1:                                # airfoil name only if there are several
+            self._add (print_text   (self.ax, name, 'right', (xa,ya), (-35*sc, yoff), color, alpha=0.8, xycoords='axes fraction'))
         self._add (print_number (self.ax, le_curv, 0, (xa,ya), (  5*sc, yoff), cl_text))
         self._add (print_number (self.ax, te_curv, 1, (xa,ya), ( 40*sc, yoff), cl_text))
-        self._add (print_number (self.ax,      nr, 0, (xa,ya), ( 70*sc, yoff), cl_text))
+        self._add (print_number (self.ax,      nr, 0, (xa,ya), ( 68*sc, yoff), cl_text))
 
 
                 

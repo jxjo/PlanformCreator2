@@ -574,7 +574,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.ax1.set_xlim([-0.05,1.05])
         self.ax1.axis('equal')
         self.ax1.grid (visible=True)
-        self.ax1.axhline(0, color=cl_labelGrid, linewidth=.5, alpha=0.6)
+        self.ax1.axhline(0, color=cl_labelGrid, linewidth=.5, alpha=0.7)
 
         # curvature
         if self.ax2:
@@ -600,6 +600,7 @@ class Diagram_Airfoil (Diagram_Abstract):
                 self.ax2.clear()
                 self.ax2.set_ylim([ -1, 1])
             self.ax2.grid (visible=True)
+            self.ax2.axhline(0, color=cl_labelGrid, linewidth=.5, alpha=0.7)
 
 
     def setup_artists(self):
