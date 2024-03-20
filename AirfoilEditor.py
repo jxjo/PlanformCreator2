@@ -2468,7 +2468,8 @@ class AirfoilEditor ():
 
             geometry = Settings().get('window_geometry', None)
             set_initialWindowSize(main, widthFrac=0.85, heightFrac=0.75, geometry=geometry)
-            main.after (2000, self.save_win_geometry)    # get geoemtry after startup geometry management
+            main.after (800,  lambda: dummy_window_resize (main))   # handle matplotlib bug for win scale <> 1.0
+            main.after (1000, self.save_win_geometry)               # get geoemtry after startup geometry management
 
         self.main = main 
         self.ctk_root = main        
@@ -2677,6 +2678,8 @@ class AirfoilEditor ():
             self.initial_geometry = 'zoomed'
         else: 
             self.initial_geometry = self.main.winfo_geometry()
+
+
 
 
     def onExit(self): 

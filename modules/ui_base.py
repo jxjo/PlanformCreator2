@@ -8,6 +8,9 @@ Highlevel abstract base classes for UI like Dialog, Edit frame or DIagram frame
 import platform
 from tkinter import Frame
 import customtkinter as ctk
+from customtkinter import ScalingTracker
+from customtkinter.windows.widgets.scaling import CTkScalingBaseClass
+
 from widgets            import *
 from common_utils       import fromDict, toDict
 
@@ -34,7 +37,6 @@ def set_initialWindowSize (tkwindow : ctk.CTkToplevel,
         heightFrac: or height as fraction of screensize
         geometry:   gemetry string like "1551x846+144+67" or "zoomed"
     """
-    from customtkinter import ScalingTracker
 
     if geometry is not None and geometry !='zoomed':     # default window size if no settings
 
@@ -43,8 +45,8 @@ def set_initialWindowSize (tkwindow : ctk.CTkToplevel,
             # in case Windows dpi settings are != 100%, ctk would scale geometry by factor win_scale
             #   so the new window would have a new size and pos --> bug
             # so geometry-string is first downscaled and then upscaled to have the original size 
-            tkwindow.geometry(geometry)
-            # tkwindow.geometry(tkwindow._reverse_geometry_scaling (geometry))
+            # tkwindow.geometry(geometry)
+            tkwindow.geometry(tkwindow._reverse_geometry_scaling (geometry))
 
         else:
             tkwindow.geometry(geometry)
@@ -73,6 +75,27 @@ def set_initialWindowSize (tkwindow : ctk.CTkToplevel,
                 tkwindow._state_before_windows_set_titlebar_color = 'zoomed'
             else:                                   # Linux
                 tkwindow.attributes('-zoomed', True)
+
+
+def dummy_window_resize (tkwindow : ctk.CTkToplevel):
+    """
+    performs a tiny dummy resize of the top level window 
+    to handle a matplotlib bug when Windows fontsize <> 100%
+    --> the initial plot doesn't handle dpi correctly, a resize is needed
+        to adjust the plot to the frame size
+    """
+
+    win_scale = ScalingTracker.get_window_scaling(tkwindow)
+
+    # dummy resive only if wqin scale isn't 1.0 
+    if win_scale != 1.0:
+
+        geometry = tkwindow.geometry()
+        width, height, x, y = CTkScalingBaseClass._parse_geometry_string(geometry)
+        width += 1
+        geometry = f"{round(width)}x{round(height)}+{x}+{y}"
+        tkwindow.geometry(geometry)
+
 
 
 #-------------------------------------------------------------------------------
