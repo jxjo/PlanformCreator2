@@ -2528,7 +2528,7 @@ class AirfoilEditor ():
         edit_Specials_frame.grid (row=0, column=4, pady=(0,5), padx=(5,5), ipadx=10, sticky="news")
 
 
-        self.diagram  = Diagram_Airfoil  (main, self.curAirfoil, view_frame=switches_frame, size=[20,8])
+        self.diagram  = Diagram_Airfoil  (main, self.curAirfoil, view_frame=switches_frame)  # , size=[20,8]
         self.diagram.grid   (row=0, column=1, pady=(5,5), padx=(5,5), sticky="news")
 
         # start App - run mainloop if self is not modal otherise control is at parent

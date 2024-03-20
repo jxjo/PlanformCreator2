@@ -34,9 +34,21 @@ def set_initialWindowSize (tkwindow : ctk.CTkToplevel,
         heightFrac: or height as fraction of screensize
         geometry:   gemetry string like "1551x846+144+67" or "zoomed"
     """
+    from customtkinter import ScalingTracker
 
     if geometry is not None and geometry !='zoomed':     # default window size if no settings
-        tkwindow.geometry(geometry)
+
+        win_scale = ScalingTracker.get_window_scaling(tkwindow)
+        if win_scale != 1.0:
+            # in case Windows dpi settings are != 100%, ctk would scale geometry by factor win_scale
+            #   so the new window would have a new size and pos --> bug
+            # so geometry-string is first downscaled and then upscaled to have the original size 
+            tkwindow.geometry(geometry)
+            # tkwindow.geometry(tkwindow._reverse_geometry_scaling (geometry))
+
+        else:
+            tkwindow.geometry(geometry)
+
     else: 
  
         if widthFrac and heightFrac: 
