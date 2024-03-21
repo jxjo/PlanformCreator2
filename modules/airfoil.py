@@ -1038,7 +1038,7 @@ class Airfoil_Hicks_Henne(Airfoil):
 
     def load (self):
         """
-        Overloaded: Loads bezier definition instead of .dat from file" 
+        Overloaded: Loads hicks henne definition instead of .dat from file" 
         """    
 
         return self.load_hh()
