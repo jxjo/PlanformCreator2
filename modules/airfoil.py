@@ -109,6 +109,7 @@ class Airfoil:
             else:
                 checkPath = os.path.join (self.workingDir, pathFileName)
             if not os.path.isfile(checkPath):
+
                 ErrorMsg ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
                 self._name = "-- Error --"
             else:
@@ -154,6 +155,33 @@ class Airfoil:
         else: 
             return None 
         
+
+    @classmethod
+    def onFileType(cls, pathFileName, workingDir = None):
+        """
+        Alternate constructor for new Airfoil based on its file type
+
+            '.dat'      - returns Airfoil 
+            '.bez'      - returns Airfoil_Bezier 
+            '.hicks'    - returns Airfoil_Hicks_Henne 
+
+        Args:
+            pathFileName: string of existinng airfoil path and name
+            workingDir: optional working dir (if path is relative)
+        """
+
+        ext = os.path.splitext(pathFileName)[1]
+
+        if ext == '.dat': 
+            return Airfoil (pathFileName=pathFileName, workingDir=workingDir)
+        elif ext == '.bez': 
+            return Airfoil_Bezier (pathFileName=pathFileName, workingDir=workingDir)
+        elif ext == '.hicks': 
+            return Airfoil_Hicks_Henne (pathFileName=pathFileName, workingDir=workingDir)
+        else:
+            raise ValueError (f"Unknown file extension '{ext}' for new airfoil")
+
+
 
     def _save (self, airfoilDict):
         """ stores the variables into the dataDict - returns the filled dict"""
@@ -839,7 +867,14 @@ class Airfoil_Bezier(Airfoil):
         Overloaded: Loads bezier definition instead of .dat from file" 
         """    
 
-        return self.load_bezier()
+        if self.isExisting and not self.isLoaded: 
+            sourcePathFile = os.path.join(self.workingDir, self.pathFileName)
+        else:
+            sourcePathFile = None 
+
+        return self.load_bezier(fromPath=sourcePathFile)
+    
+
 
     def load_bezier (self, fromPath=None):
         """
@@ -1001,6 +1036,9 @@ class Airfoil_Hicks_Henne(Airfoil):
     def isLoaded (self): 
         # overloaded
         return self._isLoaded
+    def set_isLoaded (self, aBool: bool):
+        self._isLoaded = aBool
+
 
     @property
     def geo (self) -> Geometry_HicksHenne:
@@ -1041,7 +1079,13 @@ class Airfoil_Hicks_Henne(Airfoil):
         Overloaded: Loads hicks henne definition instead of .dat from file" 
         """    
 
-        return self.load_hh()
+        if self.isExisting and not self.isLoaded: 
+            sourcePathFile = os.path.join(self.workingDir, self.pathFileName)
+        else:
+            sourcePathFile = None 
+
+        return self.load_hh(fromPath=sourcePathFile)
+
 
     def load_hh (self, fromPath=None):
         """
@@ -1051,13 +1095,20 @@ class Airfoil_Hicks_Henne(Airfoil):
         if fromPath is None: 
             fromPath = self.pathFileName
 
-        foilName, seed_foilName, seed_x, seed_y, top_hhs, bot_hhs = self._read_hh_file (fromPath)
+        name, seed_name, seed_x, seed_y, top_hhs, bot_hhs = self._read_hh_file (fromPath)
 
-        self.set_name (foilName)
+        self.set_hh_data (name, seed_name, seed_x, seed_y, top_hhs, bot_hhs)
 
-        if seed_foilName: 
 
-            seed_foil = Airfoil (x=seed_x, y=seed_y, name=seed_foilName)
+
+    def set_hh_data (self, name, seed_name, seed_x, seed_y, top_hhs, bot_hhs): 
+        """ set all data needed for a Hicks Henne airfoil"""
+
+        self.set_name (name)
+
+        if seed_name: 
+
+            seed_foil = Airfoil (x=seed_x, y=seed_y, name=seed_name)
 
             if seed_foil.isLoaded: 
                 self._geo = Geometry_HicksHenne (seed_foil.x, seed_foil.y)
@@ -1065,9 +1116,10 @@ class Airfoil_Hicks_Henne(Airfoil):
                 self._geo.lower.set_hhs (bot_hhs)
 
                 self._isLoaded = True 
-                logging.debug (f"Hicks Henne definition for {self.name} loaded")
+                # logging.debug (f"Hicks Henne definition for {self.name} loaded")
             else: 
-                ErrorMsg (f"Hicks Henne seed airfoil {seed_foilName} couldn't be loaded ")
+                ErrorMsg (f"Hicks Henne seed airfoil {seed_name} couldn't be loaded ")
+
 
 
     def _read_hh_file (self, fromPath):

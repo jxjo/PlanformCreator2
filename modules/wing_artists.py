@@ -1399,14 +1399,14 @@ class Airfoil_Artist (Artist):
 
         wing = self.model 
 
-        n = 0                                       # Number of colors
+        n = 0                                       
         for section in wing.wingSections:
             airfoil = section.airfoil
             if (airfoil.isLoaded) and not (not self._strak and airfoil.isStrakAirfoil): n += 1
         if not n: return 
 
-         # create cycled colors 
-        self._set_colorcycle (n)                # no of cycle colors - extra color for each airfoil
+        # create cycled colors 
+        self._set_colorcycle (8, colormap="Set2")    # extra color for each airfoil
 
         # plot title
         if not self._norm: 

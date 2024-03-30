@@ -173,15 +173,16 @@ class Grid_Artist (Artist):
 class Airfoil_Artist (Artist):
     """Plot the airfoils contour  """
 
-    label_with_airfoil_type = False             # include airfoil type in label 
 
     def __init__ (self, axes, modelFn, **kwargs):
         super().__init__ (axes, modelFn, **kwargs)
 
-        self._show_title = False                # show title like 'Bezier based' 
-        self._points = False                    # show point marker 
-        self._show_panels = False               # show ony panels 
-        self.set_showLegend('normal')           # show legend with/without airfoil data 
+        self._show_title = False                        # show title like 'Bezier based' 
+        self._points = False                            # show point marker 
+        self._show_panels = False                       # show ony panels 
+        self._label_with_airfoil_type = False           # include airfoil type in label 
+        self._show_shape_function = True                # show Bezier or Hicks Henne shape functions
+        self.set_showLegend('normal')                   # show legend with/without airfoil data 
 
  
     @property
@@ -190,6 +191,10 @@ class Airfoil_Artist (Artist):
         self._points = aBool 
         if self._points: 
             self.set_show_panels (False)
+
+    @property
+    def label_with_airfoil_type(self): return self._label_with_airfoil_type
+    def set_label_with_airfoil_type (self, aBool): self._label_with_airfoil_type = aBool 
 
     @property
     def show_title(self): return self._show_title
@@ -201,6 +206,10 @@ class Airfoil_Artist (Artist):
         self._show_panels = aBool 
         if self._show_panels: 
             self.set_points (False)
+
+    @property
+    def show_shape_function(self): return self._show_shape_function
+    def set_show_shape_function (self, aBool): self._show_shape_function = aBool 
 
 
     def set_current (self, aLineLabel, figureUpdate=False):
@@ -221,19 +230,28 @@ class Airfoil_Artist (Artist):
         if not len(airfoils) : return 
 
         # create cycled colors 
-        self._set_colorcycle (10, colormap="Paired")          # no of cycle colors - extra color for each airfoil
+        self._set_colorcycle (8, colormap="Set2")          # extra color for each airfoil
 
         # now plot each single airfoil
         airfoil: Airfoil
 
+        # are there many airfoils - one of them is DESIGN? 
+        airfoils_with_design = False 
+        for airfoil in airfoils:
+            if len(airfoils) > 1 and (airfoil.usedAs == DESIGN):
+                airfoils_with_design = True 
+
+
         for iair, airfoil in enumerate (airfoils):
             if (airfoil.isLoaded):
 
-                color = _color_airfoil_of (airfoil.usedAs)
-
                 # if there are many airfoils, dimm airfoils which are not DESIGN 
-                if len(airfoils) > 1 and not (airfoil.usedAs == DESIGN):
-                    color = adjust_lightness (color,0.6)
+                color = _color_airfoil_of (airfoil.usedAs)
+                if color is not None: 
+                    if airfoils_with_design and not (airfoil.usedAs == DESIGN):
+                        color = adjust_lightness (color,0.7)
+                else: 
+                    color = self._cycle_color()
 
                 if self.label_with_airfoil_type:
                     label = f"{airfoil.usedAs}: {airfoil.name}"
@@ -270,18 +288,17 @@ class Airfoil_Artist (Artist):
                     p = self.ax.fill (airfoil.x, airfoil.y, facecolor=color, alpha=0.1)
                     self._add(p)
 
-                if airfoil.isBezierBased: 
-                    if not airfoil.usedAs == DESIGN:            # a seperate artist will show 
+                # show Bezier or Hicks Henne shape function
+                if self.show_shape_function:
+                    if airfoil.isBezierBased: 
                         self.draw_bezier (airfoil, color)
                         if self.show_title: 
                             self._plot_title ('Bezier based', va='top', ha='left', wspace=0.05, hspace=0.05)
 
-                if airfoil.isHicksHenneBased: 
-                    self.draw_hicksHenne (airfoil)
-                    if self.show_title: 
-                        self._plot_title ('Hicks Henne based', va='top', ha='left', wspace=0.05, hspace=0.05)
-
-                self._cycle_color()                             # in colorycle are pairs  - move to next
+                    if airfoil.isHicksHenneBased: 
+                        self.draw_hicksHenne (airfoil)
+                        if self.show_title: 
+                            self._plot_title ('Hicks Henne based', va='top', ha='left', wspace=0.05, hspace=0.05)
 
                 if self._pickActive: 
                     self._makeObjectPickable (p)
@@ -1015,7 +1032,7 @@ class Bezier_Edit_Artist (Artist):
         self.bezier_upper_artist   = None          # the artist to draw bezier curve
         self.bezier_lower_artist   = None
 
-        self._mouseInfo_artist     = False         # user info artist
+        self._mouseInfo_artist     = None         # user info artist
 
         self.set_showLegend(False)  
 
@@ -1111,10 +1128,11 @@ class Bezier_Edit_Artist (Artist):
         """ show user info for mouse helper """
 
         # will be removed after first mouse move 
-        text = 'move points with mouse, ctrl+click to add, shift+click to remove'
-        p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
-                    transform=self.ax.transAxes, horizontalalignment='center', verticalalignment='bottom')
-        self._mouseInfo_artist = p
+        if self._mouseInfo_artist is None: 
+            text = 'move points with mouse, ctrl+click to add, shift+click to remove'
+            p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
+                        transform=self.ax.transAxes, horizontalalignment='center', verticalalignment='bottom')
+            self._mouseInfo_artist = p
 
 
     def draw_animated (self, artist_onMove=None, iArtist = None , typeTag=None): 
@@ -1139,9 +1157,9 @@ class Bezier_Edit_Artist (Artist):
             self.draw_animated_artists ()
 
             # remove mouse info after first move 
-            if self._mouseInfo_artist is not None: 
+            if self._mouseInfo_artist: 
                 self._mouseInfo_artist.remove()  
-                self._mouseInfo_artist = None
+                self._mouseInfo_artist = False
                       
      
 

@@ -531,6 +531,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         self._show_upper  = False                   # switch to show upper curvature
         self._show_lower  = False                   # switch to show lower curvature
         self._show_camber = False                   # switch to show camber / thickness
+        self._show_shape_function = True            # switch to show Bezier or HH shape function'
         self._show_logScale = True                  # switch to have log scale for curvature 
         self._show_derivative = False               # switch to show derivative of curvature 
 
@@ -668,6 +669,10 @@ class Diagram_Airfoil (Diagram_Abstract):
         r += 1
         Switch_Widget (self.view_frame,r,c, lab='Camber',
                        get=lambda: self.show_camber, set=self.set_show_camber)
+        r += 1 
+        Switch_Widget (self.view_frame,r,c, lab='Shape function', 
+                       get=lambda: self.show_shape_function, set=self.set_show_shape_function,
+                       disable=self.show_shape_function_disabled)
         r += 1
         Blank_Widget (self.view_frame,r,c)
         self.view_frame.grid_rowconfigure(r, weight=1)
@@ -716,6 +721,21 @@ class Diagram_Airfoil (Diagram_Abstract):
         self.thicknessArtist.set_show (aBool)
 
     @property
+    def show_shape_function(self) -> bool: return self._show_shape_function
+    def set_show_shape_function (self, aBool):
+        self._show_shape_function = aBool
+        self.airfoilArtist.set_show_shape_function (aBool)
+        self.refresh ()
+    def show_shape_function_disabled (self): 
+        if len(self.airfoils()) > 0: 
+            if self.airfoils()[0].isBezierBased:
+                return False
+            elif self.airfoils()[0].isHicksHenneBased:
+                return False
+        return True
+
+
+    @property
     def show_upper(self) -> bool: return self._show_upper
     def set_show_upper (self, aBool):
         """ show on/off upper curvature """ 
@@ -725,8 +745,8 @@ class Diagram_Airfoil (Diagram_Abstract):
             self.re_create_axes()
         if self.curvatureArtist:
             self.curvatureArtist.set_upper(aBool)
-        self._log_widget.refresh()
-        self._deriv_widget.refresh()
+        if self._log_widget:   self._log_widget.refresh()
+        if self._deriv_widget: self._deriv_widget.refresh()
         self.refresh()
 
 
@@ -740,8 +760,8 @@ class Diagram_Airfoil (Diagram_Abstract):
             self.re_create_axes()
         if self.curvatureArtist:
             self.curvatureArtist.set_lower(aBool)
-        self._log_widget.refresh()
-        self._deriv_widget.refresh()
+        if self._log_widget:   self._log_widget.refresh()
+        if self._deriv_widget: self._deriv_widget.refresh()
         self.refresh()
 
 
@@ -2705,27 +2725,14 @@ if __name__ == "__main__":
 
     # init logger 
 
-    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.WARNING)  # DEBUG or WARNING
-    # suppress debug messages from these modules 
-    logging.getLogger('matplotlib.font_manager').disabled = True
-    logging.getLogger('PIL.PngImagePlugin').disabled = True
+    init_logging (level= logging.DEBUG)          # INFO, DEBUG or WARNING
 
-    # set ctk application settings prior to init 
+    # ctk application settings and scalings prior to init 
 
     Settings.belongTo (__file__, msg=True)
+    apply_scaling_from_settings ()
 
-    ctk.set_appearance_mode    (Settings().get('appearance_mode', default='System'))   # Modes:  "System" (standard), "Dark", "Light"
-    ctk.set_default_color_theme(Settings().get('color_theme', default='blue'))         # Themes: "blue" (standard), "green", "dark-blue"
-    scaling = Settings().get('widget_scaling', default=1.0)
-    if scaling != 1.0: 
-        ctk.set_widget_scaling(scaling)  # widget dimensions and text size
-        NoteMsg ("Font size is scaled to %.2f" %scaling)
-    scaling = Settings().get('window_scaling', default=1.0)
-    if scaling != 1.0: 
-        ctk.set_window_scaling(scaling)  # scaling of window
-        NoteMsg ("Window size is scaled to %.2f" %scaling)
-
-    # set matpltlib defauls 
+    # set matpltlib defaults 
         
     set_font_size (Settings().get('plot_font_size', default=10))
 
@@ -2753,6 +2760,5 @@ if __name__ == "__main__":
             NoteMsg ("No airfoil file as argument. Showing example airfoil...")
             airfoil_file = None
 
-    myApp = AirfoilEditor (airfoil_file)
+    AirfoilEditor (airfoil_file)
     
- 
