@@ -2211,7 +2211,7 @@ class App(ctk.CTk):
         # initial size of app window 
         geometry = Settings().get('window_geometry', None)
         set_initialWindowSize(self, widthFrac=0.92, heightFrac=0.8, geometry=geometry)
-        self.after (2000, self.save_win_geometry)    # get geoemtry after startup geometry management
+        self.after (2000, self.save_win_geometry)    # get geometry after startup geometry management
 
 
         # create the 'wing' model - with 'splash window'
@@ -2459,22 +2459,14 @@ class App(ctk.CTk):
 if __name__ == "__main__":
 
 
-    InfoMsg("Starting %s ..." % App.name)
+    # init logger 
+
+    init_logging (level= logging.DEBUG)          # INFO, DEBUG or WARNING
 
     # set ctk application settings prior to init 
 
     Settings.belongTo (__file__, msg=True)
-
-    ctk.set_appearance_mode    (Settings().get('appearance_mode', default='System'))   # Modes:  "System" (standard), "Dark", "Light"
-    ctk.set_default_color_theme(Settings().get('color_theme', default='blue'))         # Themes: "blue" (standard), "green", "dark-blue"
-    scaling = Settings().get('widget_scaling', default=1.0)
-    if scaling != 1.0: 
-        ctk.set_widget_scaling(scaling)  # widget dimensions and text size
-        NoteMsg ("Font size is scaled to %.2f" %scaling)
-    scaling = Settings().get('window_scaling', default=1.0)
-    if scaling != 1.0: 
-        ctk.set_window_scaling(scaling)  # scaling of window
-        NoteMsg ("Window size is scaled to %.2f" %scaling)
+    apply_scaling_from_settings ()
 
     # set matpltlib defauls 
         
@@ -2497,5 +2489,8 @@ if __name__ == "__main__":
             ErrorMsg ("Parameter file '%s' doesn't exist" %parmFile )
             Settings().set('lastOpenend', None) 
             parmFile = None
+
+
+    InfoMsg("Starting %s ..." % App.name)
 
     App(parmFile)

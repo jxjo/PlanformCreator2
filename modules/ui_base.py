@@ -12,7 +12,7 @@ from customtkinter import ScalingTracker
 from customtkinter.windows.widgets.scaling import CTkScalingBaseClass
 
 from widgets            import *
-from common_utils       import fromDict, toDict
+from common_utils       import fromDict, toDict, NoteMsg
 
 # Diagram abstract 
 import matplotlib.pyplot as plt
@@ -96,6 +96,21 @@ def dummy_window_resize (tkwindow : ctk.CTkToplevel):
         geometry = f"{round(width)}x{round(height)}+{x}+{y}"
         tkwindow.geometry(geometry)
 
+
+
+def apply_scaling_from_settings ():
+    """ reads settings and applies ctk windows scaling """
+
+    ctk.set_appearance_mode    (Settings().get('appearance_mode', default='System'))   # Modes:  "System" (standard), "Dark", "Light"
+    ctk.set_default_color_theme(Settings().get('color_theme', default='blue'))         # Themes: "blue" (standard), "green", "dark-blue"
+    scaling = Settings().get('widget_scaling', default=1.0)
+    if scaling != 1.0: 
+        ctk.set_widget_scaling(scaling)  # widget dimensions and text size
+        NoteMsg ("Font size is scaled to %.2f" %scaling)
+    scaling = Settings().get('window_scaling', default=1.0)
+    if scaling != 1.0: 
+        ctk.set_window_scaling(scaling)  # scaling of window
+        NoteMsg ("Window size is scaled to %.2f" %scaling)
 
 
 #-------------------------------------------------------------------------------
