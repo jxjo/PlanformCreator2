@@ -33,13 +33,9 @@ from math_util import findRoot, interpolate
 sys.path.append(Path(__file__).parent)
 from common_utils       import *
 from spline             import Bezier
-from airfoil           import Airfoil, GEO_BASIC, GEO_SPLINE
-from airfoil_examples  import Root_Example, Tip_Example
-
-
-# disables all print output to console
-print_disabled = False
-
+from airfoil            import Airfoil, GEO_BASIC, GEO_SPLINE
+from airfoil_examples   import Root_Example, Tip_Example
+from dxf_utils          import import_fromDXF
 
 
 class Wing:
@@ -2151,8 +2147,6 @@ class Planform_DXF(Planform):
 
     def load_dxf (self, dxf_file):
         """ parse and load a dxf planform from file"""
-
-        from dxf_utils import import_fromDXF
 
         infoText = []
         self.le_norm_dxf, self.te_norm_dxf, self.hingeLine_norm_dxf, self.hingeAngle_dxf = \

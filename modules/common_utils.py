@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import json
 import platform
+import logging
 
 if platform.system() == 'Windows': 
     from colorama import just_fix_windows_console
@@ -17,37 +18,61 @@ if platform.system() == 'Windows':
 
 
 #------------------------------------------------------------------------------
-# Colored messages
+# logging 
 #------------------------------------------------------------------------------
 
-print_disabled = False
-trace_disabled = True
+def init_logging (level= logging.WARNING):
+    """ initialize logging with level"""
+
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+
+    ch.setFormatter(CustomFormatter())
+
+    # logger.addHandler(ch)
+    logging.basicConfig(format='%(levelname)-8s- %(message)s', 
+                        handlers=[ch], 
+                        level=level)  # DEBUG or WARNING
+    # suppress debug messages from these modules 
+    logging.getLogger('matplotlib.font_manager').disabled = True
+    logging.getLogger('PIL.PngImagePlugin').disabled = True
+
+    logging.getLogger('dxf_utils').disabled = True
 
 
-def my_print(message):
-    if print_disabled:
-        return
-    else:
-       print(message)
+class CustomFormatter(logging.Formatter):
+    """ colored formatting of logging stream"""
+
+    # format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+
+    FORMATS = {
+        logging.DEBUG:    colored(" - %(levelname)s - %(message)s", 'yellow', attrs=["dark"]) + colored(" (%(filename)s:%(lineno)d)", 'white', attrs=["dark"]),                          # grey + format + reset,
+        logging.INFO:     colored(" - %(message)s", 'white', attrs=["dark"]),
+        logging.WARNING:  colored("WARNING - ", 'yellow') + "%(message)s",
+        logging.ERROR:    colored("ERROR - ", 'red') + "%(message)s",
+        logging.CRITICAL: colored("ERROR - ", 'red', attrs=["bold"]) + "%(message)s"
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt)
+        return formatter.format(record)
+    
+
+#---- convinience colored logging messages  -------------------------------------------
 
 def InfoMsg(message):
-    my_print(colored(' - ' + message, 'white', attrs=["dark"]))
+    logging.info (message)
 
 def ErrorMsg(message):
-    my_print(colored('Error: ', 'red') + message)
+    logging.error (message)
 
 def WarningMsg(message):
-    my_print(colored('Warning: ', 'yellow') + message)
+    logging.warning (message)
 
 def NoteMsg(message):
-    my_print(colored('Note: ', 'cyan') + message)
+    print (colored('NOTE - ', 'cyan') + message)
 
-def TraceMsg(message):
-    if (not trace_disabled):
-        my_print(colored('Trace ' + message, 'white', attrs=["dark"]))
-
-def DoneMsg():
-    my_print("Done.\n")
 
 
 #------------------------------------------------------------------------------

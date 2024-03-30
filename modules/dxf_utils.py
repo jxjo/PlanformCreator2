@@ -18,6 +18,11 @@ from common_utils import *
 # setup matching range to 1% of length of rootchord
 matching_range = 0.1    # the original value caught the wrong line 200.0 / 100.0
 
+# deactivate ezdxf loggings 
+logging.getLogger('ezdxf').disabled = True
+
+
+
 #-------------------------------------------------------------------------------
 # all the specials for DXF import  
 #-------------------------------------------------------------------------------
@@ -55,7 +60,7 @@ def get_rootline(lines):
     rootline = None
 
     num = len(lines)
-    TraceMsg("trying to find rootline, number of lines: %d" % num)
+    # logging.debug ("trying to find rootline, number of lines: %d" % num)
 
     # check all lines
     for idx in range(num):
@@ -65,10 +70,10 @@ def get_rootline(lines):
         p1, p2 = (line[0]), (line[-1])
         length = abs(distance_between(p1, p2))
         angle_abs = abs(line_angle(p1, p2))
-        TraceMsg("checking line %d, length: %f, angle: %f" % (idx, length, angle_abs))
+        # logging.debug ("checking line %d, length: %f, angle: %f" % (idx, length, angle_abs))
         
         if ((angle_abs>89.9) and (angle_abs<90.1)):
-            TraceMsg("appending line %d to candidate list" % idx)
+            # logging.debug ("appending line %d to candidate list" % idx)
             # line runs nearly straight up or straight down, so is a candidate.
             # calculate length
             length = abs(distance_between(p1, p2))
@@ -90,13 +95,13 @@ def get_rootline(lines):
         lines.pop(rootlineIdx)
         lengths.pop(idx)
 
-        TraceMsg("found rootline, length is %f, idx is %d" % (maxLength, rootlineIdx))
+        # logging.debug ("found rootline, length is %f, idx is %d" % (maxLength, rootlineIdx))
     
         # check if rootline has to be reverted
         (x1, y1), (x2, y2) = rootline
         if (y2 < y1):
             # revert line
-            TraceMsg("reverting rootline")
+            # logging.debug ("reverting rootline")
             rootline = rootline[::-1]
 
     return rootline, lines
@@ -106,7 +111,7 @@ def get_hingeline(rootline, lines):
     hingeline = None
 
     num = len(lines)
-    TraceMsg("trying to find hingeline, number of lines: %d" % num)
+    # logging.debug ("trying to find hingeline, number of lines: %d" % num)
 
     # get x-coordinates of rootline
     (root_x1, root_y1), (root_x2, root_y2) = rootline
@@ -137,7 +142,7 @@ def get_hingeline(rootline, lines):
         
         # hingeline must have same x-coordinate, but must not have same y-coordinate as root
         if ((x_match == True) and (y_match == False)):
-            TraceMsg("Found hingeline, idx: %d" % idx)
+            # logging.debug ("Found hingeline, idx: %d" % idx)
             # found hingeline
             hingeline = lines[idx]
         
@@ -147,11 +152,11 @@ def get_hingeline(rootline, lines):
             # check if hingeline has to be reverted
             if (line_x2 <line_x1):
                 # revert line
-                TraceMsg("reverting hingeline")
+                # logging.debug ("reverting hingeline")
                 hingeline = hingeline[::-1]
             return hingeline, lines
     
-    TraceMsg("no hingeline was found")
+    # logging.debug ("no hingeline was found")
     return hingeline, lines
 
 def __points_match(p1, p2):
@@ -167,7 +172,7 @@ def __points_match(p1, p2):
 
 def __get_matching_line(point, lines):
     x,y = point
-    TraceMsg("searching for line with start- or endpoint %f, %f" % (x, y))
+    # logging.debug ("searching for line with start- or endpoint %f, %f" % (x, y))
     
     # check number of lines
     num = len(lines)
@@ -183,14 +188,14 @@ def __get_matching_line(point, lines):
         x1, y1 = p1
         x2, y2 = p2
 
-        TraceMsg("checking line %d. Startpoint: %f, %f, Endpoint %f, %f" % (idx, x1, y1, x2, y2))
+        # logging.debug ("checking line %d. Startpoint: %f, %f, Endpoint %f, %f" % (idx, x1, y1, x2, y2))
         if __points_match(point, p1):
             # return idx and line as is
-            TraceMsg("found matching startpoint")
+            # logging.debug ("found matching startpoint")
             return idx, line
         elif __points_match(point, p2):
             # line has to be reverted
-            TraceMsg("found matching endpoint, line has to be reverted")
+            # logging.debug ("found matching endpoint, line has to be reverted")
             line = line[::-1]
             return idx, line
         
@@ -297,7 +302,7 @@ def __find_duplicates(line_idx, lines):
     duplicates = []
     for idx in range(line_idx+1, len(lines)):
         if __line_isDuplicate(lines[line_idx], lines[idx]):
-            TraceMsg("found duplicate line, idx %d" % idx)
+            # logging.debug ("found duplicate line, idx %d" % idx)
             duplicates.append(idx)
 
     return duplicates
@@ -312,7 +317,7 @@ def remove_duplicate_lines(lines):
     # remove all duplicates
     duplicates = duplicates[::-1]
     for idx in duplicates:
-        TraceMsg("removed duplicate line, idx %d" % idx)
+        # logging.debug ("removed duplicate line, idx %d" % idx)
         lines.pop(idx)
     
     return lines
@@ -324,9 +329,9 @@ def __convert_toPlanform(msp):
     # empty list of lines
     myLines = []
 
-    '''TraceMsg("Analysing entities in dxf file")
+    '''logging.debug ("Analysing entities in dxf file")
     for e in msp:
-        TraceMsg("found entity %s" % e.dxftype())'''
+        logging.debug ("found entity %s" % e.dxftype())'''
     
     # get all inserts and explode
     inserts = msp.query("INSERT")
@@ -352,8 +357,8 @@ def __convert_toPlanform(msp):
     for arc in arcs:
         arc.to_spline()
 
-    for e in msp:
-        TraceMsg("found entity %s" % e.dxftype())
+    # for e in msp:
+    #     logging.debug ("found entity %s" % e.dxftype())
         
     # get all lines
     lines = msp.query("LINE")
@@ -361,7 +366,7 @@ def __convert_toPlanform(msp):
     # evaluate all lines and append to myLines
     idx = 0
     for line in lines:
-        TraceMsg("getting line %d:" % idx)
+        # logging.debug ("getting line %d:" % idx)
         x1, y1, z = line.dxf.start
         x2, y2, z = line.dxf.end
         myLines.append(((x1, y1), (x2, y2)))   
@@ -377,7 +382,7 @@ def __convert_toPlanform(msp):
     # evaluate all splines and convert into polylines
     idx = 0
     for spline in splines:
-        TraceMsg("getting spline %d and converting to 2d polyline with %d segments" % (idx, num_segments))
+        # logging.debug ("getting spline %d and converting to 2d polyline with %d segments" % (idx, num_segments))
         bspline = spline.construction_tool()
         xy_pts = [p.xy for p in bspline.approximate(segments=num_segments)]
         msp_new.add_lwpolyline(xy_pts, format='xy')
@@ -390,7 +395,7 @@ def __convert_toPlanform(msp):
     # evaluate all lw polylines and append to myLines
     idx = 0
     for line in lw_polylines:
-        TraceMsg("getting lw polyline %d" % idx)
+        # logging.debug ("getting lw polyline %d" % idx)
         with line.points("xy") as points:
             # append points of polyline
             myLines.append(points)    
@@ -422,7 +427,7 @@ def _normalize_lines (lines, y_offset, scaleFactor_y):
 
 def __create_planformShape(lines):
     
-    TraceMsg("creating planformshape")
+    # logging.debug ("creating planformshape")
 
     # remove duplicates, if any
     remaining_lines = remove_duplicate_lines(lines)  
@@ -467,7 +472,7 @@ def __create_planformShape(lines):
         p1 = hingeline[0]
         p2 = hingeline[-1]
         hingelineAngle = line_angle(p1, p2)
-        TraceMsg(" hingeline angle: %f°" %(hingelineAngle))
+        # logging.debug (" hingeline angle: %f°" %(hingelineAngle))
     else: 
         hingelineAngle = None
     
