@@ -1151,6 +1151,7 @@ class Airfoil_Hicks_Henne(Airfoil):
 
         name = ''                                # name of airfoil  
         seed_name = ''                           # name of seed airfoil 
+        x,y = [], []                             # x,y of sedd
         top_hhs = []                             # array of hh functions 
         bot_hhs = []
         curveType = None

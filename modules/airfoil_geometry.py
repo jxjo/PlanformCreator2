@@ -53,6 +53,7 @@
 
 import numpy as np
 import logging
+import time
 
 from math_util import * 
 from copy import copy, deepcopy
@@ -107,6 +108,7 @@ class Match_Side_Bezier:
 
         self._target_le_curv = target_le_curv       # also take curvature at le into account
         self._max_te_curv    = max_te_curv          # also take curvature at te into account
+        self._scale = None                          # scale for objective function
 
 
     @property
@@ -142,7 +144,7 @@ class Match_Side_Bezier:
     @property
     def max_iter (self) -> int:
         """ max number of interations - depending on number of control points  """
-        return self.nvar * 200 
+        return self.nvar * 250 
 
     @property
     def max_reached (self) -> bool:
@@ -161,6 +163,15 @@ class Match_Side_Bezier:
         devi = self._deviation_to_target()
         return np.linalg.norm (devi)
 
+    @property
+    def le_curv_diff (self):
+        """ le curvature difference to target"""
+        if self._target_le_curv:
+            target  = abs(self._target_le_curv)
+            current = abs(self.bezier.curvature(0.0))
+            return abs(target - current)  
+        else: 
+            return 0                  
 
     # --------------------
 
@@ -189,14 +200,13 @@ class Match_Side_Bezier:
 
         f = lambda variables : self._objectiveFn (variables) 
 
-        # -- calc initial step size - the more variables, the bigger the steps to explore solution space
+        self._scale = 1.0
+        self._scale = 1 / self._objectiveFn (variables_start)
 
-        if self.ncp >= 7:
-            step = 0.08
-        elif self.ncp == 6:
-            step = 0.04
-        else:
-            step = 0.01 
+        # -- initial step size 
+
+        step = 0.1                      # big enough to explore solution space 
+                                        #  ... but not too much ... 
 
         # ----- nelder mead find minimum --------
 
@@ -220,25 +230,28 @@ class Match_Side_Bezier:
     # --------------------
 
 
-    def _define_targets(self, target_side: 'Side_Airfoil'):
+
+    def _define_targets (self, target_side: 'Side_Airfoil'):
         """ 
         returns target points where deviation is tested during optimization 
-        ! the lower side is inverted to ensure equal optimization results to upper !
         """
-
-        # we do not take every coordinate point - nelder mead would take too long to evaluate x,y
-        i = 2
-        step = int (len(target_side.x)/21)
+        # based on delta x
+        # we do not take every coordinate point
         targ_x = []
         targ_y = []
-        while i < (len(target_side.x) -1):
-
+        xstart = 0.01 
+        xwide  = 0.3
+        dx1  = 0.03
+        dx2  = 0.04
+        x = xstart
+        while x < 1.0: 
+            i = bisection (target_side.x, x)
             targ_x.append(target_side.x[i])
             targ_y.append(target_side.y[i])
-            if i <= 8:                              # higher density close to LE
-                i +=3
-            else:                                   # normal denisty after le area
-                i += step
+            if x < xwide:                             # focus on le area 
+                x += dx1
+            else: 
+                x += dx2
         return np.array(targ_x), np.array(targ_y)
 
 
@@ -266,11 +279,11 @@ class Match_Side_Bezier:
         for icp in range (1,ncp-1):
             xi = cp_x[icp]
             if icp == 1:                                # special case y-start value of point 1
-                x = 0.1                                 #       take y-coord near LE
+                x = cp_x[icp+1] / 2                     #   take y-coord near LE depending
             else: 
                 x = xi  
-            i = bisection(targets_x, x)           # get nearest target y value   
-            cp_y[icp]  = targets_y[i] * 1.2       # add 20% to y for control point 
+            i = bisection(targets_x, x)                 # get nearest target y value   
+            cp_y[icp]  = targets_y[i] * 1.2             # add 20% to y for control point 
 
         self.bezier.set_points (cp_x, cp_y)             # a new Bezier curve 
 
@@ -296,18 +309,20 @@ class Match_Side_Bezier:
                 pass                                    # skip trailing edge
             elif icp == 1: 
                 if self._isLower:
-                    vars[ivar] = -cp_y[icp]             # - >pos. solution space
+                    y = -cp_y[icp]             # - >pos. solution space
                 else:
-                    vars[ivar] = cp_y[icp]              
+                    y = cp_y[icp] 
+                vars[ivar] = y                
                 ivar += 1                  
             else:                                       
                 vars[ivar] = cp_x[icp]                  # x value of control point
                 bounds[ivar] = (0.01, 0.95)             # right bound not too close to TE
                 ivar += 1                               #    to avoid curvature peaks 
                 if self._isLower:
-                    vars[ivar] = -cp_y[icp]             # - >pos. solution space
+                    y = -cp_y[icp]             # - >pos. solution space
                 else:
-                    vars[ivar] = cp_y[icp]              
+                    y = cp_y[icp]   
+                vars[ivar] = y           
                 ivar += 1                  
         return vars, bounds 
 
@@ -325,17 +340,19 @@ class Match_Side_Bezier:
                 pass                                    # skip trailing edge
             elif icp == 1:    
                 if self._isLower:
-                    cp_y[icp] = - vars[ivar]            # solution space was y inverted 
+                    y = - vars[ivar]            # solution space was y inverted 
                 else:
-                    cp_y[icp] = vars[ivar]                
+                    y = vars[ivar] 
+                cp_y[icp] = y       
                 ivar += 1                  
             else:                                       
                 cp_x[icp] = vars[ivar]
                 ivar += 1                  
                 if self._isLower:
-                    cp_y[icp] = - vars[ivar]            # solution space was y inverted 
+                    y = - vars[ivar]            # solution space was y inverted 
                 else:
-                    cp_y[icp] = vars[ivar]                
+                    y = vars[ivar] 
+                cp_y[icp] = y               
                 ivar += 1                  
         self.bezier.set_points (cp_x, cp_y)
 
@@ -353,34 +370,33 @@ class Match_Side_Bezier:
         return np.abs((y_new - self.targets_y))
 
 
+
     def _objectiveFn (self, variables : list ):  
         """ returns norm2 value of y deviations of self to target y at x """
+        
+        # multithreading - give some time to process for progess popup
+        if self._nevals%100 == 0:
+            time.sleep(0.03)
 
-        if self._nevals == 500:
-            pass
+        # rebuild Bezier 
 
-        # evaluate difference with new bezier out of variables
         self._map_variables_to_bezier (variables)
-        devi = self._deviation_to_target ()            
 
-        # calculate norm2 of the *relative* deviations 
+        # norm2 of deviations to target
 
-        base = np.abs(self.targets_y)               # target is base value for deviation 
-        base = (base / np.max (base) ) * 0.02       # norm the base 
-
-        # move base so targets with a small base (at TE) don't become overweighted 
-        shift = np.max (base) * 0.2 # * 0.7 # 0.6 # 0.4    
-        obj = np.linalg.norm (devi / (base+shift))
-
+        norm2 = self.norm2                              # 0.001 is ok, 0.0002 is good 
+        obj_norm2 = norm2 * 1000                        # 1.0   is ok, 0.2 is good 
+        
         # if a target le curvature defined, add this to objective
-        if self._target_le_curv:
-            target  = abs(self._target_le_curv)
-            current = abs(self.bezier.curvature(0.0))
-            devi    = abs(target - current) / target
-            if devi > 0.001:                                # = 0.1% 
-                obj += devi / 4 #5 # 10                     # empirical - reduce influence  
 
-        # if a max te curvature defined, add this to objective
+        obj_le = 0.0 
+        diff = self.le_curv_diff
+        if diff > 1:                                    # 1  is ok, 0.1 is good 
+            obj_le = (diff-1) ** (1/2) / 4              # take square root of diff (could be quite high)    
+
+        # if max te curvature defined, add this to objective
+
+        obj_te = 0 
         if self._max_te_curv:
 
             # ! curvature on bezier side_upper is negative !
@@ -394,30 +410,70 @@ class Match_Side_Bezier:
                 if cur_curv_te >= 0.0: 
                     delta = cur_curv_te - self._max_te_curv
                 else:
-                    delta = - cur_curv_te
+                    delta = - cur_curv_te * 3.0                 # te curvature shouldn't result in reversal
             else: 
                 if cur_curv_te < 0.0:  
                     delta = - (cur_curv_te - self._max_te_curv)
                 else:
-                    delta = cur_curv_te
-            if delta > 0.5: 
-                # only apply a soft penalty for real outliers
-                obj += delta**2/500      #2000                # add empirical  delta     
-                # print("delta_te ", delta, self._max_te_curv, cur_curv_te)
+                    delta = cur_curv_te * 3.0                   # te curvature shouldn't result in reversal
+            if delta > 0.3:                                     # delta < 0.3 is ok,  0
+                obj_te = delta - 0.3   
+
+        # derivative of curvature at te 
+    	    # try to avoid that curvature slips away at TE when control point 
+            # is getting closer to TE 
+
+        obj_te_deriv = 0 
+        u      = np.linspace (0.96, 1.0, 8)
+        x,y    = self.bezier.eval(u)
+        curv   = self.bezier.curvature(u)
+        deriv1 = derivative1 (x, curv)
+
+        max_curv_deriv_te = np.max (np.abs (deriv1))                # take absolute max of derivative
+        lim_curv_deriv_te = 10 * (abs(self._max_te_curv) if self._max_te_curv else 0.1)
+        lim_curv_deriv_te = max (lim_curv_deriv_te, 0.5)            # derivative limit depending on curv at te
+
+        if max_curv_deriv_te > lim_curv_deriv_te: 
+            obj_te_deriv = (max_curv_deriv_te - lim_curv_deriv_te)  # 0 is good, > 0 ..50 is bad 
 
         # penalty for bezier control points crossing each other 
-        
-        for ip in range (self.bezier.npoints):
-            if ip > 1 and ip < (self.bezier.npoints - 2): 
-                dist_x =  self.bezier.points_x[ip+1] - self.bezier.points_x[ip] 
-                if dist_x < 0.03: 
-                    # print (ip, dist_x)
-                    obj *= 1.0 + abs (dist_x - 0.03) * 0.4
+        # obj_cross = 0 
+        # for ip in range (self.bezier.npoints):
+        #     if ip > 1 and ip < (self.bezier.npoints - 2): 
+        #         dist_x =  self.bezier.points_x[ip+1] - self.bezier.points_x[ip] 
+        #         if dist_x < 0.05: 
+        #             obj_cross = abs (dist_x - 0.05) * 10
+
+        # penalty for reversals in derivative of curvature - avod bumps 
+
+        obj_revers = 0 
+        u      = np.linspace (0.3, 1.0, 16)                     # only back part
+        x,_    = self.bezier.eval(u)
+        curv   = self.bezier.curvature(u)
+        deriv1 = derivative1 (x, curv)
+
+        yold    = deriv1[0]
+        for i in range(len(x)):
+            if abs(deriv1[i]) >= 0.02:                          #  threshold for reversal detetction
+                if (deriv1[i] * yold < 0.0):                    # yes - changed + - 
+                    obj_revers += 0.5                           # 0.5 reversal is bad
+                yold = deriv1[i]
+
+        # objective function is sum of single objectives 
+
+        obj = obj_norm2 + obj_le + obj_te + obj_revers + obj_te_deriv
+
+        if self._nevals%100 == 0:
+            logging.debug (f"{self._nevals:4} " 
+                           f" obj:{obj:5.2f}   norm2:{obj_norm2:5.2f}"
+                           f"  le:{obj_le:5.2f}  te:{obj_te:4.1f}"
+                           f"  rev:{obj_revers:4.1f}  te_der:{obj_te_deriv:4.1f}")
 
         # counter of objective evaluations (for entertainment)
         self._nevals += 1
 
         return obj 
+
 
 
 
@@ -1181,7 +1237,7 @@ class Side_Airfoil_Bezier (Side_Airfoil):
         # initial y values 
         for icp, xi in enumerate (cp_x): 
             if icp == 1:                                # special case y-start value of point 1
-                x = 0.2                                 # take a y-coord near LE
+                x = cp_x[icp+1] / 2                     #   take y-coord near LE depending
                 cp_y[icp]  = round(targetSide.yFn (x), 6)                 
             elif icp == ncp - 1:                        # te - take last y 
                 cp_y[icp]  = round(targetSide.y[-1],7)                 

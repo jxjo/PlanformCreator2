@@ -535,8 +535,9 @@ class Diagram_Airfoil (Diagram_Abstract):
         self._show_logScale = True                  # switch to have log scale for curvature 
         self._show_derivative = False               # switch to show derivative of curvature 
 
-        self._log_widget : Switch_Widget = None     # log switch widget
+        self._log_widget   : Switch_Widget = None   # log switch widget
         self._deriv_widget : Switch_Widget = None   # derivative switch widget
+        self._shape_widget : Switch_Widget = None   # shape function switch widget
 
         self.airfoilArtist   = None
         self.thicknessArtist = None
@@ -670,7 +671,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         Switch_Widget (self.view_frame,r,c, lab='Camber',
                        get=lambda: self.show_camber, set=self.set_show_camber)
         r += 1 
-        Switch_Widget (self.view_frame,r,c, lab='Shape function', 
+        self._shape_widget = Switch_Widget (self.view_frame,r,c, lab='Shape function', 
                        get=lambda: self.show_shape_function, set=self.set_show_shape_function,
                        disable=self.show_shape_function_disabled)
         r += 1
@@ -796,6 +797,12 @@ class Diagram_Airfoil (Diagram_Abstract):
 
     def refresh(self): 
         # overloaded
+
+        # refresh switches
+        if not self._shape_widget is None:                  # subclass mustn't have widget
+            self._shape_widget.refresh()
+
+        # refresh artists
         self.airfoilArtist.refresh ()  
         self.thicknessArtist.refresh ()  
         if self.curvatureArtist:
@@ -903,6 +910,11 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
         self._log_widget = Switch_Widget (self.view_frame,r,c, lab='log scale y', 
                        get=lambda: self.show_logScale, set=self.set_show_logScale,
                        disable=lambda: not (self.show_upper or self.show_lower))
+        r += 1
+        self._deriv_widget = Switch_Widget (self.view_frame,r,c, lab='Derivative', 
+                       get=lambda: self.show_derivative, set=self.set_show_derivative,
+                       disable=lambda: not (self.show_upper or self.show_lower))
+
         return r, c
 
 
@@ -2337,7 +2349,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         #---------- run optimization with nelder mead ---------------------
 
-        messageFn = lambda: (f"Matching {sideName} side Bezier to \n\n{self.airfoilOrg.name} \n\n\n"
+        messageFn = lambda: (f"Matching Bezier to {sideName} side of \n\n{self.airfoilOrg.name} \n\n\n"
                            + f" {matcher.get_nevals():4d} evaluations") 
 
         Eval_With_ToolWindow (self, matcher.run, messageFn)
@@ -2356,17 +2368,22 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         max_reached = matcher.max_reached
         ntarget     = matcher.ntarget
         nevals      = matcher.get_nevals()
+        le_diff     = matcher.le_curv_diff
         title = f"Match Bezier {side.name} side"
 
         good_deviation = 0.001
-
-        if deviation < good_deviation:         
-            text = f"Optimization at {ncp_var} control points successful. \n\n"  \
-                   f"y-deviation at {ntarget} test points: {deviation:.5f} \n\n\n" 
+        good_le_diff   = 10 
+         
+        if deviation < good_deviation and le_diff < good_le_diff:         
+            text = f"Optimization at {ncp_var} control points successful. \n\n"  
             icon = "check"
         else:
-            text = f"Optimization at {ncp_var} control points not too good. \n\n" \
-                   f"y-deviation at {ntarget} test points: {deviation:.5f} \n\n\n" 
+            text = f"Optimization at {ncp_var} control points not too good.\n\n"  
+            if deviation > good_deviation:
+                text = text + f"y-deviation at {ntarget} test points: {deviation:.5f} \n"
+            if le_diff > good_le_diff:
+                text = text + f"Curvature difference at leading edge: {le_diff:.0f} \n"
+            text = text + "\n\n"
             icon = "info"
 
         if max_reached:

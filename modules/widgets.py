@@ -17,6 +17,7 @@ cl_entry_disable    = ("gray88","gray35")         # background of diabeld entry 
 cl_spin             = ("gray75","gray25")         # background of spin buttons
 cl_spin_text        = ("gray5" ,"gray95")         # text color of spin buttons
 cl_spin_text_disable= ("gray55","gray70")         # text color of spin buttons
+cl_red              = ("OrangeRed3", "OrangeRed3")  # background for red button 
 cl_button_primary   = ctk.ThemeManager.theme["CTkButton"]["fg_color"] # default Button darker  
 cl_button_secondary = ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"] # brighter 
 fs_header           = 18                          # font size header 
@@ -25,6 +26,7 @@ PRIMARY             = 1                           # buttonstyle for highlighted 
 SECONDARY           = 2                           # buttonstyle for normal action
 SUPTLE              = 3                           # buttonstyle for subtle appearance 
 ICON                = 4                           # buttonstyle for icon only button 
+RED                 = 5                           # buttonstyle for red - stop - style 
 
 
 STYLE_NORMAL        = 'Normal'
@@ -581,6 +583,8 @@ class Button_Widget(Base_Widget):
             self.fg_color = cl_button_primary
         elif style == SUPTLE:
             self.fg_color = cl_spin
+        elif style == RED:
+            self.fg_color = cl_red
         elif style == ICON:
             self.fg_color = "transparent"
             self.width = 25

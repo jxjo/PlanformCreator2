@@ -384,7 +384,7 @@ class Airfoil_Artist (Artist):
                 p = self.ax.plot (x, y, color=color, **ms_point)
                 self._add(p)
 
-                p = self.ax.annotate(f'{ih+1}', (x, y), fontsize='small',
+                p = self.ax.annotate(f'{ih+1}  w{hh.width:.2f}', (x, y), fontsize='small',
                     xytext=(3, 3), textcoords='offset points', color = color)
                 self._add(p)
 
@@ -535,11 +535,12 @@ class Curvature_Artist (Airfoil_Line_Artist):
                     self._add(p)
                     self._plot_reversals (side, color)
 
-                    # plot derivative1 of curvature ('spikes')
+                    # plot derivative1 of curvature ('spikes') only if just one airfoil or DESIGN
                     if self.show_derivative:
-                        p = self.ax.plot (x, -derivative1(x,y), ls, color = 'red', alpha=alpha, label=label, 
-                                        linewidth= 0.8, **self._marker_style)
-                        self._add(p)
+                        if nairfoils == 1 or (nairfoils > 1 and airfoil.usedAs == DESIGN):
+                            p = self.ax.plot (x, -derivative1(x,y), ls, color = 'red', alpha=alpha, label=label, 
+                                            linewidth= 0.8, **self._marker_style)
+                            self._add(p)
 
                     # print a table for the max values 
                     if self.showLegend == 'extended':
