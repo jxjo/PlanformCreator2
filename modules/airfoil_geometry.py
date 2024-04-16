@@ -270,9 +270,9 @@ class Match_Side_Bezier:
             if x > x3:
                 x += dx3
             elif x > x2:                             
-                x += dx1
-            else: 
                 x += dx2
+            else: 
+                x += dx1
         return np.array(targ_x), np.array(targ_y)
 
 
