@@ -7,6 +7,8 @@
 
 import numpy as np
 import math
+from bisect import bisect_left
+
 
 
 #------------ time to run -----------------------------------
@@ -126,6 +128,28 @@ def derivative1 (x, y):
         return der1
                      
 
+
+
+#------------ find closest   -----------------------------------
+
+
+def find_closest_index (myList, myNumber) -> int:
+    """
+    Assumes myList is sorted. Returns index of closest value to myNumber.
+
+    If two numbers are equally close, return index of smallest number.
+    """
+    pos = bisect_left(myList, myNumber)
+    if pos == 0:
+        return 0
+    if pos == len(myList):
+        return -1
+    before = myList[pos - 1]
+    after = myList[pos]
+    if after - myNumber < myNumber - before:
+        return pos
+    else:
+        return pos - 1
 
 
 #------------ Bisection - find index  -----------------------------------

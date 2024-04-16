@@ -863,7 +863,8 @@ class Diagram_Airfoil_Bezier (Diagram_Airfoil):
 
         super().setup_artists ()
 
-        self.airfoilArtist.set_show_title (False)       # switch off "Bezier based" of original 
+        self.airfoilArtist.set_show_title (False)           # switch off "Bezier based" of original 
+        self.airfoilArtist.set_show_shape_function (False)  # will be shown by bezier artist 
 
 
     def re_create_axes (self):
@@ -2076,8 +2077,10 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
     def __init__(self, master, airfoilFn):
 
-        self._matcher_upper = None      # controller object to match side         
-        self._matcher_lower = None      # controller object to match side         
+        self._matcher_upper = None          # controller object to match side         
+        self._matcher_lower = None          # controller object to match side     
+
+        self._target_curv_at_le = None      # target curvature at le to achieve  
 
         super().__init__ (master, airfoilFn)
 
@@ -2089,8 +2092,8 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             geo     = self.airfoil.geo
             geoOrg  = self.airfoilOrg.geo
             self._matcher_upper = Match_Side_Bezier (geo.upper, geoOrg.upper, 
-                                                     target_le_curv=geoOrg.curvature.best_around_le,
-                                                     max_te_curv   =geoOrg.curvature.at_upper_te)
+                                            target_curv_at_le=self.target_curv_at_le,
+                                            max_te_curv      =geoOrg.curvature.at_upper_te)
         return self._matcher_upper
 
     @property
@@ -2100,8 +2103,8 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             geo     = self.airfoil.geo
             geoOrg  = self.airfoilOrg.geo
             self._matcher_lower = Match_Side_Bezier (geo.lower, geoOrg.lower, 
-                                                     target_le_curv=geoOrg.curvature.best_around_le,
-                                                     max_te_curv   =geoOrg.curvature.at_lower_te)
+                                            target_curv_at_le=self.target_curv_at_le,
+                                            max_te_curv      =geoOrg.curvature.at_lower_te)
         return self._matcher_lower
 
 
@@ -2139,10 +2142,15 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                              text_style=STYLE_COMMENT)
         Label_Widget  (self.header_frame,r, c+3, padx= 20,  sticky = 'nw', columnspan=1,
                         lab= "'Match Bezier' will move the control points for a best fit\n" + 
-                             "to the original airfoil. Currently 4 - 8 control points currently supported.",
+                             "to the original airfoil. 4 - 8 control points are currently supported.",
                              text_style=STYLE_COMMENT)
 
-        self.header_frame.grid_columnconfigure (4, weight=1)
+        Label_Widget  (self.header_frame,r, c+4, padx= 20,  sticky = 'nw', columnspan=1,
+                        lab= "Particular attention is paid to achieving same curvature\n" + 
+                             "on upper and lower side at leading edge.",
+                             text_style=STYLE_COMMENT)
+
+        self.header_frame.grid_columnconfigure (5, weight=1)
 
         # ----------- Input - with 2 sub frames  ----------------
 
@@ -2240,7 +2248,6 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         c +=1
         Label_Widget  (frame,r,c, padx=10, lab= "LE  curvature  TE", width=90, columnspan=3 , text_style=STYLE_COMMENT)
 
-        frame.grid_columnconfigure (c+5, weight=1)
         r +=1
 
         for sideName in [UPPER, LOWER]:
@@ -2253,8 +2260,15 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             c +=2
             self.add (Field_Widget  (frame,r,c, val=curv.y[-1],width=50, dec=1))
             c +=2
-            self.add (Label_Widget (frame,r,c, padx=(10,0), lab=self.curv_warning, objId=sideName,
-                                    width=100, columnspan=1, text_style=STYLE_WARNING))
+            self.add (Label_Widget (frame,r,c, padx=(0,0), lab=self.curv_warning, objId=sideName,
+                                    columnspan=1, width=20, text_style=STYLE_WARNING))
+
+        self.add (Field_Widget  (frame,r-1,c+1, width=90, lab="LE target will be", lab_width=55,
+                        rowspan = 2,  
+                        get=lambda: self.target_curv_at_le, set=self.set_target_curv_at_le, 
+                        dec=0, spin=True, step=5, lim=(10,1000)))
+        
+        frame.grid_columnconfigure (c+2, weight=1)
 
         c = 0 
         r += 1
@@ -2276,6 +2290,22 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         else:               curv = self.airfoil.geo.curvature.lower
         return curv.y[-1]
 
+
+    @property
+    def target_curv_at_le (self):
+        """ target curvature at le to achieve"""
+        if self._target_curv_at_le is None: 
+            return self.airfoilOrg.geo.curvature.best_around_le
+        else: 
+            return self._target_curv_at_le
+
+    def set_target_curv_at_le (self, aVal):
+        """ manual set / overwrite auto target curvature"""
+        self._target_curv_at_le = aVal
+        self.matcher_upper.set_target_curv_at_le (self.target_curv_at_le) 
+        self.matcher_lower.set_target_curv_at_le (self.target_curv_at_le) 
+
+
     def curv_warning (self, objId):
         """ warning text if curv around le of target differs on upper and lower """
         warn = []
@@ -2289,13 +2319,13 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             bump = self.airfoilOrg.geo.curvature.bump_at_lower_le
 
         if max != at_le: 
-            warn = [f"max around LE is {max:.0f}"]
+            warn = f"max around LE is {max:.0f}"
         elif bump:
-            warn = [f"bump close to LE"]
+            warn = f"bump close to LE"
 
-        if best != at_le: 
-            warn.append(f"target will be {best:.0f}")
-            warn = ", ".join (warn) 
+        # if best != at_le: 
+        #     warn.append(f"target will be {best:.0f}")
+        #     warn = ", ".join (warn) 
         return warn
 
 
@@ -2319,13 +2349,11 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
         sideName = objId
         if sideName == UPPER: 
-            side = self.airfoil.geo.upper
-            side_target = self.airfoilOrg.geo.upper
-        else:
-            side = self.airfoil.geo.lower
-            side_target = self.airfoilOrg.geo.lower
-
-        side.set_controlPoints_closeTo (side_target, nPoints)
+            matcher = self.matcher_upper
+        else: 
+            matcher = self.matcher_lower
+        matcher.bezier.set_npoints (nPoints)
+        matcher.set_initial_bezier()
 
         # update diagram                                        
         self.airfoil.reset()                                    # make splined curves like thickness invalid 
@@ -2345,7 +2373,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             matcher = self.matcher_lower
             side    =self.airfoil.geo.lower
 
-        matcher.reset()                                         # reset statitic info 
+        matcher.reset()                                         # reset statistic info 
 
         #---------- run optimization with nelder mead ---------------------
 
@@ -2362,37 +2390,49 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
     def _match_result_info (self, side: Side_Airfoil_Bezier, matcher: Match_Side_Bezier):
         # info message for user 
 
+        ncp         = matcher.ncp
         ncp_var     = matcher.ncp - 2
         deviation   = matcher.norm2
         niter       = matcher.niter
         max_reached = matcher.max_reached
         ntarget     = matcher.ntarget
-        nevals      = matcher.get_nevals()
         le_diff     = matcher.le_curv_diff
         title = f"Match Bezier {side.name} side"
 
-        good_deviation = 0.001
-        good_le_diff   = 10 
+        good_deviation = deviation < 0.001
+        good_le_diff   = le_diff < 10 
          
-        if deviation < good_deviation and le_diff < good_le_diff:         
-            text = f"Optimization at {ncp_var} control points successful. \n\n"  
+        if good_deviation and good_le_diff:         
+            text = f"Optimization at {ncp_var} control points successful.\n"  
             icon = "check"
         else:
             text = f"Optimization at {ncp_var} control points not too good.\n\n"  
-            if deviation > good_deviation:
+            if not good_deviation:
                 text = text + f"y-deviation at {ntarget} test points: {deviation:.5f} \n"
-            if le_diff > good_le_diff:
+            if not good_le_diff:
                 text = text + f"Curvature difference at leading edge: {le_diff:.0f} \n"
-            text = text + "\n\n"
             icon = "info"
 
         if max_reached:
-            text = text + f"Max number of iterations exceeded: {niter}" 
-            icon = "info"
-        else: 
-            text = text + f"Evaluations: {nevals}   Iterations: {niter}"  
+            text = text + f"\nMax number of {niter} iterations exceeded.\n" 
 
-        msg = Messagebox (self, title=title, message=text, icon=icon, option_1="Ok")
+        # user hint 
+
+        hint = None
+        if ncp >= 7 and not good_le_diff:
+            hint = f"The algorithm could be confused... \nTry again with {ncp-1} control points."
+        elif ncp <= 5 and (not good_le_diff or not good_deviation): 
+            hint = f"Give it a try with {ncp+1} control points to improve results."
+        elif not good_le_diff: 
+            hint = f"Adjust LE target curvature to to improve results."
+
+        if hint: 
+            text = text + "\n\n" + hint
+            height = 230
+        else: 
+            height = 180
+
+        msg = Messagebox (self, height=height, title=title, message=text, icon=icon, option_1="Ok")
         msg.get()
 
 

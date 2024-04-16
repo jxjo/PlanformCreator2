@@ -1094,6 +1094,7 @@ class Bezier_Edit_Artist (Artist):
                 _marker_style = dict()
                 linewidth= 0.8
 
+            # prepare plot bezier for animated drawing (dashed line) 
             p = self.ax.plot (side.x, side.y, linestyle= 'None', linewidth=linewidth,   # 'None' not visible 
                               color=cl_editing, **_marker_style, animated=True ) 
             bezier_artist  = self._add(p) 
@@ -1181,13 +1182,10 @@ class Bezier_Edit_Artist (Artist):
         # set new bezier points  - will be checked for valid x,y 
         x, y = side.move_controlPoint_to(iPoint, x, y)
 
-        # draw the cotrol point which is moved
-        artist_onMove.xy = (x,y)
+        # draw the control point which is moved
         number_onMove.xy = (x,y)
-        # artist_onMove.set_xdata(x)
-        # artist_onMove.set_ydata(y)
-        # number_onMove.set_xdata(x)
-        # number_onMove.set_ydata(y)
+        artist_onMove.set_xdata(x)
+        artist_onMove.set_ydata(y)
 
         # draw helper line between control points 
         helper_artist.set_xdata(side.bezier.points_x)

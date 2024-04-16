@@ -615,7 +615,13 @@ class Bezier:
     def npoints (self) -> int:
         """ number of control points"""
         return len (self._px) 
-    
+    def set_npoints(self, np):
+        """ resets bezier with now np points"""
+        px = [0] * np 
+        py = [0] * np 
+        self.set_points(px, py)
+
+
     @property
     def points_x (self) -> list:  
         """ x coordinate of control points of self """

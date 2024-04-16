@@ -249,7 +249,7 @@ class Base_Widget():
 
         self.whileSetting = True                # avoid circular actions with refresh()
         if callable(self.setter):               # getter is a method ?
-            if self.val is None:                # typically a button method which has bo arg
+            if self.val is None:                # typically a button method which has no arg
                 if not self.objId is None:      # an object Id was set to identify object
                     self.setter(objId=self.objId) 
                 else:            
@@ -738,6 +738,7 @@ class Field_Widget(Base_Widget):
                  padx=None, pady=None, 
                  lab_width= None, 
                  columnspan=None, 
+                 rowspan=None, 
                  justify=None,                  # justify data within entry field - 'right' or 'left'
                  sticky=None,                   # alignment of widget within grid - 'w 'oder 'e'
                  **kwargs):
@@ -746,6 +747,7 @@ class Field_Widget(Base_Widget):
 
         column = self.column
         if columnspan is None: columnspan = 1
+        if rowspan is None:    rowspan = 1
 
         if justify is None: justify = 'right'
 
@@ -762,7 +764,7 @@ class Field_Widget(Base_Widget):
 
             label_ctk = ctk.CTkLabel (self.parent, width= width, text=self.label,  
                                       justify='left', anchor='w')
-            label_ctk.grid (row=self.row, column=column, padx=padx, pady=pady, sticky='w')
+            label_ctk.grid (row=self.row, column=column, rowspan=rowspan, padx=padx, pady=pady, sticky='w')
             column += 1
 
         if self.spinner:
@@ -792,17 +794,19 @@ class Field_Widget(Base_Widget):
             self.mainCTk.grid(row=0, column=1, padx=(1, 1), pady=1, sticky='we')
             self.addCTk.grid (row=0, column=2, padx=(1, 1), pady=1, sticky='w')
 
-            entry_frame.grid (row=self.row, column=column, columnspan= columnspan, padx=(1, 1), pady=pady, sticky=sticky)
+            entry_frame.grid (row=self.row, rowspan=rowspan, column=column, columnspan=columnspan, 
+                              padx=(1, 1), pady=pady, sticky=sticky)
         else:
-            self.mainCTk.grid(row=self.row, column=column, columnspan= columnspan, padx=(1, 1), pady=pady, sticky=sticky)
+            self.mainCTk.grid(row=self.row, rowspan=rowspan, column=column, columnspan=columnspan, 
+                              padx=(1, 1), pady=pady, sticky=sticky)
 
         column += 1
         if (self.unit):
             unit_ctk  = ctk.CTkLabel (self.parent, text=self.unit, anchor='w')
-            unit_ctk.grid (row=self.row, column=column, padx=(2,15), pady=pady, sticky=sticky)
+            unit_ctk.grid (row=self.row, rowspan=rowspan, column=column, padx=(2,15), pady=pady, sticky=sticky)
         else: 
             unit_ctk  = ctk.CTkFrame (self.parent, width=1, height=1, fg_color="transparent")
-            unit_ctk.grid (row=self.row, column=column, padx=(2,5),  pady=pady, sticky=sticky)
+            unit_ctk.grid (row=self.row, rowspan=rowspan, column=column, padx=(2,5),  pady=pady, sticky=sticky)
 
         self.mainCTk.bind('<Return>', self.CTk_callback)
         self.mainCTk.bind('<FocusOut>', self.CTk_callback)
@@ -814,7 +818,7 @@ class Field_Widget(Base_Widget):
     def _getFrom_CTkControl (self):
         return self.mainCTk.get()
 
-    def _set_CTkControl (self,  widgetCTk, newValStr: str):
+    def _set_CTkControl (self,  widgetCTk : ctk.CTkEntry, newValStr: str):
 
         # ctk special - if field is disabed, no update is made
         #  --> enable, set, disable 
