@@ -54,7 +54,7 @@ from artist             import set_font_size
 #------------------------------------------------
 
 AppName    = "Airfoil Editor"
-AppVersion = "1.2.2"
+AppVersion = "1.2.3"
 
 
 # tk change events for updating diagrams or vice versa entry fields  
@@ -2780,9 +2780,12 @@ class AirfoilEditor ():
 
 if __name__ == "__main__":
 
-    # init logger 
+    # init logging  
 
-    init_logging (level= logging.DEBUG)          # INFO, DEBUG or WARNING
+    if os.path.isdir(os.path.dirname(os.path.realpath(__file__)) +"\\test_airfoils"):  # dev environment 
+        init_logging (level= logging.DEBUG)             # INFO, DEBUG or WARNING
+    else:                       
+        init_logging (level= logging.WARNING)
 
     # ctk application settings and scalings prior to init 
 

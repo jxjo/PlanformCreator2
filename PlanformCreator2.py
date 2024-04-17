@@ -57,7 +57,7 @@ from artist             import set_font_size
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "1.2.2"
+AppVersion = "1.2.3"
 
 #------------------------------------------------
 
@@ -2459,9 +2459,12 @@ class App(ctk.CTk):
 if __name__ == "__main__":
 
 
-    # init logger 
+    # init logging  
 
-    init_logging (level= logging.DEBUG)          # INFO, DEBUG or WARNING
+    if os.path.isdir(os.path.dirname(os.path.realpath(__file__)) +"\\test_airfoils"):  # dev environment 
+        init_logging (level= logging.DEBUG)             # INFO, DEBUG or WARNING
+    else:                       
+        init_logging (level= logging.WARNING)
 
     # set ctk application settings prior to init 
 
