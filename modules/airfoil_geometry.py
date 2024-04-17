@@ -221,8 +221,8 @@ class Match_Side_Bezier:
 
         # -- initial step size 
 
-        step = 0.15                      # big enough to explore solution space 
-                                        #  ... but not too much ... 
+        step = 0.16                      # big enough to explore solution space 
+                                         #  ... but not too much ... 
 
         # ----- nelder mead find minimum --------
 
@@ -277,7 +277,10 @@ class Match_Side_Bezier:
 
 
     def set_initial_bezier (self):
-        """ sets inital coordinates of control points close to target side"""
+        """ 
+        Sets inital coordinates of control points so Bezier is already 
+        more or less close to target
+        """
 
         ncp = self.ncp
         targets_x = self._targets_x
@@ -286,7 +289,7 @@ class Match_Side_Bezier:
 
         cp_x, cp_y = [0.0] * ncp, [0.0] * ncp
 
-        # initial x values 
+        # initial x values of fixed points 
         cp_x[0]   = 0.0                                 # LE and TE fix pos 
         cp_y[0]   = 0.0                                 # LE and TE fix pos 
         cp_x[1]   = 0.0 
@@ -295,53 +298,53 @@ class Match_Side_Bezier:
 
         np_between =  ncp - 3                           
         if np_between == 1: 
-            dx = 0.4                                    # only 1 point between take 40% chord
+            dx = 0.35                                   # only 1 point between take 40% chord
         else:                                           # equal distribution between   
             dx = 1.0 / (np_between + 1)
 
-        # build x values 
+        # build x values and first estimate of y 
         x = 0.0 
         for ib in range(np_between): 
             icp = 2 + ib
             x += dx
-            cp_x[icp] = x
+            i = find_closest_index (targets_x, x)
+            cp_x[icp] = targets_x[i] 
+            cp_y[icp] = targets_y[i] 
 
-        # initial y values between le and te 
-        for icp in range (1,ncp-1):
-            xi = cp_x[icp]
-            if icp == 1:                                        # special case start tangent
-                if ncp == 3: 
-                    if self._isLower:
-                        cp_y[icp] = min (targets_y) * 1.8
-                        cp_y[icp] = min (cp_y[icp], -0.025)
-                    else: 
-                        cp_y[icp] = max (targets_y) * 1.8
-                else:
-                    x = cp_x[icp+1] * 0.6                       #   take y-coord near LE depending
-                    i = find_closest_index (targets_x, x)              
-                    cp_y[icp] = targets_y[i]    
-                if self._isLower:
-                    cp_y[icp] = min (cp_y[icp], -0.025)
-                else: 
-                    cp_y[icp] = max (cp_y[icp], 0.025)
+        # y of start tangent 
 
+        if ncp == 3: 
+            if self._isLower:
+                cp_y[1] = min (targets_y) * 1.8
+                cp_y[1] = min (cp_y[icp], -0.025)
             else: 
-                x = xi  
-                i = find_closest_index (targets_x, x)                
-                if ncp == 6: 
-                    y_fac = 1.2
-                elif ncp == 5:
-                    y_fac = 1.3
-                elif ncp == 4:
-                    y_fac = 1.6
-                else: 
-                    y_fac = 1.15 
+                cp_y[1] = max (targets_y) * 1.8
+        else:
+            xhelp = cp_x[2] * 0.6                       #   take y-coord near LE depending
+            i = find_closest_index (targets_x, xhelp)              
+            cp_y[1] = targets_y[i]    
+        if self._isLower:
+            cp_y[1] = min (cp_y[1], -0.025)
+        else: 
+            cp_y[1] = max (cp_y[1], 0.025)
 
-                if icp == 2:
-                    y_fac *= 1.2                                   # the second point even higher 
-                cp_y[icp]  = targets_y[i] * y_fac                  # control point a little higher than target
+        # adjust y values between le and te for best fit 
 
-        self.bezier.set_points (cp_x, cp_y)             # a new Bezier curve 
+        for icp in range (2,ncp-1):
+            if ncp == 6: 
+                y_fac = 1.2
+            elif ncp == 5:
+                y_fac = 1.3
+            elif ncp == 4:
+                y_fac = 1.6
+            else: 
+                y_fac = 1.15 
+
+            if icp == 2:
+                y_fac *= 1.2                                    # the second point even higher 
+            cp_y[icp]  = cp_y[icp] * y_fac                      # control point a little higher than target
+
+        self.bezier.set_points (cp_x, cp_y)                     # a new Bezier curve 
 
 
     def _map_bezier_to_variables (self): 
