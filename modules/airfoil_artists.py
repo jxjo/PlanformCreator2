@@ -990,7 +990,7 @@ class Thickness_Edit_Artist (Airfoil_Line_Artist):
             # get new coordinates (when dragged) and try to move control point 
             x_try, y_try = artist_onMove.get_xydata()[0]
 
-            x = min (0.6, max (0.1, x_try))
+            x = min (0.8, max (0.1, x_try))
 
             if typeTag == THICKNESS:
                 y = min (0.5, max (0.01, y_try))            # if 0.0 line couldn't be restored

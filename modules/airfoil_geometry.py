@@ -106,9 +106,9 @@ class Match_Side_Bezier:
         self._targets_x, self._targets_y   = self._define_targets(target_side)  
         self._target_y_te = target_side.y[-1]        
 
-        self._target_curv_at_le = target_curv_at_le       # also take curvature at le into account
+        self._target_curv_at_le = target_curv_at_le # also take curvature at le into account
+        self._target_curv_at_le_weighting = 1.0     # ... wieghting ot target le 
         self._max_te_curv    = max_te_curv          # also take curvature at te into account
-        self._scale = None                          # scale for objective function
 
 
     @property
@@ -168,6 +168,16 @@ class Match_Side_Bezier:
         if aVal is not None and aVal > 0: 
             self._target_curv_at_le = aVal
 
+    @property
+    def target_curv_at_le_weighting (self) -> float:
+        """ weighting of target curvature at le - default 1.0"""
+        return self._target_curv_at_le_weighting
+
+    def set_target_curv_at_le_weighting (self, aVal : float):
+        """ set target curvature at le weighting"""
+        if aVal is not None and aVal > 0: 
+            self._target_curv_at_le_weighting = aVal
+
 
     @property
     def le_curv_diff (self):
@@ -216,8 +226,6 @@ class Match_Side_Bezier:
 
         f = lambda variables : self._objectiveFn (variables) 
 
-        self._scale = 1.0
-        self._scale = 1 / self._objectiveFn (variables_start)
 
         # -- initial step size 
 
@@ -253,12 +261,12 @@ class Match_Side_Bezier:
         """
         # based on delta x
         # we do not take every coordinate point - define different areas of point intensity 
-        x1  = 0.03                                      # a le le curvature is master 
-        dx1 = 0.025                                     # higher density at nose area
+        x1  = 0.02 # 0.03                               # a le le curvature is master 
+        dx1 = 0.04 # 0.025                              # now lower density at nose area
         x2  = 0.25 
         dx2 = 0.04
-        x3  = 0.8                                       # higher density at te
-        dx3 = 0.03                                      # to handle reflexed or rear loading
+        x3  = 0.8                                       # no higher density at te
+        dx3 = 0.03 # 0.03                               # to handle reflexed or rear loading
 
         targ_x = []
         targ_y = []
@@ -440,18 +448,19 @@ class Match_Side_Bezier:
         # rebuild Bezier 
 
         self._map_variables_to_bezier (variables)
-
+        # print (' '.join(f'{p:8.4f}' for p in self.bezier.points_y))   
+          
         # norm2 of deviations to target
 
         norm2 = self.norm2                                  # 0.001 is ok, 0.0002 is good 
-        obj_norm2 = norm2 * 1000                        # 1.0   is ok, 0.2 is good 
+        obj_norm2 = norm2 * 1000                            # 1.0   is ok, 0.2 is good 
 
 
         # difference to target le curvature 
 
         obj_le = 0.0 
         diff = self.le_curv_diff                            # 1% is like 1 
-        obj_le = diff  / 40  #70      
+        obj_le = (diff  / 40) * self.target_curv_at_le_weighting    # apply optional weighting      
 
 
         # limit max te curvature 
@@ -493,10 +502,10 @@ class Match_Side_Bezier:
 
         max_curv_deriv_te = np.max (abs(deriv1[-10:]))              # check the last 10 points                   
         lim_curv_deriv_te = 10 * (abs(self._max_te_curv) if self._max_te_curv else 0.1)
-        lim_curv_deriv_te = max (lim_curv_deriv_te, 0.2)            # derivative limit depending on curv at te
+        lim_curv_deriv_te = max (lim_curv_deriv_te, 1)             # derivative limit depending on curv at te
 
         if max_curv_deriv_te > lim_curv_deriv_te: 
-            obj_te_deriv = (max_curv_deriv_te - lim_curv_deriv_te)  # 0 is good, > 0 ..50 is bad 
+            obj_te_deriv = (max_curv_deriv_te - lim_curv_deriv_te) / 20  # 0 is good, > 0 ..50 is bad 
 
         # penalty for reversals in derivative of curvature - avoid bumps 
 
@@ -508,7 +517,7 @@ class Match_Side_Bezier:
                 if (deriv1[i] * yold < 0.0):                        # yes - changed + - 
                     nrevers += 1                             
                 yold = deriv1[i]
-        obj_revers = nrevers ** 2 * 0.3                             #  2+ reversals are really bad
+        obj_revers = nrevers ** 2 * 0.4                             #  2+ reversals are really bad
 
 
         # objective function is sum of single objectives 

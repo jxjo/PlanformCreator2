@@ -2160,7 +2160,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                        lab= "sides with curvature which should match target")
         r +=1
         bezier_frame = ctk.CTkFrame(self.input_frame, fg_color="transparent")
-        bezier_frame.grid(row=r, column=c, columnspan=2, sticky="nwe", padx=10, pady=(0,10))
+        bezier_frame.grid(row=r, column=c, columnspan=2, sticky="nwe", padx=(0,10), pady=(0,10))
 
         self._init_bezier_frame (bezier_frame) 
 
@@ -2169,7 +2169,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         Header_Widget (self.input_frame,r,c,   padx=0, lab= f"Target   '{self.airfoilOrg.name}'")
         r +=1
         target_frame = ctk.CTkFrame(self.input_frame, fg_color="transparent")
-        target_frame.grid(row=r, column=c, columnspan=2, sticky="nwe", padx=10, pady=(0,10))
+        target_frame.grid(row=r, column=c, columnspan=2, sticky="nwe", padx=(0,10), pady=(0,10))
 
         self._init_target_frame (target_frame) 
 
@@ -2263,12 +2263,17 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             self.add (Label_Widget (frame,r,c, padx=(0,0), lab=self.curv_warning, objId=sideName,
                                     columnspan=1, width=20, text_style=STYLE_WARNING))
 
-        self.add (Field_Widget  (frame,r-1,c+1, width=90, lab="LE target will be", lab_width=55,
-                        rowspan = 2,  
+        self.add (Field_Widget  (frame,r-1,c+1, width=90, lab="LE target will be", lab_width=65,
+                        padx=10,  
                         get=lambda: self.target_curv_at_le, set=self.set_target_curv_at_le, 
                         dec=0, spin=True, step=5, lim=(10,1000)))
         
-        frame.grid_columnconfigure (c+2, weight=1)
+        self.add (Field_Widget  (frame,r,c+1, width=90, lab="Weighting", lab_width=65,
+                        padx=10,  
+                        get=lambda: self.target_curv_at_le_weighting, set=self.set_target_curv_at_le_weighting, 
+                        dec=1, spin=True, step=0.5, lim=(0.1,10)))
+
+        frame.grid_columnconfigure (c+4, weight=1)
 
         c = 0 
         r += 1
@@ -2304,6 +2309,17 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         self._target_curv_at_le = aVal
         self.matcher_upper.set_target_curv_at_le (self.target_curv_at_le) 
         self.matcher_lower.set_target_curv_at_le (self.target_curv_at_le) 
+
+
+    @property
+    def target_curv_at_le_weighting (self):
+        """ target curvature at le weighting"""
+        return self.matcher_upper._target_curv_at_le_weighting 
+
+    def set_target_curv_at_le_weighting (self, aVal):
+        """ manual set / overwrite weighting for target_le """
+        self.matcher_upper.set_target_curv_at_le_weighting (aVal) 
+        self.matcher_lower.set_target_curv_at_le_weighting (aVal) 
 
 
     def curv_warning (self, objId):
