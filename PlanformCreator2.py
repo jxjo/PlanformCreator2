@@ -42,6 +42,10 @@ from tkinter import filedialog
 import customtkinter as ctk
 
 # let python find the other modules in modules relativ to path of self  
+
+# jx common modules hosted by AirfoilEditor 
+sys.path.append(os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree/modules'))
+# local modules
 sys.path.append(os.path.join(Path(__file__).parent , 'modules'))
 
 from common_utils       import * 
@@ -53,11 +57,14 @@ from widgets            import *
 from wing_artists       import *
 from artist             import set_font_size
 
+from AirfoilEditor_subtree.AirfoilEditor      import AirfoilEditor
+
+
 
 #------------------------------------------------
 
 AppName    = "Planform Creator 2"
-AppVersion = "1.2.3"
+AppVersion = "1.3.0"
 
 #------------------------------------------------
 
@@ -751,8 +758,6 @@ class Edit_WingSection(Edit_Abstract_Wing):
 
     def edit_airfoil(self):
         """ edit airfoil with AirfoilEditor - a new, modified airfoil may be returned"""
-
-        from AirfoilEditor import AirfoilEditor
 
         relPathFileName = self.wingSection().airfoil.pathFileName
         ph = PathHandler (workingDir=self.workingDir)

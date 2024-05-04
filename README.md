@@ -1,6 +1,8 @@
-# Planform Creator 2 & [Airfoil Editor](README_AirfoilEditor.md)
+# Planform Creator 2 
 
- Have a look into [README_AirfoilEditor](README_AirfoilEditor.md) for infos about the Airfoil Editor 
+
+> [!NOTE]
+ The [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) moved to a repo of its own. You can downlaod the app from there.
 
 ##
 
@@ -102,9 +104,9 @@ Optionally, a short 'nick name' can be assigned to the airfoils of a wing. The n
 
 All airfoils, including the generated 'strak' airfoils, can be exported as a .dat file at the end. Very practical is the optional setting of a continuous trailing edge thickness ('Te gap') in mm, which eliminates the often necessary manual reworking of the airfoils in CAD. 
 
-A spin off from this project is the  [Airfoil Editor](README_AirfoilEditor.md) which allows the typical modifications of an airfoil during wing design. 
+A spin off from this project is the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) which allows the typical modifications of an airfoil during wing design. 
 
-![PC2](images/AirfoilEditor_App.png "Screenshot of the AirfoilEditor ")
+![PC2](AirfoilEditor_subtree/images/AirfoilEditor_App.png "Screenshot of the AirfoilEditor ")
 <sup>The AirfoilEditor can also be used as a stand-alone program. Linked with the file extension ".dat" it acts as a smart display and edit app for airfoils.</sup>
 
 ## Bridge to Xflr5 and FLZ_vortex
