@@ -9,6 +9,11 @@
 import pytest
 
 import numpy as np 
+import os
+import sys
+
+# let python find the other modules in modules relativ to path of self  
+sys.path.append('./modules')
 
 from airfoil import Airfoil, Airfoil_Bezier, GEO_BASIC, GEO_SPLINE
 from airfoil_examples import Root_Example, Tip_Example
