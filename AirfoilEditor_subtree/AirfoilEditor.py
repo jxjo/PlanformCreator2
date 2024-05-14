@@ -130,7 +130,7 @@ class Edit_File_Menu(Edit_Abstract_Airfoil):
 
         r,c = 0,0 
         Header_Widget (self,r,c, columnspan=2, lab=self.name, width=80)
-        Button_Widget (self,r,c+2, icon_name='settings', sticky="e",  width=30, padx=(0,0),
+        Button_Widget (self,r,c+2, icon_name='settings', sticky="e", padx=(0,5),
                        style=ICON, set=self.myApp.edit_settings)
 
         # if AirfoilEditor called stand alone offer combobox with input files

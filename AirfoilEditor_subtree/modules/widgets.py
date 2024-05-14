@@ -561,9 +561,15 @@ class Button_Widget(Base_Widget):
     """
 
     # <a target="_blank" href="https://icons8.com/icon/15813/pfeil%3A-einklappen">Pfeil: Einklappen</a> Icon von <a target="_blank" href="https://icons8.com">Icons8</a>
+    # Windows 11 icon style 
+    # color dark theme #C5C5C5, light theme #000000
+
     ICONS = {
         "settings": None,
-        "collapse": None
+        "collapse": None,
+        "open"    : None,
+        "edit"    : None, 
+        "delete"  : None,
         }
     
 
@@ -588,7 +594,7 @@ class Button_Widget(Base_Widget):
         elif style == ICON:
             self.fg_color = "transparent"
             self.width = 25
-            icon_size= (17,17)
+            icon_size= (18,18)
             icon_name = icon_name if icon_name is not None else "settings"
         else:
             self.fg_color = cl_button_secondary
@@ -605,6 +611,11 @@ class Button_Widget(Base_Widget):
                                      anchor=anchor, image=icon, 
                                      border_spacing=0, border_width=0,
                                      command=self.CTk_callback)
+        if style == ICON:
+            # patch ctkButton._create_grid to reduce button width (<-corner radius)
+            self.mainCTk.grid_columnconfigure(0, weight=100, minsize=2)
+            self.mainCTk.grid_columnconfigure(4, weight=100, minsize=2)
+
         self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky=sticky)
      
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
