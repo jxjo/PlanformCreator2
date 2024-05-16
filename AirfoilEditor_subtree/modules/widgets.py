@@ -570,6 +570,9 @@ class Button_Widget(Base_Widget):
         "open"    : None,
         "edit"    : None, 
         "delete"  : None,
+        "add"     : None,
+        "next"    : None,
+        "previous": None,
         }
     
 
