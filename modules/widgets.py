@@ -637,15 +637,22 @@ class Button_Widget(Base_Widget):
         # no call back when disabled 
         if not self.disabled: return super().CTk_callback(dummy)
 
-    def _set_CTkControl_state (self, widgetCTk, disable: bool):
+    def _set_CTkControl_state (self, widgetCTk : ctk.CTkBaseClass, disable: bool):
         # overwritten because of flicker of CTkButton
         if disable: 
-            widgetCTk.configure (text_color = cl_spin_text_disable) 
-            widgetCTk.configure (fg_color =cl_spin )
+            if self.style == ICON: 
+                # icons - make the button disappear
+                widgetCTk.lower()
+            else: 
+                widgetCTk.configure (text_color = cl_spin_text_disable) 
+                widgetCTk.configure (fg_color =cl_spin )
         else: 
             if self.style == SUPTLE: 
-                " for suptle buttons same as Spin Button (black)"
+                # for suptle buttons same as Spin Button (black)
                 widgetCTk.configure (text_color = cl_spin_text)
+            elif self.style == ICON: 
+                # icons - make the button appear again
+                widgetCTk.lift()
             else:
                 # for buttons always color of Dark mode
                 widgetCTk.configure (text_color = self._text_color()[1])
