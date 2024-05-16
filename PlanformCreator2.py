@@ -588,11 +588,11 @@ class Edit_WingSection_Master(Edit_Abstract_Wing):
         self.add(Option_Widget (hfrm,0,1,   get=self.curSectionName, set=self.set_curSection,
                                             spin=True, width=100, options=self.sectionNames))
         self.add(Button_Widget (hfrm,0,2,   lab='Add', width=50,  
-                                            set=self.addSection, disable=self.addDisabled))
-        # self.add(Button_Widget (hfrm,0,2,   icon_name='add', style=ICON, padx=(10,0), 
-        #                                     set=self.addSection, disable=self.addDisabled))
+                                            set=self.addSection, disable=self.addDisabled,
+                                            tooltip="Add wing section after current"))
         self.add(Button_Widget (hfrm,0,3,   icon_name='delete', style=ICON, padx=0, 
-                                            set=self.deleteSection, disable=self.deleteDisabled))
+                                            set=self.deleteSection, disable=self.deleteDisabled,
+                                            tooltip="Remove current wing section"))
 
         hfrm.grid (row=0, column=0, pady=0, padx=0, sticky="w")
 
@@ -728,13 +728,16 @@ class Edit_WingSection(Edit_Abstract_Wing):
                                 disable=True, event=SECTION_CHANGED))
 
         self.add(Button_Widget (self,5,2, icon_name='open', padx=(5,0), style=ICON, 
-                                set=self.select_airfoil))
+                                set=self.select_airfoil,
+                                tooltip="Select new airfoil"))
         self.add(Button_Widget (self,5,3, icon_name='edit', padx=(0,0), style=ICON, 
                                 set=self.edit_airfoil,
-                                disable=lambda: not self.wingSection().airfoil_canBeEdited()))
+                                disable=lambda: not self.wingSection().airfoil_canBeEdited(),
+                                tooltip="Modify airfoil with the 'Airfoil Editor'"))
         self.add(Button_Widget (self,5,3, icon_name='delete', padx=(30,0), style=ICON,
                                 set= self.remove_airfoil,
-                                disable=lambda: not self.wingSection().airfoil_canBeRemoved()))
+                                disable=lambda: not self.wingSection().airfoil_canBeRemoved(),
+                                tooltip="Remove airfoil - at wing section will be <strak>"))
 
         self.add(Field_Widget  (self,6,0, lab="Airfoil nick", obj=self.wingSection ,get='airfoilNick', 
                                                 disable=True, width=110))
