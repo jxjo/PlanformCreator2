@@ -984,9 +984,6 @@ class Option_Widget(Base_Widget):
         if columnspan   is None: columnspan = 1
 
         # label support not active
-        #if (self.label):  label_ctk = ctk.CTkLabel (self.parent, text=self.label)
-        #else:             label_ctk = ctk.CTkFrame (self.parent, width=10, height=5, fg_color="transparent")     # dummy frame
-        #label_ctk.grid (row=self.row, column=self.column, padx=(15, 15), pady=1, sticky='e')
 
         if self.spinner:
             if spinPos == 'below':
@@ -998,7 +995,7 @@ class Option_Widget(Base_Widget):
                 option_frame = ctk.CTkFrame(self.parent, fg_color="transparent")
                 button_frame  = option_frame
 
-            button_width  = self.height * 2 
+            button_width  = self.height - 2 
             button_height = self.height
             option_width  = self.width 
         else: 
@@ -1011,10 +1008,10 @@ class Option_Widget(Base_Widget):
                                           command=self.CTk_callback)        
 
         if self.spinner:
-            self.prevCTk = ctk.CTkButton(button_frame, text="prev", command=self.prev_button_callback,
+            self.prevCTk = ctk.CTkButton(button_frame, text="<", command=self.prev_button_callback,
                                          width=button_width, height=button_height, 
                                          fg_color=cl_spin, text_color=cl_spin_text, text_color_disabled=cl_spin_text_disable)
-            self.nextCTk = ctk.CTkButton(button_frame, text="next", command=self.next_button_callback,
+            self.nextCTk = ctk.CTkButton(button_frame, text=">", command=self.next_button_callback,
                                          width=button_width, height=button_height, 
                                          fg_color=cl_spin, text_color=cl_spin_text, text_color_disabled=cl_spin_text_disable)
             if spinPos == 'below':
