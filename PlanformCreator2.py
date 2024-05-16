@@ -587,10 +587,12 @@ class Edit_WingSection_Master(Edit_Abstract_Wing):
 
         self.add(Option_Widget (hfrm,0,1,   get=self.curSectionName, set=self.set_curSection,
                                             spin=True, width=100, options=self.sectionNames))
-        self.add(Button_Widget (hfrm,0,2,   lab=' Add ',  width=50,  set=self.addSection,
-                                            disable=self.addDisabled))
-        self.add(Button_Widget (hfrm,0,3,   lab='Delete',   width=50, set=self.deleteSection,
-                                            disable=self.deleteDisabled))
+        self.add(Button_Widget (hfrm,0,2,   lab='Add', width=50,  
+                                            set=self.addSection, disable=self.addDisabled))
+        # self.add(Button_Widget (hfrm,0,2,   icon_name='add', style=ICON, padx=(10,0), 
+        #                                     set=self.addSection, disable=self.addDisabled))
+        self.add(Button_Widget (hfrm,0,3,   icon_name='delete', style=ICON, padx=0, 
+                                            set=self.deleteSection, disable=self.deleteDisabled))
 
         hfrm.grid (row=0, column=0, pady=0, padx=0, sticky="w")
 
