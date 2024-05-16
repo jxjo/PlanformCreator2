@@ -724,13 +724,15 @@ class Edit_WingSection(Edit_Abstract_Wing):
 
         self.add(Field_Widget  (self,5,0, lab="Airfoil", width=110, get=lambda: self.wingSection().airfoil.name, 
                                 disable=True, event=SECTION_CHANGED))
-        
-        self.add(Button_Widget (self,5,2, lab='Select', width=60, columnspan=2, sticky='w',style=SUPTLE, 
-                                padx=(3,10),set=self.select_airfoil ))
-        self.add(Button_Widget (self,5,2, lab='Edit',   width=60, columnspan=2, sticky='e', style=SUPTLE,
-                                set=self.edit_airfoil, disable=self.edit_airfoil_disable ))
-        self.add(Button_Widget (self,5,4, lab='Remove', width=60, columnspan=3, sticky='w', style=SUPTLE,
-                                set=self.remove_airfoil, disable=self.remove_airfoil_disable ))
+
+        self.add(Button_Widget (self,5,2, icon_name='open', padx=(5,0), style=ICON, 
+                                set=self.select_airfoil))
+        self.add(Button_Widget (self,5,3, icon_name='edit', padx=(0,0), style=ICON, 
+                                set=self.edit_airfoil,
+                                disable=lambda: not self.wingSection().airfoil_canBeEdited()))
+        self.add(Button_Widget (self,5,3, icon_name='delete', padx=(30,0), style=ICON,
+                                set= self.remove_airfoil,
+                                disable=lambda: not self.wingSection().airfoil_canBeRemoved()))
 
         self.add(Field_Widget  (self,6,0, lab="Airfoil nick", obj=self.wingSection ,get='airfoilNick', 
                                                 disable=True, width=110))
@@ -738,7 +740,6 @@ class Edit_WingSection(Edit_Abstract_Wing):
         self.add(Field_Widget  (self,8,0, lab="Flap group", obj=self.wingSection ,get='flapGroup', set='set_flapGroup',
                                                 lim=(0,9), dec=0, spin=True, step=1,
                                                 disable='isTip', event=SECTION_CHANGED))
-
         self.grid_columnconfigure   (5, weight=1)
 
     
@@ -777,20 +778,13 @@ class Edit_WingSection(Edit_Abstract_Wing):
             Messagebox (self,title="Edit airfoil", message= "Airfoil\n\n'%s'\n\ndoesn't exist anymore."%absPathFileName,
                         icon="cancel", option_1="Close")
 
-
-    def edit_airfoil_disable (self):
-        return not self.wingSection().airfoil_canBeEdited()
-
-
     def remove_airfoil(self):
-
+        """ remove airfoil from wing section """
         if self.wingSection().airfoil_canBeRemoved():
             self.wingSection().set_airfoilWithPathFileName(None)
             self.refresh()
             fireEvent (self.ctk_root, AIRFOIL_CHANGED)
         
-    def remove_airfoil_disable (self):
-        return not self.wingSection().airfoil_canBeRemoved()
 
 
 #-------------------------------------------------------------------------------
