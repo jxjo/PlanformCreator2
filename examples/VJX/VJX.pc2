@@ -17,6 +17,7 @@
       "position":0.0,
       "norm_chord":1.0,
       "flapGroup":1,
+      "eitherPosOrChord":true,
       "airfoil":{
         "file":"JX-GS-15-t7.9.dat"
       }
@@ -24,6 +25,7 @@
     {
       "position":200.0,
       "flapGroup":1,
+      "eitherPosOrChord":true,
       "airfoil":{
         "file":"JX-GS-15.dat"
       }
@@ -31,6 +33,7 @@
     {
       "position":580.0,
       "flapGroup":2,
+      "eitherPosOrChord":true,
       "airfoil":{
         "name":"<strak>"
       }
@@ -38,6 +41,7 @@
     {
       "norm_chord":0.809392,
       "flapGroup":2,
+      "eitherPosOrChord":true,
       "airfoil":{
         "name":"<strak>"
       }
@@ -45,6 +49,7 @@
     {
       "position":1150.0,
       "flapGroup":2,
+      "eitherPosOrChord":true,
       "airfoil":{
         "file":"JX-GS-10.dat"
       }
@@ -52,6 +57,7 @@
     {
       "norm_chord":0.558659,
       "flapGroup":2,
+      "eitherPosOrChord":true,
       "airfoil":{
         "name":"<strak>"
       }
@@ -59,6 +65,7 @@
     {
       "position":1350.0,
       "flapGroup":2,
+      "eitherPosOrChord":true,
       "airfoil":{
         "file":"JX-GS-06.dat"
       }
@@ -66,6 +73,7 @@
     {
       "position":1400.0,
       "flapGroup":2,
+      "eitherPosOrChord":true,
       "airfoil":{
         "file":"JX-GS-04.dat"
       }
@@ -73,6 +81,7 @@
     {
       "norm_chord":0.168555,
       "flapGroup":2,
+      "eitherPosOrChord":true,
       "airfoil":{
         "name":"<strak>"
       }
@@ -81,18 +90,11 @@
       "position":1450.0,
       "norm_chord":0.013043,
       "flapGroup":2,
+      "eitherPosOrChord":true,
       "airfoil":{
         "file":"JX-GS-04.dat"
       }
     }
   ],
-  "refPlanform_dxfPath":"VJX_v7_for_PC2.dxf",
-  "flz":{
-    "exportDir":"Flz_vortex",
-    "useNick":true,
-    "x-panels":10,
-    "x-distribution":"cosine",
-    "y-panels":7,
-    "y-minWidth":20
-  }
+  "refPlanform_dxfPath":"VJX_v7_for_PC2.dxf"
 }
