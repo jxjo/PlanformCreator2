@@ -2202,7 +2202,7 @@ class App(ctk.CTk):
     def __init__(self, paramFile):
         super().__init__()
 
-        self.initial_geometry   = None                # window geometry at th ebginning
+        self.initial_geometry   = None                # window geometry at the bginning
         self._curWingSectionName = None               # Dispatcher field between Diagram and Edit
         self.ctk_root = self                          # setup single event root -> ctk root
 
