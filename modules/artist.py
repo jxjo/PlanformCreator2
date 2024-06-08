@@ -20,7 +20,7 @@ import colorsys
 import tkinter as tk
 
 cl_background       = '#101010'
-cl_labelGrid        = '#A0A0A0'    
+cl_labelGrid        = '#B0B0B0'    
 cl_axes             = '#606060'
 cl_text             = '#D0D0D0'
 cl_textHeader       = '#808080'
@@ -629,7 +629,7 @@ class DragManager:
         self.cid_enter  = self.canvas.mpl_connect('axes_enter_event', self.on_enter_event)
 
 
-    def _draw_animated(self, duringMove=False, iArtMoved=None):
+    def _draw_animated(self, artist_onMove=None, duringMove=False, iArtMoved=None):
         """Draw the animated artists either via callback for static and animated"""
 
         if duringMove:                # on move - draw on move only current
