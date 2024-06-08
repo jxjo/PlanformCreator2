@@ -57,7 +57,7 @@ class Airfoil:
 
 
     def __init__(self, x= None, y = None, name = None,
-                 geometry : Type[Geometry]  = GEO_SPLINE, 
+                 geometry : Type[Geometry]  = None, 
                  pathFileName = None,  workingDir= None):
         """
         Main constructor for new Airfoil
@@ -87,14 +87,17 @@ class Airfoil:
         self._isEdited       = False 
         self._isStrakAirfoil = False             # is self blended from two other airfoils 
 
-        self._geometryClass  = geometry          # geometry startegy 
+        if geometry is None: 
+            self._geometryClass  = GEO_SPLINE          # geometry startegy 
+        else:
+            self._geometryClass  = geometry          # geometry startegy 
         self._geo            = None              # selfs instance of geometry
 
         self._nPanelsNew     = None              # repanel: no of panels - init via default
         self._le_bunch       = None              # repanel: panel bunch at leading edge
         self._te_bunch       = None   	         # repanel: panel bunch at trailing edge
 
-        self._polarSets      = None              # polarSets which are defined from outside 
+        self._polarSet       = None              # polarSet which is defined from outside 
 
         self._usedAs         = None              # usage type of airfoil used by app <- AIRFOIL_TYPES
         self._propertyDict   = {}                # multi purpose extra properties for an AIirfoil
@@ -136,28 +139,10 @@ class Airfoil:
         name          = fromDict(dataDict, "name", None)
         return cls(pathFileName = pathFileName, name = name, 
                    geometry = geometry, workingDir = workingDir)
-
-
-    @classmethod
-    def onDictKey (cls, dataDict, key, workingDir = None):
-        """
-        Alternate constructor for new Airfoil based on data dictionary and key
-        Returns None if key doesn't exist in dataDict 
-
-        Args:
-            :dataDict: dictionary with key
-            :key: key in dataDict
-            :workingDir: home of dictionary (paramter file) 
-        """
-        pathFileName  = fromDict(dataDict, key, None)
-        if pathFileName is not None: 
-            return cls(pathFileName = pathFileName, workingDir=workingDir)
-        else: 
-            return None 
         
 
     @classmethod
-    def onFileType(cls, pathFileName, workingDir = None):
+    def onFileType(cls, pathFileName, workingDir = None, geometry : Type[Geometry]  = None):
         """
         Alternate constructor for new Airfoil based on its file type
 
@@ -168,12 +153,13 @@ class Airfoil:
         Args:
             pathFileName: string of existinng airfoil path and name
             workingDir: optional working dir (if path is relative)
+            geometry : geometry tyoe - only for .dat files 
         """
 
         ext = os.path.splitext(pathFileName)[1]
 
         if ext == '.dat': 
-            return Airfoil (pathFileName=pathFileName, workingDir=workingDir)
+            return Airfoil (pathFileName=pathFileName, workingDir=workingDir, geometry=geometry)
         elif ext == '.bez': 
             return Airfoil_Bezier (pathFileName=pathFileName, workingDir=workingDir)
         elif ext == '.hicks': 
@@ -261,22 +247,11 @@ class Airfoil:
         else:                       return "..." + self.name[-20:]
             
     @property
-    def hasPolarSets (self):
-        """does self has polarSets (which are set from 'outside')
-        """
-        return self._polarSets is not None
-    
-    def polarSets (self):
-        """ returns  PolarSets of self"""
-
-        if self._polarSets is None:
-            return []
-        else: 
-            return self._polarSets
-
-    def set_polarSets (self, polarSets): 
-        """ polarSets must be set from outside - Airfoil doesn't know about this """
-        self._polarSets = polarSets
+    def polarSet (self):
+        """ Property which is set from outside - Airfoil doesn't know about it... """ 
+        return self._polarSet 
+    def set_polarSet (self, aPolarSet):
+        self._polarSet = aPolarSet
 
 
     @property
@@ -1104,9 +1079,9 @@ class Airfoil_Hicks_Henne(Airfoil):
     def set_hh_data (self, name, seed_name, seed_x, seed_y, top_hhs, bot_hhs): 
         """ set all data needed for a Hicks Henne airfoil"""
 
-        self.set_name (name)
+        self._name = name                       # don't use set_ (isModified)
 
-        if seed_name: 
+        if seed_name and len(seed_x) and len(seed_y): 
 
             seed_foil = Airfoil (x=seed_x, y=seed_y, name=seed_name)
 
@@ -1116,9 +1091,11 @@ class Airfoil_Hicks_Henne(Airfoil):
                 self._geo.lower.set_hhs (bot_hhs)
 
                 self._isLoaded = True 
-                # logging.debug (f"Hicks Henne definition for {self.name} loaded")
+                logging.debug (f"Hicks Henne definition for {self.name} loaded")
             else: 
                 ErrorMsg (f"Hicks Henne seed airfoil {seed_name} couldn't be loaded ")
+        else: 
+            raise ValueError (f"Hicks Henne seed airfoil data missing for {name}")
 
 
 

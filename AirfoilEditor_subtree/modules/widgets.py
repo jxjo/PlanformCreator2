@@ -11,14 +11,15 @@ import customtkinter as ctk
 import tkinter as tk
 from PIL import Image
 
-
-cl_entry            = ("gray95","gray35")         # background of entry fields
-cl_entry_disable    = ("gray88","gray35")         # background of diabeld entry fields
+                    #   light     dark
+cl_entry            = ("gray96","gray35")         # background of entry fields
+cl_entry_disable    = ("gray80","gray25")         # background of disabeld entry fields
 cl_spin             = ("gray75","gray25")         # background of spin buttons
 cl_spin_text        = ("gray5" ,"gray95")         # text color of spin buttons
 cl_spin_text_disable= ("gray55","gray70")         # text color of spin buttons
 cl_red              = ("OrangeRed3", "OrangeRed3")  # background for red button 
-cl_button_primary   = ctk.ThemeManager.theme["CTkButton"]["fg_color"] # default Button darker  
+cl_button_primary   = ("#3b8ed0", "#3076ad")
+# cl_button_primary   = ctk.ThemeManager.theme["CTkButton"]["fg_color"][0]# default Button darker  
 cl_button_secondary = ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"] # brighter 
 fs_header           = 18                          # font size header 
 
@@ -27,7 +28,7 @@ SECONDARY           = 2                           # buttonstyle for normal actio
 SUPTLE              = 3                           # buttonstyle for subtle appearance 
 ICON                = 4                           # buttonstyle for icon only button 
 RED                 = 5                           # buttonstyle for red - stop - style 
-
+BUTTON_STYLES = [PRIMARY, SECONDARY, SUPTLE, ICON, RED]
 
 STYLE_NORMAL        = 'Normal'
 STYLE_COMMENT       = 'Comment'
@@ -36,11 +37,11 @@ STYLE_ERROR         = 'Error'
 STYLE_HINT          = 'Hint'
 STYLE_WARNING       = 'Warning'
 
-# some additional color definitions 
+# text style color definitions 
 cl_styles ={
-        STYLE_NORMAL    : ("gray10","gray95"),
-        STYLE_DISABLED  : ("gray30","gray70"),
-        STYLE_COMMENT   : ("gray40","gray60"),
+        STYLE_NORMAL    : ("gray5", "gray95"),
+        STYLE_DISABLED  : ("gray45","gray50"),
+        STYLE_COMMENT   : ("gray15","gray70"),
         STYLE_ERROR     : ("red2","red2") ,
         STYLE_HINT      : ("RoyalBlue3", "cornflower blue"),
         STYLE_WARNING   : ("DarkOrange3", "orange")
@@ -307,7 +308,7 @@ class Base_Widget():
                  disable = False, 
                  event: str= None,
                  lim:tuple=None, dec = None, unit : str = None, 
-                 spin: bool = False, step: float = 0.1,
+                 spin: bool = False, step: float = None,
                  options: list = None,
                  width:int=None, height:int=None,
                  text_style=None):
@@ -322,15 +323,22 @@ class Base_Widget():
         self.setter = set
         self.obj    = obj                 
         self.objId  = objId                 
-        if not val is None:  self.val = val                  # a input val overwrites the setter altwernative
+        if not val is None:  self.val = val                     # a input val overwrites the setter altwernative
         else:                self.val = self.get_value (get, obj, parent) 
         if self.val is None: self.val = ""
 
-        if isinstance (self.val, bool):                       # supported data types
+        if isinstance (self.val, bool):                         # supported data types
            self.valType = bool
-        elif isinstance (self.val, int) or ((not dec is None) and (dec == 0)):
+        elif dec is not None:                                   # try to detect float 
+            if dec == 0:
+                self.valType = int
+            else: 
+                self.valType = float
+        elif step is not None and isinstance (step, float):     # try to detect float 
+            self.valType = float
+        elif isinstance (self.val, int):
            self.valType = int
-        elif isinstance  (self.val, float) or ((not dec is None) and (dec > 0)):    
+        elif isinstance  (self.val, float) :    
            self.valType = float
         elif isinstance (self.val, str):
            self.valType = str
@@ -370,8 +378,9 @@ class Base_Widget():
 
         self.decimals = dec
         self.unit     = unit
-        if not spin is None: self.spinner  = spin
-        self.step     = step
+        if spin is not None: 
+            self.spinner  = spin
+            self.step     = step if step is not None else 0.1
         self.event    = event
 
         self.width    = width
@@ -379,13 +388,13 @@ class Base_Widget():
         if not self.width:  self.width  = 110
         if not self.height: self.height = 25
 
-        self._styleGetter = None
+        self._text_styleGetter = None
         if text_style is None:
             self._text_style = STYLE_NORMAL
         else: 
             if not (isinstance(text_style, str)):
-                self._styleGetter = text_style
-                text_style = self.get_value (self._styleGetter, obj, parent)
+                self._text_styleGetter = text_style
+                text_style = self.get_value (self._text_styleGetter, obj, parent)
             if text_style in cl_styles:
                 self._text_style = text_style
             else:
@@ -610,7 +619,7 @@ class Base_Widget():
             if decimals:
                 s = "%0.*f" %(decimals,val)
             else: 
-                s = "%f" % val
+                s = ("%f" % val).rstrip('0').rstrip('.')            # remove trailing 0 and '.' 
         else:
             s = '???'
         return s
@@ -624,18 +633,20 @@ class Base_Widget():
         if valType == int:
             try:
                 newVal = int(float(newStr))
-            except:                             # user enetered a non int
-                newVal = int(val) 
-            if limits: 
+            except:                             # user entered a non int
+                if val is not None and val != '':
+                    newVal = int(val)        # take old val 
+            if limits and newVal is not None: 
                 minVal, maxVal = limits
                 newVal2 = max (int(minVal), newVal)
                 newVal  = min (int(maxVal), newVal2)
         elif valType == float:
             try:
                 newVal = float(newStr)
-            except:                             # user enetered a non float
-                if val: newVal = float(val)     #   could also be None
-            if limits and newVal: 
+            except:                             # user entered a non float
+                if val is not None and val != '':
+                    newVal = float(val)         # take old val 
+            if limits and newVal is not None: 
                 minVal, maxVal = limits
                 newVal2 = max (float(minVal), newVal)
                 newVal  = min (float(maxVal), newVal2)
@@ -658,12 +669,12 @@ class Base_Widget():
         """ returns the text_color depending on style"""
 
         if aStyle is None  : 
-            if self._styleGetter: 
-                aStyle = self.get_value (self._styleGetter, self.obj, self.parent)
+            if self._text_styleGetter: 
+                aStyle = self.get_value (self._text_styleGetter, self.obj, self.parent)
             else: 
                 aStyle = self._text_style
-        elif aStyle == STYLE_DISABLED and self._styleGetter:        # external style overwrites disabled style
-                extStyle = self.get_value (self._styleGetter, self.obj, self.parent)
+        elif aStyle == STYLE_DISABLED and self._text_styleGetter:        # external style overwrites disabled style
+                extStyle = self.get_value (self._text_styleGetter, self.obj, self.parent)
                 if extStyle: 
                     aStyle = extStyle
 
@@ -736,7 +747,7 @@ class Label_Widget(Base_Widget):
                  padx=None, pady=None, 
                  justify=None,              # left or right - default left 
                  sticky=None,               # default sw
-                 text_style='Disabled', 
+                 text_style=STYLE_COMMENT, 
                  columnspan=None,
                  wraplength=0,              # enable wrap at length
                  **kwargs):
@@ -783,16 +794,18 @@ class Button_Widget(Base_Widget):
         style -- button appearance - either PRIMARY, SECONDARY or SUPTLE
     """
 
-    # <a target="_blank" href="https://icons8.com/icon/15813/pfeil%3A-einklappen">Pfeil: Einklappen</a> Icon von <a target="_blank" href="https://icons8.com">Icons8</a>
+    # <a target="_blank" href="https://icons8.com/icon/15813/pfeil%3A-einklappen">Pfeil: Einklappen</a> 
+    # Icon von <a target="_blank" href="https://icons8.com">Icons8</a>
     # Windows 11 icon style 
-    # color dark theme #C5C5C5, light theme #000000
+    # color dark theme #C5C5C5, light theme #303030
+    # size 96x96
 
     ICONS = {
         "settings": None,
         "collapse": None,
         "open"    : None,
-        "edit"    : None, 
-        "delete"  : None,
+        "edit"    : None,           # https://icons8.com/icon/set/edit/family-windows--static
+        "delete"  : None,           # https://icons8.com/icon/set/delete/family-windows--static
         "add"     : None,
         "next"    : None,
         "previous": None,
@@ -800,7 +813,7 @@ class Button_Widget(Base_Widget):
     
 
     def __init__(self, *args, 
-                 style=SECONDARY, 
+                 style=None, 
                  sticky= None, anchor=None, 
                  icon_name: str = None,             #  "settings"
                  pady= None, padx=None, 
@@ -813,28 +826,34 @@ class Button_Widget(Base_Widget):
         if anchor is None: anchor = 'center'
         if padx   is None: padx = 10
         if pady   is None: pady = 0
+        if sticky is None: sticky = 'w' 
 
-        if style == PRIMARY: 
-            self.fg_color = cl_button_primary
-        elif style == SUPTLE:
-            self.fg_color = cl_spin
-        elif style == RED:
-            self.fg_color = cl_red
-        elif style == ICON:
-            self.fg_color = "transparent"
+        text = self.val if self.getter else self.label      # either 'get' or 'lab' can be used
+
+        # set initial / default button style and optional getter for style 
+
+        self._styleGetter = None
+
+        if style is None:
+            style = SECONDARY
+        else: 
+            if not (style in BUTTON_STYLES):
+                if not (isinstance(style, int)):                # style is getter method 
+                    self._styleGetter = style
+                    style = self.get_value (self._styleGetter, self.obj, self.parent)
+                else:
+                    style = SECONDARY
+        self._style = style 
+
+        if style == ICON:
             self.width = 25
             icon_size= (18,18)
             icon_name = icon_name if icon_name is not None else "settings"
-        else:
-            self.fg_color = cl_button_secondary
-            style = SECONDARY
-        self.style = style
+            icon = self._load_icon (icon_name, icon_size=icon_size) if icon_name else None
+        else: 
+            icon = None  
 
-        sticky = 'w' if sticky is None else sticky
-        text = self.val if self.getter else self.label      # either 'get' or 'lab' can be used
-
-        icon = self.load_icon (icon_name, icon_size=icon_size) if icon_name else None 
-
+        self.fg_color = self._get_fg_color (style)
 
         self.mainCTk = ctk.CTkButton(self.parent, text=text, height=self.height, width=self.width, 
                                      anchor=anchor, image=icon, 
@@ -854,16 +873,31 @@ class Button_Widget(Base_Widget):
             self.tooltipCTk = CTkToolTip(self.mainCTk, delay=0.5, message=tooltip)
 
 
+    def _get_fg_color (self, style):
+        # get foreground color of button depending of style
+        if style == PRIMARY: 
+            fg_color = cl_button_primary
+        elif style == SUPTLE:
+            fg_color = cl_spin
+        elif style == RED:
+            fg_color = cl_red
+        elif style == ICON:
+            fg_color = "transparent"
+        else:
+            fg_color = cl_button_secondary     
+        return fg_color    
+
+
     def _getFrom_CTkControl (self):
         # button has nothing to give ...
         return None                     
 
-    def _set_CTkControl  (self, widgetCTk, newLabelStr):
+    def _set_CTkControl  (self, widgetCTk : ctk.CTkButton, newLabelStr):
         # if self is destroyed , newLaberlStr good be ''
         if newLabelStr: 
             widgetCTk.configure (text=newLabelStr)
 
-    def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
+    def _set_CTkControl_label (self, widgetCTk : ctk.CTkButton, newLabelStr: str):
         widgetCTk.configure (text=newLabelStr)
 
     def CTk_callback(self, dummy=None):
@@ -871,42 +905,47 @@ class Button_Widget(Base_Widget):
         # no call back when disabled 
         if not self.disabled: return super().CTk_callback(dummy)
 
-    def _set_CTkControl_state (self, widgetCTk : ctk.CTkBaseClass, disable: bool):
+    def _set_CTkControl_state (self, widgetCTk : ctk.CTkButton, disable: bool):
         # overwritten because of flicker of CTkButton
         if disable: 
-            if self.style == ICON: 
+            if self._style == ICON: 
                 # icons - make the button disappear
                 widgetCTk.lower()
             else: 
                 widgetCTk.configure (text_color = cl_spin_text_disable) 
-                widgetCTk.configure (fg_color =cl_spin )
+                widgetCTk.configure (fg_color = cl_spin )
         else: 
-            if self.style == SUPTLE: 
-                # for suptle buttons same as Spin Button (black)
-                widgetCTk.configure (text_color = cl_spin_text)
-            elif self.style == ICON: 
+            if self._style == SUPTLE:           
+                widgetCTk.configure (text_color = self._text_color(STYLE_COMMENT)) 
+            elif self._style == ICON: 
                 # icons - make the button appear again
                 widgetCTk.lift()
             else:
                 # for buttons always color of Dark mode
-                widgetCTk.configure (text_color = self._text_color()[1])
+                widgetCTk.configure (text_color = self._text_color()[1]) 
             widgetCTk.configure (fg_color =self.fg_color )
 
 
-    def load_icon(self, icon_name, icon_size= (20,20)):
-            if icon_name not in self.ICONS or self.ICONS[icon_name] is None:
-                dirname = os.path.dirname(os.path.realpath(__file__))
-                image_path_light = os.path.join(dirname, 'icons', icon_name + '_light'+ '.png')
-                image_path_dark  = os.path.join(dirname, 'icons', icon_name + '_dark'+ '.png')
-                self.ICONS[icon_name] = ctk.CTkImage(light_image=Image.open(image_path_light), 
-                                                     dark_image =Image.open(image_path_dark), 
-                                                     size=icon_size)
-            return self.ICONS[icon_name]       
+    def _load_icon(self, icon_name, icon_size= (20,20)):
+        """ load icon_name from file and store into class dict (cache) """
+
+        if icon_name not in self.ICONS or self.ICONS[icon_name] is None:
+            dirname = os.path.dirname(os.path.realpath(__file__))
+            image_path_light = os.path.join(dirname, 'icons', icon_name + '_light'+ '.png')
+            image_path_dark  = os.path.join(dirname, 'icons', icon_name + '_dark'+ '.png')
+            self.ICONS[icon_name] = ctk.CTkImage(light_image=Image.open(image_path_light), 
+                                                    dark_image =Image.open(image_path_dark), 
+                                                    size=icon_size)
+        return self.ICONS[icon_name]       
 
 
     def refresh(self):
         """ overloaded """
-        if self._styleGetter :                  #  new text style for button? 
+
+        if self._styleGetter :                  #  new style for button?
+
+            self._style = self.get_value (self._styleGetter, self.obj, self.parent)
+            self.fg_color = self._get_fg_color (self._style) 
             self.set_CTkControl_state ()
 
         return super().refresh()
@@ -927,7 +966,51 @@ class Switch_Widget(Base_Widget):
         if pady is None: pady = 0
         if columnspan is None: columnspan = 1
 
-        self.mainCTk = ctk.CTkSwitch(self.parent, switch_height=14, switch_width=32, text=self.label, width=self.width, onvalue=1, command=self.CTk_callback)
+        self.mainCTk = ctk.CTkSwitch(self.parent, switch_height=14, switch_width=32, 
+                                     text_color = self._text_color(STYLE_COMMENT),
+                                     text_color_disabled= self._text_color(STYLE_DISABLED),
+                                     text=self.label, width=self.width, onvalue=1, command=self.CTk_callback)
+        self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky="w")
+
+        self.set_CTkControl()
+        self.set_CTkControl_state()
+
+    def _getFrom_CTkControl (self):
+        return self.mainCTk.get()
+
+    def _set_CTkControl (self, widgetCTk : ctk.CTkSwitch, newValStr: str):
+        if newValStr == "1":  widgetCTk.select()
+        else:                 widgetCTk.deselect()
+
+    def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
+        widgetCTk.configure (text=newLabelStr)
+
+
+class CheckBox_Widget(Base_Widget):
+    """CTKCheckBox - uses one column in the grid
+
+    Keyword Arguments:
+        val or obj+getter -- val string to show or access path with obj and getter          :)
+        set -- access path setter when switched              :)
+    """
+    def __init__(self, *args, padx=None, pady=None, columnspan=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if padx is None: padx = (15,5)
+        if pady is None: pady = 0
+        if columnspan is None: columnspan = 1
+
+        checkbox_width  = 16
+        checkbox_height = 16
+
+        self.mainCTk = ctk.CTkCheckBox (self.parent, text=self.label, onvalue=1, 
+                                        width=self.width, border_width=1,
+                                        text_color = self._text_color(STYLE_COMMENT),
+                                        text_color_disabled= self._text_color(STYLE_DISABLED),
+                                        checkbox_width=checkbox_width, checkbox_height=checkbox_height,
+
+                                        checkmark_color=cl_button_primary,
+                                        command=self.CTk_callback)
         self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky="w")
 
         self.set_CTkControl()
@@ -943,37 +1026,13 @@ class Switch_Widget(Base_Widget):
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
         widgetCTk.configure (text=newLabelStr)
 
-
-class CheckBox_Widget(Base_Widget):
-    """CTKCheckBox - uses one column in the grid
-
-    Keyword Arguments:
-        val or obj+getter -- val string to show or access path with obj and getter          :)
-        set -- access path setter when switched              :)
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        height = 15
-        pady= 2
-
-        self.mainCTk = ctk.CTkCheckBox (self.parent, text=self.label, onvalue=1, command=self.CTk_callback)
-        self.mainCTk.grid(row=self.row, column=self.column, padx=10, pady = pady, sticky="w")
-
-        self.set_CTkControl()
-        self.set_CTkControl_state()
-
-    def _getFrom_CTkControl (self):
-        return self.mainCTk.get()
-
-    def _set_CTkControl (self,  widgetCTk, newValStr: str):
-        if newValStr == "1":  widgetCTk.select()
-        else:                 widgetCTk.deselect()
-
-    def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
-        widgetCTk.configure (text=newLabelStr)
-
-
+    def _set_CTkControl_state (self, widgetCTk : ctk.CTkCheckBox, disable: bool):
+        # overwritten to set disabled borde rcolor 
+        if disable: 
+            widgetCTk.configure (border_color = self._text_color(STYLE_DISABLED))
+        else: 
+            widgetCTk.configure (border_color = self._text_color(STYLE_COMMENT))
+        super(). _set_CTkControl_state (widgetCTk, disable)
 
 
 class Field_Widget(Base_Widget):
@@ -1014,7 +1073,8 @@ class Field_Widget(Base_Widget):
             else:
                 width= 95
 
-            label_ctk = ctk.CTkLabel (self.parent, width= width, text=self.label,  
+            label_ctk = ctk.CTkLabel (self.parent, width= width, text=self.label, 
+                                      text_color = self._text_color(STYLE_COMMENT), 
                                       justify='left', anchor='w')
             label_ctk.grid (row=self.row, column=column, rowspan=rowspan, padx=padx, pady=pady, sticky='w')
             column += 1
@@ -1054,8 +1114,10 @@ class Field_Widget(Base_Widget):
 
         column += 1
         if (self.unit):
-            unit_ctk  = ctk.CTkLabel (self.parent, text=self.unit, anchor='w')
-            unit_ctk.grid (row=self.row, rowspan=rowspan, column=column, padx=(2,15), pady=pady, sticky=sticky)
+            unit_ctk  = ctk.CTkLabel (self.parent, text=self.unit, anchor='w',
+                                      text_color = self._text_color(STYLE_COMMENT))
+            unit_ctk.grid (row=self.row, rowspan=rowspan, column=column, padx=(2,15), pady=pady,
+                           sticky=sticky)
         else: 
             unit_ctk  = ctk.CTkFrame (self.parent, width=1, height=1, fg_color="transparent")
             unit_ctk.grid (row=self.row, rowspan=rowspan, column=column, padx=(2,5),  pady=pady, sticky=sticky)
@@ -1104,7 +1166,7 @@ class Field_Widget(Base_Widget):
             self._set_CTkControl_state (self.subCTk,  self.disabled)
             self._set_CTkControl_state (self.addCTk,  self.disabled)
     
-    def _set_CTkControl_state (self, widgetCTk, disable: bool):
+    def _set_CTkControl_state (self, widgetCTk : ctk.CTkEntry, disable: bool):
         """sets the disabled / normal state in CTk control 
         """
         # ! overwrite because of CTk bug text_color_disabled
@@ -1112,10 +1174,12 @@ class Field_Widget(Base_Widget):
         if disable: 
             if curCTk_state == "normal":
                 widgetCTk.configure (state ="disabled" )         # "normal" (standard) or "disabled" (not clickable, darker color)
-                widgetCTk.configure (text_color = self._text_color('Disabled'))
+                widgetCTk.configure (text_color = self._text_color(STYLE_COMMENT))
                 # also set background of entry field
                 if widgetCTk == self.mainCTk: 
                     widgetCTk.configure (fg_color = cl_entry_disable)
+                    widgetCTk.configure (border_color = cl_entry_disable)
+                    
         else: 
             if curCTk_state == "disabled":
                 widgetCTk.configure (state ="normal" )           # "normal" (standard) or "disabled" (not clickable, darker color)
@@ -1123,6 +1187,7 @@ class Field_Widget(Base_Widget):
                 # also set background of entry field
                 if widgetCTk == self.mainCTk: 
                     widgetCTk.configure (fg_color = cl_entry)
+                    widgetCTk.configure (border_color = cl_entry)
 
 
 
@@ -1235,6 +1300,9 @@ class Option_Widget(Base_Widget):
 
         self.mainCTk = ctk.CTkOptionMenu (option_frame, values= self.options, 
                                           width=option_width, height=self.height, 
+                                          text_color = self._text_color(STYLE_NORMAL)[1],
+                                          text_color_disabled= self._text_color(STYLE_DISABLED)[1],
+                                          fg_color = cl_button_primary,
                                           dynamic_resizing=False,
                                           command=self.CTk_callback)        
 
@@ -1347,11 +1415,19 @@ class Combo_Widget(Base_Widget):
         set -- access path setter when switched              :)
         spin -- Boolean if entry field should have a spinner       :)
     """
-    def __init__(self, *args, padx=None, pady=None, lab_width=None, **kwargs):
+    def __init__(self, *args, 
+                 padx=None, pady=None, 
+                 lab_width=None,
+                 justify=None,
+                 sticky=None,
+                 **kwargs):
         super().__init__(*args, **kwargs)
 
         if padx is None: padx = (1,1)
         if pady is None: pady = 0
+
+        if justify is None: justify='left'
+        if sticky  is None: sticky='w'
 
         r = self.row
         c = self.column
@@ -1360,18 +1436,23 @@ class Combo_Widget(Base_Widget):
             if lab_width:   width = lab_width
             else:           width= 95
             label_ctk = ctk.CTkLabel (self.parent, width=width, text=self.label,
+                                      text_color = self._text_color(STYLE_COMMENT),
                                       justify='left', anchor='w')
         else:
             label_ctk = ctk.CTkFrame (self.parent, width=10, height=5, fg_color="transparent")     # dummy frame
 
-        label_ctk.grid (row=r, column=c, padx=padx, pady=pady, sticky='w')
+        label_ctk.grid (row=r, column=c, padx=padx, pady=pady, sticky=sticky)
 
         self.mainCTk = ctk.CTkComboBox (self.parent, values= self.options, 
                                         width=self.width, height=self.height, 
+                                        text_color = self._text_color(STYLE_COMMENT),
+                                        text_color_disabled= self._text_color(STYLE_DISABLED),
+                                        fg_color = cl_entry,
                                         button_color=cl_spin, border_width=1,
+                                        justify=justify,
                                         command=self.CTk_callback)        
 
-        self.mainCTk.grid (row=r, column=c+1, padx=None, pady=pady, sticky='w')
+        self.mainCTk.grid (row=r, column=c+1, padx=None, pady=pady, sticky=sticky)
         self.set_CTkControl()
         self.set_CTkControl_state()
 

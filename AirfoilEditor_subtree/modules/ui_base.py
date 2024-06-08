@@ -25,6 +25,7 @@ from artist             import Plot_Toolbar
 def set_initialWindowSize (tkwindow : ctk.CTkToplevel,
                            width = None, height = None,  
                            widthFrac = None, heightFrac = None,
+                           posxFrac = None,  posyFrac = None,
                            geometry=None):
     """
     Set size and position of tkinter window in fraction of screensize
@@ -35,6 +36,7 @@ def set_initialWindowSize (tkwindow : ctk.CTkToplevel,
         height:     height in px - default 400
         widthFrac:  or width as fraction of screensize
         heightFrac: or height as fraction of screensize
+        posxFrac, posyFrac: position as fraction of screensize 
         geometry:   gemetry string like "1551x846+144+67" or "zoomed"
     """
 
@@ -63,8 +65,11 @@ def set_initialWindowSize (tkwindow : ctk.CTkToplevel,
         tkwindow.minsize(int(width*0.9), int(height*0.8))
         tkwindow.geometry("%dx%d" %(width, height))
 
-        x = (tkwindow.winfo_screenwidth()  - width)  // 2
-        y = ((tkwindow.winfo_screenheight() - height) // 2 ) // 2.0 # more up (Windows bar)
+        if posxFrac is None: posxFrac = 0.5
+        if posyFrac is None: posyFrac = 0.5
+        
+        x =  (tkwindow.winfo_screenwidth()  - width)  * posxFrac
+        y = ((tkwindow.winfo_screenheight() - height) * posyFrac ) // 2.0 # more up (Windows bar)
 
         tkwindow.geometry("+%d+%d" %(x, y))
 
@@ -465,6 +470,8 @@ class Dialog_Abstract (ctk.CTkToplevel):
     name       = "My little title"
     widthFrac  = 0.75
     heightFrac = 0.70
+    posxFrac   = None                       # auto x position 
+    posyFrac   = None                       # auto y position 
 
     def __init__(self, master, myApp=None, workingDir=None, title=None, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
@@ -473,7 +480,8 @@ class Dialog_Abstract (ctk.CTkToplevel):
 
         # bug fix titlebar color https://github.com/TomSchimansky/CustomTkinter/issues/1930
         self.after(10, lambda: self._windows_set_titlebar_color(self._get_appearance_mode()))
-        set_initialWindowSize (self, widthFrac=self.widthFrac, heightFrac=self.heightFrac)
+        set_initialWindowSize (self, widthFrac=self.widthFrac, heightFrac=self.heightFrac, 
+                                     posxFrac=self.posxFrac, posyFrac=self.posyFrac)
 
         self.title (title if title else self.name)
 
@@ -744,10 +752,7 @@ class Diagram_Abstract(ctk.CTkFrame):
     def setup_toolbar (self, r):
         """ toolbar for pan and zoom"""
         r +=1
-        Blank_Widget (self.view_frame,r,0)
-        self.view_frame.grid_rowconfigure(r, weight=1)
-        r +=1
-        Label_Widget (self.view_frame, r, 0, lab='Pan and zoom')
+        Label_Widget (self.view_frame, r, 0, pady=(5,5), lab='Pan and zoom')
         r +=1
         self.toolbar = Plot_Toolbar(self.canvas, self.view_frame, background=ctk.get_appearance_mode())
         self.toolbar.grid (row=r, column=0, columnspan= 3, sticky='ew', padx=(10,10), pady=(0,0))
