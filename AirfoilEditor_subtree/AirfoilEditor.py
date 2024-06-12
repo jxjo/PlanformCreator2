@@ -266,12 +266,12 @@ class Edit_Curvature(Edit_Abstract_Airfoil):
         c = 1                                  
         self.add (Field_Widget  (self,r,c,   lab="Reversals upper", 
                                  get=lambda: self.geo.curvature.upper.nreversals,
-                                 width=50, lab_width=100, set='', dec=0))
+                                 width=50, lab_width=100, dec=0))
        
         r += 1
         self.add (Field_Widget  (self,r,c, lab="lower", 
                                  get=lambda: self.geo.curvature.lower.nreversals, 
-                                 width=50, lab_width=60, padx=(20,0), set='', dec=0))
+                                 width=50, lab_width=60, padx=(20,0), dec=0))
         r += 1
         self.add (Field_Widget  (self,r,c,   lab="... threshold", 
                                  get=lambda: self.curvature_threshold, 
