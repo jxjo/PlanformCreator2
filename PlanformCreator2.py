@@ -1030,6 +1030,10 @@ class Diagram_Planform (Diagram_Abstract):
         p = Switch_Widget (self.view_frame,r,c, lab='From DXF', val=False, set=self._set_showRefDXF,
                            disable=lambda: not self.wing().refPlanform_DXF.isValid)
         self._dxf_widget = p 
+
+        r += 1                                                  # place toolbar at bottom
+        self.view_frame.grid_rowconfigure (r, weight=3)
+
         return r,c 
 
 
@@ -1343,6 +1347,9 @@ class Diagram_ChordDistribution (Diagram_Abstract):
                            disable=lambda: not self.wing().refPlanform_DXF.isValid)
         self._dxf_widget = p 
 
+        r += 1                                                  # place toolbar at bottom
+        self.view_frame.grid_rowconfigure (r, weight=3)
+
         return r,c 
 
 
@@ -1511,6 +1518,10 @@ class Diagram_Airfoils (Diagram_Abstract):
         Switch_Widget (self.view_frame,r,c, lab='as wing section', val=False, set=self._set_show_abs)
         r += 1
         Switch_Widget (self.view_frame,r,c, lab='Straked airfoils', val=False, set=self._set_show_strakedAirfoils)
+
+        r += 1                                                  # place toolbar at bottom
+        self.view_frame.grid_rowconfigure (r, weight=3)
+
         return r,c 
 
 
