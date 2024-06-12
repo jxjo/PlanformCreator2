@@ -705,10 +705,7 @@ class Base_Widget():
         elif disable is not None:               # or access path
             self.disGetter = disable
             self.disabled = self.get_value (disable, obj, parent)
-        elif self.setter is None:               # no setter? 
-            self.disabled = True                #   disable field 
-            self.readOnly = True                #   readOnly mode - will alos control appearance 
-        
+ 
         # label of widget 
 
         if (isinstance(lab, str)) or lab is None:
@@ -1436,6 +1433,12 @@ class Field_Widget(Base_Widget):
         
         if padx is None: padx= (5, 5)
         if pady is None: pady= 0
+
+        if self.setter is None:                 # no setter? 
+            self.disabled = True                #   force disable field 
+            self.readOnly = True                #   readOnly mode - will also control appearance 
+
+        # create CTk widgets 
 
         if (self.label):  
             if lab_width:
