@@ -222,7 +222,8 @@ class Edit_Airfoil_Data(Edit_Abstract_Airfoil):
         self.add (Field_Widget  (self,r,c+3, lab="LE radius", obj=self.airfoil, 
                                 get='leRadius_perc', width=50, lab_width=60, unit="%", dec=2))
         r += 1
-        self.add (Label_Widget  (self,r,c, padx=5,  pady=(3,3), lab=lambda : "Data " + self.airfoil().geo.description))
+        self.add (Label_Widget  (self,r,c, padx=5,  pady=(3,3), disable=True,
+                                 lab=lambda : "Data " + self.airfoil().geo.description))
  
 
     def modify_airfoil (self): 
@@ -263,16 +264,19 @@ class Edit_Curvature(Edit_Abstract_Airfoil):
         r = 1
         Blank_Widget (self, r,0)                # left blank column to inset the fields 
         c = 1                                  
-        self.add (Field_Widget  (self,r,c,   lab="Reversals upper", get=lambda: self.geo.curvature.upper.nreversals,
-                                width=50, lab_width=100, set='', dec=0, disable= True))
+        self.add (Field_Widget  (self,r,c,   lab="Reversals upper", 
+                                 get=lambda: self.geo.curvature.upper.nreversals,
+                                 width=50, lab_width=100, set='', dec=0))
        
         r += 1
-        self.add (Field_Widget  (self,r,c, lab="lower", get=lambda: self.geo.curvature.lower.nreversals, 
-                                width=50, lab_width=60, padx=(20,0), set='', dec=0, disable= True))
+        self.add (Field_Widget  (self,r,c, lab="lower", 
+                                 get=lambda: self.geo.curvature.lower.nreversals, 
+                                 width=50, lab_width=60, padx=(20,0), set='', dec=0))
         r += 1
-        self.add (Field_Widget  (self,r,c,   lab="... threshold", get=lambda: self.curvature_threshold, 
-                                set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
-                                width=50, lab_width=80, lim=(0,1), dec=2, spin=False, step=0.02))
+        self.add (Field_Widget  (self,r,c,   lab="... threshold", 
+                                 get=lambda: self.curvature_threshold, 
+                                 set=self._set_curvature_threshold, event=AIRFOIL_CHANGED,
+                                 width=50, lab_width=80, lim=(0,1), dec=2, spin=False, step=0.02))
 
 
     def refresh(self): 
@@ -615,6 +619,7 @@ class Diagram_Airfoil (Diagram_Abstract):
         
         self.airfoilArtist   = Airfoil_Artist (self.ax1, self.airfoils, show=True)
         self.airfoilArtist.set_points(self.show_points)
+        self.airfoilArtist.set_show_shape_function (self.show_shape_function)
         self.airfoilArtist.set_show_title (True)            # title like "Bezier based.." 
 
         self.thicknessArtist = Thickness_Artist (self.ax1, self.airfoils, show=self.show_camber)
@@ -672,6 +677,8 @@ class Diagram_Airfoil (Diagram_Abstract):
         Switch_Widget (self.view_frame,r,c, lab='Camber',
                        get=lambda: self.show_camber, set=self.set_show_camber)
         r += 1 
+        if self.show_shape_function_disabled():                 # switch off, if the first airfoil is a .dat
+            self._show_shape_function = False
         self._shape_widget = Switch_Widget (self.view_frame,r,c, lab='Shape function', 
                        get=lambda: self.show_shape_function, set=self.set_show_shape_function,
                        disable=self.show_shape_function_disabled)
@@ -1569,7 +1576,7 @@ class Dialog_Repanel (Dialog_Airfoil_Abstract):
         self.add (Field_Widget (self.input_frame,r,c  , lab="No of panels", width=100,
                                 obj=self.airfoil, get='nPanelsNew', set='set_nPanelsNew',
                                 event=self.change_event, lim=(50,500), dec=0, spin=True, step=10))
-        self.add (Label_Widget (self.input_frame,r,c+3  , columnspan = 1, 
+        self.add (Label_Widget (self.input_frame,r,c+3  , columnspan = 1, text_style=STYLE_DISABLED,
                                 lab= lambda: "equals %d points" % self.airfoil.nPoints))
         
         self.add(Button_Widget (self.input_frame,r,c+4, lab='Change defaults', width=110, columnspan=3, 
@@ -2198,17 +2205,17 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
         # init sub frame with data of Bezier airfoil 
 
         r,c = 0,0  
-        Label_Widget  (frame,r,c, padx= 0, lab= "Side", width=80, columnspan=1, text_style=STYLE_NORMAL)
+        Label_Widget  (frame,r,c, padx= 0, lab= "Side", width=80, columnspan=1)
         c +=1
-        Label_Widget  (frame,r,c, padx=20, lab= "Ctrl Points", width=60, columnspan=1, text_style=STYLE_NORMAL)
+        Label_Widget  (frame,r,c, padx=20, lab= "Ctrl Points", width=60, columnspan=1)
         c +=2
         Blank_Widget  (frame, r,c, width=10)
         c += 1
-        Label_Widget  (frame,r,c, padx=10, lab= "LE  curvature  TE", width=90, columnspan=3 , text_style=STYLE_COMMENT)
+        Label_Widget  (frame,r,c, padx=10, lab= "LE  curvature  TE", width=90, columnspan=3)
         c +=4
         Blank_Widget  (frame, r,c, width=30)
         c +=1
-        Label_Widget  (frame,r,c, padx=10, lab= "Deviation Bezier to target ", width=50, columnspan=2 , text_style=STYLE_COMMENT)
+        Label_Widget  (frame,r,c, padx=10, lab= "Deviation Bezier to target ", width=50, columnspan=2)
 
         frame.grid_columnconfigure (c+2, weight=1)
         r +=1
@@ -2217,7 +2224,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
 
             r += 1
             c = 0 
-            self.add (Label_Widget (frame,r,c, padx=(30,0), lab=f"{sideName}", width=60, columnspan=1, text_style=STYLE_NORMAL))
+            self.add (Label_Widget (frame,r,c, padx=(30,0), lab=f"{sideName}", width=60, columnspan=1))
             c +=1
             self.add (Field_Widget  (frame,r,c, width=90, lab_width=100,
                                     get=self.nPoints, set=self.set_nPoints, objId = sideName,
@@ -2238,16 +2245,17 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
                                 get='teGap_perc', set='set_teGap_perc', step=0.01,
                                 spin=True, width=90, lab_width=70, unit="%", dec=2,
                                 event=self.changed_te_gap))
-        Label_Widget (frame,r,c+3, padx=0, columnspan=8, lab= "= move last Bezier point up/down (Match will overwrite)")
+        Label_Widget (frame,r,c+3, padx=0, columnspan=8, text_style=STYLE_DISABLED,
+                      lab= "= move last Bezier point up/down (Match will overwrite)")
 
 
     def _init_target_frame (self, frame : ctk.CTkFrame): 
         # init sub frame with data of target airfoil 
 
         r,c = 0,0  
-        Label_Widget  (frame,r,c, padx= 0, lab= "Side", width=80, columnspan=1, text_style=STYLE_NORMAL)
+        Label_Widget  (frame,r,c, padx= 0, lab= "Side", width=80, columnspan=1)
         c +=1
-        Label_Widget  (frame,r,c, padx=10, lab= "LE  curvature  TE", width=90, columnspan=3 , text_style=STYLE_COMMENT)
+        Label_Widget  (frame,r,c, padx=10, lab= "LE  curvature  TE", width=90, columnspan=3)
 
         r +=1
 
@@ -2255,7 +2263,7 @@ class Dialog_Bezier (Dialog_Airfoil_Abstract):
             curv = self.airfoilOrg.geo.curvature.side(sideName)
             r += 1
             c = 0 
-            self.add (Label_Widget (frame,r,c, padx=(30,0), lab=f"{sideName}", width=60, columnspan=1, text_style=STYLE_NORMAL))
+            self.add (Label_Widget (frame,r,c, padx=(30,0), lab=f"{sideName}", width=60, columnspan=1))
             c += 1
             self.add (Field_Widget  (frame,r,c, val=curv.y[0], width=50, dec=0))
             c +=2
