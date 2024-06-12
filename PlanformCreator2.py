@@ -326,7 +326,7 @@ class Edit_Planform_Master(Edit_Abstract_Wing):
                                 width = 150, options=Planform.allTemplatePlanformTypes(),
                                 event=PLANFORM_CHANGED))
 
-        self.add(Label_Widget  (self,1, 0, lab= self.shortDescription))
+        self.add(Label_Widget  (self,1, 0, lab= self.shortDescription, disable=True))
         self.add(Blank_Widget  (self,2, 0))
 
         # set inital planform to edit 
@@ -724,8 +724,9 @@ class Edit_WingSection(Edit_Abstract_Wing):
 
         Blank_Widget (self,4,0, width=20, height = 10) 
 
-        self.add(Field_Widget  (self,5,0, lab="Airfoil", width=110, get=lambda: self.wingSection().airfoil.name, 
-                                disable=True, event=SECTION_CHANGED))
+        self.add(Field_Widget  (self,5,0, lab="Airfoil", width=110, 
+                                get=lambda: self.wingSection().airfoil.name, 
+                                event=SECTION_CHANGED))
 
         self.add(Button_Widget (self,5,2, icon_name='open', padx=(5,0), style=ICON, 
                                 set=self.select_airfoil,
@@ -739,8 +740,8 @@ class Edit_WingSection(Edit_Abstract_Wing):
                                 disable=lambda: not self.wingSection().airfoil_canBeRemoved(),
                                 tooltip="Remove airfoil - at wing section will be <strak>"))
 
-        self.add(Field_Widget  (self,6,0, lab="Airfoil nick", obj=self.wingSection ,get='airfoilNick', 
-                                                disable=True, width=110))
+        self.add(Field_Widget  (self,6,0, lab="Airfoil nick", width=110, 
+                                obj=self.wingSection ,get='airfoilNick'))
         Blank_Widget (self,7,0, width=20, height = 10) 
         self.add(Field_Widget  (self,8,0, lab="Flap group", obj=self.wingSection ,get='flapGroup', set='set_flapGroup',
                                                 lim=(0,9), dec=0, spin=True, step=1,
