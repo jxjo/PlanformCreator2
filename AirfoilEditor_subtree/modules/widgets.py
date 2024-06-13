@@ -1319,28 +1319,75 @@ class Button_Widget(Base_Widget):
     
 
 
-class Switch_Widget(Base_Widget):
-    """CTKSwitch - uses one column in the grid
-
-    Keyword Arguments:
-        val or obj+getter -- val string to show or access path with obj and getter          :)
-        set -- access path setter when switched              :)
+class Switch_Widget (Base_Widget):
     """
-    def __init__(self, *args, padx=None, pady=None, columnspan=None, **kwargs):
+    CTKSwitch - uses two columns in the grid if label is defined 
+    """
+    def __init__(self, *args, 
+                 padx=None, pady=None, 
+                 columnspan=None,
+                 rowspan=None,
+                 lab_width= None, 
+                 lab_pos=None, 
+                 **kwargs):
         super().__init__(*args, **kwargs)
 
-        if padx is None: padx = (15,5)
+        if padx is None: padx = (15,3)
         if pady is None: pady = 0
         if columnspan is None: columnspan = 1
+        if rowspan is None:    rowspan = 1
 
-        self.mainCTk = ctk.CTkSwitch(self.parent, switch_height=14, switch_width=32, 
-                                     text_color = self._text_color(STYLE_COMMENT),
-                                     text_color_disabled= self._text_color(STYLE_DISABLED),
-                                     text=self.label, width=self.width, onvalue=1, command=self.CTk_callback)
-        self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky="w")
+        # label left - right 
+
+        if lab_pos is None: lab_pos = 'right' 
+        if not lab_pos in ['left', 'right']: 
+            raise ValueError (f"Unknown label position '{lab_pos}'")
+        if lab_width is None: lab_width = 95
+
+        # create 2 widgets Label and Switch 
+
+        if self.label: 
+            self.labelCTk = ctk.CTkLabel (self.parent, width= lab_width, height=self.height, 
+                                text=self.label, 
+                                text_color=self._text_color(STYLE_COMMENT), 
+                                text_color_disabled=self._text_color(STYLE_DISABLED),
+                                justify='left', anchor='w')
+        else: 
+            self.labelCTk = None 
+
+        self.mainCTk = ctk.CTkSwitch(self.parent, switch_height=13, switch_width=32, text='', 
+                                     width=40, onvalue=1, command=self.CTk_callback)
+
+        # position widgets in grid according lab_pos 
+
+        c = self.column 
+        r = self.row
+        padx_main = padx
+
+        if lab_pos == 'left' and self.labelCTk:
+            self.labelCTk.grid (row=r, column=c, pady=pady, padx=padx, rowspan=rowspan, sticky='w')
+            padx_main = 0 
+            c += 1
+        elif lab_pos == 'right' and self.labelCTk: 
+            self.labelCTk.grid (row=r, column=c+1, pady=pady, sticky='w')
+
+        self.mainCTk.grid (row=r, column=c, columnspan=columnspan, rowspan=rowspan,
+                            padx=padx_main, pady=pady, sticky='w')
+
+        # allow click on label to switch 
+
+        if self.labelCTk: 
+            self.labelCTk.bind("<Button-1>", self._label_callback)
 
         self.set_CTkControl()
         self.set_CTkControl_state()
+
+
+    def _label_callback (self,*_):
+        # clicked on label - toggle switch
+        self.mainCTk.toggle()
+        self.CTk_callback() 
+
 
     def _getFrom_CTkControl (self):
         return self.mainCTk.get()
@@ -1350,7 +1397,16 @@ class Switch_Widget(Base_Widget):
         else:                 widgetCTk.deselect()
 
     def _set_CTkControl_label (self, widgetCTk, newLabelStr: str):
-        widgetCTk.configure (text=newLabelStr)
+        if self.labelCTk: 
+            self.labelCTk.configure (text=newLabelStr)
+
+    def set_CTkControl_state (self):
+        """sets disable bool into the final CTk control 
+        """
+        # over written to disable also label 
+        self._set_CTkControl_state (self.mainCTk, self.disabled)
+        if self.labelCTk:
+            self._set_CTkControl_state (self.labelCTk, self.disabled)
 
 
 class CheckBox_Widget(Base_Widget):
@@ -1457,7 +1513,7 @@ class Field_Widget(Base_Widget):
             entry_frame = ctk.CTkFrame(self.parent, fg_color="transparent")
             button_width  = self.height  - 2
             button_height = self.height
-            entry_width = self.width - 2 * button_width - 2
+            entry_width = self.width - 2 * button_width - 3 
         else: 
             entry_frame = self.parent
             entry_width = self.width
@@ -1475,9 +1531,9 @@ class Field_Widget(Base_Widget):
             entry_frame.grid_columnconfigure((0, 2), weight=0)   # buttons don't expand
             entry_frame.grid_columnconfigure(1, weight=0)        # entry expands
 
-            self.subCTk.grid (row=0, column=0, padx=(1, 1), pady=1, sticky='w')
+            self.subCTk.grid (row=0, column=0, padx=(0, 1), pady=1, sticky='w')
             self.mainCTk.grid(row=0, column=1, padx=(1, 1), pady=1, sticky='we')
-            self.addCTk.grid (row=0, column=2, padx=(1, 1), pady=1, sticky='w')
+            self.addCTk.grid (row=0, column=2, padx=(1, 0), pady=1, sticky='w')
 
             entry_frame.grid (row=self.row, rowspan=rowspan, column=column, columnspan=columnspan, 
                               padx=(1, 1), pady=pady, sticky=sticky)
@@ -1838,7 +1894,7 @@ class Combo_Widget(Base_Widget):
                                         justify=justify,
                                         command=self.CTk_callback)        
 
-        self.mainCTk.grid (row=r, column=c+1, padx=None, pady=pady, sticky=sticky)
+        self.mainCTk.grid (row=r, column=c+1, padx=1, pady=pady, sticky=sticky)
         self.set_CTkControl()
         self.set_CTkControl_state()
 
