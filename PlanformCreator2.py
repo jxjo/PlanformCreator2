@@ -1775,7 +1775,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         hint = self.check_y_deviation() 
         if hint: 
             self.add (Label_Widget  (self.input_frame,r,c+2, lab=hint, sticky="w", 
-                                     columnspan=8, text_style='hint'))
+                                     columnspan=8, text_style=STYLE_HINT))
 
         # entry fields 
         r +=1  
@@ -1800,7 +1800,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
                                  obj=self.paneledPlanform, get='y_minWidth', set='set_y_minWidth',
                                  event=PANELS_CHANGED, lim=(1,40), dec=0, spin=True, step=1, unit=self.wing.unit))
         text = "Good value could be 20 %s" %(self.wing.unit)
-        self.add (Label_Widget  (self.input_frame,r,c+3, lab=text, padx=(0,0)))
+        self.add (Label_Widget  (self.input_frame,r,c+3, lab=text, padx=(0,0), disable=True))
         r +=1  
         self.add (Field_Widget  (self.input_frame,r,c, lab="Min tip chord", width=100, padx=(20,0),
                                  obj=self.paneledPlanform, get='minTipChord', set='set_minTipChord',
@@ -1813,11 +1813,14 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         self.input_frame.grid_columnconfigure (6, weight=1)
         self.input_frame.grid_columnconfigure (10, weight=2)
 
-        self.add(Field_Widget  (self.input_frame,r,c, lab=self.mode+ " directory", obj=self.exporter, get='baseAndExportDir', set='',
-                                width=220, disable=True, justify='left'))
+        self.add(Field_Widget  (self.input_frame,r,c, lab=self.mode+ " directory", 
+                                obj=self.exporter, get='baseAndExportDir', 
+                                width=220,  justify='left'))
         self.add(Button_Widget (self.input_frame,r,c+2, lab='Select', width=60, sticky='w', set=self.select_dir ))
-        self.add(Switch_Widget (self.input_frame,r+1,c, lab='Use airfoil nick names for airfoils', 
-                                columnspan=2, padx=0, 
+        r += 1
+        frame = ctk.CTkFrame (self.input_frame, fg_color=None)
+        frame.grid (row=r, column=c, columnspan=3, sticky='w')
+        self.add(Switch_Widget (frame,0,0, lab='Use airfoil nick names for airfoils', padx=(0,5),
                                 obj=self.exporter, get='useNick', set='set_useNick'))
  
 
@@ -1858,7 +1861,7 @@ class Dialog_Export_Xflr5_Flz (Dialog_Abstract):
         if self.paneledPlanform.minTipChord > self.wing.tipchord:
             return STYLE_WARNING
         else: 
-            return STYLE_COMMENT
+            return STYLE_DISABLED
 
 
     def select_dir(self):
@@ -1970,14 +1973,15 @@ class Dialog_Export_Dxf (Dialog_Abstract):
         hint = self.hint_onlyPolylines () 
         if hint: 
             self.add (Label_Widget  (self.header_frame,r,c+1, lab=hint, sticky="w", 
-                                     columnspan=8, text_style='hint'))
+                                     columnspan=8, text_style=STYLE_HINT))
         self.header_frame.grid_columnconfigure (c+2, weight=1)
 
         # entry fields 
         r = 0 
         c = 0 
-        self.add(Field_Widget  (self.input_frame,r,c, lab="Dxf directory", obj=self.exporter, get='baseAndExportDir', set='',
-                                width=280, columnspan=2, disable=True))
+        self.add(Field_Widget  (self.input_frame,r,c, lab="Dxf directory", 
+                                obj=self.exporter, get='baseAndExportDir',
+                                width=280, columnspan=2, justify='left'))
         self.add(Button_Widget (self.input_frame,r,c+3, lab='Select', width=60, sticky='w', set=self.select_dir ))
 
 
@@ -1986,24 +1990,20 @@ class Dialog_Export_Dxf (Dialog_Abstract):
 
         r += 1 
         self.add(Switch_Widget (self.input_frame,r,c+1, lab='Include airfoils in DXF', 
-                                columnspan=2, padx=0, 
                                 obj=self.exporter, get='includeAirfoils', set='set_includeAirfoils'))      
        
         r += 1 
         self.add(Switch_Widget (self.input_frame,r,c+1, lab='Use airfoils nick name ', 
-                                columnspan=2, padx=0, 
                                 obj=self.exporter, get='useNick', set='set_useNick'))      
         r += 1 
         self.add(Switch_Widget (self.input_frame,r,c+1, lab='Export airfoils into directory', 
-                                columnspan=2, padx=0, 
                                 obj=self.exporter, get='exportAirfoils', set='set_exportAirfoils'))      
        
         r += 1 
         self.add(Switch_Widget (self.input_frame,r,c+1, lab='Set a common airfoil TE thickness of', 
-                                columnspan=2, padx=0, 
                                 obj=self.exporter, get='setTeGap', set='set_setTeGap'))      
 
-        self.teWidget = Field_Widget (self.input_frame,r,c+3, lab="", lab_width= 30, width=90,
+        self.teWidget = Field_Widget (self.input_frame,r,c+3, lab=" ", lab_width= 10, width=90, 
                                  obj=self.exporter, get='teGap_mm', set='set_teGap_mm',
                                  lim=(0,2), dec=1, spin=True, step=0.1, unit='mm')
         self.add(self.teWidget) 
@@ -2099,14 +2099,15 @@ class Dialog_Export_Airfoils (Dialog_Abstract):
         hint =  "A common trailing edge thickness in mm can be set \n" + \
                 "which will modify the airfoils based on their chord in the wing."
         self.add (Label_Widget  (self.header_frame,r,c+1, lab=hint, sticky="w", 
-                                    columnspan=8, text_style='hint'))
+                                    columnspan=8, text_style=STYLE_HINT))
         self.header_frame.grid_columnconfigure (c+2, weight=1)
 
         # entry fields 
         r = 0 
         c = 0 
-        self.add(Field_Widget  (self.input_frame,r,c, lab="Airfoils directory", obj=self.exporter, get='baseAndExportDir', set='',
-                                lab_width=105, width=380, columnspan=4, disable=True))
+        self.add(Field_Widget  (self.input_frame,r,c, lab="Airfoils directory", 
+                                obj=self.exporter, get='baseAndExportDir', 
+                                lab_width=105, width=380, columnspan=4, justify='left'))
         self.add(Button_Widget (self.input_frame,r,c+5, lab='Select', width=60, sticky='w', set=self.select_dir ))
 
         r += 1 
@@ -2114,13 +2115,11 @@ class Dialog_Export_Airfoils (Dialog_Abstract):
               
         r += 1 
         self.add(Switch_Widget (self.input_frame,r,c+1, lab='Use airfoils nick name ', 
-                                columnspan=2, padx=0, 
                                 obj=self.exporter, get='useNick', set='set_useNick'))      
         r += 1 
         self.add(Switch_Widget (self.input_frame,r,c+1, lab='Set a common airfoil TE thickness of', 
-                                columnspan=2, padx=0, 
                                 obj=self.exporter, get='setTeGap', set='set_setTeGap'))      
-        self.teWidget = Field_Widget (self.input_frame,r,c+3, lab="", lab_width= 30, width=90,
+        self.teWidget = Field_Widget (self.input_frame,r,c+3, lab=" ", lab_width= 30, width=90,
                                  obj=self.exporter, get='teGap_mm', set='set_teGap_mm',
                                  lim=(0,2), dec=1, spin=True, step=0.1, unit='mm')
         self.add(self.teWidget) 
