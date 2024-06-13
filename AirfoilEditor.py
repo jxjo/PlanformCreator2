@@ -2692,7 +2692,7 @@ class AirfoilEditor ():
             airfoil_files = dat_files + bez_files + hh_files
             airfoil_files = [os.path.normpath(os.path.join(airfoil_dir, f)) \
                                 for f in airfoil_files if os.path.isfile(os.path.join(airfoil_dir, f))]
-            return sorted (airfoil_files)
+            return sorted (airfoil_files, key=str.casefold)
         else:
             return []
 
@@ -2838,7 +2838,7 @@ if __name__ == "__main__":
             airfoil_dir   =".\\test_airfoils"
             airfoil_files = [os.path.join(airfoil_dir, f) for f in os.listdir(airfoil_dir) if os.path.isfile(os.path.join(airfoil_dir, f))]
             airfoil_files = [f for f in airfoil_files if f.endswith('.dat')]       
-            airfoil_files = sorted (airfoil_files)
+            airfoil_files = sorted (airfoil_files, key=str.casefold)
             airfoil_file = airfoil_files[0]
             NoteMsg ("No airfoil file as argument. Showing example airfoils in '%s'" %airfoil_dir)
         else:
