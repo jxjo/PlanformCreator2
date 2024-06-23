@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mc
 from matplotlib.collections import PathCollection
+from matplotlib.backend_bases import MouseEvent
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk 
 
 from cycler import cycler  
@@ -580,6 +581,7 @@ class DragManager:
                  typeTag = None, 
                  callback_draw_animated = None, 
                  callback_shiftCtrlClick = None, 
+                 callback_doubleClick = None, 
                  callback_on_moved=None):
         """
         Create a DragManager for an artist 
@@ -591,7 +593,8 @@ class DragManager:
         bounds :            [(x1,x2),(y1,y2)] - bounds for movement of the artist - either scalar or array
         typeTag :           optional free form tag to identy DragManager in callBacks
         callback_draw_animated : function - optional external method to draw the artist (and do other thinsg)
-        callback_shiftCtrlClick : function - call with coordinates shift or control click
+        callback_shiftCtrlClick : function - callback with coordinates shift or control click
+        callback_doubleClick : function - callback with iArtist
         callback_on_moved : function - call with final coordinates after movement
              
         """
@@ -601,7 +604,9 @@ class DragManager:
         self._callback_on_moved = callback_on_moved
         self._callback_draw_animated = callback_draw_animated
         self._callback_shiftCtrlClick = callback_shiftCtrlClick
+        self._callback_doubleClick = callback_doubleClick
         self._shiftCtrlClick = False                # was shift or ctrl press down made?
+        self._doubleClick    = False                # was double click made?
 
         # bounds for movements
         if bounds: 
@@ -652,7 +657,7 @@ class DragManager:
         self._bg = aBackground
 
 
-    def on_press(self, event):
+    def on_press(self, event : MouseEvent ):
         """Check whether mouse is over us; if so, store some data."""
 
         if event.inaxes != self.ax: return
@@ -668,7 +673,9 @@ class DragManager:
 
         if not myArtistHit: iArt = None 
 
-        # dbouble click not on an artist ? Extra handling 
+        logging.debug (f"Matplotlib Event:  {event.name}  doubleClick: {event.dblclick}")
+
+        # shift ctrl click not on an artist ? Extra handling 
         if event.key =='control' or event.key =='shift':
             if self._callback_shiftCtrlClick:
 
@@ -683,6 +690,15 @@ class DragManager:
                 return 
 
         if not myArtistHit: return
+
+        # double click extra handling 
+        if event.dblclick:
+            if self._callback_doubleClick:
+
+                # self.canvas.restore_region(self._bg)            # blank background
+                self._callback_doubleClick (iArtist=iArt)       #call back into parent 
+                self._doubleClick = True                        # new state of self 
+                return 
 
         # store all relevant data - index of artist, old position, new mouse poisition
         self._press_xy = iArt, myArtist.get_xydata()[0], (event.xdata, event.ydata)
@@ -730,14 +746,22 @@ class DragManager:
         self.canvas.blit(self.ax.bbox)
         self.canvas.flush_events()
 
-    def on_release(self, event):
+    def on_release(self, event : MouseEvent):
         """Clear button press information."""
         if event.button != 1:
             return
 
-        # does the released button belong to self motion? 
-        if self._press_xy: 
+        if event.inaxes != self.ax: 
+            return
 
+        logging.debug (f"Matplotlib Event:  {event.name}  doubleClick: {event.dblclick}")
+
+        if self._doubleClick:
+
+            self._doubleClick = False
+
+        # does the released button belong to self motion? 
+        elif self._press_xy: 
             self.canvas.restore_region(self._bg)
 
             # callback when move is finished - before redraw - parent could change points
@@ -768,55 +792,10 @@ class DragManager:
         self.canvas.mpl_disconnect(self.cidmotion)
         self.canvas.mpl_disconnect(self.cid_enter)
 
+        self.ax = None
+        self.canvas = None
+        self._callback_on_moved = None
+        self._callback_draw_animated = None
+        self._callback_shiftCtrlClick = None
+        self._callback_doubleClick = None
 
-
-
-if __name__ == '__main__':
-
-#     # Test DraggableArtist 
-#     #     
-#     def on1_finished (): 
-#         print("Finished ")
-
-#     def draw_animated(duringMove=False):
-#         ax.draw_artist (markerArtist)
-#         x2,y2 = markerArtist.get_xydata()[0]
-#         x = [0,x2]
-#         y = [0,y2]
-#         lineArtist.set_xdata(x)
-#         lineArtist.set_ydata(y)
-#         ax.draw_artist (lineArtist)
-
-#     def draw_animated2(duringMove=False, iArtist=None):
-
-#         if iArtist:
-#             ax.draw_artist (markerArtists[iArtist])
-#             print ("Artist: ", iArtist)
-#         # ax.draw_artist (markerArtist2)
-
-#     fig, ax = plt.subplots()
-
-#     # ax.set_xlim((0, 6))
-#     # ax.set_ylim((0, 6))
-
-
-#     (markerArtist,) =  ax.plot ([2], [2], marker='o', color="red", markersize=8, animated=True) 
-#     (lineArtist,) =  ax.plot ([0,2], [0,2],  color="red", animated=True) 
-#     dr1 = DragManager(ax, markerArtist, bounds=[(2,5.5),(1,4)], 
-#                        callback_draw_animated = draw_animated,
-#                        callback_on_moved=on1_finished)
-
-#     # test array of artists 
-
-#     markerArtists = []
-#     for i in range (5):
-#         (art,) =  ax.plot ([i], [8-i], marker='o', color="blue", markersize=6, animated=True) 
-#         markerArtists.append(art)
-
-#     dr2 = DragManager(ax, markerArtists, bounds=None, 
-#                        callback_draw_animated = draw_animated2,
-#                        callback_on_moved=on1_finished)
-
-
-#     plt.show()
-    pass
