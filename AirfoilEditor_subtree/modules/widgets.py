@@ -7,9 +7,13 @@ Additional generic (compound) widgets based on original CTK widgets
 
 """
 import os
+import sys
+import time
 import customtkinter as ctk
-import tkinter as tk
+from customtkinter.windows.widgets.core_widget_classes.dropdown_menu import DropdownMenu
+from tkinter import Toplevel, Frame
 from PIL import Image
+
 
                     #   light     dark
 cl_entry            = ("gray96","gray35")         # background of entry fields
@@ -19,7 +23,6 @@ cl_spin_text        = ("gray5" ,"gray95")         # text color of spin buttons
 cl_spin_text_disable= ("gray55","gray70")         # text color of spin buttons
 cl_red              = ("OrangeRed3", "OrangeRed3")  # background for red button 
 cl_button_primary   = ("#3b8ed0", "#3076ad")
-# cl_button_primary   = ctk.ThemeManager.theme["CTkButton"]["fg_color"][0]# default Button darker  
 cl_button_secondary = ctk.ThemeManager.theme["CTkOptionMenu"]["button_color"] # brighter 
 fs_header           = 18                          # font size header 
 
@@ -46,19 +49,6 @@ cl_styles ={
         STYLE_HINT      : ("RoyalBlue3", "cornflower blue"),
         STYLE_WARNING   : ("DarkOrange3", "orange")
         }
-
-
-
-"""
-CTkToolTip Widget
-version: 0.8
-"""
-
-import time
-import sys
-import customtkinter
-from tkinter import Toplevel, Frame
-
 
         
 #-------------------------------------------------------------------------------
@@ -100,7 +90,7 @@ class CTkToolTip(Toplevel):
 
         if sys.platform.startswith("win"):
             self.transparent_color = self.widget._apply_appearance_mode(
-                customtkinter.ThemeManager.theme["CTkToplevel"]["fg_color"])
+                ctk.ThemeManager.theme["CTkToplevel"]["fg_color"])
             self.attributes("-transparentcolor", self.transparent_color)
             self.transient()
         elif sys.platform.startswith("darwin"):
@@ -118,7 +108,7 @@ class CTkToolTip(Toplevel):
         self.config(background=self.transparent_color)
 
         # StringVar instance for msg string
-        self.messageVar = customtkinter.StringVar()
+        self.messageVar = ctk.StringVar()
         self.message = message
         self.messageVar.set(self.message)
 
@@ -130,7 +120,7 @@ class CTkToolTip(Toplevel):
         self.alpha = alpha
         self.border_width = border_width
         self.padding = padding
-        self.bg_color = customtkinter.ThemeManager.theme["CTkFrame"]["fg_color"] if bg_color is None else bg_color
+        self.bg_color = ctk.ThemeManager.theme["CTkFrame"]["fg_color"] if bg_color is None else bg_color
         self.border_color = border_color
         self.disable = False
 
@@ -149,13 +139,13 @@ class CTkToolTip(Toplevel):
         self.transparent_frame = Frame(self, bg=self.transparent_color)
         self.transparent_frame.pack(padx=0, pady=0, fill="both", expand=True)
 
-        self.frame = customtkinter.CTkFrame(self.transparent_frame, bg_color=self.transparent_color,
+        self.frame = ctk.CTkFrame(self.transparent_frame, bg_color=self.transparent_color,
                                             corner_radius=self.corner_radius,
                                             border_width=self.border_width, fg_color=self.bg_color,
                                             border_color=self.border_color)
         self.frame.pack(padx=0, pady=0, fill="both", expand=True)
 
-        self.message_label = customtkinter.CTkLabel(self.frame, textvariable=self.messageVar, **message_kwargs)
+        self.message_label = ctk.CTkLabel(self.frame, textvariable=self.messageVar, **message_kwargs)
         self.message_label.pack(fill="both", padx=self.padding[0] + self.border_width,
                                 pady=self.padding[1] + self.border_width, expand=True)
 
@@ -163,7 +153,7 @@ class CTkToolTip(Toplevel):
             if self.frame.cget("fg_color") == self.widget.cget("bg_color"):
                 if not bg_color:
                     self._top_fg_color = self.frame._apply_appearance_mode(
-                        customtkinter.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+                        ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
                     if self._top_fg_color != self.transparent_color:
                         self.frame.configure(fg_color=self._top_fg_color)
 
@@ -271,353 +261,6 @@ class CTkToolTip(Toplevel):
         self.message_label.configure(**kwargs)
 
 
-
-
-import customtkinter
-import sys
-import time
-import difflib
-
-class CTkScrollableDropdown(customtkinter.CTkToplevel):
-    """
-    Advanced Scrollable Dropdown class for customtkinter widgets
-    Author: Akash Bora
-
-    CC0 1.0 Universal - https://github.com/Akascape/CTkScrollableDropdown
-    """ 
-    
-    def __init__(self, attach, x=None, y=None, button_color=None, height: int = 200, width: int = None,
-                 fg_color=None, button_height: int = 20, justify="center", scrollbar_button_color=None,
-                 scrollbar=True, scrollbar_button_hover_color=None, frame_border_width=2, values=[],
-                 command=None, image_values=[], alpha: float = 0.97, frame_corner_radius=20, double_click=False,
-                 resize=True, frame_border_color=None, text_color=None, autocomplete=False, 
-                 hover_color=None, **button_kwargs):
-        
-        super().__init__(takefocus=1)
-        
-        self.focus()
-        self.lift()
-        self.alpha = alpha
-        self.attach = attach
-        self.corner = frame_corner_radius
-        self.padding = 0
-        self.focus_something = False
-        self.disable = True
-        self.update()
-        
-        if sys.platform.startswith("win"):
-            self.after(100, lambda: self.overrideredirect(True))
-            self.transparent_color = self._apply_appearance_mode(self._fg_color)
-            self.attributes("-transparentcolor", self.transparent_color)
-        elif sys.platform.startswith("darwin"):
-            self.overrideredirect(True)
-            self.transparent_color = 'systemTransparent'
-            self.attributes("-transparent", True)
-            self.focus_something = True
-        else:
-            self.overrideredirect(True)
-            self.transparent_color = '#000001'
-            self.corner = 0
-            self.padding = 18
-            self.withdraw()
-
-        self.hide = True
-        self.attach.bind('<Configure>', lambda e: self._withdraw() if not self.disable else None, add="+")
-        self.attach.winfo_toplevel().bind('<Configure>', lambda e: self._withdraw() if not self.disable else None, add="+")
-        self.attach.winfo_toplevel().bind("<ButtonPress>", lambda e: self._withdraw() if not self.disable else None, add="+")        
-   
-        
-        self.attributes('-alpha', 0)
-        self.disable = False
-        self.fg_color = customtkinter.ThemeManager.theme["CTkFrame"]["fg_color"] if fg_color is None else fg_color
-        self.scroll_button_color = customtkinter.ThemeManager.theme["CTkScrollbar"]["button_color"] if scrollbar_button_color is None else scrollbar_button_color
-        self.scroll_hover_color = customtkinter.ThemeManager.theme["CTkScrollbar"]["button_hover_color"] if scrollbar_button_hover_color is None else scrollbar_button_hover_color
-        self.frame_border_color = customtkinter.ThemeManager.theme["CTkFrame"]["border_color"] if frame_border_color is None else frame_border_color
-        self.button_color = customtkinter.ThemeManager.theme["CTkFrame"]["top_fg_color"] if button_color is None else button_color
-        self.text_color = customtkinter.ThemeManager.theme["CTkLabel"]["text_color"] if text_color is None else text_color
-        self.hover_color = customtkinter.ThemeManager.theme["CTkButton"]["hover_color"] if hover_color is None else hover_color
-        
-        
-        if scrollbar is False:
-            self.scroll_button_color = self.fg_color
-            self.scroll_hover_color = self.fg_color
-            
-        self.frame = customtkinter.CTkScrollableFrame(self, bg_color=self.transparent_color, fg_color=self.fg_color,
-                                        scrollbar_button_hover_color=self.scroll_hover_color,
-                                        corner_radius=self.corner, border_width=frame_border_width,
-                                        scrollbar_button_color=self.scroll_button_color,
-                                        border_color=self.frame_border_color)
-        self.frame._scrollbar.grid_configure(padx=3)
-        self.frame.pack(expand=True, fill="both")
-        self.dummy_entry = customtkinter.CTkEntry(self.frame, fg_color="transparent", border_width=0, height=1, width=1)
-        self.no_match = customtkinter.CTkLabel(self.frame, text="No Match")
-        self.height = height
-        self.height_new = height
-        self.width = width
-        self.command = command
-        self.fade = False
-        self.resize = resize
-        self.autocomplete = autocomplete
-        self.var_update = customtkinter.StringVar()
-        self.appear = False
-        
-        if justify.lower()=="left":
-            self.justify = "w"
-        elif justify.lower()=="right":
-            self.justify = "e"
-        else:
-            self.justify = "c"
-            
-        self.button_height = button_height
-        self.values = values
-        self.button_num = len(self.values)
-        self.image_values = None if len(image_values)!=len(self.values) else image_values
-        
-        self.resizable(width=False, height=False)
-        self.transient(self.master)
-        self._init_buttons(**button_kwargs)
-
-        # Add binding for different ctk widgets
-        if double_click or self.attach.winfo_name().startswith("!ctkentry") or self.attach.winfo_name().startswith("!ctkcombobox"):
-            self.attach.bind('<Double-Button-1>', lambda e: self._iconify(), add="+")
-        else:
-            self.attach.bind('<Button-1>', lambda e: self._iconify(), add="+")
-
-        if self.attach.winfo_name().startswith("!ctkcombobox"):
-            self.attach._canvas.tag_bind("right_parts", "<Button-1>", lambda e: self._iconify())
-            self.attach._canvas.tag_bind("dropdown_arrow", "<Button-1>", lambda e: self._iconify())
-            if self.command is None:
-                self.command = self.attach.set
-              
-        if self.attach.winfo_name().startswith("!ctkoptionmenu"):
-            self.attach._canvas.bind("<Button-1>", lambda e: self._iconify())
-            self.attach._text_label.bind("<Button-1>", lambda e: self._iconify())
-            if self.command is None:
-                self.command = self.attach.set
-                
-        self.attach.bind("<Destroy>", lambda _: self._destroy(), add="+")
-        
-        self.update_idletasks()
-        self.x = x
-        self.y = y
-
-        if self.autocomplete:
-            self.bind_autocomplete()
-            
-        self.deiconify()
-        self.withdraw()
-        
-        self.attributes("-alpha", self.alpha)
-
-    def _destroy(self):
-        self.after(500, self.destroy_popup)
-        
-    def _withdraw(self):
-        if self.winfo_viewable() and self.hide:
-            self.withdraw()
-        
-        self.event_generate("<<Closed>>")
-        self.hide = True
-
-    def _update(self, a, b, c):
-        self.live_update(self.attach._entry.get())
-        
-    def bind_autocomplete(self, ):
-        def appear(x):
-            self.appear = True
-            
-        if self.attach.winfo_name().startswith("!ctkcombobox"):
-            self.attach._entry.configure(textvariable=self.var_update)
-            self.attach._entry.bind("<Key>", appear)
-            self.attach.set(self.values[0])
-            self.var_update.trace_add('write', self._update)
-            
-        if self.attach.winfo_name().startswith("!ctkentry"):
-            self.attach.configure(textvariable=self.var_update)
-            self.attach.bind("<Key>", appear)
-            self.var_update.trace_add('write', self._update)
-        
-    def fade_out(self):
-        for i in range(100,0,-10):
-            if not self.winfo_exists():
-                break
-            self.attributes("-alpha", i/100)
-            self.update()
-            time.sleep(1/100)
-            
-    def fade_in(self):
-        for i in range(0,100,10):
-            if not self.winfo_exists():
-                break
-            self.attributes("-alpha", i/100)
-            self.update()
-            time.sleep(1/100)
-            
-    def _init_buttons(self, **button_kwargs):
-        self.i = 0
-        self.widgets = {}
-        for row in self.values:
-            self.widgets[self.i] = customtkinter.CTkButton(self.frame,
-                                                          text=row,
-                                                          height=self.button_height,
-                                                          fg_color=self.button_color,
-                                                          text_color=self.text_color,
-                                                          image=self.image_values[self.i] if self.image_values is not None else None,
-                                                          anchor=self.justify,
-                                                          command=lambda k=row: self._attach_key_press(k), **button_kwargs)
-            self.widgets[self.i].pack(fill="x", pady=2, padx=(self.padding, 0))
-            self.i+=1
- 
-        self.hide = False
-            
-    def destroy_popup(self):
-        self.destroy()
-        self.disable = True
-
-    def place_dropdown(self):
-        self.x_pos = self.attach.winfo_rootx() if self.x is None else self.x + self.attach.winfo_rootx()
-        self.y_pos = self.attach.winfo_rooty() + self.attach.winfo_reqheight() + 5 if self.y is None else self.y + self.attach.winfo_rooty()
-        self.width_new = self.attach.winfo_width() if self.width is None else self.width
-        
-        if self.resize:
-            if self.button_num<=5:      
-                self.height_new = self.button_height * self.button_num + 55
-            else:
-                self.height_new = self.button_height * self.button_num + 35
-            if self.height_new>self.height:
-                self.height_new = self.height
-
-        self.geometry('{}x{}+{}+{}'.format(self.width_new, self.height_new,
-                                           self.x_pos, self.y_pos))
-        self.fade_in()
-        self.attributes('-alpha', self.alpha)
-        self.attach.focus()
-
-    def _iconify(self):
-        if self.attach.cget("state")=="disabled": return
-        if self.disable: return
-        if self.hide:
-            self.event_generate("<<Opened>>")
-            self._deiconify()        
-            self.focus()
-            self.hide = False
-            self.place_dropdown()
-            if self.focus_something:
-                self.dummy_entry.pack()
-                self.dummy_entry.focus_set()
-                self.after(100, self.dummy_entry.pack_forget)
-        else:
-            self.withdraw()
-            self.hide = True
-            
-    def _attach_key_press(self, k):
-        self.event_generate("<<Selected>>")
-        self.fade = True
-        if self.command:
-            self.command(k)
-        self.fade = False
-        self.fade_out()
-        self.withdraw()
-        self.hide = True
-            
-    def live_update(self, string=None):
-        if not self.appear: return
-        if self.disable: return
-        if self.fade: return
-        if string:
-            string = string.lower()
-            self._deiconify()
-            i=1
-            for key in self.widgets.keys():
-                s = self.widgets[key].cget("text").lower()
-                text_similarity = difflib.SequenceMatcher(None, s[0:len(string)], string).ratio()
-                similar = s.startswith(string) or text_similarity > 0.75
-                if not similar:
-                    self.widgets[key].pack_forget()
-                else:
-                    self.widgets[key].pack(fill="x", pady=2, padx=(self.padding, 0))
-                    i+=1
-                    
-            if i==1:
-                self.no_match.pack(fill="x", pady=2, padx=(self.padding, 0))
-            else:
-                self.no_match.pack_forget()
-            self.button_num = i
-            self.place_dropdown()
-            
-        else:
-            self.no_match.pack_forget()
-            self.button_num = len(self.values)
-            for key in self.widgets.keys():
-                self.widgets[key].destroy()
-            self._init_buttons()
-            self.place_dropdown()
-            
-        self.frame._parent_canvas.yview_moveto(0.0)
-        self.appear = False
-        
-    def insert(self, value, **kwargs):
-        self.widgets[self.i] = customtkinter.CTkButton(self.frame,
-                                                       text=value,
-                                                       height=self.button_height,
-                                                       fg_color=self.button_color,
-                                                       text_color=self.text_color,
-                                                       anchor=self.justify,
-                                                       command=lambda k=value: self._attach_key_press(k), **kwargs)
-        self.widgets[self.i].pack(fill="x", pady=2, padx=(self.padding, 0))
-        self.i+=1
-        self.values.append(value)
-        
-    def _deiconify(self):
-        if len(self.values)>0:
-            self.deiconify()
-
-    def popup(self, x=None, y=None):
-        self.x = x
-        self.y = y
-        self.hide = True
-        self._iconify()
-        
-    def configure(self, **kwargs):
-        if "height" in kwargs:
-            self.height = kwargs.pop("height")
-            self.height_new = self.height
-            
-        if "alpha" in kwargs:
-            self.alpha = kwargs.pop("alpha")
-            
-        if "width" in kwargs:
-            self.width = kwargs.pop("width")
-            
-        if "fg_color" in kwargs:
-            self.frame.configure(fg_color=kwargs.pop("fg_color"))
-            
-        if "values" in kwargs:
-            self.values = kwargs.pop("values")
-            self.image_values = None
-            self.button_num = len(self.values)
-            for key in self.widgets.keys():
-                self.widgets[key].destroy()
-            self._init_buttons()
- 
-        if "image_values" in kwargs:
-            self.image_values = kwargs.pop("image_values")
-            self.image_values = None if len(self.image_values)!=len(self.values) else self.image_values
-            if self.image_values is not None:
-                i=0
-                for key in self.widgets.keys():
-                    self.widgets[key].configure(image=self.image_values[i])
-                    i+=1
-                    
-        if "button_color" in kwargs:
-            for key in self.widgets.keys():
-                self.widgets[key].configure(fg_color=kwargs.pop("button_color"))
-        
-        if "hover_color" not in kwargs:
-            kwargs["hover_color"] = self.hover_color
-        
-        for key in self.widgets.keys():
-            self.widgets[key].configure(**kwargs)
 
 #-------------------------------------------------------------------------------
 # Widgets  
@@ -922,9 +565,11 @@ class Base_Widget():
         newStr = self._getFrom_CTkControl()
 
         if newStr is None:                                      # this was a button
+            refresh = False                                     # do not refresh after callback
             setAndFire = True
             self.val = None
         else: 
+            refresh = True                                      # refresh after callback
             newVal = self.val_basedOnStr (self.val, self.valType, newStr, self.limits)
             if (newVal != self.val):                            # defensive to set in model ...
                 self.val  = newVal                              # store new value
@@ -936,8 +581,9 @@ class Base_Widget():
             if not self.setter is None: self.set_value()        # write val back to object
             if not self.event  is None: self.fireEvent()
         
-        # update entry field if there was a re-formatting e.g. digits
-        self.set_CTkControl()
+        # refresh widget if there was a re-formatting e.g. digits
+        if refresh: 
+            self.set_CTkControl()
 
 
     def _getFrom_CTkControl (self):
@@ -1044,6 +690,7 @@ class Base_Widget():
 
         return self.__class__
 
+
 #-----------  real widget subclasses ----------------------------
 
 
@@ -1058,7 +705,6 @@ class Blank_Widget(Base_Widget):
             
         if padx   is None: padx = 0
 
-        # self.mainCTk = ctk.CTkFrame (self.parent, width=self.width, height=self.height, fg_color="blue")     # dummy frame
         self.mainCTk = ctk.CTkFrame (self.parent, width=self.width, height=self.height, fg_color="transparent")     # dummy frame
         self.mainCTk.grid(row=self.row, column=self.column,  pady=0, padx=padx, sticky="w")
 
@@ -1122,12 +768,12 @@ class Label_Widget(Base_Widget):
         if columnspan   is None: columnspan = 6
 
         if padx         is None: padx = 10
-        if pady         is None: pady = 0
+        if pady         is None: pady = 1
 
         if textvariable: self.label = None                  # a textvariable overwrites an additional label 
 
         self.mainCTk = ctk.CTkLabel(self.parent, text=self.label, textvariable=textvariable,
-                                    width=self.width, justify =justify, 
+                                    width=self.width, height=self.height,justify =justify, 
                                     anchor= anchor, text_color=self._text_color(),
                                     wraplength=wraplength) 
                   
@@ -1192,10 +838,15 @@ class Button_Widget(Base_Widget):
         icon_size = None 
         if anchor is None: anchor = 'center'
         if padx   is None: padx = 10
-        if pady   is None: pady = 0
+        if pady   is None: pady = 1
         if sticky is None: sticky = 'w' 
 
-        text = self.val if self.getter else self.label      # either 'get' or 'lab' can be used
+        # either 'get' or 'lab' can be used
+
+        if self.getter or self.val:
+            text = self.val
+        else: 
+            text = self.label
 
         # set initial / default button style and optional getter for style 
 
@@ -1222,22 +873,49 @@ class Button_Widget(Base_Widget):
 
         self.fg_color = self._get_fg_color (style)
 
+        #  if there are 'options' the command callback opens drop down 
+
+        self._selectedValue = None 
+        if self.options: 
+            callback = self._dropdown_menu_open
+        else: 
+            callback = self.CTk_callback
+
+
         self.mainCTk = ctk.CTkButton(self.parent, text=text, height=self.height, width=self.width, 
                                      anchor=anchor, image=icon, 
                                      border_spacing=0, border_width=0,
-                                     command=self.CTk_callback)
+                                     command=callback)
         if style == ICON:
             # patch ctkButton._create_grid to reduce button width (<-corner radius)
             self.mainCTk.grid_columnconfigure(0, weight=100, minsize=2)
             self.mainCTk.grid_columnconfigure(4, weight=100, minsize=2)
 
-        self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, padx=padx, pady=pady, sticky=sticky)
-     
+        self.mainCTk.grid(row=self.row, column=self.column, columnspan=columnspan, 
+                          padx=padx, pady=pady, sticky=sticky)
+
+        # attach optional dropdown 
+        if self.options: 
+            self._dropdown_menu = DropdownMenu(master=self.mainCTk,
+                                            values=self.options,
+                                            command=self._dropdown_menu_callback)
+
         self.set_CTkControl_state ()        # state explicit as no value is set_value in button
 
         # allow tooltip for button 
         if tooltip is not None: 
             self.tooltipCTk = CTkToolTip(self.mainCTk, delay=0.5, message=tooltip)
+
+
+    def _dropdown_menu_open (self):
+        # callback of button if option dropw down active 
+        self._dropdown_menu.open(self.mainCTk.winfo_rootx(),
+                                 self.mainCTk.winfo_rooty() + self.mainCTk._apply_widget_scaling(self.height + 0))
+
+    def _dropdown_menu_callback (self, aVal):
+        # callback when item selected in dropdown
+        self._selectedValue = aVal 
+        self.CTk_callback()
 
 
     def _get_fg_color (self, style):
@@ -1256,13 +934,19 @@ class Button_Widget(Base_Widget):
 
 
     def _getFrom_CTkControl (self):
-        # button has nothing to give ...
-        return None                     
+        # button has nothing to give ... if options return selected value 
 
-    def _set_CTkControl  (self, widgetCTk : ctk.CTkButton, newLabelStr):
-        # if self is destroyed , newLaberlStr good be ''
-        if newLabelStr: 
-            widgetCTk.configure (text=newLabelStr)
+        if self.options: 
+            return self._selectedValue
+        else: 
+            return None                     
+
+
+    def _set_CTkControl  (self, widgetCTk : ctk.CTkButton, newVal):
+        # in case of 'options' newVal is the selected item - don't write back 
+        
+        if not self.options and newVal:         # if self is destroyed , newVal good be ''
+            widgetCTk.configure (text=newVal)
 
     def _set_CTkControl_label (self, widgetCTk : ctk.CTkButton, newLabelStr: str):
         widgetCTk.configure (text=newLabelStr)
@@ -1321,7 +1005,7 @@ class Button_Widget(Base_Widget):
 
 class Switch_Widget (Base_Widget):
     """
-    CTKSwitch - uses two columns in the grid if label is defined 
+    CTKSwitch - uses two columns in the grid if label is left, otherwise 1 column 
     """
     def __init__(self, *args, 
                  padx=None, pady=None, 
@@ -1333,7 +1017,7 @@ class Switch_Widget (Base_Widget):
         super().__init__(*args, **kwargs)
 
         if padx is None: padx = (15,3)
-        if pady is None: pady = 0
+        if pady is None: pady = 1
         if columnspan is None: columnspan = 1
         if rowspan is None:    rowspan = 1
 
@@ -1344,10 +1028,18 @@ class Switch_Widget (Base_Widget):
             raise ValueError (f"Unknown label position '{lab_pos}'")
         if lab_width is None: lab_width = 95
 
+        if self.label and lab_pos == 'right':
+            # use helper frame so switch will be in one column of parent
+            frame = ctk.CTkFrame(self.parent, fg_color="transparent")  
+        else:
+            # use grid from parent
+            frame = self.parent
+
+
         # create 2 widgets Label and Switch 
 
         if self.label: 
-            self.labelCTk = ctk.CTkLabel (self.parent, width= lab_width, height=self.height, 
+            self.labelCTk = ctk.CTkLabel (frame, width= lab_width, height=self.height, 
                                 text=self.label, 
                                 text_color=self._text_color(STYLE_COMMENT), 
                                 text_color_disabled=self._text_color(STYLE_DISABLED),
@@ -1355,24 +1047,30 @@ class Switch_Widget (Base_Widget):
         else: 
             self.labelCTk = None 
 
-        self.mainCTk = ctk.CTkSwitch(self.parent, switch_height=13, switch_width=32, text='', 
-                                     width=40, onvalue=1, command=self.CTk_callback)
+        self.mainCTk = ctk.CTkSwitch(frame, switch_height=13, switch_width=32, text='', 
+                                     width=40, height=self.height, 
+                                     onvalue=1, command=self.CTk_callback)
 
         # position widgets in grid according lab_pos 
 
-        c = self.column 
-        r = self.row
-        padx_main = padx
+        r,c = self.row, self.column 
 
-        if lab_pos == 'left' and self.labelCTk:
-            self.labelCTk.grid (row=r, column=c, pady=pady, padx=padx, rowspan=rowspan, sticky='w')
-            padx_main = 0 
-            c += 1
-        elif lab_pos == 'right' and self.labelCTk: 
-            self.labelCTk.grid (row=r, column=c+1, pady=pady, sticky='w')
+        if self.label and lab_pos == 'right':
+            # grid within helper frame
+            frame.grid (row=r, column=c, columnspan=columnspan, rowspan=rowspan, 
+                        padx=padx, pady=pady,sticky='nsw')
+            self.mainCTk.grid  (row=0, column=0, sticky='nsw')
+            self.labelCTk.grid (row=0, column=1, padx=(2,0), sticky='nsw')
 
-        self.mainCTk.grid (row=r, column=c, columnspan=columnspan, rowspan=rowspan,
-                            padx=padx_main, pady=pady, sticky='w')
+        elif self.label and lab_pos == 'left':
+            # use grid of parent 
+            self.labelCTk.grid (row=r, column=c, pady=pady, padx=padx, 
+                                rowspan=rowspan, sticky='nsw')
+            self.mainCTk.grid (row=r, column=c+1, columnspan=columnspan, rowspan=rowspan,
+                                pady=pady, sticky='nsw')
+        else: 
+            self.mainCTk.grid (row=r, column=c, columnspan=columnspan, rowspan=rowspan,
+                                padx=padx, pady=pady, sticky='nsw')
 
         # allow click on label to switch 
 
@@ -1407,6 +1105,7 @@ class Switch_Widget (Base_Widget):
         self._set_CTkControl_state (self.mainCTk, self.disabled)
         if self.labelCTk:
             self._set_CTkControl_state (self.labelCTk, self.disabled)
+
 
 
 class CheckBox_Widget(Base_Widget):
@@ -1458,6 +1157,7 @@ class CheckBox_Widget(Base_Widget):
         super(). _set_CTkControl_state (widgetCTk, disable)
 
 
+
 class Field_Widget(Base_Widget):
     """ Compund widget existing out of 
         column i    : Field label - optional (CTkLabel)
@@ -1488,7 +1188,7 @@ class Field_Widget(Base_Widget):
         if sticky is None: sticky = 'w'
         
         if padx is None: padx= (5, 5)
-        if pady is None: pady= 0
+        if pady is None: pady= 1
 
         if self.setter is None:                 # no setter? 
             self.disabled = True                #   force disable field 
@@ -1502,9 +1202,10 @@ class Field_Widget(Base_Widget):
             else:
                 width= 95
 
-            self.labelCTk = ctk.CTkLabel (self.parent, width= width, text=self.label, 
-                                      text_color = self._text_color(STYLE_COMMENT), 
-                                      justify='left', anchor='w')
+            self.labelCTk = ctk.CTkLabel (self.parent, text=self.label, 
+                                        width= width, height=self.height,
+                                        text_color = self._text_color(STYLE_COMMENT), 
+                                        justify='left', anchor='w')
             self.labelCTk.grid (row=self.row, column=column, rowspan=rowspan, padx=padx, pady=pady, sticky='w')
             column += 1
 
@@ -1531,9 +1232,9 @@ class Field_Widget(Base_Widget):
             entry_frame.grid_columnconfigure((0, 2), weight=0)   # buttons don't expand
             entry_frame.grid_columnconfigure(1, weight=0)        # entry expands
 
-            self.subCTk.grid (row=0, column=0, padx=(0, 1), pady=1, sticky='w')
-            self.mainCTk.grid(row=0, column=1, padx=(1, 1), pady=1, sticky='we')
-            self.addCTk.grid (row=0, column=2, padx=(1, 0), pady=1, sticky='w')
+            self.subCTk.grid (row=0, column=0, padx=(0, 1), pady=0, sticky='w')
+            self.mainCTk.grid(row=0, column=1, padx=(1, 1), pady=0, sticky='we')
+            self.addCTk.grid (row=0, column=2, padx=(1, 0), pady=0, sticky='w')
 
             entry_frame.grid (row=self.row, rowspan=rowspan, column=column, columnspan=columnspan, 
                               padx=(1, 1), pady=pady, sticky=sticky)
@@ -1544,6 +1245,7 @@ class Field_Widget(Base_Widget):
         column += 1
         if (self.unit):
             unit_ctk  = ctk.CTkLabel (self.parent, text=self.unit, anchor='w',
+                                      height=self.height,
                                       text_color = self._text_color(STYLE_COMMENT))
             unit_ctk.grid (row=self.row, rowspan=rowspan, column=column, padx=(2,15), pady=pady,
                            sticky=sticky)
@@ -1649,7 +1351,7 @@ class Slider_Widget(Base_Widget):
         column = self.column
         if columnspan is None:  columnspan = 1
         if padx is None: padx = 1 
-        if pady is None: pady = 0 
+        if pady is None: pady = 1 
 
         self.mainCTk = ctk.CTkSlider (self.parent, width=self.width, height=self.height, border_width=1,
                                       command=self.CTk_callback, fg_color=cl_entry)
@@ -1697,6 +1399,7 @@ class Slider_Widget(Base_Widget):
         self.mainCTk.configure(number_of_steps=nsteps) 
 
 
+
 class Option_Widget(Base_Widget):
     """ Compund widget existing out of 
         column i    : Field label - optional (CTkLabel)
@@ -1709,19 +1412,35 @@ class Option_Widget(Base_Widget):
     def __init__(self, *args, 
                  sticky=None, 
                  padx=None, pady=None, 
+                 lab_width= None, 
                  spinPos=None,
                  columnspan=None,
                  **kwargs):
         super().__init__(*args, **kwargs)
 
+        if columnspan   is None: columnspan = 1
+        column = self.column
+        
         option_width = self.width 
         if padx is None: padx = (1,1)
-        if pady is None: pady = 0
+        if pady is None: pady = 1
         if sticky is None: sticky = 'w'
 
-        if columnspan   is None: columnspan = 1
+        # create CTk widgets 
 
-        # label support not active
+        if (self.label):  
+            if lab_width:
+                width = lab_width
+            else:
+                width= 95
+
+            self.labelCTk = ctk.CTkLabel (self.parent, text=self.label, 
+                                      width= width, height=self.height,
+                                      text_color = self._text_color(STYLE_COMMENT), 
+                                      justify='left', anchor='w')
+            self.labelCTk.grid (row=self.row, column=column, padx=padx, pady=pady, sticky='w')
+            padx = (1,1)                        # only label will get padx ...
+            column += 1
 
         if self.spinner:
             if spinPos == 'below':
@@ -1743,7 +1462,7 @@ class Option_Widget(Base_Widget):
         self.mainCTk = ctk.CTkOptionMenu (option_frame, values= self.options, 
                                           width=option_width, height=self.height, 
                                           text_color = self._text_color(STYLE_NORMAL)[1],
-                                          text_color_disabled= self._text_color(STYLE_DISABLED)[1],
+                                          text_color_disabled= self._text_color(STYLE_COMMENT)[1],
                                           fg_color = cl_button_primary,
                                           dynamic_resizing=False,
                                           command=self.CTk_callback)        
@@ -1756,10 +1475,10 @@ class Option_Widget(Base_Widget):
                                          width=button_width, height=button_height, 
                                          fg_color=cl_spin, text_color=cl_spin_text, text_color_disabled=cl_spin_text_disable)
             if spinPos == 'below':
-                self.mainCTk.grid (row=self.row, column=self.column, columnspan=columnspan, 
+                self.mainCTk.grid (row=self.row, column=column, columnspan=columnspan, 
                                    padx=padx, pady=pady, sticky=sticky)
                 button_frame.grid_columnconfigure((0,1), weight=1)       
-                button_frame.grid (row=self.row+1, column=self.column, columnspan=columnspan,
+                button_frame.grid (row=self.row+1, column=column, columnspan=columnspan,
                                    padx=padx, pady=pady, sticky='we')
                 self.prevCTk.grid (row=0, column=0, padx=(0, 2), pady=0, sticky='w')
                 self.nextCTk.grid (row=0, column=1, padx=(2, 0), pady=0, sticky='e')
@@ -1767,14 +1486,14 @@ class Option_Widget(Base_Widget):
                 option_frame.grid_columnconfigure((0, 2), weight=0)   # buttons don't expand
                 option_frame.grid_columnconfigure(1, weight=0)        # entry expands
 
-                self.prevCTk.grid (row=self.row, column=self.column,   padx=(0, 0), pady=0, sticky=sticky)
-                self.mainCTk.grid (row=self.row, column=self.column+1, padx=(2, 2), pady=0, sticky=sticky)
-                self.nextCTk.grid (row=self.row, column=self.column+2, padx=(0, 0), pady=0, sticky=sticky)
+                self.prevCTk.grid (row=self.row, column=column,   padx=(0, 0), pady=0, sticky=sticky)
+                self.mainCTk.grid (row=self.row, column=column+1, padx=(2, 2), pady=0, sticky=sticky)
+                self.nextCTk.grid (row=self.row, column=column+2, padx=(0, 0), pady=0, sticky=sticky)
 
-                option_frame.grid (row=self.row, column=self.column, columnspan=columnspan,
+                option_frame.grid (row=self.row, column=column, columnspan=columnspan,
                                    padx=padx, pady=pady, sticky=sticky)
         else:
-            self.mainCTk.grid (row=self.row, column=self.column, columnspan=columnspan,
+            self.mainCTk.grid (row=self.row, column=column, columnspan=columnspan,
                                padx=padx, pady=pady, sticky=sticky)
 
         self.set_CTkControl()
@@ -1846,6 +1565,7 @@ class Option_Widget(Base_Widget):
             self._set_CTkControl_state (self.nextCTk, nextDisabled)
     
 
+
 class Combo_Widget(Base_Widget):
     """ Compund widget existing out of 
         column i    : Field label - optional (CTkLabel)
@@ -1902,7 +1622,6 @@ class Combo_Widget(Base_Widget):
         self.mainCTk.bind('<FocusOut>', self.CTk_callback)
 
 
-
     def _getFrom_CTkControl (self):
         return self.mainCTk.get()
 
@@ -1921,168 +1640,3 @@ class Combo_Widget(Base_Widget):
                 self.mainCTk.configure (values=self.options)
         # then refresh the selected item
         super().refresh()
-
-
-
-#=========================================================
-#========     Test App    ================================
-
-class TestModelObject (): 
-    def __init__(self):
-        self._aString = 'Hello jo'
-        self._aInt    = 654321
-        self._aFloat  = 1234.5678
-
-    @property
-    def aString(self):      return self._aString
-    @aString.setter
-    def aString (self, val):
-        self._aString = val
-    @property
-    def aInt(self):         return self._aInt
-    @property
-    def aFloat(self):       return self._aInt
-
-    def aString_no_property(self):  return self._aString
-
-    # @x.setter
-    
-    def set_aString(self, val):
-        print ("mo set aString: ", val)
-        self._aString = val 
-    def set_aFloat(self, val):
-        print ("mo set aFloat: ", val)
-        self._aFloat = val 
-
-
-class TestApp(ctk.CTk):
-    def currentMo (self):
-        if self.localBool:
-            cur = self.mos[0]
-        else:
-            cur = self.mos[1]
-        return cur
-    
-
-    def localString (self):
-        return 'I am a local string'
-    def localString2 (self):
-        return 'This is the second'
-    def localBoolOn (self):
-        return True
-    def localBoolOff (self):
-        return False
-
-    def setlocalBool (self, aBool):
-        self.localBool = aBool 
-        print("Current is currently ",self.currentMo().aString)
-        self.moCurrentWidget.refresh()
-
-    def setlocalFloat(self, val):
-        print ("local set aFloat: ", val)
-        self.localFloat = val 
-        self.setlocalBool(val % 2)
-        self.slaveWidget.refresh()
-        self.switchWidget.refresh()
-
-    def hitMe(self):
-        print ("I was hit by button")
-
-    def __init__(self):
-        super().__init__()
-
-        ctk.set_appearance_mode("Dark")    
-        # ctk.set_default_color_theme("blue") 
-
-        self.title("Test App for widgets")
-        self.geometry("900x500")
-
-        self.event_add('<<TEST_EVENT>>','None')
-
-        #self.grid_rowconfigure   (1, weight=1)
-        #self.grid_rowconfigure   (1, weight=1)
-
-        mo = TestModelObject()
-        self.localBool = True
-        self.localFloat = 0
-        self.mymo = mo
-
-        mo1 = TestModelObject()
-        mo1.set_aString ("des erschte")
-        mo2 = TestModelObject()
-        mo2.set_aString ("des zwoite")
-
-        self.mos = [mo1,mo2]
-
-        print("Initial mo ", self.mos[0].aString)
-
-        a = self.localBoolOn
-        print (a)
-        a = self.localBoolOn()
-
-        a = mo.aString
-        a = lambda: self.localBoolOn()
-        a = a()
-        a = lambda: self.mymo.aString
-        print (callable(a))
-        a = a()
-        b = lambda: self.mymo.aString
-        print (callable(b), b.__name__, b.__self__)
-        prop = getattr (b.__self__, b.__name__) 
-        print (prop)
-        prop = 'yeppe'
-        # b = b('huhu')
-        print (b,a, mo.aString)
-        raise ValueError ("ohhh!") from None
-        a = mo.aString_no_property
-        a = mo.aString_no_property ()
-
-
-        print (a) 
-
-
-
-        Header_Widget (self, 0,0, lab='Header from val')
-        Header_Widget (self, 0,1, get='localString')
-        Header_Widget (self, 0,2, get=self.localString2)
-        Header_Widget (self, 0,3, obj=mo, get='aString')
-        Header_Widget (self, 0,4, get=mo.aString_no_property)
-        Header_Widget (self, 0,5, get=lambda:mo.aFloat)  
-
-        Button_Widget (self, 1,0, lab='Header from val')
-        Button_Widget (self, 1,1, get=self.localString2, width=50, height=20)
-        Button_Widget (self, 1,2, lab='Hit me', set=self.hitMe)
-
-        Switch_Widget (self, 2,0, lab='Should be on', val=True)
-        Switch_Widget (self, 2,1, lab='and off',      get=self.localBoolOff)
-        Switch_Widget (self, 2,2, lab='and on again', get=self.localBoolOn)
-
-        Field_Widget  (self, 3,0, lab='Field with lab', val='oho') 
-        Field_Widget  (self, 3,3, val = '') 
-        Field_Widget  (self, 4,0, lab='Field lab & units', val='123455', unit='mkg') 
-
-        Field_Widget   (self, 6,0, lab='My super Spinner', val=123455, spin=True, step=1000, unit='mkg') 
-
-        Header_Widget (self, 7,0, lab='Now writing back')
-        Field_Widget  (self, 8,0, lab='Field set + get by string', obj=mo, get='aString', set='set_aString' ) 
-        Field_Widget  (self, 9,0, lab='Field set + get by method', get=lambda: mo.aString, set=mo.set_aString ) 
-
-        Switch_Widget (self, 10,0, lab='Activator Switch', get=lambda: self.localBool, set=self.setlocalBool)
-        Field_Widget   (self, 11,0, lab='mo afloat #1', get=lambda:mo.aFloat, set=self.setlocalFloat, spin = True, step=1, ) 
-        self.slaveWidget = \
-            Field_Widget  (self, 11,3, lab='Slave of Spin', get=lambda: self.localFloat ) 
-        self.switchWidget = \
-            Switch_Widget (self, 11,5, lab='Number is even', get=lambda: self.localBool, disable=lambda: self.localBool)
-        Field_Widget   (self, 12,0, lab='mo afloat inaktiv', get=lambda:mo.aFloat, set=self.setlocalFloat, disable= self.localBoolOn,  spin = True, step=1, ) 
-
-        self.moCurrentWidget = Field_Widget   (self, 12,0, lab='Current mo aString', obj= self.currentMo,  get='aString') 
-
-
-
-
-
-# Main program for testing -----------------------------------
-
-if __name__ == "__main__":
-
-    TestApp().mainloop()

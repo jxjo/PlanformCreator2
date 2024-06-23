@@ -715,7 +715,7 @@ class Diagram_Airfoil (Diagram_Abstract):
     @property
     def show_points (self) -> bool: return self._show_points
     def set_show_points (self, aBool): 
-        self._show_points = True
+        self._show_points = aBool
         self.airfoilArtist.set_points (aBool)
         if self.curvatureArtist:
             self.curvatureArtist.set_points (aBool)
