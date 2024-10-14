@@ -3,1271 +3,885 @@
 
 """  
 
-The "Artists" to plot a airfoil object on a matplotlib axes
+The "Artists" to plot a airfoil object on a pg.PlotItem 
 
 """
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
 
-from artist             import *
-from common_utils       import *
+from base.math_util             import derivative1
+from base.artist                import *
+from base.common_utils          import *
+from base.spline                import Bezier
 
-from airfoil            import Airfoil, Airfoil_Bezier
-from airfoil            import NORMAL, SEED,SEED_DESIGN, REF1, REF2, DESIGN, FINAL
-from airfoil_geometry   import Side_Airfoil, Side_Airfoil_Bezier, Side_Airfoil_HicksHenne
-from airfoil_geometry   import Curvature_Abstract, UPPER, LOWER, THICKNESS, CAMBER
+from model.airfoil              import Airfoil, Airfoil_Bezier, usedAs, Geometry
+from model.airfoil_geometry     import Line, Side_Airfoil_Bezier
 
-from spline             import HicksHenne
+from PyQt6.QtGui                import QColor, QBrush, QPen
+from PyQt6.QtCore               import pyqtSignal, QObject
 
-cl_fill             = 'whitesmoke'
-cl_editing          = 'deeppink'
-cl_editing_lower    = 'orchid'
-cl_helperLine       = 'orange'
-ls_curvature        = '-'
-ls_curvature_lower  = '--'
-ls_difference       = '-.'
-ls_camber           = '--'
-ls_thickness        = ':'
-ms_points           = dict(marker='o', fillstyle='none'    , markersize=4)   # marker style for points
-ms_points_selected  = dict(marker='x', fillstyle='none'    , markersize=6)   # marker style for points
-ms_le               = dict(marker='o'                      , markersize=7)   # marker style for leading edge
-ms_warning          = dict(marker='o', color='orange'      , markersize=6)   # marker style for wrong points
-ms_leReal           = dict(marker='o', color='limegreen'   , markersize=6)   # marker style for real leading edge
-ms_point            = dict(marker='+'                      , markersize=8)   # marker style for just a point
-
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 # -------- helper functions ------------------------
 
+def _color_airfoil_of (airfoil_type : usedAs) -> QColor:
+    """ returns QColor for airfoil depending on its type """
 
-def _color_airfoil_of (airfoil_type):
-    """ returns the plot color for airfoil depending on its type """
+    alpha = 1.0
 
-    if airfoil_type == DESIGN:
+    if airfoil_type == usedAs.DESIGN:
         color = 'deeppink'
-    elif airfoil_type == NORMAL:
-        color = 'turquoise' # 'aquamarine'
-    elif airfoil_type == FINAL:
+    elif airfoil_type == usedAs.NORMAL:
+        color = 'springgreen' # 'aquamarine'
+        alpha = 0.9
+    elif airfoil_type == usedAs.FINAL:
         color = 'springgreen'
-    elif airfoil_type == SEED:
+    elif airfoil_type == usedAs.SEED:
         color = 'dodgerblue'
-    elif airfoil_type == SEED_DESIGN:
+    elif airfoil_type == usedAs.SEED_DESIGN:
         color = 'cornflowerblue'
-    elif airfoil_type == REF1:                          # used also in 'blend' 
+    elif airfoil_type == usedAs.REF1:                          # used also in 'blend' 
         color = 'lightskyblue'  
-    elif airfoil_type == REF2:
+        alpha = 0.9
+    elif airfoil_type == usedAs.REF2:
         color = 'orange'
+        alpha = 0.9
+    elif airfoil_type == usedAs.TARGET:
+        color = 'cornflowerblue'
+        alpha = 1.0
     else:
-        color = None
-    return color 
+        color = 'gray'
+    qcolor =  QColor (color) 
+
+    if alpha != 1.0:
+        qcolor.setAlphaF (alpha) 
+    return qcolor
 
 
+def _linestyle_of (aType : Line.Type) -> QColor:
+    """ returns PenStyle for line depending on its type """
 
-def _plot_bezier_point_marker (ax, side : Side_Airfoil_Bezier, ipoint, color, animated=False):
-    """
-    Plot a single marker for a bezier control point
-    returns: plt marker artist  
-    """
-
-    markersize = 7
-    if ipoint == 0 or ipoint == (len(side.controlPoints)-1):
-        markerstyle = '.'
-        markersize = 3
-    elif side.name == UPPER:
-        markerstyle = 6
-    else: 
-        markerstyle = 7
-
-    x,y = side.controlPoints[ipoint]
-
-    if animated: 
-        alpha = 1
-    else: 
-        alpha = 0.5
-
-    p =  ax.plot (x,y , marker=markerstyle, markersize=markersize, 
-                 color=color, alpha=alpha, animated=animated) 
-    return p
-
-
-
-def _plot_bezier_point_number (ax, side : Side_Airfoil_Bezier, ipoint, color, animated=False):
-    """
-    Plot a single marker for a bezier control point
-    returns: plt text artist  
-    """
-
-    if side.name == UPPER:
-        va = 'bottom'
-        yn = 8
+    if aType == Line.Type.CAMBER:
+        style = style=Qt.PenStyle.DashDotLine
+    elif aType == Line.Type.THICKNESS:
+        style = style=Qt.PenStyle.DashLine
+    elif aType == Line.Type.UPPER:
+        style = style=Qt.PenStyle.DotLine
+    elif aType == Line.Type.LOWER:
+        style = style=Qt.PenStyle.DotLine
     else:
-        va = 'top'
-        yn = -8
+        style = style=Qt.PenStyle.SolidLine
 
-    x,y = side.controlPoints[ipoint]
-
-    p = None 
-
-    if ipoint == 0 :                            # point 0 draw to the left 
-        p = ax.annotate(f'{ipoint+1}', (x,y) , va='center', ha='right', fontsize='small',
-            xytext=(-10, 0), textcoords='offset points', 
-            color = color, backgroundcolor= cl_background, animated=animated)
-    elif ipoint > 0: 
-        p = ax.annotate(f'{ipoint+1}', (x,y), va=va, ha='center', fontsize='small',
-            xytext=(0, yn), textcoords='offset points', 
-            color = color, backgroundcolor= cl_background, animated=animated)
-    return p
+    return style
 
 
-def _plot_side_title (ax : plt.Axes, side : Side_Airfoil):
-    """
-    Plot info text about bezier curve of one side 
-    returns: plt text artist  
+class Movable_Highpoint (Movable_Point):
+    """ 
+    Represents the highpoint of an airfoil Line object,
+    which can be moved to change the highpoint 
     """
 
-    if side.name == UPPER:
-        y = 0.88
-        va = 'top'
-    else:
-        y = 0.12
-        va = 'bottom'
-    x = 0.05 
+    def __init__ (self, 
+                  geo : Geometry, 
+                  line : Line, 
+                  line_plot_item : pg.PlotDataItem, *args, 
+                  movable : bool = False,
+                  color : QColor|str, 
+                  **kwargs):
 
-    if side.isBezier:
-        text = f'{side.nPoints} control points'
-    elif side.isHicksHenne:
-        text = f'{side.nhhs} functions'
+        # symmetrical and camber? 
+        if line.type == Line.Type.CAMBER and geo.isSymmetrical: 
+            movable = False 
+        # Bezier is changed via control points ? 
+        elif geo.isBezier:
+            movable = False 
 
-    p = ax.text(x,y, text, va=va, ha='left',
-                transform= ax.transAxes,  fontsize='small',
-                color = cl_textHeader, alpha=1)
-    return p 
+        self.name = 'max '+ line.name
+        self._geo = geo
+        self._line = line
+        self._line_type = line.type
+        self._line_plot_item = line_plot_item
+
+        super().__init__(line.highpoint.xy, 
+                         color = color, 
+                         movable = movable, 
+                         show_label_static = movable,
+                         **kwargs)
+
+
+    def label_static (self):
+
+        if self._line.type == Line.Type.CAMBER and self._geo.isSymmetrical: 
+            return  "No camber - symmetrical" 
+        else:  
+            return super().label_static()
+
+    def label_moving (self):
+
+        if self._line.type == Line.Type.CAMBER and self._geo.isSymmetrical: 
+            return  "No camber - symmetrical" 
+        else:  
+            return f"{self.y:.2%} @ {self.x:.2%}"
+
+
+    def _moving (self, _):
+        """ slot - point is moved by mouse """
+        # overlaoded to update airfoil geo 
+        # update highpoint coordinates
+        self._geo.set_highpoint_of (self._line, (self.x, self.y), finished=False)
+
+        # update self xy if we run against limits 
+        self.setPos(self._line.highpoint.xy)
+
+        # update line plot item 
+        self._line_plot_item.setData (self._line.x, self._line.y)
+
+
+    def _finished (self, _):
+        """ slot - point is move finished """
+        # overlaoded to update airfoil geo 
+        self._geo.finished_change_of (self._line)
+
+        # update parent plot item 
+        self._changed()
 
 
 
 
+class Movable_TE_Point (Movable_Point):
+    """ 
+    Represents the upper TE point. 
+    When moved the upper plot item will be updated
+    When finished final TE gap will be set 
+    """
+
+    name = "TE gap"
+
+    def __init__ (self, 
+                  geo : Geometry, 
+                  upper_plot_item : pg.PlotDataItem, 
+                  movable = False, 
+                  **kwargs):
+
+        # Bezier is changed via control points ? 
+        if geo.isBezier:
+            movable = False 
+
+        self._geo = geo
+        self._upper_plot_item = upper_plot_item
+
+        xy = self._te_point_xy()
+
+        super().__init__(xy, movable=movable, show_label_static = movable,**kwargs)
+
+    
+    def _te_point_xy (self): 
+        return self._geo.upper.x[-1], self._geo.upper.y[-1]
+    
+
+    def _moving (self, _):
+        """ slot -point is moved"""
+
+        # update highpoint coordinates
+        self._geo.set_te_gap (self.y * 2 , moving=True)
+
+        # update self xy if we run against limits 
+        self.setPos(self._te_point_xy())
+
+        # update line plot item 
+        self._upper_plot_item.setData (self._geo.upper.x, self._geo.upper.y)
+
+
+    def _finished (self, _):
+        """ slot - point moving is finished"""
+        # final highpoint coordinates
+        self._geo.set_te_gap (self.y * 2, moving=False)
+        self._changed()
+
+
+    def label_moving (self):
+
+        return f"{self.name}  {self.y*2:.2%} "
+
+    def _label_opts (self, moving=False, hover=False) -> dict:
+        """ returns the label options as dict """
+
+        # overloaded to align right 
+        if moving or hover:
+            labelOpts = {'color': QColor(Artist.COLOR_NORMAL),
+                        'anchor': (1,1),
+                        'offset': (10, 10)}
+        else: 
+            labelOpts = {'color': QColor(Artist.COLOR_LEGEND),
+                        'anchor': (1,1),
+                        'offset': (10, 10)}
+        return labelOpts
+
+
+
+
+class Movable_LE_Point (Movable_Point):
+    """ 
+    Represents the LE radius . 
+    When moved the LE radius will be updated
+    When finished final LE radius will be set 
+    """
+    name =  "LE radius"
+
+    def __init__ (self, 
+                  geo : Geometry, 
+                  circle : pg.ScatterPlotItem, 
+                  movable = False, 
+                  **kwargs):
+
+        # Bezier is changed via control points ? 
+        if geo.isBezier:
+            movable = False 
+
+        self._geo = geo
+        self._circle_item = circle
+        xy = 2 * self._geo.le_radius , 0
+
+        super().__init__(xy, movable=movable, show_label_static = movable, **kwargs)
+  
+
+    def _moving (self, _):
+        """ slot - when point is moved"""
+
+        # update radius 
+        new_radius = self.x / 2
+        new_radius = min(0.05,  new_radius)
+        new_radius = max(0.002, new_radius)
+
+        # update self xy if we run against limits 
+        self.setPos(2 * new_radius,0)
+
+        # update line plot item 
+        self._circle_item.setData ([new_radius], [0])
+        self._circle_item.setSize (2 * new_radius)
+
+
+    def _finished (self, _):
+        """ slot - point moving is finished"""
+
+        # final highpoint coordinates
+        new_radius = self.x / 2
+        self._geo.set_le_radius (new_radius)
+        self._changed()
+
+
+    def label_moving (self):
+
+        return f"{self.name}  {self.x/2:.2%} "
+
+
+
+
+
+class Movable_Side_Bezier (Movable_Bezier):
+    """
+    pg.PlotCurveItem/UIGraphicsItem which represents 
+    an airfoil Side_Bezier. 
+    The Bezier curve which can be changed by the controllpoints
+    
+    Points are implemented with Moveable_Points
+    A Moveable_Point can also be fixed ( movable=False).
+    See pg.TargetItem for all arguments 
+
+    Callback 'on_changed' will return the (new) list of 'points'
+
+    """
+    def __init__ (self, 
+                  airfoil : Airfoil_Bezier,
+                  side : Side_Airfoil_Bezier,
+                  **kwargs):
+
+        self._airfoil = airfoil
+        self._side = side 
+        points = side.controlPoints_as_points
+
+        if side.isUpper:
+            label_anchor = (0,1) 
+        else: 
+            label_anchor = (0,0)
+
+        super().__init__(points, label_anchor=label_anchor, **kwargs)
+
+    @property
+    def bezier (self) -> Bezier:
+        """ the Bezier  self is working with """
+        # here - take Bezier of the 'side' 
+        return self._side.bezier
+
+    @property
+    def u (self) -> list:
+        """ the Bezier parameter  """
+        # here - take Bezier of the 'side' 
+        return self._side._u
+
+
+    def refresh (self):
+        """ refresh control points from side control points """
+
+        # update all my movable points at once 
+        movable_point : Movable_Bezier_Point
+        for i, point_xy in enumerate(self._side.controlPoints): 
+            movable_point = self._movable_points[i]
+            movable_point.setPos_silent (point_xy)              # silent - no change signal 
+
+        self.setData(*self.points_xy())                         # update self (polyline) 
+
+        # if self._bezier_item is not None:   	                # update bezier item to be dispalyed
+        #     x,y = self.bezier.eval (self.u) 
+        #     self._bezier_item.setData (x, y)
+        #     self._bezier_item.show()
+
+
+    def scene_clicked (self, ev : MouseClickEvent):
+        """ 
+        slot - mouse click in scene of self 
+            - handle add Bezier point with crtl-click either on upper or lower side
+        """ 
+
+        # handle on ctrl-click
+        if not (ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier): return  
+       
+        # get scene coordinates of click pos and map to view box 
+        vb : pg.ViewBox = self.getViewBox()
+        pos : pg.Point = vb.mapSceneToView(ev.scenePos())
+        pos_x = pos.x()
+        pos_y = pos.y()
+
+        # typically there are 2 instances of self - upper and lower Bezier 
+        if pos_y < 0.0 and self._side.isLower:
+            self._add_point (pos_x, pos_y)
+        elif pos_y >= 0.0 and self._side.isUpper:
+            self._add_point (pos_x, pos_y)
+
+
+    def _add_point (self, pos_x, pos_y):
+       """ add controlpoint to Bezier curve""" 
+
+       index, point = self._side.check_new_controlPoint_at (pos_x, pos_y)
+       
+       if index is not None: 
+
+            self._side.add_controlPoint (index, point)
+            # _finished will do the rest - and init complete refresh
+            self._finished_point()
+ 
+
+    def _delete_point (self, aPoint : Movable_Point):
+        """ slot - point is should be deleted """
+        # overloaded - don't delete point 1 
+        if aPoint.id == 1: return
+        super()._delete_point (aPoint)    
+
+        px, py = self.jpoints_xy()
+        self._side.set_controlPoints (px, py)   
+
+        # _finished will do the rest - and init complete refresh
+        self._finished_point()
+
+
+    def _finished_point (self, aPoint = None):
+        """ slot - point move is finished """
+
+        # overloaded - update airfoil geometry 
+        self._airfoil.geo.finished_change_of (self._side)      
+
+        super()._finished_point(aPoint)
 
 
 
 # -------- concrete sub classes ------------------------
 
 
-class Grid_Artist (Artist):
-    """shows the grid in the axis
-    """
-    # plot over loaded because different handling with grid
-    def set_show (self, aBool):
-        """ suser switch to diaable ploting the data
-        """
-        self._show = aBool
-        self.plot()
-
-    def plot(self):
-        # todo improved grid depending on scale  
-        self.ax.grid(self.show)
-        self.ax.figure.canvas.draw_idle()
-
-
-
 class Airfoil_Artist (Artist):
     """Plot the airfoils contour  """
 
 
-    def __init__ (self, axes, modelFn, **kwargs):
-        super().__init__ (axes, modelFn, **kwargs)
+    def __init__ (self, *args, **kwargs):
 
-        self._show_title = False                        # show title like 'Bezier based' 
-        self._points = False                            # show point marker 
         self._show_panels = False                       # show ony panels 
         self._label_with_airfoil_type = False           # include airfoil type in label 
-        self._show_shape_function = True                # show Bezier or Hicks Henne shape functions
-        self.set_showLegend('normal')                   # show legend with/without airfoil data 
+        self._welcome_text = None                       # a HTML welcome text 
+        self._first_time  = True                        # to show welcome message 
+
+        super().__init__ (*args, **kwargs)
 
  
-    @property
-    def points(self): return self._points
-    def set_points (self, aBool): 
-        self._points = aBool 
-        if self._points: 
-            self.set_show_panels (False)
-
     @property
     def label_with_airfoil_type(self): return self._label_with_airfoil_type
     def set_label_with_airfoil_type (self, aBool): self._label_with_airfoil_type = aBool 
 
-    @property
-    def show_title(self): return self._show_title
-    def set_show_title (self, aBool): self._show_title = aBool 
 
     @property
     def show_panels(self): return self._show_panels
     def set_show_panels (self, aBool): 
         self._show_panels = aBool 
         if self._show_panels: 
-            self.set_points (False)
-
-    @property
-    def show_shape_function(self): return self._show_shape_function
-    def set_show_shape_function (self, aBool): self._show_shape_function = aBool 
+            self.set_show_points (False)
 
 
-    def set_current (self, aLineLabel, figureUpdate=False):
-        """ tries to set a highlighted airfoil  to section with name ''aLineLabel' 
-        """
+    def set_show_points (self, aBool):
+        """ user switch to show point (marker ) """
+
+        # overridden to show leading edge of spline 
+        super().set_show_points (aBool)
+        self.plot()             # do refresh will show leading edge of spline 
+
+
+    def set_current (self, aLineLabel):
+        # tries to set a highlighted airfoil to section with name ''aLineLabel' 
         if (not aLineLabel is None and aLineLabel != self._curLineLabel):    # only when changed do something
             self._curLineLabel = aLineLabel
             if self.show:                       # view is switched on by user? 
-                self.plot (figureUpdate=figureUpdate)
+                self.plot ()
 
-    
+
+    def set_welcome (self, aText):
+        """ set a welcome HTML text, which is schon the first time"""
+        if aText != self._welcome_text:
+            self._welcome_text = aText 
+            self.plot()
+
+
+    @property
+    def airfoils (self) -> list [Airfoil]: return self.data_list
+
+
     def _plot (self): 
-        """ do plot of airfoils in the prepared axes   
-        """
-        airfoils = self.model 
-        airfoil: Airfoil
-
-        if not len(airfoils) : return 
-
-        # create cycled colors 
-        self._set_colorcycle (8, colormap="Set2")          # extra color for each airfoil
-
-        # now plot each single airfoil
-        airfoil: Airfoil
+    
+        color_palette = random_colors (len(self.airfoils))
 
         # are there many airfoils - one of them is DESIGN? 
-        airfoils_with_design = False 
-        for airfoil in airfoils:
-            if len(airfoils) > 1 and (airfoil.usedAs == DESIGN):
-                airfoils_with_design = True 
 
-
-        for iair, airfoil in enumerate (airfoils):
-            if (airfoil.isLoaded):
-
-                # if there are many airfoils, dimm airfoils which are not DESIGN 
-                color = _color_airfoil_of (airfoil.usedAs)
-                if color is not None: 
-                    if airfoils_with_design and not (airfoil.usedAs == DESIGN):
-                        color = adjust_lightness (color,0.7)
-                else: 
-                    color = self._cycle_color()
-
-                if self.label_with_airfoil_type:
-                    label = f"{airfoil.usedAs}: {airfoil.name}"
-                else: 
-                    label = f"{airfoil.name}"
-
-                # the marker style 
-                if self.points:
-                    linewidth = 0.5
-                    linestyle = 'None'
-                    _marker_style = ms_points
-                elif self.show_panels:                  # plot black marker to simulate panels        
-                    linewidth = 1.5  
-                    linestyle = '-'
-                    _marker_style = dict(marker='o', fillstyle='full', markersize=4, 
-                                         mfc=cl_background, mec=cl_background)  
-                else:  
-                    linewidth = 1.2  
-                    linestyle = '-'
-                    _marker_style = dict()  
-
-                p = self.ax.plot (airfoil.x, airfoil.y, color=color, label=label, 
-                                  linewidth=linewidth, linestyle=linestyle, **_marker_style)
-                self._add (p)
-
-                # plot real le - airfoil must be loaded as GEO_SPLINE!
-                # p = self.ax.plot (airfoil.geo.le, linestyle='None', 
-                #                   marker='o', fillstyle='full', markersize=6, 
-                #                   mfc='red', mec='red')
-                # self._add (p)
-
-                # fill airfoil if it's only one 
-                if len(airfoils) == 1 and not self.show_panels:                    
-                    p = self.ax.fill (airfoil.x, airfoil.y, facecolor=color, alpha=0.1)
-                    self._add(p)
-
-                # show Bezier or Hicks Henne shape function
-                if self.show_shape_function:
-                    if airfoil.isBezierBased: 
-                        self.draw_bezier (airfoil, color)
-                        if self.show_title: 
-                            self._plot_title ('Bezier based', va='top', ha='left', wspace=0.05, hspace=0.05)
-
-                    if airfoil.isHicksHenneBased: 
-                        self.draw_hicksHenne (airfoil)
-                        if self.show_title: 
-                            self._plot_title ('Hicks Henne based', va='top', ha='left', wspace=0.05, hspace=0.05)
-
-                if self._pickActive: 
-                    self._makeObjectPickable (p)
-
-                # print a table for the max values 
-                if self.showLegend == 'extended':
-                    self._print_values (iair, airfoil, color)
-                elif self.showLegend == 'normal':
-                    self._print_name (iair, airfoil, color)
-
-        # suppress autoscale because of printed legend 
-        self.ax.autoscale(enable=False, axis='y')
-
-        # activate event for clicking on line 
-        if self._pickActive: self._connectPickEvent ()
-
-
-    def draw_bezier(self, airfoil: Airfoil_Bezier, color):
-        """ draw Bezier control Points of airfoil """
-
-        linewidth   = 1
-        linestyle   = ':'
-
-        for side in [airfoil.geo.upper, airfoil.geo.lower]:
-
-            # print info text about bezier curve 
-
-            if self.show_title:
-                p = _plot_side_title (self.ax, side)
-                self._add(p)
-
-            # plot bezier control points with connecting line 
-
-            x = side.bezier.points_x
-            y = side.bezier.points_y
-            p = self.ax.plot (x,y, linestyle, linewidth=linewidth, color=color, alpha=0.7) 
-            self._add(p)
-
-            for ipoint in range (side.nPoints):
-
-                # plot bezier control point marker 
-
-                p = _plot_bezier_point_marker(self.ax, side, ipoint, color)
-                self._add(p)
-
-                # print point number  
-
-                p = _plot_bezier_point_number (self.ax, side, ipoint, color)
-                self._add(p)
-
-            
-
-
-    def draw_hicksHenne (self, airfoil: Airfoil_Bezier):
-        """ draw hicks henne functions of airfoil """
-
-        linewidth   = 1
-        linestyle   = ':'
-
-        side : Side_Airfoil_HicksHenne
-
-        for side in [airfoil.geo.upper, airfoil.geo.lower]:
-        # side = airfoil.geo.upper
-
-            if side.name == UPPER:
-                delta_y =  0.1
-            else:
-                delta_y = -0.1
-
-            hh : HicksHenne
-            for ih, hh in enumerate(side.hhs):
-
-                # plot hh function 
-                x = side.x 
-                y = hh.eval (x) 
-                p = self.ax.plot (x,y * 10 + delta_y, linestyle, linewidth=linewidth , alpha=1) 
-                self._add(p)
-
-                # plot maximum marker 
-                x = hh.location
-                y = hh.strength  * 10 + delta_y
-                color =self._get_color (p) 
-                p = self.ax.plot (x, y, color=color, **ms_point)
-                self._add(p)
-
-                p = self.ax.annotate(f'{ih+1}  w{hh.width:.2f}', (x, y), fontsize='small',
-                    xytext=(3, 3), textcoords='offset points', color = color)
-                self._add(p)
-
-            # print info text 
-
-            if self.show_title:    
-                p = _plot_side_title (self.ax, side)
-                self._add(p)
-
-
-
-    def _print_name (self, iair, airfoil: Airfoil, color):
-        # print airfoil name in upper left corner , position relative in pixel 
-
-        xa = 0.96
-        ya = 0.96 
-        sc = get_font_size() / 10                    # scale pos depending on font size 
-
-        yoff = - iair * (12*sc) - 12
-        if self.label_with_airfoil_type:
-            name = f"{airfoil.usedAs}: {airfoil.name}" if airfoil.usedAs else f"{airfoil.name}" 
-        else:  
-            name = f"{airfoil.name}"
-
-        self._add (print_text   (self.ax, name, 'right', (xa,ya), (0, yoff), color, xycoords='axes fraction'))
-
-
-    def _print_values (self, iair, airfoil: Airfoil, color):
-         # print thickness, camber in a little table in upper left corner , position relative in pixel 
- 
-        xa = 0.98
-        ya = 0.96 
-
-        sc = get_font_size() / 10                    # scale pos depending on font size 
-
-        # header 
-        if iair == 0: 
-            self._add (print_text (self.ax, 'Thickness', 'right', (xa,ya), (-85*sc, 0), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax, 'Camber'   , 'right', (xa,ya), (-25*sc, 0), cl_textHeader, xycoords='axes fraction'))
-
-        # airfoil data 
-        if self.label_with_airfoil_type:  
-            name = f"{airfoil.usedAs}: {airfoil.name}" if airfoil.usedAs else f"{airfoil.name}" 
-        else:  
-            name = f"{airfoil.name}"
-
-        geo = airfoil.geo
-        xt, t = geo.maxThickX, geo.maxThick 
-        xc, c = geo.maxCambX,  geo.maxCamb
-
-        yoff = - iair * (12*sc) - (12*sc)
-        self._add (print_text   (self.ax, name, 'right', (xa,ya), (-135*sc, yoff), color, xycoords='axes fraction'))
-        self._add (print_number (self.ax,  t, 2, (xa,ya), (-100*sc, yoff), cl_text, asPercent=True))
-        self._add (print_number (self.ax, xt, 1, (xa,ya), ( -70*sc, yoff), cl_text, asPercent=True))
-        self._add (print_number (self.ax,  c, 2, (xa,ya), ( -30*sc, yoff), cl_text, asPercent=True))
-        self._add (print_number (self.ax, xc, 1, (xa,ya), (   0*sc, yoff), cl_text, asPercent=True))
-
-
-
-class Airfoil_Line_Artist (Artist):
-    """Superclass for plotting a line like curvature of upper and lower side of an airfoil
-    """
-    def __init__ (self, axes, modelFn, **kwargs):
-        super().__init__ (axes, modelFn, **kwargs)
-
-        self._upper  = True                     # including upper and lower lines 
-        self._lower  = True
-        self._points = False                    # show point marker 
-
-    def refresh(self, figureUpdate=False, upper=None, lower=None):
-        """ overloaded to switch upper/lower on/off"""
-        if upper is not None: self._upper = upper
-        if lower is not None: self._lower = lower
-        super().refresh (figureUpdate=figureUpdate)
-
-    @property
-    def upper(self): return self._upper
-    def set_upper (self, aBool): self._upper = aBool 
-
-    @property
-    def lower(self): return self._lower
-    def set_lower (self, aBool): self._lower = aBool 
-    
-    @property
-    def points(self): return self._points
-    def set_points (self, aBool): self._points = aBool 
-
-    @property
-    def _marker_style (self):
-        """ the marker style to show points"""
-        if self._points: return ms_points
-        else:            return dict()
-
-    
-    @property
-    def airfoils (self): 
-        return self.model
-    
-    def _plot (self): 
-        # to be overloaded
-        pass
-
-
-class Curvature_Artist (Airfoil_Line_Artist):
-    """Plot curvature (top or bottom) of an airfoil
-    """
-    name = 'Curvature' 
-
-    def __init__ (self, axes, modelFn, **kwargs):
-        super().__init__ (axes, modelFn, **kwargs)
-
-        self._show_derivative = False           # show derivative of curvature 
-        self.set_showLegend('extended')         # show legend with/without curvature data 
-
-    @property
-    def show_derivative(self): return self._show_derivative
-    def set_show_derivative (self, aBool): self._show_derivative = aBool 
-
-
-    def _plot (self): 
-
-        from math_util  import derivative1
-
-        nairfoils = len(self.airfoils)
-        if nairfoils == 0: return 
-        
         airfoil: Airfoil
+        airfoils_with_design = False 
+        for airfoil in self.airfoils:
+            if airfoil.usedAsDesign:
+                airfoils_with_design = True 
+                break
 
         for iair, airfoil in enumerate (self.airfoils):
             if (airfoil.isLoaded):
 
-                curv : Curvature_Abstract = airfoil.geo.curvature
-                color = _color_airfoil_of (airfoil.usedAs)
-                linewidth = 1.0 # 0.8
-                label = None
-                sides = []
-                if self.upper: sides.append (curv.upper)
-                if self.lower: sides.append (curv.lower)
+                # the first airfoil get's in the title 
 
-                side : Side_Airfoil
-                for side in sides:
-                    x = side.x
-                    y = side.y      
-                    alpha = 0.7 # 0.9     
-                    ls = ls_curvature if side.name == UPPER else ls_curvature_lower
-                    p = self.ax.plot (x, y, ls, color = color, alpha=alpha, label=label, 
-                                      linewidth= linewidth, **self._marker_style)
-                    self._add(p)
-                    self._plot_reversals (side, color)
+                if iair == 0:
+                    mods = None 
+                    if airfoil.usedAsDesign:
+                        mods = self._get_modifications (airfoil)
+                    if mods:
+                        subTitle = "Mods: " + mods
+                    elif not mods and airfoil.isBezierBased:
+                        subTitle = 'Based on 2 Bezier curves'
+                    else: 
+                        subTitle = None 
 
-                    # plot derivative1 of curvature ('spikes') only if just one airfoil or DESIGN
-                    if self.show_derivative:
-                        if nairfoils == 1 or (nairfoils > 1 and airfoil.usedAs == DESIGN):
-                            p = self.ax.plot (x, -derivative1(x,y), ls, color = 'red', alpha=alpha, label=label, 
-                                            linewidth= 0.8, **self._marker_style)
-                            self._add(p)
+                    if self._first_time and airfoil.isExample and self._welcome_text is not None:
+                        self._plot_text (self._welcome_text, color=QColor(self.COLOR_LEGEND), # fontSize=self.SIZE_NORMAL, 
+                                         parentPos=(0.05,0.), itemPos=(0.0,0), offset=(30,10))
+                        self._first_time = False
+                    else: 
+                        self._plot_title (airfoil.name, subTitle=subTitle )
 
-                    # print a table for the max values 
-                    if self.showLegend == 'extended':
-                        self._print_values (iair, nairfoils, airfoil.name, side, side.name==UPPER, color)
+                # no legend if it is only one airfoil 
 
-
-        self._plot_title (self.name, va='top', ha='center', wspace=0.1, hspace=0.05)
-
-        # print derivative legend 
-        if self.show_derivative:
-            p = self.ax.text (0.05, 0.05, "Derivative of curvature", color='firebrick' , 
-                            fontsize = 'small', transform=self.ax.transAxes, 
-                            horizontalalignment='left', verticalalignment='bottom')
-            self._add (p)   
-
-
-    def _plot_reversals (self, line : Side_Airfoil, color):
-        # annotate reversals of curvature  - return number of reversals 
-
-        reversals = line.reversals()
-        if reversals:
-            for i, point in enumerate(reversals): 
-                text = "R"
-                marker_x = point[0]
-                if point[1] < 0.0:
-                    marker_y = point[1] - 0.5
-                    va = 'bottom'
+                if len(self.airfoils) == 1:
+                    label = None                            # suppress legend 
                 else: 
-                    marker_y = point[1] + 0.5
-                    va = 'top'
+                    if self.label_with_airfoil_type:
+                        label = f"{airfoil.usedAs}: {airfoil.name}"
+                    else: 
+                        label = f"{airfoil.name}"
 
-                p = self.ax.text (marker_x, marker_y, text, va=va, ha='center', color = color )
-                self._add (p) 
-
-
-    def _print_values (self, iair, nair, name, curvature: Side_Airfoil, upper: bool, color):
-        # print curvature values 
-
-        # print in upper left corner , position relative in pixel 
-        xa = 0.87
-        if upper: 
-            ya = 0.96 
-            ypos = 0
-        else: 
-            ya = 0.04 
-            ypos = 12 * nair + 6
-
-        sc = get_font_size() / 10                    # scale pos depending on font size 
-
-        # header 
-        if iair == 0: 
-            self._add (print_text (self.ax, 'LE'    , 'right', (xa,ya), (  2*sc, ypos), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax, 'TE'    , 'right', (xa,ya), ( 38*sc, ypos), cl_textHeader, xycoords='axes fraction'))
-            self._add (print_text (self.ax, 'Revers', 'right', (xa,ya), ( 80*sc, ypos), cl_textHeader, xycoords='axes fraction'))
-
-        # airfoil data + name 
-        le_curv = curvature.y[0]
-        te_curv = curvature.y[-1]
-        nr     = len(curvature.reversals())
-        yoff = ypos - iair * 12 - 12
-
-        if nair > 1:                                # airfoil name only if there are several
-            self._add (print_text   (self.ax, name, 'right', (xa,ya), (-35*sc, yoff), color, alpha=0.8, xycoords='axes fraction'))
-        self._add (print_number (self.ax, le_curv, 0, (xa,ya), (  5*sc, yoff), cl_text))
-        self._add (print_number (self.ax, te_curv, 1, (xa,ya), ( 40*sc, yoff), cl_text))
-        self._add (print_number (self.ax,      nr, 0, (xa,ya), ( 68*sc, yoff), cl_text))
-
-
-                
-
-class Difference_Artist (Airfoil_Line_Artist):
-    """Plot the y-difference of two airfoils 
-
-        2nd airfoil is Bezier based airfoil 
-        1st is reference or original airfoil from where x-stations are taken  
-    """
-
-    @property
-    def airfoil (self) -> Airfoil_Bezier: 
-        return self.airfoils[1] 
-    
-    @property
-    def ref_airfoil (self) -> Airfoil : 
-        return self.airfoils[0] 
-    
-
-    def _get_difference (self, side_ref: Side_Airfoil, side_actual: Side_Airfoil_Bezier):
-        # calculate difference at y-stations of reference airfoil 
-        diff  = np.zeros (len(side_ref.x))
-        for i, x in enumerate(side_ref.x):
-            diff [i] = side_actual.bezier.eval_y_on_x (x, fast=True) - side_ref.y[i]
-        return diff 
-
-
-    def _plot (self): 
-
-        if len(self.airfoils) != 2 : return 
-
-        self.set_showLegend (False)                             # no legend 
-        color = _color_airfoil_of (self.airfoil.usedAs)
-        linewidth=0.8
-
-        if self.upper:
-            x = self.ref_airfoil.geo.upper.x
-            y = 10 * self._get_difference (self.ref_airfoil.geo.upper, self.airfoil.geo.upper )
-            p = self.ax.plot (x, y, ls_difference, color = color, 
-                            linewidth= linewidth, **self._marker_style)
-            self._add(p)
-
-        if self.lower:
-            x = self.ref_airfoil.geo.lower.x
-            y = 10 * self._get_difference (self.ref_airfoil.geo.lower, self.airfoil.geo.lower ) 
-            p = self.ax.plot (x, y, ls_difference, color = color, 
-                            linewidth= linewidth, **self._marker_style)
-            self._add(p)
-
-
-
-class Le_Artist (Artist):
-    """Plot the airfoils leading edge areacontour  """
-
-    def __init__ (self, axes, modelFn, show=False, showMarker=True):
-        super().__init__ (axes, modelFn, show=show, showMarker=showMarker)
-
-        self._points = True                     # show point marker 
-        self.set_showLegend (False)             # no legend 
-
-
-    @property
-    def points(self): return self._points
-    def set_points (self, aBool): self._points = aBool 
-
-    @property
-    def _marker_style (self):
-        """ the marker style to show points"""
-        if self._points: return ms_points
-        else:            return dict()
-
-    @property
-    def airfoils (self): 
-        return self.model
-    
-    def _plot (self): 
-        """ do plot of airfoils in the prepared axes   
-        """
-
-        # create cycled colors 
-        self._set_colorcycle (10, colormap="Paired")          # no of cycle colors - extra color for each airfoil
-
-        airfoil : Airfoil
-
-        for airfoil in self.airfoils:
-            if (airfoil.isLoaded):
+                # set color, width, ZValue, symbol style depending on airfoil usage and no of airfoils  
 
                 color = _color_airfoil_of (airfoil.usedAs)
+                if color is None:  
+                    color = color_palette [iair]
 
-                linewidth = 0.5
-                
-                self._plot_le_angle (airfoil)
-                self._plot_le_coordinates (airfoil)
+                # default 
+                width = 1
+                antialias = False
+                zValue = 1
 
-                p = self.ax.plot (airfoil.x, airfoil.y, '-', color = color, 
-                                  linewidth= linewidth, **self._marker_style)
-                self._add(p)
+                if airfoils_with_design:
+                    if airfoil.usedAsDesign:
+                        width = 2
+                        antialias = True
+                        zValue = 3
+                    else:
+                        color = QColor (color).darker (150)
+                elif airfoil.usedAs == usedAs.NORMAL:
+                        width = 2
+                        antialias = True
 
-                self._plot_le (airfoil.geo.le, color)
+                pen = pg.mkPen(color, width=width)
 
+                sPen, sBrush, sSize = pg.mkPen(color, width=1), 'black', 7
+                s = 'o' if self.show_points else None 
 
-    def _plot_le (self, le, color):
+                # plot contour and fill airfoil if it's only one 
+                #   use geometry.xy to refelect changes in diesign airfoil
 
-        # highlight leading edge based on coordinates
-        if self.points:
-            p = self.ax.plot (le[0], le[1], color=color, **ms_le)
-            self._add(p)
+                if len(self.airfoils) == 1: 
 
+                    # if there is only one airfoil, fill the airfoil contour with a soft color tone  
+                    brush = pg.mkBrush (color.darker (600))
+                    self._plot_dataItem  (airfoil.geo.x, airfoil.geo.y, name=label, pen = pen, 
+                                          symbol=s, symbolSize=sSize, symbolPen=sPen, symbolBrush=sBrush, 
+                                          fillLevel=0.0, fillBrush=brush, antialias = antialias,
+                                          zValue=zValue)
+                else: 
+                    self._plot_dataItem  (airfoil.geo.x, airfoil.geo.y, name=label, pen = pen, 
+                                          symbol=s, symbolSize=sSize, symbolPen=sPen, symbolBrush=sBrush,
+                                          antialias = antialias,
+                                          zValue=zValue)
 
-    def _plot_le_angle (self, airfoil: Airfoil):
+                # optional plot of real LE defined by spline 
 
-        yLim1, yLim2 = self.ax.get_ylim()
-
-        xLe, yLe = airfoil.geo.le
-        iLe = airfoil.geo.iLe
- 
-        # plot two lines from LE to upper and lower neighbour points 
-        xLe_before = airfoil.x [iLe-1]
-        yLe_before = airfoil.y [iLe-1]
-
-        # length of lines about 3/4 of axes height
-        dy_line = (yLim2 - yLim1)/ 3 
-
-        dx = xLe_before - xLe
-        dy = yLe_before - yLe
-        x = [xLe, xLe_before + dy_line * dx/dy]
-        y = [yLe, yLe_before + dy_line]
-        p = self.ax.plot (x,y, color = cl_helperLine, lw=0.7)
-        self._add(p)
-
-        # plot angle text 
-        text = "%.1f °" % (airfoil.geo.panelAngle_le)
-
-        p = self.ax.annotate(text, (x[1], y[1]), fontsize = 'small',
-                             xytext=(-15, 5), textcoords='offset points', color = cl_helperLine)
-        self._add (p)   
-
-        # lower line
-        xLe_after = airfoil.x [iLe+1]
-        yLe_after = airfoil.y [iLe+1]
-        dx = xLe_after - xLe
-        dy = yLe_after - yLe
-        x = [xLe, xLe_after - dy_line * dx/dy]
-        y = [yLe, yLe_after - dy_line]
-        p = self.ax.plot (x,y, color = cl_helperLine, lw=0.7)
-        self._add(p)
+                if self.show_points and airfoil.geo.isSplined:
+                    if airfoil.isNormalized:
+                        brushcolor = "limegreen"
+                        text = None
+                    else: 
+                        brushcolor = "yellow"
+                        text="LE spline"
+                    self._plot_point (airfoil.geo.le_real, color=color, brushColor=brushcolor,
+                                      text=text,anchor=(0.5,1) )
 
 
+    def _get_modifications (self, airfoil : Airfoil) -> str: 
+        """ returns the modifications made to the airfoil as long string"""
 
-    def _plot_le_coordinates (self, airfoil: Airfoil):
-
-        xLe, yLe = airfoil.geo.le
-        if airfoil.isEdited:
-            text = "New "
-        else:
-            text = ""
-
-        text = text + "LE at %.7f, %.7f" % (xLe, yLe)
-        p = self.ax.annotate(text, (xLe, yLe), fontsize = 'small',
-                             xytext=(20, -4), textcoords='offset points', color = cl_helperLine)
-        self._add (p)   
+        return ', '.join(airfoil.geo.modifications)
 
 
 
-class Thickness_Artist (Airfoil_Line_Artist):
-    """Plot thickness, camber line of an airfoil, print max values 
-    """
-    def __init__ (self, axes, modelFn, **kwargs):
-        super().__init__ (axes, modelFn, **kwargs)
+class Bezier_Artist (Artist):
+    """Plot and edit airfoils Bezier control points """
 
-        self.set_showLegend(False)         # show  legend with airfoil data 
+    sig_bezier_changed     = pyqtSignal()           # bezier curve changed 
 
-        
+    @property
+    def airfoils (self) -> list [Airfoil]: return self.data_list
+
+    def refresh_from_side (self, aLinetype):
+
+        p : Movable_Side_Bezier
+        for p in self._plots: 
+            if p._side.type == aLinetype:
+                p.refresh()
+
     def _plot (self): 
-
-        airfoils = self.model 
+    
         airfoil: Airfoil
 
-        if not len(airfoils) : return 
+        for airfoil in self.airfoils:
+            if airfoil.isBezierBased and airfoil.isLoaded:
 
-        for airfoil in airfoils:
-            if (airfoil.isLoaded ):
-
-                # use fast airfoil geometry calc
-                camber    = airfoil.camber
-                thickness = airfoil.thickness
-                    
                 color = _color_airfoil_of (airfoil.usedAs)
+                movable = airfoil.usedAsDesign
 
-                # dimm airfoils which are not DESIGN 
-                if  not (airfoil.usedAs == DESIGN):
-                    color = adjust_lightness (color,0.6)
+                side : Side_Airfoil_Bezier
+                for side in [airfoil.geo.lower, airfoil.geo.upper]:     # paint upper on top 
 
-                # plot camber line
-                p = self.ax.plot (camber.x, camber.y, ls_camber, color = color, 
-                                    linewidth= 0.8, **self._marker_style)
-                self._add(p)
+                    p = Movable_Side_Bezier (airfoil, side, color=color, movable=movable,
+                                              on_changed=self.sig_bezier_changed.emit) 
+                    self._add(p)
+ 
+                    # connect to mouse click in scene to add a new Bezier control point 
 
-                # plot thickness distribution line
-                p = self.ax.plot (thickness.x, thickness.y, ls_thickness, color = color, 
-                                    linewidth= 1.0, **self._marker_style)
-                self._add(p)
-
-                # plot marker for the max values 
-                self._plot_max_val (thickness, airfoil.usedAs, color)
-                self._plot_max_val (camber,    airfoil.usedAs, color)
-
-                # plot le circle 
-
-                le_radius = airfoil.leRadius_perc / 100
-                circle = Circle ((le_radius,0), le_radius, linewidth=1, fill=False, 
-                                     ec=adjust_lightness(color,1.2))
-                p = self.ax.add_artist (circle) 
-                self._add(p)
+                    if movable:
+                        sc : pg.GraphicsScene = p.scene()
+                        sc.sigMouseClicked.connect (p.scene_clicked)
 
 
+    # def draw_hicksHenne (self, airfoil: Airfoil_Bezier):
+    #     """ draw hicks henne functions of airfoil """
 
-    def _plot_max_val (self, airfoilLine: Side_Airfoil, airfoil_type, color):
-        """ indicate max. value of camber or thickness line """
+    #     linewidth   = 1
+    #     linestyle   = ':'
 
-        x, y = airfoilLine.maximum
-        if airfoil_type == DESIGN:
-            text = ""
-            color = cl_helperLine
-        else:
-            text = ""
-            color = color
+    #     side : Side_Airfoil_HicksHenne
 
-        # symmetrical and camber? 
-        if airfoilLine.name == CAMBER and y == 0.0: 
-            p = self.ax.annotate("No camber - symmetrical", (0.3, 0), fontsize='small',
-                                xytext=(4, 4), textcoords='offset points', color = color)
-            self._add (p) 
-        # normal 
-        else:  
-            # marker 
-            p = self.ax.plot (x, y, color=color, **ms_point)        
-            self._add(p)
-            # values 
-            p = self.ax.annotate(text + "%.2f%% at %.1f%%" % (y * 100, x *100), (x, y), fontsize='small',
-                                xytext=(4, 4), textcoords='offset points', color = color)
-            self._add (p)   
+    #     for side in [airfoil.geo.upper, airfoil.geo.lower]:
+    #     # side = airfoil.geo.upper
+
+    #         if side.name == UPPER:
+    #             delta_y =  0.1
+    #         else:
+    #             delta_y = -0.1
+
+    #         hh : HicksHenne
+    #         for ih, hh in enumerate(side.hhs):
+
+    #             # plot hh function 
+    #             x = side.x 
+    #             y = hh.eval (x) 
+    #             p = self.ax.plot (x,y * 10 + delta_y, linestyle, linewidth=linewidth , alpha=1) 
+    #             self._add(p)
+
+    #             # plot maximum marker 
+    #             x = hh.location
+    #             y = hh.strength  * 10 + delta_y
+    #             color =self._get_color (p) 
+    #             p = self.ax.plot (x, y, color=color, **ms_point)
+    #             self._add(p)
+
+    #             p = self.ax.annotate(f'{ih+1}  w{hh.width:.2f}', (x, y), fontsize='small',
+    #                 xytext=(3, 3), textcoords='offset points', color = color)
+    #             self._add(p)
+
+    #         # print info text 
+
+    #         if self.show_title:    
+    #             p = _plot_side_title (self.ax, side)
+    #             self._add(p)
 
 
 
-class Thickness_Edit_Artist (Airfoil_Line_Artist):
+
+class Curvature_Artist (Artist):
     """
-    Plot thickness, camber line of an airfoil, print max values
-    Move highpoints of thickness and camber by mouse  
+    Plot curvature (top or bottom) of an airfoil
     """
+    name = 'Curvature' 
 
-    def __init__ (self, axes, modelFn, **kwargs):
-        super().__init__ (axes, modelFn, **kwargs)
+    def __init__ (self, *args, show_derivative=False, **kwargs):
 
-
-        self.thickness_artist        = None          # artist to thickness line 
-        self.thickness_max_artist    = None          # artist to move thickness highpoint 
-        self.thickness_marker_artist = None          # artist to move thickness highpoint 
-        self.camber_artist           = None          # artist to camber line 
-        self.camber_max_artist       = None          # artist to move camber highpoint 
-        self.camber_marker_artist    = None          # artist to move camber highpoint 
-
-        self._mouseInfo_wasShown     = False         # user info shown? 
-
-        self.set_showLegend(False)                   # show legend with airfoil data 
-
-
-    def _deleteMyPlots(self):
-        super()._deleteMyPlots()
-        
-        self.ax.relim()                              # make sure all the data fits
-
-        self.thickness_artist        = None          # artist to thickness line 
-        self.thickness_max_artist    = None          # artist to move thickness highpoint 
-        self.thickness_marker_artist = None          # artist to move thickness highpoint 
-        self.camber_artist           = None          # artist to camber line 
-        self.camber_max_artist       = None          # artist to move camber highpoint 
-        self.camber_marker_artist    = None          # artist to move camber highpoint 
+        self._show_upper = True                     # show upper side 
+        self._show_lower = True                     # show lower side 
+        self._show_derivative = show_derivative     # show derivative of curvature 
+ 
+        super().__init__ (*args, **kwargs)
 
     @property
-    def airfoil (self) -> Airfoil:
-        return self.model [0]
-
-
-        
-    def _plot (self): 
-
-        if not self.airfoil.isLoaded: return 
-
-        color = _color_airfoil_of (self.airfoil.usedAs)
-        linewidth=1.2
-
-        # thickness line and max point for mouse 
-
-        thickness = self.airfoil.thickness                   # use fast airfoil geometry calc
-        p = self.ax.plot (thickness.x, thickness.y, ls_thickness, color = color, 
-                            linewidth= linewidth, **self._marker_style, animated=True)
-        self.thickness_artist = self._add(p)
-
-        x, y = thickness.maximum
-        p = self.ax.plot (x, y, color=cl_userHint, **ms_point, animated=True)        
-        self.thickness_max_artist = self._add(p)
-
-        p = self.ax.annotate("%.2f%% at %.1f%%" % (y * 100, x *100), (x, y), fontsize='small',
-                               xytext=(4, 4), textcoords='offset points', color = cl_userHint, animated = True)
-        self.thickness_marker_artist = self._add (p)   
-
-        self._dragManagers.append (DragManager (self.ax, self.thickness_max_artist,
-                    typeTag = thickness.name, 
-                    callback_draw_animated  = self.draw_animated,
-                    callback_on_moved       = self._moveCallback)) 
-
-
-        # camber line and max point for mouse 
-
-        camber    = self.airfoil.camber                      # use fast airfoil geometry calc
-        p = self.ax.plot (camber.x, camber.y, ls_camber, color = color, 
-                            linewidth= linewidth, **self._marker_style, animated=True)
-        self.camber_artist = self._add(p)
-
-        x, y = camber.maximum
-        p = self.ax.plot (x, y, color=cl_userHint, **ms_point, animated=True)        
-        self.camber_max_artist = self._add(p)
-
-        p = self.ax.annotate("%.2f%% at %.1f%%" % (y * 100, x *100), (x, y), fontsize='small',
-                               xytext=(4, 4), textcoords='offset points', color = cl_userHint, animated = True)
-        self.camber_marker_artist = self._add (p)   
-
-        self._dragManagers.append (DragManager (self.ax, self.camber_max_artist,
-                    typeTag = camber.name, 
-                    callback_draw_animated  = self.draw_animated,
-                    callback_on_moved       = self._moveCallback)) 
-        
-        # plot le circle 
-
-        le_radius = self.airfoil.leRadius_perc / 100
-        circle = Circle ((le_radius,0), le_radius, fill=False, ec=color, alpha=0.8, animated=True)
-        p = self.ax.add_artist (circle) 
-        self._add(p)
-
-
-        # connect to draw event for initial plot of the animated artists all together
-        self._connectDrawEvent()
-
-        self.show_mouseInfo ()
-
-        # suppress autoscale 
-        # self.ax.set_ylim(bottom=0.0)
-        self.ax.autoscale(enable=False, axis='y')
-
-
-
-    def show_mouseInfo (self):
-        """ show user info for mouse helper """
-
-        # show only once 
-        if not self._mouseInfo_wasShown:
-            text = 'move highpoints with mouse'
-            p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
-                        transform=self.ax.transAxes, horizontalalignment='center', verticalalignment='bottom')
-            self._add(p)
-            self._mouseInfo_wasShown = True
-
-
-    def draw_animated (self, artist_onMove=None, iArtist = None , typeTag=None): 
-        """ call back when point is moving - draw and update lines """
-
-        if artist_onMove is not None and iArtist is not None: 
-            
-            if typeTag == THICKNESS:
-                line          = self.airfoil.thickness
-                line_artist   = self.thickness_artist
-                marker_artist = self.thickness_marker_artist 
-
-            else: 
-                line          = self.airfoil.camber
-                line_artist   = self.camber_artist
-                marker_artist = self.camber_marker_artist 
-
-            # get new coordinates (when dragged) and try to move control point 
-            x_try, y_try = artist_onMove.get_xydata()[0]
-
-            x = min (0.8, max (0.1, x_try))
-
-            if typeTag == THICKNESS:
-                y = min (0.5, max (0.01, y_try))            # if 0.0 line couldn't be restored
-            else:
-                y = min (0.5, max (0.001, y_try))           # if 0.0 line couldn't be restored
-
-            # set new max points  - will be checked for valid x,y 
-            line.set_maximum (x, y)
-
-            # draw the point which is moved
-            artist_onMove.set_xdata(x)
-            artist_onMove.set_ydata(y)
-
-            # draw the line 
-            line_artist.set_xdata(line.x)
-            line_artist.set_ydata(line.y)
-
-            # marker pos update 
-            marker_artist.xy = (x,y)
-            marker_artist.set_text ("%.2f%% at %.1f%%" % (y * 100, x *100))
-
-            # finally draw all animated artists
-            self.draw_animated_artists ()
-
-
-
-
-class Bezier_Edit_Artist (Artist):
-    """Plot upper and lower Bezier curve - drag control points with mouse    """
-
-    def __init__ (self, axes, modelFn, **kwargs):
-        super().__init__ (axes, modelFn, **kwargs)
-
-        self._points = False                       # show point marker 
-
-        self.points_upper_artist   = []            # the artists of bezier control points
-        self.points_lower_artist   = []      
-        self.helper_upper_artist   = None          # artist to draw helper line 
-        self.helper_lower_artist   = None      
-        self.bezier_upper_artist   = None          # the artist to draw bezier curve
-        self.bezier_lower_artist   = None
-
-        self._mouseInfo_artist     = None         # user info artist
-
-        self.set_showLegend(False)  
-
-
-    def set_points (self, aBool): self._points = aBool 
-
-
-    def _deleteMyPlots(self):
-        super()._deleteMyPlots()
-        
-        self.ax.relim()                            # make sure all the data fits
-
-        self.marker_upper_artist   = []            # the artists of bezier control points
-        self.marker_lower_artist   = []   
-        self.number_upper_artist   = []            # the artists of bezier control points number
-        self.number_lower_artist   = []   
-        self.helper_upper_artist   = None          # artist to draw helper line 
-        self.helper_lower_artist   = None      
-        self.bezier_upper_artist   = None          # the artist to draw bezier curve
-        self.bezier_lower_artist   = None
+    def show_upper(self): return self._show_upper
+    def set_show_upper (self, aBool): 
+        self._show_upper = aBool
+        self.plot() 
 
     @property
-    def airfoil (self) -> Airfoil_Bezier:
-        return self.model
+    def show_lower(self): return self._show_lower
+    def set_show_lower (self, aBool): 
+        self._show_lower = aBool 
+        self.plot()
+
+    @property
+    def show_derivative(self): return self._show_derivative
+    def set_show_derivative (self, aBool): 
+        self._show_derivative = aBool 
+        self.plot()
+
+    @property
+    def airfoils (self) -> list [Airfoil]: return self.data_list
 
 
     def _plot (self): 
-        """ do plot of bezier control points and bezier curve 
-        """
 
-        for side in [self.airfoil.geo.upper, self.airfoil.geo.lower]:
-
-            # plot bezier control points marker and their number  
-
-            marker_artist = []
-            number_artist = []
-            for ipoint in range (side.nPoints):
-
-                p = _plot_bezier_point_marker (self.ax, side, ipoint, cl_userHint, animated=True)
-                marker_artist.append (self._add(p))
-
-                p = _plot_bezier_point_number (self.ax, side, ipoint, cl_userHint, animated=True)
-                number_artist.append (self._add(p))
-
-            # plot bezier helper line between control points 
-                
-            x = side.bezier.points_x
-            y = side.bezier.points_y
-            p = self.ax.plot (x,y, ':', linewidth=1, color=cl_userHint, alpha=0.7, animated=True) 
-            helper_artist = self._add(p)
-
-            # plot  bezier curve points 
-
-            if self._points:                         # the marker style to show points
-                _marker_style = ms_points
-                linewidth= 0.4
-            else:  
-                _marker_style = dict()
-                linewidth= 0.8
-
-            # prepare plot bezier for animated drawing (dashed line) 
-            p = self.ax.plot (side.x, side.y, linestyle= 'None', linewidth=linewidth,   # 'None' not visible 
-                              color=cl_editing, **_marker_style, animated=True ) 
-            bezier_artist  = self._add(p) 
-
-            # remind artist - activate dragManager per side 
-            if side.name == UPPER:
-                self.marker_upper_artist = marker_artist
-                self.number_upper_artist = number_artist
-                self.helper_upper_artist = helper_artist
-                self.bezier_upper_artist = bezier_artist 
-            else: 
-                self.marker_lower_artist = marker_artist
-                self.number_lower_artist = number_artist
-                self.helper_lower_artist = helper_artist
-                self.bezier_lower_artist = bezier_artist 
-                
-            self._dragManagers.append (DragManager (self.ax, marker_artist,
-                                typeTag = side.name, 
-                                callback_draw_animated  = self.draw_animated,
-                                callback_shiftCtrlClick = self.handle_shiftCtrlClick,
-                                callback_on_moved       = self._moveCallback)) 
-
-        # connect to draw event for initial plot of the animated artists all together
-        self._connectDrawEvent()
-
-        self.show_mouseInfo ()
-
-        return 
-
-
-
-    def show_mouseInfo (self):
-        """ show user info for mouse helper """
-
-        # will be removed after first mouse move 
-        if self._mouseInfo_artist is None: 
-            text = 'move points with mouse, ctrl+click to add, shift+click to remove'
-            p = self.ax.text (0.50, 0.05, text, color=cl_userHint, fontsize = 'small',
-                        transform=self.ax.transAxes, horizontalalignment='center', verticalalignment='bottom')
-            self._mouseInfo_artist = p
-
-
-    def draw_animated (self, artist_onMove=None, iArtist = None , typeTag=None): 
-        """ call back when point is moving - draw and update Bezier """
-
-        if artist_onMove is not None and iArtist is not None: 
-            
-            if typeTag == UPPER:
-                side   = self.airfoil.geo.upper
-            else: 
-                side   = self.airfoil.geo.lower
-
-            iPoint = iArtist 
-
-            # get new coordinates (when dragged) and try to move control point 
-            x_try, y_try = artist_onMove.get_xydata()[0]
-
-            # draw all the dependand artists of this side 
-            self.update_animated_side (side, iPoint, x_try, y_try)
-
-            # finally draw all animated artists
-            self.draw_animated_artists ()
-
-            # remove mouse info after first move 
-            if self._mouseInfo_artist: 
-                self._mouseInfo_artist.remove()  
-                self._mouseInfo_artist = False
-                      
-     
-
-    def update_animated_side (self, side : Side_Airfoil_Bezier, iPoint, x, y): 
-        """ update Bezier and plot artists of side """
-
-        if side.name == UPPER:
-            artist_onMove = self.marker_upper_artist[iPoint]
-            number_onMove = self.number_upper_artist[iPoint]
-            bezier_artist = self.bezier_upper_artist
-            helper_artist = self.helper_upper_artist
-        else:  
-            artist_onMove = self.marker_lower_artist[iPoint]
-            number_onMove = self.number_lower_artist[iPoint]
-            bezier_artist = self.bezier_lower_artist
-            helper_artist = self.helper_lower_artist
+        nairfoils = len(self.airfoils)
         
-        # set new bezier points  - will be checked for valid x,y 
-        x, y = side.move_controlPoint_to(iPoint, x, y)
+        airfoil: Airfoil
 
-        # draw the control point which is moved
-        number_onMove.xy = (x,y)
-        artist_onMove.set_xdata(x)
-        artist_onMove.set_ydata(y)
+        for airfoil in self.airfoils:
 
-        # draw helper line between control points 
-        helper_artist.set_xdata(side.bezier.points_x)
-        helper_artist.set_ydata(side.bezier.points_y)
+            color = _color_airfoil_of (airfoil.usedAs)
 
-        # draw animated Bezier 
-        bezier_artist.set_xdata(side.x)
-        bezier_artist.set_ydata(side.y)
-        bezier_artist.set_linestyle('--')
+            sides = []
+            if self.show_upper: sides.append (airfoil.geo.curvature.upper)
+            if self.show_lower: sides.append (airfoil.geo.curvature.lower)
+
+            side : Line
+            for side in sides:
+                x = side.x
+                y = side.y      
+                if side.type == Line.Type.UPPER:
+                    pen = pg.mkPen(color, width=1, style=Qt.PenStyle.SolidLine)
+                else: 
+                    pen = pg.mkPen(color, width=1, style=Qt.PenStyle.DashLine)
+
+                label = f"{side.name} - {airfoil.name}"
+                self._plot_dataItem (x, y, name=label, pen=pen)
+
+                # plot derivative1 of curvature ('spikes') 
+
+                if self.show_derivative and (nairfoils == 1 or airfoil.usedAsDesign):
+                    pen = QPen (pen)
+                    pen.setColor (QColor('red'))
+                    name = f"{side.name} - Derivative"
+                    self._plot_dataItem (x, -derivative1(x,y), name=name, pen=pen)
+
+                # plot max points at le and te and reversals
+
+                self._plot_le_te_max_point (side, color )
+                self._plot_reversals (side, color)
 
 
-    def handle_shiftCtrlClick (self, iArtist=None, typeTag=None, event=None):
-        """handle shift or control click - if posssible insert new opPoint at eventxy
-            - or remove if shift click  
-        """
-        if not event: return 
 
-        updateBezier = False 
-        if typeTag == UPPER:
-            marker_artist = self.marker_upper_artist
-            number_artist = self.number_upper_artist
-            bezier_artist = self.bezier_upper_artist
-            helper_artist = self.helper_upper_artist
-            side          = self.airfoil.geo.upper
-        elif typeTag == LOWER: 
-            marker_artist = self.marker_lower_artist
-            number_artist = self.number_lower_artist
-            bezier_artist = self.bezier_lower_artist
-            helper_artist = self.helper_lower_artist
-            side          = self.airfoil.geo.lower
+    def _plot_le_te_max_point (self, aSide : Line, color ):
+        """ plot the max values at LE and te"""
+
+        point_color = QColor (color).darker (150)
+
+        # le 
+        if aSide.isUpper:
+            anchor = (0,1)
         else: 
-            return
+            anchor = (0,0)
+        text = f"max {aSide.name} {aSide.max_xy[1]:.0f}"
+        self._plot_point (aSide.max_xy, color=point_color, text=text, anchor=anchor,
+                          textColor=Artist.COLOR_LEGEND)
 
-        if event.key == 'control' and iArtist is None:                     # no new opPoint on an exiysting point
+        # te 
+        if aSide.isUpper:
+            anchor = (1,1)
+        else: 
+            anchor = (1,0)
+        text = f"max {aSide.name} {aSide.te[1]:.1f}"
+        self._plot_point (aSide.te, color=point_color, text=text, anchor=anchor,
+                          textColor=Artist.COLOR_LEGEND)
 
-            # is tnew point for upper points or lower points? 
-            # simple check: +y --> upper, -y --> lower 
-            if (event.ydata > 0.0 and typeTag == LOWER) or \
-               (event.ydata < 0.0 and typeTag == UPPER): 
-                return
-            
-            # new control point - insert according x-coordinate, x,y will be checked
-            i_insert, x, y = side.insert_controlPoint_at (event.xdata, event.ydata)
 
-            updateBezier = not i_insert is None 
+    def _plot_reversals (self, side : Line, color):
+        """ annotate reversals of curvature """
 
-        elif event.key == 'shift' and iArtist:
+        point_color = QColor (color).darker (150)
 
-            # remove control Point on which shift-click was made
-            i_delete = side.delete_controlPoint_at (index = iArtist)
+        reversals = side.reversals()
+        if reversals:
+            for reversal_xy in reversals: 
+                if side.isUpper:
+                    anchor = (1,1.2)
+                else: 
+                    anchor = (1,-0.2)
+                self._plot_point (reversal_xy, color=point_color, size=2, text="R", anchor=anchor,
+                                  textColor=Artist.COLOR_LEGEND)
 
-            updateBezier = not i_delete is None 
 
-        if updateBezier: 
-            # update Bezier now, so redraw wil use the new curve 
-            bezier_artist.set_xdata(side.x)
-            bezier_artist.set_ydata(side.y)
-            helper_artist.set_xdata(side.bezier.points_x)
-            helper_artist.set_ydata(side.bezier.points_y)
+# class Difference_Artist (Airfoil_Line_Artist):
+#     """Plot the y-difference of two airfoils 
 
-            # delete marker and their number - and rebuild  
+#         2nd airfoil is Bezier based airfoil 
+#         1st is reference or original airfoil from where x-stations are taken  
+#     """
 
-            for artist in marker_artist:
-                self._myPlots.remove(artist)                # remove from my lists 
-                artist.remove()                             # finally matplotlib remove 
-            for artist in number_artist:
-                self._myPlots.remove(artist)                # remove from my lists 
-                artist.remove()                             # finally matplotlib remove 
+#     @property
+#     def airfoil (self) -> Airfoil_Bezier: 
+#         return self.airfoils[1] 
+    
+#     @property
+#     def ref_airfoil (self) -> Airfoil : 
+#         return self.airfoils[0] 
+    
 
-            marker_artist.clear()                           # keep list alive 
-            number_artist.clear()
-            for ipoint in range (side.nPoints):
+#     def _get_difference (self, side_ref: Side_Airfoil, side_actual: Side_Airfoil_Bezier):
+#         # calculate difference at y-stations of reference airfoil 
+#         diff  = np.zeros (len(side_ref.x))
+#         for i, x in enumerate(side_ref.x):
+#             diff [i] = side_actual.bezier.eval_y_on_x (x, fast=True) - side_ref.y[i]
+#         return diff 
 
-                p = _plot_bezier_point_marker (self.ax, side, ipoint, cl_userHint, animated=True)
-                marker_artist.append (self._add(p))
 
-                p = _plot_bezier_point_number (self.ax, side, ipoint, cl_userHint, animated=True)
-                number_artist.append (self._add(p))
+#     def _plot (self): 
 
-            # finally re-draw all 
+#         if len(self.airfoils) != 2 : return 
+
+#         self.set_showLegend (False)                             # no legend 
+#         color = _color_airfoil_of (self.airfoil.usedAs)
+#         linewidth=0.8
+
+#         if self.upper:
+#             x = self.ref_airfoil.geo.upper.x
+#             y = 10 * self._get_difference (self.ref_airfoil.geo.upper, self.airfoil.geo.upper )
+#             p = self.ax.plot (x, y, ls_difference, color = color, 
+#                             linewidth= linewidth, **self._marker_style)
+#             self._add(p)
+
+#         if self.lower:
+#             x = self.ref_airfoil.geo.lower.x
+#             y = 10 * self._get_difference (self.ref_airfoil.geo.lower, self.airfoil.geo.lower ) 
+#             p = self.ax.plot (x, y, ls_difference, color = color, 
+#                             linewidth= linewidth, **self._marker_style)
+#             self._add(p)
+
+
+
+
+class Airfoil_Line_Artist (Artist, QObject):
+    """
+    Plot thickness, camber line of an airfoil, print max values 
+    """
+
+    sig_geometry_changed     = pyqtSignal()          # airfoil data changed 
+
+    @property
+    def airfoils (self) -> list [Airfoil]: return self.data_list
+
+
+    def _plot (self): 
+
+        airfoil: Airfoil
+
+        for iair, airfoil in enumerate (self.airfoils):
+
+            color = _color_airfoil_of (airfoil.usedAs)
+            color.setAlphaF (0.8)
+
+            # plot all 'lines' of airfoil 
+
+            for line in airfoil.geo.lines_dict.values():
                 
-            bezier_artist.set_linestyle('--')
-            self.draw_animated_artists ()
-            bezier_artist.set_linestyle('None')
+                style = _linestyle_of (line._type)
+                if airfoil.usedAsDesign:
+                    zValue = 5                                  # plot design on top 
+                else:
+                    zValue = 4 
 
+                is_upper = line.type == Line.Type.UPPER
+                is_lower = line.type == Line.Type.LOWER
+                is_upper_lower = is_upper or is_lower
+
+                if iair == 0 and not is_upper_lower:            # line legend only for the first airfoil 
+                    name = line.name
+                else: 
+                    name = None 
+
+                # plot upper and lower only for design (to visualize move highpoint)
+
+                if airfoil.usedAsDesign or not is_upper_lower:
+                    pen = pg.mkPen(color, width=1, style=style)
+                    p = self._plot_dataItem (line.x, line.y, pen = pen, name = name, zValue=zValue)
+                else: 
+                    p = None
+
+                # plot its highpoint 
+
+                ph = Movable_Highpoint (airfoil.geo, line, p, 
+                                            movable=airfoil.usedAsDesign, color=color,
+                                            on_changed=self.sig_geometry_changed.emit )
+                self._add (ph) 
+
+
+                # te gap point for DESIGN 
+
+                if airfoil.usedAsDesign and is_upper:
+                    pt = Movable_TE_Point (airfoil.geo, p, 
+                                            movable=airfoil.usedAsDesign, color=color,
+                                            on_changed=self.sig_geometry_changed.emit )
+                    self._add (pt) 
+
+
+            # plot le circle 
+
+            radius = airfoil.geo.le_radius
+            circle_item = self._plot_point (radius, 0, color=color, size=2*radius, pxMode=False, 
+                                            style=Qt.PenStyle.DotLine, brushAlpha=0.3, brushColor='black')
+            pl = Movable_LE_Point (airfoil.geo, circle_item, 
+                                    movable=airfoil.usedAsDesign, color=color,
+                                    on_changed=self.sig_geometry_changed.emit )
+            self._add(pl) 
