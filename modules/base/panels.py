@@ -325,7 +325,7 @@ class Edit_Panel (Panel_Abstract):
         pass
 
 
-    def _add_to_header_layout(self, l_head : QHBoxLayout) -> QLayout:
+    def _add_to_header_layout(self, l_head : QHBoxLayout):
         """ add Widgets to header layout"""
 
         # to be implemented by sub class

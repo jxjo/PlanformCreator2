@@ -61,6 +61,7 @@ def random_colors (nColors) -> list:
         h = golden_ratio * i/nColors 
         h = h % 1.0
         colors.append(QColor.fromHsvF (h, 0.5, 0.95, 1.0) )
+    return colors
 
 
 # -------- pg defaults ------------------------
@@ -497,7 +498,8 @@ class Movable_Bezier (pg.PlotCurveItem):
             self._bezier_item.show()
 
         self._finished_point (aPoint)
-        aPoint.scene().removeItem(aPoint)                   # final delete from scene 
+        if aPoint.scene():                                  # sometimes scene get lost ... (?) 
+            aPoint.scene().removeItem(aPoint)               # final delete from scene 
 
 
     def _finished_point (self, aPoint):
