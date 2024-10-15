@@ -10,10 +10,11 @@ Utility functions for dxf import
 """
 
 import ezdxf
-from ezdxf.addons import Importer
 import numpy as np
+from ezdxf.addons import Importer
 from math import atan2,degrees
-from common_utils import *
+
+from base.common_utils      import * 
 
 # setup matching range to 1% of length of rootchord
 matching_range = 0.1    # the original value caught the wrong line 200.0 / 100.0

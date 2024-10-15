@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"autoDocstring.docstringFormat": "google-notypes",
+		"markdown.preview.fontSize": 20
+	}
+}

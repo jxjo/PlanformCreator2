@@ -21,21 +21,23 @@
 
 import os
 import numpy as np
-from math import  sin
 import bisect
-import json
 import sys
 from pathlib import Path
-from math_util import findRoot, interpolate
 
 
 # let python find the other modules in the dir of self  
 sys.path.append(Path(__file__).parent)
-from common_utils       import *
-from spline             import Bezier
-from airfoil            import Airfoil, GEO_BASIC, GEO_SPLINE
-from airfoil_examples   import Root_Example, Tip_Example
-from dxf_utils          import import_fromDXF
+from base.common_utils      import * 
+from base.math_util         import * 
+from base.spline            import Bezier
+from model.airfoil          import Airfoil, GEO_BASIC, GEO_SPLINE
+from model.airfoil_examples import Root_Example, Tip_Example
+from dxf_utils              import import_fromDXF
+
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class Wing:
@@ -53,11 +55,11 @@ class Wing:
 
         dataDict = Parameters (paramFilePath).get_dataDict()
         if not dataDict:
-            NoteMsg ('No input data - a default wing will be created')
+            logger.info ('No input data - a default wing will be created')
             wingExists = False
             self.paramFilePath = None
         else: 
-            InfoMsg ('Reading wing parameters from %s' % paramFilePath)
+            logger.info ('Reading wing parameters from %s' % paramFilePath)
             wingExists = True
             self.paramFilePath = paramFilePath
 
@@ -66,18 +68,18 @@ class Wing:
 
         self.dataDict = dataDict
 
-        self._name            = fromDict (dataDict, "wingName", "My new Wing", wingExists)
-        self._wingspan        = fromDict (dataDict, "wingspan", 2000.0, wingExists) 
-        self._rootchord       = fromDict (dataDict, "rootchord", 200.0, wingExists)
-        self._tipchord        = fromDict (dataDict, "tipchord", self._rootchord/4, wingExists)
+        self._name            = fromDict (dataDict, "wingName", "My new Wing")
+        self._wingspan        = fromDict (dataDict, "wingspan", 2000.0) 
+        self._rootchord       = fromDict (dataDict, "rootchord", 200.0)
+        self._tipchord        = fromDict (dataDict, "tipchord", self._rootchord/4)
 
-        self._hingeAngle      = fromDict (dataDict, "hingeLineAngle", 0.0, wingExists)
-        self._flapDepthRoot   = fromDict (dataDict, "flapDepthRoot", 25.0, wingExists)
-        self._flapDepthTip    = fromDict (dataDict, "flapDepthTip", 25.0, wingExists)
+        self._hingeAngle      = fromDict (dataDict, "hingeLineAngle", 0.0)
+        self._flapDepthRoot   = fromDict (dataDict, "flapDepthRoot", 25.0)
+        self._flapDepthTip    = fromDict (dataDict, "flapDepthTip", 25.0)
 
 
         # attach the Planform 
-        tmp_planformType      = fromDict (dataDict, "planformType", "Bezier", wingExists)
+        tmp_planformType      = fromDict (dataDict, "planformType", "Bezier")
         self._planform        = None
         self.set_planform      (Planform.having (tmp_planformType, self, dataDict))
 
@@ -96,10 +98,10 @@ class Wing:
         self._exporterAirfoils  = None 
 
         # miscellaneous parms
-        self._rootRe            = fromDict (dataDict, "rootRe", 400000, wingExists)
-        self._airfoilNickPrefix = fromDict (dataDict, "airfoilNickPrefix", "JX", msg=False)
+        self._rootRe            = fromDict (dataDict, "rootRe", 400000)
+        self._airfoilNickPrefix = fromDict (dataDict, "airfoilNickPrefix", "JX")
         
-        InfoMsg (str(self)  + ' created')
+        logger.info (str(self)  + ' created')
 
 
     def __repr__(self) -> str:
@@ -264,7 +266,7 @@ class Wing:
         from export_Xflr5       import Export_Xflr5         # here - otherwise circular errors
 
         if self._exporterXflr5 is None:                     # init exporter with parameters in sub dictionary
-            xflr5Dict           = fromDict (self.dataDict, "xlfr5", "", msg=False)
+            xflr5Dict           = fromDict (self.dataDict, "xlfr5", "")
             self._exporterXflr5 = Export_Xflr5(self, xflr5Dict) 
         return self._exporterXflr5     
 
@@ -275,7 +277,7 @@ class Wing:
         from export_Dxf       import Export_Dxf         # here - otherwise circular errors
 
         if self._exporterDxf is None:                   # init exporter with parameters in sub dictionary       
-            dxfDict           = fromDict (self.dataDict, "dxf", "", msg=False)
+            dxfDict           = fromDict (self.dataDict, "dxf", "")
             self._exporterDxf = Export_Dxf(self, dxfDict) 
         return self._exporterDxf     
 
@@ -286,7 +288,7 @@ class Wing:
         from export_FLZ  import Export_FLZ              # here - otherwise circular errors
 
         if self._exporterFlz is None:                   # init exporter with parameters in sub dictionary
-            flzDict           = fromDict (self.dataDict, "flz", "", msg=False)
+            flzDict           = fromDict (self.dataDict, "flz", "")
             self._exporterFlz = Export_FLZ(self, flzDict) 
         return self._exporterFlz     
 
@@ -295,7 +297,7 @@ class Wing:
     def exporterAirfoils (self): 
         """ returns class managing export of airfoils"""
         if self._exporterAirfoils is None:              # init exporter with parameters in sub dictionary
-            airfoilsDict      = fromDict (self.dataDict, "airfoils", "", msg=False)
+            airfoilsDict      = fromDict (self.dataDict, "airfoils", "")
             self._exporterAirfoils = Export_Airfoils(self, airfoilsDict) 
         return self._exporterAirfoils     
 
@@ -349,13 +351,13 @@ class Wing:
         newSections = curSections
         if (curSections ==[]):
             newWing = True
-            InfoMsg (' - creating example wing sections...')
+            logger.info (' - creating example wing sections...')
         else:
             newWing = False
 
         # create at least a root section
         if (newWing or not curSections [0].isRoot ):
-            if not newWing: NoteMsg ('Root wing section missing. Creating a new one ...')
+            if not newWing: logger.info ('Root wing section missing. Creating a new one ...')
             newSections.insert(0, WingSection (self, {"position": 0.0}))
 
         # create a third example section for a new wing
@@ -364,10 +366,10 @@ class Wing:
 
         # create at least a tip section
         if (newWing or not newSections [-1].isTip ):
-            if not newWing: NoteMsg ('Tip wing section missing. Creating a new one ...')
+            if not newWing: logger.info ('Tip wing section missing. Creating a new one ...')
             newSections.append(WingSection (self, {"position": self.halfwingspan}))
 
-        InfoMsg (" %d Wing sections added" % len(newSections))
+        logger.info (" %d Wing sections added" % len(newSections))
 
         return newSections
 
@@ -664,7 +666,7 @@ class Planform:
 
         # self.__class__.instances.append(weakref.proxy(self))
         if dataDict:                                    # no info for internal planforms
-            InfoMsg (' ' + str(self)  + ' created')
+            logger.info (' ' + str(self)  + ' created')
 
     def __repr__(self) -> str:
         # overwrite class method to get a nice print string of self 
@@ -703,7 +705,7 @@ class Planform:
                 break
 
         if (not planformClass):
-            ErrorMsg("Planform_Class for planformType '%s' not found - using 'Bezier'" %planformType)
+            logger.error("Planform_Class for planformType '%s' not found - using 'Bezier'" %planformType)
             planformClass = Planform_Bezier
 
         return planformClass(myWing, dataDict)
@@ -916,7 +918,7 @@ class Planform:
         myChord = chord / self.rootchord            # normalize 
 
         if(myChord > 1.0 or myChord < 0): 
-            ErrorMsg ("Chord %f must be between 0.0 and root chord" % chord)
+            logger.error ("Chord %f must be between 0.0 and root chord" % chord)
             return
 
         y       = None
@@ -1006,9 +1008,9 @@ class Planform_Bezier(Planform):
         self._px = [1.0, 1.0, 0.55, 0.0]                            # wing coordinate system 
         self._py = [0.0, 0.55, 1.0, 1.0]
         # from dict only the variable point coordinates of Bezier
-        self._px[1]   = fromDict (dataDict, "p1x", 1.00, False)
-        self._px[2]   = fromDict (dataDict, "p2x", 0.55, False)     # nearly elliptic
-        self._py[1]   = fromDict (dataDict, "p1y", 0.55, False)
+        self._px[1]   = fromDict (dataDict, "p1x", 1.00)
+        self._px[2]   = fromDict (dataDict, "p2x", 0.55)     # nearly elliptic
+        self._py[1]   = fromDict (dataDict, "p1y", 0.55)
         self._px[3]   = self.tipchord / self.rootchord              # p3 sits on tip chord
 
         self._bezier = Bezier (self._py, self._px)
@@ -1019,8 +1021,8 @@ class Planform_Bezier(Planform):
         self._banana_px = [0.0, 0.0, 0.0]                           # wing coordinate system 
         self._banana_py = [0.0, 0.5, 1.0]
         # from dict only the variable point coordinates of Bezier
-        self._banana_px[1]   = fromDict (dataDict, "banana_p1x", 0.0, False)
-        self._banana_py[1]   = fromDict (dataDict, "banana_p1y", 0.5, False)
+        self._banana_px[1]   = fromDict (dataDict, "banana_p1x", 0.0)
+        self._banana_py[1]   = fromDict (dataDict, "banana_p1y", 0.5)
 
         self._banana = None                                         # init see _norm_banana_function 
 
@@ -1555,12 +1557,12 @@ class Planform_Paneled (Planform_Trapezoidal):
             :dataDict: optional - dictonary with all the data for a valid section
         """
         # read additional parameters of this shapeform 
-        self._x_panels    = fromDict (dataDict, "x-panels", 10, False)
-        self._x_dist      = fromDict (dataDict, "x-distribution", "cosine", False)
-        self._y_panels    = fromDict (dataDict, "y-panels", 10, False)
-        self._y_dist      = fromDict (dataDict, "y-distribution", "uniform", False)
-        self._y_minWidth  = fromDict (dataDict, "y-minWidth", 20 , False)
-        self._minTipChord = fromDict (dataDict, "minTipChord", 30 , False)
+        self._x_panels    = fromDict (dataDict, "x-panels", 10)
+        self._x_dist      = fromDict (dataDict, "x-distribution", "cosine")
+        self._y_panels    = fromDict (dataDict, "y-panels", 10)
+        self._y_dist      = fromDict (dataDict, "y-distribution", "uniform")
+        self._y_minWidth  = fromDict (dataDict, "y-minWidth", 20)
+        self._minTipChord = fromDict (dataDict, "minTipChord", 30)
 
         self.distribution_fns = {}
         self.distribution_fns["uniform"]= lambda y : y
@@ -1858,7 +1860,7 @@ class Planform_DXF(Planform):
 
         self._dxf_isReference   = ref   # is it a reference planform 
 
-        self._dxfMirrorX       = fromDict (dataDict, "dxfMirrorX", True, msg=False)   
+        self._dxfMirrorX       = fromDict (dataDict, "dxfMirrorX", True)   
 
         self.le_norm_dxf        = None   # the normalized leading edge in points from DXF
         self.te_norm_dxf        = None   # the normalized trailing edge in points from DXF
@@ -1883,7 +1885,7 @@ class Planform_DXF(Planform):
             if os.path.isfile (dxfFullPathName):
                 self.load_dxf (dxfFullPathName)
             else:
-                ErrorMsg ("The dxf file '%s' doesn't exist" % self._dxfPathFilename)
+                logger.error ("The dxf file '%s' doesn't exist" % self._dxfPathFilename)
                 self._dxfPathFilename = None
 
 
@@ -1923,7 +1925,7 @@ class Planform_DXF(Planform):
             # the path could be either absolute or relative to parameter dict
             loadPathFile = self.wing.pathHandler.fullFilePath (aNewPathFile)
             if not os.path.isfile(loadPathFile):
-                ErrorMsg ("DXF file \'%s\' does not exist" % loadPathFile)
+                logger.error ("DXF file \'%s\' does not exist" % loadPathFile)
             else:
                 # load and parse data from file
                 self.load_dxf (loadPathFile)
@@ -1974,7 +1976,7 @@ class Planform_DXF(Planform):
         te = self.__get_xFromY(self.te_norm_dxf, y_norm)
 
         if (le == None) or (te == None):
-            ErrorMsg("DXF import: y-coordinate not found, planform could not be created")
+            logger.error("DXF import: y-coordinate not found, planform could not be created")
             return None
         else:
             return abs(te-le)
@@ -2031,7 +2033,7 @@ class Planform_DXF(Planform):
         te_norm = self.__get_xFromY(self.te_norm_dxf, y_norm)
         
         if (le_norm == None) or (te_norm == None):
-            ErrorMsg("DXF import: y-coordinate not found, planform could not be created")
+            logger.error("DXF import: y-coordinate not found, planform could not be created")
             return 0.0, 0.0
 
         le = le_norm * self.rootchord
@@ -2093,7 +2095,7 @@ class Planform_DXF(Planform):
             x2, y2 = line[iGreater]
             y = interpolate(x1, x2, y1, y2, x)
         else:
-            ErrorMsg("__get_yFromX, xcoordinate %f not found" % x)
+            logger.error("__get_yFromX, xcoordinate %f not found" % x)
             y = 0.0
                 
         return y
@@ -2154,14 +2156,14 @@ class Planform_DXF(Planform):
 
         # check result
         if self.le_norm_dxf != None:
-            InfoMsg("DXF planform imported from file %s" % dxf_file)
+            logger.info("DXF planform imported from file %s" % dxf_file)
 
             infoText.append(" - Leading edge %d points"  % (len(self.le_norm_dxf)))
             infoText.append(" - Trailing edge %d points" % (len(self.te_norm_dxf)))
 
             if (self._dxfMirrorX):
                 infoText.append(" - mirrored along y-axis")
-                InfoMsg("Mirroring DXF planform for LE showing upwards")
+                logger.info("Mirroring DXF planform for LE showing upwards")
                 self.mirror_dxf()
             if self.hingeLine_norm_dxf != None: 
                 if self._dxfMirrorX:               # also mirror hinge line 
@@ -2178,7 +2180,7 @@ class Planform_DXF(Planform):
 
             self.infoText = '\n'.join(infoText)
         else:
-            ErrorMsg("DXF import from file %s failed" % dxf_file)
+            logger.error("DXF import from file %s failed" % dxf_file)
             self.infoText = "DXF file couldn't be loaded"
 
 
@@ -2209,8 +2211,8 @@ class WingSection:
 
         self._yPos              = fromDict (dataDict, "position", None)
         self._norm_chord        = fromDict (dataDict, "norm_chord", None)
-        self._flapGroup         = fromDict (dataDict, "flapGroup", 1, False)
-        self._eitherPosOrChord  = fromDict (dataDict, "eitherPosOrChord", None, False)
+        self._flapGroup         = fromDict (dataDict, "flapGroup", 1)
+        self._eitherPosOrChord  = fromDict (dataDict, "eitherPosOrChord", None)
 
         self.isRoot = (self._yPos == 0.0) 
         self.isTip  = (self._yPos == self.wing.halfwingspan)
@@ -2219,8 +2221,8 @@ class WingSection:
             self._norm_chord = 1.0
  
         if (self._yPos is None and self._norm_chord is None):
-            ErrorMsg ("Wing section: Either position or chord / reynolds must be set")
-            NoteMsg  ("Wing section: Setting chord to 0.8 of root")
+            logger.error ("Wing section: Either position or chord / reynolds must be set")
+            logger.info  ("Wing section: Setting chord to 0.8 of root")
             self._norm_chord    = self.wing.rootchord * 0.8
 
         # section may have either a position or chord for
@@ -2280,7 +2282,7 @@ class WingSection:
                 airfoil = Tip_Example()
             else:
                 airfoil = Airfoil(name="<strak>", geometry=GEO_BASIC)
-                airfoil.set_isStrakAirfoil (True)
+                #airfoil.set_isStrakAirfoil (True)
 
         self.airfoil = airfoil 
 
@@ -2319,9 +2321,9 @@ class WingSection:
         if (value == None):
             self._yPos = None
         elif (value < 0.0 or value > self.wing.halfwingspan):
-            ErrorMsg ("wingSection: Position must be inside half wingspan %dmm" %self.wing.halfwingspan)
+            logger.error ("wingSection: Position must be inside half wingspan %dmm" %self.wing.halfwingspan)
         elif (self.isRoot or self.isTip):
-            ErrorMsg ("wingSection: Do not set root or tip chord via wing section")
+            logger.error ("wingSection: Do not set root or tip chord via wing section")
         else:
             self._yPos = value
             if self.eitherPosOrChord:
@@ -2354,13 +2356,13 @@ class WingSection:
     def set_norm_chord (self, value):
         """ set the normaized chord 0..1 - the section will move to a new position   """
         if (value is None and self._yPos is None):
-            ErrorMsg ("wingSection: Can't remove normalized chord. Either position or chord must be defined")
+            logger.error ("wingSection: Can't remove normalized chord. Either position or chord must be defined")
         elif(value < 0.0):
-            ErrorMsg ("wingSection: Normalized chord must => 0")
+            logger.error ("wingSection: Normalized chord must => 0")
         elif(value > 1.0):
-            ErrorMsg ("wingSection: Normalized chord must <= 1")
+            logger.error ("wingSection: Normalized chord must <= 1")
         elif (self.isRoot or self.isTip):
-            ErrorMsg ("wingSection: Do not set root or tip chord via wing section")
+            logger.error ("wingSection: Do not set root or tip chord via wing section")
         else:
             self._norm_chord = value
             if self.eitherPosOrChord:
@@ -2706,10 +2708,10 @@ class Export_Airfoils:
  
         self.wing       = wing
         self.workingDir = wing.workingDir       
-        self._exportDir         = fromDict (myDict, "exportDir", "airfoils", msg=False)
-        self._useNick           = fromDict (myDict, "useNick", True, msg=False)
-        self._setTeGap          = fromDict (myDict, "setTeGap", False, msg=False)
-        self._teGap_mm          = fromDict (myDict, "teGap_mm", 0.5, msg=False)
+        self._exportDir         = fromDict (myDict, "exportDir", "airfoils")
+        self._useNick           = fromDict (myDict, "useNick", True)
+        self._setTeGap          = fromDict (myDict, "setTeGap", False)
+        self._teGap_mm          = fromDict (myDict, "teGap_mm", 0.5)
 
 
     def _save (self):
@@ -2762,7 +2764,7 @@ class Export_Airfoils:
 
         airfoilList = self.wing.do_export_airfoils (targetDir, useNick=self.useNick, teGap_mm=teGap)      
 
-        InfoMsg ("Airfoils written to " + targetDir) 
+        logger.info ("Airfoils written to " + targetDir) 
         message = "Airfoils: \n\n" + \
                   ',  '.join(airfoilList)  + \
                   "\n\n exported to \n\n" + \

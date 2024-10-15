@@ -4,7 +4,7 @@ import numpy as np
 import ezdxf
 from ezdxf import enums
 from common_utils import *
-from wing_model import Wing, WingSection, Flap
+from model.wing import Wing, WingSection, Flap
 from airfoil import Airfoil, GEO_SPLINE
 
 class Export_Dxf:

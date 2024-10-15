@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TextIO
 import getpass
 from common_utils import *
-from wing_model import Wing, WingSection, Airfoil, Planform_Paneled
+from model.wing import Wing, WingSection, Airfoil, Planform_Paneled
 
 
 # FLZ panel distribution names to self names

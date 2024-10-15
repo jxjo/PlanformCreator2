@@ -5,7 +5,7 @@ import os, re
 import io
 from copy import deepcopy
 from common_utils import *
-from wing_model import Wing, WingSection, Planform_Paneled
+from model.wing import Wing, WingSection, Planform_Paneled
 
 
 class Export_Xflr5:
