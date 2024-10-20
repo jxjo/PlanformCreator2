@@ -376,6 +376,50 @@ class App_Main (QMainWindow):
         return self._airfoil_org
 
 
+    # --- airfoil functions -----------------------------------------------
+
+
+
+    def blend_with (self): 
+        """ run blend airfoil with dialog to blend current with another airfoil""" 
+
+        self.sig_enter_blend.emit()
+
+        dialog = Blend_Airfoil (self, self.airfoil(), self.airfoil_org)  
+
+        dialog.sig_airfoil_changed.connect (self.sig_airfoil_changed.emit)
+        dialog.sig_airfoil2_changed.connect (self.set_airfoil_target)
+        dialog.exec()     
+
+        if dialog.airfoil2 is not None: 
+            # do final blend with high quality (splined) 
+            self.airfoil().geo.blend (self.airfoil_org.geo, 
+                                      dialog.airfoil2.geo, 
+                                      dialog.blendBy) 
+
+        self.sig_airfoil_changed.emit()
+
+
+    def repanel_airfoil (self): 
+        """ run repanel dialog""" 
+
+        self.sig_enter_panelling.emit()
+
+        dialog = Repanel_Airfoil (self, self.airfoil().geo)
+
+        dialog.sig_new_panelling.connect (self.sig_panelling_changed.emit)
+        dialog.exec()     
+
+        if dialog.has_been_repaneled:
+            # finalize modifications 
+            self.airfoil().geo.repanel (just_finalize=True)                
+
+        self.sig_airfoil_changed.emit()
+
+
+
+    # --- private ---------------------------------------------------------
+
     def _on_leaving_edit_mode (self) -> bool: 
         """ handle user wants to leave edit_mode"""
         #todo 

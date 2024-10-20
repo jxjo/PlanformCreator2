@@ -146,7 +146,7 @@ class Airfoil_Save_Dialog (Dialog):
 
 # ----- Blend two airfoils   -----------
 
-class Blend (Dialog):
+class Blend_Airfoil (Dialog):
     """ Dialog to two airfoils into a new one"""
 
     _width  = 560
@@ -260,7 +260,7 @@ class Blend (Dialog):
 # ----- repanel dialog helper window  -----------
 
 
-class Repanel (Dialog):
+class Repanel_Airfoil (Dialog):
     """ Dialog to repanel an airfoil"""
 
     _width  = 460

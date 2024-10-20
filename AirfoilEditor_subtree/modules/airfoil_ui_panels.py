@@ -18,7 +18,7 @@ from model.airfoil_geometry import Line, Side_Airfoil_Bezier
 
 
 from airfoil_widgets        import * 
-from airfoil_dialogs        import Match_Bezier, Matcher, Repanel, Blend
+from airfoil_dialogs        import Match_Bezier, Matcher, Repanel_Airfoil, Blend_Airfoil
 
 
 logger = logging.getLogger(__name__)
@@ -67,12 +67,19 @@ class Panel_Airfoil_Abstract (Edit_Panel):
         self.myApp.sig_airfoil_changed.emit()
 
 
+    @property
+    def edit_mode (self) -> bool:
+        """ panel in edit_mode or disabled ? - from App """
+        return self.myApp.edit_mode
+
+
     @override
     @property
     def _isDisabled (self) -> bool:
         """ overloaded: only enabled in edit mode of App """
-        return not self.myApp.edit_mode
+        return not self.edit_mode
     
+
 
 
 class Panel_File_View (Panel_Airfoil_Abstract):
@@ -84,7 +91,7 @@ class Panel_File_View (Panel_Airfoil_Abstract):
     @property
     def _shouldBe_visible (self) -> bool:
         """ overloaded: only visible if edit_moder """
-        return not self.myApp.edit_mode
+        return not self.edit_mode
 
     @property
     def _isDisabled (self) -> bool:
@@ -140,7 +147,7 @@ class Panel_File_Edit (Panel_Airfoil_Abstract):
     @property
     def _shouldBe_visible (self) -> bool:
         """ overloaded: only visible if edit_moder """
-        return self.myApp.edit_mode
+        return self.edit_mode
 
 
     def _init_layout (self): 
@@ -180,15 +187,15 @@ class Panel_Geometry (Panel_Airfoil_Abstract):
     _width  = (350, None)
 
     @override
-    def _add_to_header_layout(self, l_head: QHBoxLayout) -> QLayout:
+    def _add_to_header_layout(self, l_head: QHBoxLayout):
         """ add Widgets to header layout"""
 
         l_head.addStretch(1)
 
         # blend with airfoil - currently Bezier is not supported
         Button (l_head, text="&Blend", width=80,
-                set=self._blend_with, 
-                hide=lambda: not self.myApp.edit_mode or self.airfoil().isBezierBased,
+                set=self.myApp.blend_with, 
+                hide=lambda: not self.edit_mode or self.airfoil().isBezierBased,
                 toolTip="Blend original airfoil with another airfoil")
 
 
@@ -196,9 +203,6 @@ class Panel_Geometry (Panel_Airfoil_Abstract):
 
         l = QGridLayout()
         r,c = 0, 0 
-        # Field  (l,r,c, lab="Name", width=(100,None), colSpan=5,
-        #         obj=self.airfoil, prop=Airfoil.name)
-        # r += 1
         FieldF (l,r,c, lab="Thickness", width=75, unit="%", step=0.1,
                 obj=self.geo, prop=Geometry.max_thick,
                 disable=self._disabled_for_airfoil)
@@ -239,24 +243,6 @@ class Panel_Geometry (Panel_Airfoil_Abstract):
         return self.airfoil().isBezierBased
 
 
-    def _blend_with (self): 
-        """ run blend airfoil with dialog""" 
-
-        self.myApp.sig_enter_blend.emit()
-
-        dialog = Blend (self.myApp, self.airfoil(), self.myApp.airfoil_org)    
-        dialog.sig_airfoil_changed.connect (self.myApp.sig_airfoil_changed.emit)
-        dialog.sig_airfoil2_changed.connect (self.myApp.set_airfoil_target)
-        dialog.exec()     
-
-        if dialog.airfoil2 is not None: 
-            # do final blend with high quality (splined) 
-            self.airfoil().geo.blend (self.myApp.airfoil_org.geo, 
-                                      dialog.airfoil2.geo, 
-                                      dialog.blendBy) 
-
-        self.myApp.sig_airfoil_changed.emit()
-
 
 
 class Panel_Panels (Panel_Airfoil_Abstract):
@@ -265,14 +251,14 @@ class Panel_Panels (Panel_Airfoil_Abstract):
     name = 'Panels'
     _width  =  (290, None)
 
-    def _add_to_header_layout(self, l_head: QHBoxLayout) -> QLayout:
+    def _add_to_header_layout(self, l_head: QHBoxLayout):
         """ add Widgets to header layout"""
 
         l_head.addStretch(1)
 
         # repanel airfoil - currently Bezier is not supported
         Button (l_head, text="&Repanel", width=80,
-                set=self._repanel, hide=lambda: not self.myApp.edit_mode,
+                set=self.myApp.repanel_airfoil, hide=lambda: not self.edit_mode,
                 toolTip="Repanel airfoil with a new number of panels" ) 
 
 
@@ -302,29 +288,13 @@ class Panel_Panels (Panel_Airfoil_Abstract):
         
         return l
  
-    def _repanel (self): 
-        """ run repanel dialog""" 
-
-        self.myApp.sig_enter_panelling.emit()
-
-        dialog = Repanel (self.myApp, self.geo())    
-        dialog.sig_new_panelling.connect (self.myApp.sig_panelling_changed.emit)
-        dialog.exec()     # delayed emit 
-
-        geo : Geometry_Bezier = self.geo()
-
-        if dialog.has_been_repaneled:
-            geo.repanel (just_finalize=True)       # finalize modifications          
-
-        self.myApp.sig_airfoil_changed.emit()
-
-     
+      
     def refresh(self):
         super().refresh()
 
+
     def _on_panelling_finished (self, aSide : Side_Airfoil_Bezier):
         """ slot for panelling (dialog) finished - reset airfoil"""
-
 
 
     def _style_panel (self):
@@ -333,6 +303,7 @@ class Panel_Panels (Panel_Airfoil_Abstract):
             return style.WARNING
         else: 
             return style.NORMAL
+
 
     def _style_angle (self):
         """ returns style.WARNING if panel angle too blunt"""
@@ -370,16 +341,16 @@ class Panel_LE_TE  (Panel_Airfoil_Abstract):
     @property
     def _shouldBe_visible (self) -> bool:
         """ overloaded: only visible if geo is not Bezier """
-        return not (self.geo().isBezier and self.myApp.edit_mode)
+        return not (self.geo().isBezier and self.edit_mode)
 
 
-    def _add_to_header_layout(self, l_head: QHBoxLayout) -> QLayout:
+    def _add_to_header_layout(self, l_head: QHBoxLayout):
         """ add Widgets to header layout"""
 
         l_head.addStretch(1)
         Button (l_head, text="&Normalize", width=80,
                 set=lambda : self.airfoil().normalize(), signal=True, 
-                hide=lambda: not self.myApp.edit_mode,
+                hide=lambda: not self.edit_mode,
                 toolTip="Normalize airfoil to get leading edge at 0,0")
 
 
@@ -390,7 +361,7 @@ class Panel_LE_TE  (Panel_Airfoil_Abstract):
         FieldF (l,r,c, lab="Leading edge", get=lambda: self.geo().le[0], width=75, dec=7, style=lambda: self._style (self.geo().le[0], 0.0))
         r += 1
         FieldF (l,r,c, lab=" ... of spline", get=lambda: self.geo().le_real[0], width=75, dec=7, style=self._style_le_real,
-                hide=lambda: not self.myApp.edit_mode)
+                hide=lambda: not self.edit_mode)
         r += 1
         FieldF (l,r,c, lab="Trailing edge", get=lambda: self.geo().te[0], width=75, dec=7, style=lambda: self._style (self.geo().te[0], 1.0))
         r += 1
@@ -402,7 +373,7 @@ class Panel_LE_TE  (Panel_Airfoil_Abstract):
         FieldF (l,r,c+1,get=lambda: self.geo().le[1], width=75, dec=7, style=lambda: self._style (self.geo().le[1], 0.0))
         r += 1
         FieldF (l,r,c+1,get=lambda: self.geo().le_real[1], width=75, dec=7, style=self._style_le_real,
-                hide=lambda: not self.myApp.edit_mode)
+                hide=lambda: not self.edit_mode)
         r += 1
         FieldF (l,r,c+1,get=lambda: self.geo().te[1], width=75, dec=7, style=lambda: self._style (self.geo().te[1], -self.geo().te[3]))
         r += 1
@@ -524,12 +495,12 @@ class Panel_Bezier_Match (Panel_Airfoil_Abstract):
     _width  = (370, None)
 
 
-    # ---- overloaded 
 
+    @override
     @property
     def _shouldBe_visible (self) -> bool:
         """ overloaded: only visible if geo is Bezier """
-        return self.geo().isBezier and self.myApp.edit_mode
+        return self.geo().isBezier and self.edit_mode
 
     # ----
 
@@ -593,20 +564,20 @@ class Panel_Bezier_Match (Panel_Airfoil_Abstract):
         return self._norm2_lower
 
 
-    def _add_to_header_layout(self, l_head: QHBoxLayout) -> QLayout:
-        """ add Widgets to header layout"""
+    # def _add_to_header_layout(self, l_head: QHBoxLayout):
+    #     """ add Widgets to header layout"""
 
-        l_head.addSpacing (20)
+    #     l_head.addSpacing (20)
   
-        Airfoil_Select_Open_Widget (l_head, width=(100,200),
-                    get=lambda: self.myApp.airfoil_target, set=self.myApp.set_airfoil_target,
-                    initialDir=self.myApp.airfoils()[0], addEmpty=True)
+    #     Airfoil_Select_Open_Widget (l_head, width=(100,200),
+    #                 get=lambda: self.myApp.airfoil_target, set=self.myApp.set_airfoil_target,
+    #                 initialDir=self.airfoil(), addEmpty=True)
 
 
-    def __init__ (self,*args, **kwargs):
-        super().__init__(*args,**kwargs)
+    # def __init__ (self,*args, **kwargs):
+    #     super().__init__(*args,**kwargs)
 
-        self.myApp.sig_airfoil_target_changed.connect(self._on_airfoil_target_changed)
+    #     self.myApp.sig_airfoil_target_changed.connect(self._on_airfoil_target_changed)
 
 
     def _init_layout (self):
@@ -703,10 +674,10 @@ class Panel_Bezier_Match (Panel_Airfoil_Abstract):
         self.myApp.sig_airfoil_changed.emit()
 
 
-    def _on_airfoil_target_changed (self,refresh):
-        """ slot for changed target airfoil"""  
-        if refresh:      
-            self.refresh(reinit_layout=True)              # refresh will also set new layout 
+    # def _on_airfoil_target_changed (self,refresh):
+    #     """ slot for changed target airfoil"""  
+    #     if refresh:      
+    #         self.refresh(reinit_layout=True)              # refresh will also set new layout 
 
     @override
     def refresh (self, reinit_layout=False):
