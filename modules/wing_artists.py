@@ -958,7 +958,7 @@ class PaneledPlanform_Artist (Planform_Artist):
         elif section.isTip:
             label = "Tip"
         else:
-            label = str(section.wing.wingSectionIndexOf (section))
+            label = str(section.wing.wingSections.index_of (section))
 
         p = self.ax.text (top_y, top_x, "%s" % label, ha='center', va='bottom',
                           color = cl_wingSection_fix )
@@ -1291,7 +1291,7 @@ class Sections_Artist (Artist):
             label = "Tip"
             marker_top_x = le_to_te[0] - 4 * offset
         else:
-            label = str(section.wing.wingSectionIndexOf (section))
+            label = str(section.wing.wingSections.index_of (section))
 
         p = self.ax.text (marker_top_y, marker_top_x, "%s" % label, ha='center', va='bottom',
                           color = cl_wingSection_fix, fontsize = 'medium')   

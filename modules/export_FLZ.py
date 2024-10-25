@@ -290,8 +290,8 @@ class SEGMENT (FLZ_Element):
 
         distrib  = distrib_name_map[self.paneledPlanform.y_dist]
 
-        leftSectionIndex  = self.wing.wingSectionIndexOf (self.leftSection)  - 1  # this index is +1 
-        rightSectionIndex = self.wing.wingSectionIndexOf (self.rightSection) - 1  # this index is +1 
+        leftSectionIndex  = self.wing.wingSections.index_of (self.leftSection)  - 1  # this index is +1 
+        rightSectionIndex = self.wing.wingSections.index_of (self.rightSection) - 1  # this index is +1 
 
         # use sections of the paneled planform as original tip cut be cutted due to minTipChord ... 
         sections_yPos, sections_chord = self.paneledPlanform._sections_yPos_chord()

@@ -340,8 +340,29 @@ class Movable_Bezier_Point (Movable_Point):
     Represents one control point of a Side_Bezier,
     """
 
+    @override
     def label_moving (self):
-        return f"x {self.x:.3f}\ny {self.y:.3f}"
+        """ label precision depending on value """
+
+        if self.x >= 1000:
+            precision_x = 0
+        elif self.x >= 100:
+            precision_x = 1
+        elif self.x >=10:
+            precision_x = 2
+        else:
+            precision_x = 3
+
+        if self.y >= 1000:
+            precision_y = 0
+        elif self.y >= 100:
+            precision_y = 1
+        elif self.y >=10:
+            precision_y = 2
+        else:
+            precision_y = 3
+
+        return f"x {self.x:.{precision_x}f}\ny {self.y:.{precision_y}f}"
 
 
 
@@ -541,6 +562,7 @@ class Artist(QObject):
     COLOR_NORMAL        = "silver"
     COLOR_LEGEND        = "darkgray"
 
+    show_mouse_helper   = True                  # global setting to show mouse helper points
 
     def __init__ (self, pi: pg.PlotItem , 
                   getter = None,       
@@ -645,6 +667,11 @@ class Artist(QObject):
             self.plot()
         else: 
             self._remove_legend_items ()
+
+
+    def set_show_mouse_helper (self, aBool : bool):
+        """ on/off for mouse helper of self - for global setting use class variable"""
+        self.show_mouse_helper = aBool == True
 
 
     def plot (self):

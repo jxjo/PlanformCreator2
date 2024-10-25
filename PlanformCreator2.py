@@ -15,7 +15,7 @@ import argparse
 from pathlib import Path
 
 from PyQt6.QtCore           import QMargins
-from PyQt6.QtWidgets        import QApplication, QMainWindow, QWidget, QMessageBox 
+from PyQt6.QtWidgets        import QApplication, QMainWindow, QWidget, QMessageBox, QFileDialog
 from PyQt6.QtWidgets        import QGridLayout, QVBoxLayout, QHBoxLayout
 from PyQt6.QtGui            import QCloseEvent
 
@@ -26,8 +26,7 @@ sys.path.insert (1,os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree/m
 sys.path.insert (1,os.path.join(Path(__file__).parent , 'modules'))
 
 from wing                   import Wing
-from wing                   import Planform, Planform_Bezier_StraightTE, \
-                                   Planform_DXF, Planform_Trapezoidal, Planform_Bezier         
+from wing                   import Planform, Planform_DXF, Planform_Trapezoidal, Planform_Bezier         
 
 from base.common_utils      import * 
 from base.panels            import Container_Panel
@@ -38,6 +37,10 @@ from base.widgets           import *
 from pc2_panels             import *
 from pc2_diagrams           import *
 
+
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 #------------------------------------------------
 
@@ -54,12 +57,20 @@ class App_Main (QMainWindow):
 
     name = AppName  
 
+   # Signals 
+
+    sig_wing_new            = pyqtSignal()              # new wing loaded 
+    sig_cur_wingSection     = pyqtSignal()              # current wing section changed
+
+
+
+
     def __init__(self, paramFile):
         super().__init__()
 
         self.initial_geometry   = None                  # window geometry at the bginning
-        self._curWingSectionName = None                 # Dispatcher field between Diagram and Edit
-        self.paramFile = ''                             #todo remove? 
+        self._cur_wingSection = None                    # Dispatcher field between Diagram and Edit
+        self.paramFile = ''                             # paramter file with wing settings  
         self._myWing : Wing = None                      # actual wing model 
 
         # if paramFile: 
@@ -87,7 +98,7 @@ class App_Main (QMainWindow):
 
         self._data_panel    = Container_Panel  (title="Data panel")
         self._file_panel    = Container_Panel  (title="File panel", width=240)
-        self._diagram_panel = Diagram_Planform (self, self.wing, welcome=self._welcome_message())
+        self._diagram_panel = Diagram_Planform (self, self.wing, self.cur_wingSection, welcome=self._welcome_message())
 
         l_main = self._init_layout() 
 
@@ -98,7 +109,7 @@ class App_Main (QMainWindow):
 
         # connect to signals from diagram
 
-            # self._diagram_panel.sig_airfoil_changed.connect  (self.refresh)
+        self._diagram_panel.sig_wingSection_new.connect  (self.set_cur_wingSection)
 
         # connect to signals of self
 
@@ -106,7 +117,8 @@ class App_Main (QMainWindow):
 
         # connect signals to slots of diagram
 
-            # self.sig_airfoil_changed.connect        (self._diagram_panel.on_airfoil_changed)
+        self.sig_wing_new.connect        (self._diagram_panel.on_wing_new)
+        self.sig_cur_wingSection.connect (self._diagram_panel.on_cur_wingSection_changed)
 
 
     def __repr__(self) -> str:
@@ -157,20 +169,25 @@ class App_Main (QMainWindow):
         to enable a new wing to be set """
         return self._myWing
 
-    
-    def curWingSectionName (self):
+      
+    def cur_wingSection (self) -> WingSection:
         """ Dispatcher for current WingSection between Edit and Diagram """
-        if self._curWingSectionName is None: 
+        if self._cur_wingSection is None: 
 
-            # set second section as initial
-            self._curWingSectionName = self.wing().wingSections[1].name()        
+            if len (self.wing().wingSections) > 2:
+                self._cur_wingSection = self.wing().wingSections[1]     # set second section as initial
+            else:        
+                self._cur_wingSection = None                            # nothing selected
 
-        return self._curWingSectionName 
+        return self._cur_wingSection 
 
 
-    def set_curWingSectionName (self, aName):
-        """ Dispatcher for current WingSection between Edit and Diagram """
-        self._curWingSectionName = aName
+    def set_cur_wingSection (self, aSection : WingSection | None):
+        """ set current wing section"""
+        self._cur_wingSection = aSection
+        logger.debug (f"{aSection} as current")
+
+        self.sig_cur_wingSection.emit()
 
 
     def refresh(self):
@@ -271,15 +288,14 @@ You can view the properties of an airfoil like thickness distribution or camber,
     def open (self):
         """ open a new wing definition json and load it"""
 
-        filetypes  = [('Planform Creator 2 files', '*.pc2')]
-        # newPathFilename = filedialog.askopenfilename(
-        #             title='Select new wing definition',
-        #             initialdir=self.workingDir,
-        #             filetypes=filetypes)
+        filters  = "PlanformCreator2 files (*.pc2)"
+        newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters)
 
-        # if newPathFilename:                     # user pressed open
-        #     # load new wing into model 
-        #     self.load_wing (newPathFilename)
+        if newPathFilename:                     
+            #leave button callback and refresh in a few ms 
+            timer = QTimer()                                
+            timer.singleShot(10, lambda: self.load_wing (newPathFilename))     # delayed emit 
+
 
 
     def save (self):
@@ -330,7 +346,10 @@ You can view the properties of an airfoil like thickness distribution or camber,
 
     def load_wing (self, pathFilename, initial=False): 
         """ creates / loads new wing as current"""
+
         self._myWing = Wing (pathFilename)
+        
+        self._cur_wingSection = None
 
         if pathFilename:
             self.paramFile = PathHandler.relPath (pathFilename)
@@ -340,9 +359,7 @@ You can view the properties of an airfoil like thickness distribution or camber,
         self.set_title ()
 
         if not initial: 
-            # mega alarm - inform everything
-            #todo emit 
-            pass
+            self.sig_wing_new.emit()
 
 
     # def export_xflr5 (self): 
