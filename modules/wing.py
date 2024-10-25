@@ -9,7 +9,8 @@
                 |-- Airfoil             - the airfoil at a section
         |-- Planform                    - describes geometry, outline of the wing  
         |     (ellipsoid, trapezoid, straightTE, DXF)
-        |-- Flap                        - the outline of a flap - dynamically created based on flap group
+        |-- Flaps                       - flaps handler, creates list of Flap 
+                |-- Flap                - single flap - dynamically created based on flap group
         |
         |-- refPlanform                 - a ellipsoid reference planform 
         |-- refPlanform_dxf             - a DXF based reference planform 
@@ -77,10 +78,6 @@ class Wing:
         self._chord_root      = fromDict (dataDict, "chord_root", 200.0)
         self._chord_tip       = fromDict (dataDict, "chord_tip", self._chord_root/4)
 
-        # version 1
-        self._hingeAngle      = fromDict (dataDict, "hingeLineAngle", 0.0)
-        self._flapDepthRoot   = fromDict (dataDict, "flapDepthRoot", 25.0)
-        self._flapDepthTip    = fromDict (dataDict, "flapDepthTip", 25.0)
 
         # create reference line 
 
@@ -91,8 +88,10 @@ class Wing:
         planform_type         = fromDict (dataDict, "planform_type", "Bezier")
         self.set_planform      (Planform.having (planform_type, self, dataDict))
 
+        # wing sections and flaps
         self._wingSections    = WingSections (self, dataDict=fromDict(dataDict, "wingSections", None))
-    
+        self._flaps           = Flaps (self, dataDict=fromDict(dataDict, "flaps", None) )
+
         # create reference planforms   
         self.refPlanform_dxf  = Planform_DXF (self, dataDict, ref=True)  # could be not 'isValid'
         self.refPlanform_elli = Planform_Pure_Elliptical (self)     
@@ -296,17 +295,15 @@ class Wing:
             #self.wingSections.sort_by_y()
 
     @property
+    def flaps (self) -> 'Flaps':
+        """ flaps handler """
+        return self._flaps
+
+    @property
     def hingeAngle(self) -> float: 
         """ hingle angle in degrees"""
         return self._hingeAngle
 
-    @property
-    def flapDepthRoot(self): return self._flapDepthRoot
-    def set_flapDepthRoot(self, newDepth): self._flapDepthRoot = newDepth
-
-    @property
-    def flapDepthTip(self): return self._flapDepthTip
-    def set_flapDepthTip(self, newDepth): self._flapDepthTip = newDepth
 
     @property
     def wingSections (self) -> 'WingSections':
@@ -444,25 +441,6 @@ class Wing:
             fileList.append (sec.do_export_airfoil (toDir, useNick=useNick, teGap_mm = teGap_mm))
         return fileList
 
-
-    def getFlaps (self): 
-        """
-        returns the flap objects based on wing sections flap group
-        """
-        flapList = []
-        if not self.wingSections: return flapList 
-
-        sectionStart : WingSection = self.wingSections[0]
-        section : WingSection
-
-        for section in self.wingSections:
-            if (section.flap_group != sectionStart.flap_group or \
-                section == self.wingSections[-1]) :
-                # new flap group or last section -> create flap 
-                flapList.append(Flap(self, sectionStart, section))
-                sectionStart = section 
-
-        return flapList
     
 
 #-------------------------------------------------------------------------------
@@ -763,9 +741,11 @@ class Planform:
         """ hinge angle in degrees """       
         return self.wing.hingeAngle
     @property
-    def flapDepthRoot(self):    return self.wing.flapDepthRoot
+    def flapDepthRoot(self):
+        raise NotImplementedError
     @property
-    def flapDepthTip(self):     return self.wing.flapDepthTip
+    def flapDepthTip(self):     
+        raise NotImplementedError
     @property
     def isValid (self):         return self._isValid         # to overwrite
 
@@ -856,7 +836,7 @@ class Planform:
         return xn, y
 
 
-    def _planform_le_te (self):
+    def _planform_le_te (self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         leading and trailing edge x coordinates as arrays
 
@@ -927,62 +907,6 @@ class Planform:
         return polyline_y, polyline_x
 
     
-
-    def flapPolygon  (self, fromY, toY, nPoints = 50):
-        """
-        returns an y,x polygon describing a flap between fromY and toY   
-
-        Arguments:
-            nPoints --  number of points for idealization of trailing edge - default 20
-        """
-        yFlapLine = []
-        xFlapLine = [] 
-        # we start a TE at fromY and going clockwise around the flap upto toY
-        yFlapLine.append(fromY)
-        xFlapLine.append(self._planform_at (fromY)[1])
-        # go to hinge point
-        yFlapLine.append(fromY)
-        xFlapLine.append(self.hingePointAt(fromY))
-        # go along the hinge 
-        yFlapLine.append(toY)
-        xFlapLine.append(self.hingePointAt(toY))
-        # back to TE 
-        yFlapLine.append(toY)
-        xFlapLine.append(self._planform_at (toY)[1])
-        # ... finally along TE to starting point back to TE
-        y, le, te = self._planform_le_te()
-        i1 = min(bisect.bisect(y, fromY)-1, len(y) -2)    # get te coordinates between fromY and yTo
-        i2 = min(bisect.bisect(y, toY)  -1, len(y) -2)
-        yFlapLine.extend (np.flip(y [i1:i2+1]))  
-        xFlapLine.extend (np.flip(te[i1:i2+1]))
-
-        return np.asarray(yFlapLine), np.asarray(xFlapLine)
-    
-    def flapDepthAt (self, yPos):
-        """ returns the normed flap depth at position yPos
-        """
-        xHinge   = self.hingePointAt(yPos)
-        xLE, xTE = self._planform_at (yPos)
-        flapDepth = (xTE - xHinge) / (xTE-xLE)
-
-        if flapDepth > 0.9:                         # sanity - this should not happen 
-            flapDepth = 0.9                         # hinge end point of Amokka-JX is outside planform
-        return flapDepth
-
-    
-    def flapLineAt (self, yPos):
-        """ returns a section line (from TE to hinge point) at position yPos
-        """
-        yFlapLine = []
-        xFlapLine = [] 
-        # we start a TE at fromY and going clockwise around the flap upto toY
-        yFlapLine.append(yPos)
-        xFlapLine.append(self._planform_at (yPos)[1])
-        # go to hinge point
-        yFlapLine.append(yPos)
-        xFlapLine.append(self.hingePointAt(yPos))
-        return yFlapLine, xFlapLine
-
 
     def find_yFromChord (self, chord):
         """
@@ -2089,9 +2013,10 @@ class Planform_DXF(Planform):
         if self.isValid and not self.dxf_isReference:
             # dxf data is master for the wing 
             if self.hingeAngle_dxf != None: 
-                self.wing.reference_line.set_angle (self.hingeAngle_dxf)
-                self.wing.set_flapDepthRoot (self.flapDepthRoot_dxf)
-                self.wing.set_flapDepthTip  (self.flapDepthTip_dxf)
+                raise NotImplementedError
+                # self.wing.reference_line.set_angle (self.hingeAngle_dxf)
+                # self.wing.set_flapDepthRoot (self.flapDepthRoot_dxf)
+                # self.wing.set_flapDepthTip  (self.flapDepthTip_dxf)
 
 
     def load_dxf (self, dxf_file):
@@ -2660,23 +2585,19 @@ class WingSections (list):
         newSections = curSections
         if (curSections ==[]):
             newWing = True
-            logger.info (' - creating example wing sections...')
+            logger.info ('Creating example wing sections')
         else:
             newWing = False
 
-        # create at least a root section
-        if (newWing or not curSections [0].isRoot ):
-            if not newWing: logger.info ('Root wing section missing. Creating a new one ...')
-            newSections.insert(0, WingSection (myWing, {"y": 0.0}))
+        # new wing - create default sections
+        if newWing: 
 
-        # create a third example section for a new wing
-        if (newWing):
-            newSections.append(WingSection (myWing, {"norm_chord": 0.8}))
-
-        # create at least a tip section
-        if (newWing or not newSections [-1].isTip ):
-            if not newWing: logger.info ('Tip wing section missing. Creating a new one ...')
-            newSections.append(WingSection (myWing, {"y": myWing.halfwingspan}))
+            newSections.insert(0, WingSection (myWing, {"y": 0.0, 
+                                                        "flap_group":1}))
+            newSections.append(   WingSection (myWing, {"norm_chord": 0.8, 
+                                                        "flap_group":2}))
+            newSections.append(   WingSection (myWing, {"y": myWing.halfwingspan, 
+                                                        "flap_group":2}))
 
         logger.info (" %d Wing sections added" % len(newSections))
 
@@ -2863,27 +2784,219 @@ class WingSections (list):
 # Flap   
 #-------------------------------------------------------------------------------
 
-class Flap:
+class Flaps:
     """ 
-    defining the outline of a single flap based on flap group in the wing sections  
+    Handle flaps settings, parent of single flaps
 
     Wing
-       |-- Flap 
+       |-- Flaps 
+              |-- Flap 
+    """ 
+    def __init__(self, myWing: Wing, dataDict: dict = None):
+
+        self.wing : Wing = myWing
+
+    @property
+    def wingSections (self) -> list[WingSection]:
+        return self.wing.wingSections
+    
+    @property
+    def planform (self) -> Planform:
+        return self.wing.planform
+
+    def get (self): 
+        """
+        returns the flap objects based on wing sections flap group
+        """
+        flapList = []
+        if not self.wingSections: return flapList 
+
+        sectionStart : WingSection = self.wingSections[0]
+        section : WingSection
+
+        for section in self.wingSections:
+            if (section.flap_group != sectionStart.flap_group or \
+                section == self.wingSections[-1]) :
+                # new flap group or last section -> create flap 
+                flapList.append(Flap(self.wing, self, sectionStart, section))
+                sectionStart = section 
+
+        return flapList
+
+
+    @property
+    def hinge_xn_root (self) -> float:    
+        """ normed xn 0..1 of hinge line at root """
+        # todo hinge <> ref line 
+        return self.wing.reference_line.xn_root
+    
+    @property
+    def hinge_x_root (self) -> float:    
+        """ x 0..chord of hinge line at root """
+        return self.hinge_xn_root * self.wing.chord_root
+    
+    @property
+    def hinge_angle (self) -> float:    
+        """ hinge line angle in degrees """
+        return self.wing.reference_line.angle
+
+
+    def hinge_at (self, y : float):
+        """  Returns the x-coordinate of the hinge line at y """        
+        x = self.hinge_x_root + np.tan((self.hinge_angle/180) * np.pi) * y
+        return x
+
+
+    def depths_at (self, y : float) -> float:
+        """ returns the flap depth at position y
+        """
+        hinge_x   = self.hinge_at (y)
+        _, te_x = self.planform._planform_at (y)
+        depth = te_x - hinge_x
+
+        depth = max (0.0, depth)                # sanity 
+
+        return depth
+
+
+class Flap:
+    """ 
+    Outline of a single flap based on flap group in the wing sections  
     """
-    def __init__(self, myWing: Wing, sectionLeft: WingSection, sectionRight: WingSection):
+    def __init__(self, myWing: Wing, flaps: Flaps,
+                 sectionLeft: WingSection, sectionRight: WingSection):
         """
         Main constructor for new flap belonging to a wing 
         """
         self.wing : Wing = myWing
+        self.flaps = flaps
+
+        self.y_from = sectionLeft.y
+        self.y_to   = sectionRight.y
 
         self.flap_group  = sectionLeft.flap_group
         self.sectionName = sectionLeft.name()
-        self.y , self.x = myWing.planform.flapPolygon (sectionLeft.y, sectionRight.y)
-        self.depthLeft  = myWing.planform.flapDepthAt (sectionLeft.y)
-        self.depthRight = myWing.planform.flapDepthAt (sectionRight.y)
-        self.lineLeft   = myWing.planform.flapLineAt  (sectionLeft.y)
-        self.lineRight  = myWing.planform.flapLineAt  (sectionRight.y)
-         
+
+    @property         
+    def planform (self) -> Planform:
+        return self.wing.planform
+
+
+    def polyline  (self) -> tuple [np.ndarray, np.ndarray]:
+        """
+        polyline y,x of self    
+        """
+        y_from = self.y_from
+        y_to   = self.y_to
+        y,x = [], []
+
+        # we start a TE at y_from and going clockwise around the flap upto y_to
+        y.append(y_from)
+        x.append(self.planform._planform_at (y_from)[1])
+
+        # go to hinge point
+        y.append(y_from)
+        x.append(self.flaps.hinge_at(y_from))
+
+        # go along the hinge 
+        y.append(y_to)
+        x.append(self.flaps.hinge_at(y_to))
+
+        # back to TE 
+        y.append(y_to)
+        x.append(self.planform._planform_at(y_to)[1])
+
+        # ... finally along TE to starting point back to TE
+        y_te, _, x_te = self.planform._planform_le_te()
+        i1 = min(bisect.bisect(y_te, y_from)-1, len(y_te) -2)    # get te coordinates between y_from and yTo
+        i2 = min(bisect.bisect(y_te, y_to)  -1, len(y_te) -2)
+        y = np.append (y, np.flip(y_te[i1:i2+1]))  
+        x = np.append (x, np.flip(x_te[i1:i2+1]))
+
+        return y, x
+
+
+
+    def polyline_left  (self, y_offset=0) -> tuple [np.ndarray, np.ndarray]:
+        """
+        polyline y,x of self left side   
+        """
+        y_from = self.y_from + y_offset
+        y,x = [], []
+
+        # we start a TE at y_from and going clockwise around the flap upto y_to
+        y.append(y_from)
+        x.append(self.planform._planform_at (y_from)[1])
+
+        # go to hinge point
+        y.append(y_from)
+        x.append(self.flaps.hinge_at(y_from))
+
+        return np.array(y), np.array(x)
+
+
+    def polyline_right  (self, y_offset=0) -> tuple [np.ndarray, np.ndarray]:
+        """
+        polyline y,x of self right side   
+        """
+        y_to   = self.y_to - y_offset
+        y,x = [], []
+
+        # we start a TE at y_from and going clockwise around the flap upto y_to
+        y.append(y_to)
+        x.append(self.planform._planform_at(y_to)[1])
+
+        # go to hinge point
+        y.append(y_to)
+        x.append(self.flaps.hinge_at(y_to))
+
+        return np.array(y), np.array(x)
+
+
+    def polyline_hinge  (self, y_offset=0) -> tuple [np.ndarray, np.ndarray]:
+        """
+        hinge line y,x line of self    
+        """
+        y_from = self.y_from + y_offset
+        y_to   = self.y_to   - y_offset
+        y,x = [], []
+
+        # go to hinge point
+        y.append(y_from)
+        x.append(self.flaps.hinge_at(y_from))
+
+        # go along the hinge 
+        y.append(y_to)
+        x.append(self.flaps.hinge_at(y_to))
+
+        return np.array(y), np.array(x)
+
+
+    def polyline_te  (self, y_offset=0) -> tuple [np.ndarray, np.ndarray]:
+        """
+        trailing edge polyline y,x of self    
+        """
+        y_from = self.y_from + y_offset
+        y_to   = self.y_to   - y_offset
+        y,x = [], []
+
+        # we start a TE at y_from and going clockwise around the flap upto y_to
+        y.append(y_from)
+        x.append(self.planform._planform_at (y_from)[1])
+
+        # ... along TE 
+        y_te, _, x_te = self.planform._planform_le_te()
+        i1 = min(bisect.bisect(y_te, y_from)-1, len(y_te) -2)    # get te coordinates between y_from and yTo
+        i2 = min(bisect.bisect(y_te, y_to)  -1, len(y_te) -2)
+        y = np.append (y, y_te[i1:i2+1])  
+        x = np.append (x, x_te[i1:i2+1])
+
+        # final TE point 
+        y = np.append(y, y_to)
+        x = np.append(x, self.planform._planform_at(y_to)[1])
+
+        return y, x
+
 
 #-------------------------------------------------------------------------------
 # Export airfoils of all wing sections    

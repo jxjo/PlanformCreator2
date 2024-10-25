@@ -72,6 +72,7 @@ class Item_Planform (Diagram_Item):
         self.ref_planform_artist   = Ref_Planform_Artist   (self, self.ref_planforms, show_legend=True)
         self.wingSections_artist   = WingSections_Artist   (self, self.wing, cur_wingSection_fn=self._cur_wingSection_fn,
                                                             norm_chord=False, show=initial_show, show_legend=True)
+        self.flaps_artist          = Flaps_Artist          (self, self.wing, norm_chord=False, show=initial_show)
 
 
     @override
@@ -98,11 +99,22 @@ class Item_Planform (Diagram_Item):
         self.planform_artist.refresh() 
         self.ref_planform_artist.refresh()
         self.wingSections_artist.refresh()
+        self.flaps_artist.refresh()
 
 
     def set_show_wingSections (self, aBool : bool): 
         """ switch on/off wing sections"""
         self.wingSections_artist.set_show(aBool) 
+
+
+    def set_show_ref_line (self, aBool : bool): 
+        """ switch on/off reference line"""
+        self.planform_artist.set_show_ref_line(aBool) 
+
+
+    def set_show_flaps (self, aBool : bool): 
+        """ switch on/off flaps"""
+        self.flaps_artist.set_show(aBool) 
 
 
     @property
@@ -112,15 +124,16 @@ class Item_Planform (Diagram_Item):
         if self._section_panel is None:    
             l = QGridLayout()
             r,c = 0, 0 
-            CheckBox (l,r,c, text="Reference Line", 
-                    get=lambda: self.planform_artist.show_ref_line,
-                    set=self.planform_artist.set_show_ref_line) 
+            # CheckBox (l,r,c, text="Reference Line", 
+            #         get=lambda: self.planform_artist.show_ref_line,
+            #         set=self.planform_artist.set_show_ref_line) 
             r += 1
             l.setColumnStretch (3,2)
             l.setRowStretch    (r,2)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=130, 
-                                              switchable=True, on_switched=self.setVisible)
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height=40, 
+                                              switchable=True, hide_switched=False, 
+                                              on_switched=self.setVisible)
 
         return self._section_panel 
 
@@ -206,12 +219,21 @@ class Item_Chord (Diagram_Item):
         self.chord_ref_line_artist.refresh() 
         self.ref_chord_artist.refresh()
         self.wingSections_artist.refresh()
+        # self.flaps_artist.refresh()
 
 
     def set_show_wingSections (self, aBool : bool): 
         """ switch on/off wing sections"""
         self.wingSections_artist.set_show(aBool) 
 
+
+    def set_show_ref_line (self, aBool : bool): 
+        """ switch on/off reference line"""
+        self.chord_ref_line_artist.set_show (aBool) 
+
+    def set_show_flaps (self, aBool : bool): 
+        """ switch on/off flaps"""
+        # self.flaps_artist.set_show(aBool) 
 
     @property
     def section_panel (self) -> Edit_Panel:
@@ -220,15 +242,16 @@ class Item_Chord (Diagram_Item):
         if self._section_panel is None:    
             l = QGridLayout()
             r,c = 0, 0 
-            CheckBox (l,r,c, text="Reference Line", 
-                    get=lambda: self.chord_ref_line_artist.show,
-                    set=self.chord_ref_line_artist.set_show) 
+            # CheckBox (l,r,c, text="Reference Line", 
+            #         get=lambda: self.chord_ref_line_artist.show,
+            #         set=self.chord_ref_line_artist.set_show) 
             r += 1
             l.setColumnStretch (3,2)
             l.setRowStretch    (r,2)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=130, 
-                                              switchable=True, on_switched=self.setVisible)
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height=40, 
+                                              switchable=True, hide_switched=False, 
+                                              on_switched=self.setVisible)
 
         return self._section_panel 
 
@@ -257,9 +280,10 @@ class Diagram_Planform (Diagram):
         self._item_chord = None                      
 
         self._general_panel = None                          # panel with general settings  
+        self._show_ref_line = True                          # show reference line 
         self._show_ref_planform_elli = True
         self._show_wingSections = True
-
+        self._show_flaps = True
 
         super().__init__(parent, wing_fn, **kwargs)
 
@@ -305,6 +329,28 @@ class Diagram_Planform (Diagram):
         self._item_planform.set_show_wingSections(aBool) 
         self._item_chord.set_show_wingSections(aBool) 
  
+
+
+    @property
+    def show_ref_line (self) -> bool: 
+        """ show ref line """
+        return self._show_ref_line
+    
+    def set_show_ref_line (self, aBool : bool): 
+        self._show_ref_line = aBool == True
+        self._item_planform.set_show_ref_line(aBool) 
+        self._item_chord.set_show_ref_line(aBool) 
+
+
+    @property
+    def show_flaps (self) -> bool: 
+        """ show flaps """
+        return self._show_flaps
+    
+    def set_show_flaps (self, aBool : bool): 
+        self._show_flaps = aBool == True
+        self._item_planform.set_show_flaps(aBool) 
+        self._item_chord.set_show_flaps(aBool) 
 
 
     @property
@@ -400,10 +446,18 @@ class Diagram_Planform (Diagram):
             CheckBox (l,r,c, text="Show mouse helper", 
                       get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
             r += 1
+            SpaceR   (l,r,10)
+            r += 1
+            CheckBox (l,r,c, text="Reference Line", 
+                    get=lambda: self.show_ref_line,
+                    set=self.set_show_ref_line) 
+
+            r += 1
             CheckBox (l,r,c, text="Wing Sections", 
                       get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
             r += 1
-            SpaceR (l,r)
+            CheckBox (l,r,c, text="Flaps", 
+                      get=lambda: self.show_flaps, set=self.set_show_flaps) 
 
             l.setColumnStretch (0,2)
 
@@ -428,8 +482,9 @@ class Diagram_Planform (Diagram):
             SpaceR (l,r)
             l.setColumnStretch (0,2)
 
-            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, height=(None,None),
-                                              switchable=True, switched_on=False, on_switched=self.refresh)
+            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, height=80,
+                                              switchable=True, hide_switched=False, switched_on=False, 
+                                              on_switched=self.refresh)
 
         return self._section_panel 
 

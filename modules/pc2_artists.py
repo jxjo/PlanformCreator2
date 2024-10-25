@@ -14,6 +14,7 @@ from base.spline                import Bezier
 
 from wing                       import Wing, Planform, Reference_Line, Planform_Bezier 
 from wing                       import WingSections, WingSection
+from wing                       import Flaps, Flap
 from model.airfoil              import Airfoil, Airfoil_Bezier, usedAs, Geometry
 from model.airfoil_geometry     import Line, Side_Airfoil_Bezier
 
@@ -775,11 +776,6 @@ class WingSections_Artist (Artist):
 
 
 
-
-
-
-
-
     class Movable_Section (Movable_Point):
         """ 
         Represents a point of the section line to move either by pos or by chord. 
@@ -926,4 +922,68 @@ class WingSections_Artist (Artist):
             """ slot - point moving is finished"""
             self._remove_tmp_section_line ()
             self._changed()
+
+
+
+
+
+class Flaps_Artist (Artist):
+    """Plot the flaps in planform """
+
+
+    def __init__ (self, *args, norm_chord=False, **kwargs):
+
+        self._norm_chord = norm_chord                           # plot chord as normed
+
+        super().__init__ (*args, **kwargs)
+
+
+    @property
+    def wing (self) -> Wing: return self.data_object
+
+    @property
+    def norm_chord (self) -> bool:
+        """ true - sections will be plotted with normed chord"""
+        return self._norm_chord
+
+
+    def _plot (self): 
+
+        flaps = self.wing.flaps.get()
+        if not flaps: return 
+
+        colors = random_colors (len(flaps))
+
+        flap : Flap
+        for i, flap in enumerate (flaps):
+
+            color : QColor = colors[i]
+            pen   = pg.mkPen(color, width=1)
+
+            # flap left and right side 
+
+            x,y = flap.polyline_left(y_offset=0.5)  
+            self._plot_dataItem  (x, y,  pen = pen, antialias = False, zValue=1)
+            x,y = flap.polyline_right(y_offset=0.5)  
+            self._plot_dataItem  (x, y,  pen = pen, antialias = False, zValue=1)
+
+            # fill area between hinge and te 
+
+            pen   = pg.mkPen(colors[i], width=1)
+            x,y = flap.polyline_hinge(y_offset=0.5)  
+            p1 = self._plot_dataItem  (x, y,  pen = pen, antialias = False, zValue=1)
+
+            x,y = flap.polyline_te(y_offset=0.5)  
+            p2 = self._plot_dataItem  (x, y,  pen = pen, antialias = False, zValue=1)
+
+            brush = pg.mkBrush (color.darker(400))
+            p = pg.FillBetweenItem (p1, p2, brush=brush)
+            self._add (p)
+
+            # plot flap name 
+
+            # point_xy = (x[0],y[0]) if self.norm_chord else (x[0],y[0])  # point at le
+            # anchor   = (0.5,1.5) if section.isTip else (0.5,1.2)        # label anchor 
+
+            # self._plot_point (point_xy, color=color, size=0, text=section.name_short(), textColor=color, anchor=anchor)
 

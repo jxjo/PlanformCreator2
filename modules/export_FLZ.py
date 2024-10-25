@@ -6,7 +6,8 @@ from datetime import datetime
 from typing import TextIO
 import getpass
 from common_utils import *
-from model.wing import Wing, WingSection, Airfoil, Planform_Paneled
+
+from wing import Wing, WingSection, Flaps, Airfoil, Planform_Paneled
 
 
 # FLZ panel distribution names to self names
@@ -321,8 +322,8 @@ class SEGMENT (FLZ_Element):
         sweep = atan (abs((le_left - le_right)/(1000 *width))) * 180 / pi
         refSweep = 0
 
-        flapDepthLeft  = self.wing.planform.flapDepthAt (leftSection_yPos)  * 100
-        flapDepthRight = self.wing.planform.flapDepthAt (rightSection_yPos) * 100
+        flapDepthLeft  = self.wing.flaps.depths_at (leftSection_yPos) 
+        flapDepthRight = self.wing.flaps.depths_at (rightSection_yPos) 
 
         self._write (aStream, self.startTag)
 
