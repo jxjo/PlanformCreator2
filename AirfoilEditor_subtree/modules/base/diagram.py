@@ -147,8 +147,6 @@ class Diagram (QWidget):
         """ QShowEvent - self becomes visible  - Tab switch or first time"""
 
         # refresh plotItems - if it is first time they are intially plotted
-        print ("show")
-
         item : Diagram_Item
         for item in self.diagram_items:
             item.refresh() 
@@ -166,10 +164,10 @@ class Diagram (QWidget):
         pass
 
 
-    def _add_item (self, anItem: 'Diagram_Item', row, col):
+    def _add_item (self, anItem: 'Diagram_Item', row, col, rowspan=1, colspan=1):
         """ adds a diagram item to self graphic layout """
 
-        self._graph_widget.addItem (anItem, row, col)
+        self._graph_widget.addItem (anItem, row, col, rowspan=rowspan, colspan=colspan)
 
         anItem.sig_visible.connect (self._on_item_visible)
 

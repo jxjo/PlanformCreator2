@@ -73,7 +73,7 @@ class Export_FLZ:
         Returns a message string what was done """
 
         # ensure straked airfoils are loaded 
-        self.wing.do_strak()
+        self.wing.wingSections.do_strak()
 
         targetDir = self.baseAndExportDir
 

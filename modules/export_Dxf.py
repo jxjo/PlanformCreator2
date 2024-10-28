@@ -98,7 +98,7 @@ class Export_Dxf:
         dxf.plot_title ()
 
         if self.includeAirfoils:
-            self.wing.do_strak (geometry=GEO_SPLINE)          # ensure strak airfoils are uptodate and splined (quality) 
+            self.wing.wingSections.do_strak (geometry=GEO_SPLINE)          # ensure strak airfoils are uptodate and splined (quality) 
             dxf.plot_airfoils (teGap_mm=teGap)
 
         targetDir = self.baseAndExportDir

@@ -413,31 +413,6 @@ class Wing:
   
         
 
-    def do_strak (self, geometry  = None): 
-        """
-        straks the airfoil of all wing sections having a Strak-Airfoil which is 
-        created by blending with its real neighbours
-
-        Args: 
-            geometry: optional - the desired geometry of the new straked airfoils 
-                                 either GEO_BASIC or GEO_SPLINE
-        """
-        sec: WingSection
-
-        for sec in self.wingSections:
-            if sec.airfoil.isStrakAirfoil: 
-
-                # get the neighbour wing sections  with real airfoils 
-                leftSec, rightSec = self.wingSections.neighbours_having_airfoil(sec) 
-
-                blendBy  = (sec.norm_chord - leftSec. norm_chord) / \
-                           (rightSec.norm_chord - leftSec. norm_chord)
-
-                # strak - set new geometry to achieve higher quality with splined airfoils 
-
-                sec.airfoil.do_strak(leftSec.airfoil,  rightSec.airfoil, blendBy, geometry)
-
-
     def do_export_airfoils (self,toDir, useNick=True, teGap_mm = None): 
         """
         exports all also straked airfoils into directory 'toDir'. 
@@ -445,7 +420,7 @@ class Wing:
         Optionally a te gap in mm can be set for all exported airfoils"""
         fileList  = []
         
-        self.do_strak (geometry=GEO_SPLINE)          # ensure strak airfoils are uptodate and splined (quality) 
+        self.wingSections.do_strak (geometry=GEO_SPLINE)          # ensure strak airfoils are uptodate and splined (quality) 
 
         sec: WingSection
         for sec in self.wingSections:
@@ -2166,7 +2141,7 @@ class WingSection:
                 airfoil = Tip_Example()
             else:
                 airfoil = Airfoil(name="<strak>", geometry=GEO_BASIC)
-                #airfoil.set_isStrakAirfoil (True)
+                airfoil.set_isBlendAirfoil (True)
 
         self.airfoil : Airfoil = airfoil 
 
@@ -2549,12 +2524,12 @@ class WingSection:
         return os.path.basename(filePathName) 
         
     
-    def line (self):
+    def line (self) -> tuple [list, list]:
         """
-        the wing section as a line from LE to TE
+        wing section as a line from LE to TE
         Returns:
-            :y: array of the y-stations of the line  
-            :x: array of x values of LE and TE 
+            y: array of the y-stations of the line  
+            x: array of x values of LE and TE 
         """
         le, te = self.wing.planform._planform_at (self.y)
         y = [self.y, self.y]
@@ -2673,6 +2648,32 @@ class WingSections (list):
                 pass
 
         return None  
+
+
+    def do_strak (self, geometry  = None): 
+        """
+        straks the airfoil of all wing sections having a Strak-Airfoil which is 
+        created by blending with its real neighbours
+
+        Args: 
+            geometry: optional - the desired geometry of the new straked airfoils 
+                                 either GEO_BASIC or GEO_SPLINE
+        """
+        sec: WingSection
+
+        for sec in self:
+            if sec.airfoil.isBlendAirfoil: 
+
+                # get the neighbour wing sections  with real airfoils 
+                leftSec, rightSec = self.neighbours_having_airfoil(sec) 
+
+                blendBy  = (sec.norm_chord - leftSec. norm_chord) / \
+                           (rightSec.norm_chord - leftSec. norm_chord)
+
+                # strak - set new geometry to achieve higher quality with splined airfoils 
+
+                sec.airfoil.do_blend (leftSec.airfoil,  rightSec.airfoil, blendBy, geometry)
+
 
 
     def sort_by_y (self):
@@ -2808,7 +2809,7 @@ class Flaps:
 
         self.wing : Wing = myWing
 
-        self._hinge_equal_ref_line = fromDict (dataDict, "_hinge_equal_ref_line", False)       
+        self._hinge_equal_ref_line = fromDict (dataDict, "_hinge_equal_ref_line", True)       
 
         self._hinge_xn_root = fromDict (dataDict, "hinge_xn_root", 0.75)        # normed x at root
         self._hinge_xn_tip  = fromDict (dataDict, "hinge_xn_tip", 0.8)         # normed x at tip

@@ -181,6 +181,9 @@ class App_Main (QMainWindow):
         self._diag_planform = Diagram_Planform (self, self.wing, self.cur_wingSection)
         self._diagrams.addTab (self._diag_planform, "Planform")
 
+        self._diag_pairfoils = Diagram_Airfoils (self, self.wing)
+        self._diagrams.addTab (self._diag_pairfoils, "Airfoils")
+
         l_main = self._init_layout() 
 
         container = QWidget()

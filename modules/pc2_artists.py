@@ -15,8 +15,7 @@ from base.spline                import Bezier
 from wing                       import Wing, Planform, Reference_Line, Planform_Bezier 
 from wing                       import WingSections, WingSection
 from wing                       import Flaps, Flap
-from model.airfoil              import Airfoil, Airfoil_Bezier, usedAs, Geometry
-from model.airfoil_geometry     import Line, Side_Airfoil_Bezier
+from model.airfoil              import Airfoil, GEO_BASIC
 
 from PyQt6.QtGui                import QColor, QBrush, QPen, QTransform
 from PyQt6.QtCore               import pyqtSignal, QObject
@@ -71,11 +70,16 @@ class Abstract_Wing_Artist (Artist):
     def flaps (self) -> Flaps: return self.wing.flaps
 
     @property
+    def wing_mode (self) -> bool:
+        """ does artist plot half of a complete wing"""
+        return self._wing_half is not None
+
+    @property
     def transform (self) -> QTransform | None:
         """ returns Transform object if self should be wing half right or left"""
 
         # sanity - ensure no transform for normal operation 
-        if not self._wing_half: return 
+        if not self.wing_mode: return 
 
         if self._transform is None: 
             self._transform = self._create_transform ()
@@ -161,7 +165,7 @@ class Planform_Artist (Abstract_Wing_Artist):
                                 parentPos=(0.05,0.), itemPos=(0.0,0), offset=(30,10))
             self._first_time = False
         else: 
-            if self._wing_half:
+            if self.wing_mode:
                 if self._wing_half == self.RIGHT:
                     self._plot_title (self.wing.name, subTitle="created by Jochen",  offset=(-80,0) )
             else:
@@ -708,43 +712,45 @@ class WingSections_Artist (Abstract_Wing_Artist):
 
             p = self._plot_dataItem  (x, y,  name=name, pen = pen, antialias = False, zValue=3)
 
-            # plot section name 
+            # plot section name in planform view 
 
-            point_xy = (x[0],y[0]) if self.norm_chord else (x[0],y[0])  # point at le
-            anchor   = (0.5,1.5) if section.isTip else (0.5,1.2)        # label anchor 
+            if not self.wing_mode:
+                point_xy = (x[0],y[0]) if self.norm_chord else (x[0],y[0])  # point at le
+                anchor   = (0.5,1.5) if section.isTip else (0.5,1.2)        # label anchor 
 
-            self._plot_point (point_xy, color=color, size=0, text=section.name_short, textColor=color, anchor=anchor)
+                self._plot_point (point_xy, color=color, size=0, text=section.name_short, textColor=color, anchor=anchor)
 
-            # highlight current section - add movable points 
+                # highlight current section - add movable points 
 
-            if section == self.cur_wingSection and not (section.isRoot or section.isTip):
-                p.setShadowPen (pg.mkPen(QColor(COLOR_SECTION).darker(150), width=4))
+                if section == self.cur_wingSection and not (section.isRoot or section.isTip):
+                    p.setShadowPen (pg.mkPen(QColor(COLOR_SECTION).darker(150), width=4))
 
 
-                if self.show_mouse_helper:
-                    # add movable points for move by pos and move by chord 
+                    if self.show_mouse_helper:
+                        # add movable points for move by pos and move by chord 
 
-                    pt = self.Movable_Section (self._pi, section, norm_chord=self.norm_chord, 
-                                               move_by_pos=True, name="Move by pos",
-                                               movable=True, color=COLOR_SECTION,
-                                               on_changed=self.sig_wingSection_changed.emit)
-                    self._add (pt) 
-                    pt = self.Movable_Section (self._pi, section, norm_chord=self.norm_chord, 
-                                               move_by_pos=False, name="Move by chord",
-                                               movable=True, color=COLOR_SECTION,
-                                               on_changed=self.sig_wingSection_changed.emit)
-                    self._add (pt) 
+                        pt = self.Movable_Section (self._pi, section, norm_chord=self.norm_chord, 
+                                                move_by_pos=True, name="Move by pos",
+                                                movable=True, color=COLOR_SECTION,
+                                                on_changed=self.sig_wingSection_changed.emit)
+                        self._add (pt) 
+                        pt = self.Movable_Section (self._pi, section, norm_chord=self.norm_chord, 
+                                                move_by_pos=False, name="Move by chord",
+                                                movable=True, color=COLOR_SECTION,
+                                                on_changed=self.sig_wingSection_changed.emit)
+                        self._add (pt) 
 
-            # make line clickable 
+                # make line clickable 
 
-            p.setCurveClickable (True, width=8)
-            p.sigClicked.connect (self._section_item_clicked)
+                p.setCurveClickable (True, width=8)
+                p.sigClicked.connect (self._section_item_clicked)
 
-            name = None                                             # legend entry only for frst item 
+                name = None                                             # legend entry only for frst item 
 
-        # make scene cklickable to add wing section 
-        #   delayed as during init scene is not yet available
-        QTimer().singleShot (10, self._connect_scene_mouseClick)
+        if not self.wing_mode:
+            # make scene cklickable to add wing section 
+            #   delayed as during init scene is not yet available
+            QTimer().singleShot (10, self._connect_scene_mouseClick)
 
 
     def _section_item_clicked (self, item : pg.PlotDataItem,  ev : MouseClickEvent):
@@ -1009,10 +1015,13 @@ class Flaps_Artist (Abstract_Wing_Artist):
                 self._add(p) 
         else:
 
-            # plot hinge line at flaps in planform 
+            # plot hinge line if it differs from reference line 
 
-            x,y = self.wing.flaps.hinge_line()
-            self._plot_dataItem  (x, y,  pen = pen, antialias = True, name="Flap Hinge",zValue=3)
+            if not self.flaps.hinge_equal_ref_line:
+                x,y = self.wing.flaps.hinge_line()
+                self._plot_dataItem  (x, y,  pen = pen, antialias = True, name="Flap Hinge",zValue=3)
+
+            # plot single flaps 
 
             self._plot_flaps (flaps, colors) 
 
@@ -1056,7 +1065,7 @@ class Flaps_Artist (Abstract_Wing_Artist):
             self._add (p)
 
             # plot flap group in the middle of the flap - not in 'wing mode'
-            if not self._wing_half:
+            if not self.wing_mode:
                 self._plot_point (flap.center(), color=color, size=0, text=flap.name, textColor=color, anchor=(0.5,0.5))
 
 
@@ -1193,4 +1202,66 @@ class Flaps_Artist (Abstract_Wing_Artist):
                 return f"{self.name} {self._flaps.depth_at_tip():.1f}mm"
 
 
+
+
+
+class Airfoils_Artist (Abstract_Wing_Artist):
+    """Plot the airfoils of a planform """
+
+    def __init__ (self, *args, show_strak=True, real_size=False, **kwargs):
+
+        self._show_strak = show_strak                   # show also straked airfoils 
+        self._real_size  = real_size                    # plot airfoils in real size
+        super().__init__ (*args, **kwargs)
+
+
+    @property
+    def show_strak (self) -> bool:
+        """ true - show also straked airfoils """
+        return self._show_strak
+    def set_show_strak (self, aBool : bool):
+        self._show_strak = aBool == True
+
+    @property
+    def real_size (self) -> bool:
+        """ true - plot airfoils in real size """
+        return self._real_size
+    def set_real_size (self, aBool : bool):
+        self._real_size = aBool == True
+
+
+    def _plot (self): 
+
+        colors = random_colors (len(self.wingSections))
+
+        # strak airfoils if needed
+        if self.show_strak:
+            self.wingSections.do_strak (geometry=GEO_BASIC)
+
+        section : WingSection
+        for i, section in enumerate (self.wingSections):
+            airfoil = section.airfoil
+            if (airfoil.isLoaded) and not (not self.show_strak and airfoil.isBlendAirfoil):
+
+                if self.real_size:
+                    le_x = section.line ()[1][0]
+                    x = airfoil.x * section.chord + le_x 
+                    y = airfoil.y * section.chord 
+                else:
+                    x = airfoil.x
+                    y = airfoil.y
+
+                label = f"{airfoil.name} @ {section.name}"   
+                color = colors[i]
+                pen = pg.mkPen(color, width=1.5)
+                antialias = True
+
+                self._plot_dataItem  (x, y, name=label, pen = pen, 
+                                      antialias = antialias, zValue=1)
+
+
+
+
+
+                
 
