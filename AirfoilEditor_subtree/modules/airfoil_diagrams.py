@@ -71,15 +71,15 @@ class Diagram_Item_Airfoil (Diagram_Item):
 
 
     @override
-    def setup_artists (self, initial_show=True):
+    def setup_artists (self):
         """ create and setup the artists of self"""
         
-        self.airfoil_artist = Airfoil_Artist   (self, self.airfoils, show=initial_show, show_legend=True)
+        self.airfoil_artist = Airfoil_Artist   (self, self.airfoils, show_legend=True)
 
         self.line_artist = Airfoil_Line_Artist (self, self.airfoils, show=False, show_legend=True)
         self.line_artist.sig_geometry_changed.connect (self.sig_geometry_changed.emit)
 
-        self.bezier_artist = Bezier_Artist (self, self.airfoils, show= initial_show)
+        self.bezier_artist = Bezier_Artist (self, self.airfoils)
         self.bezier_artist.sig_bezier_changed.connect (self.sig_geometry_changed.emit)
 
 
@@ -187,11 +187,10 @@ class Diagram_Item_Curvature (Diagram_Item):
         else: 
             self.setXLink(None)
 
-    def setup_artists (self, initial_show=True):
+    def setup_artists (self):
         """ create and setup the artists of self"""
         
-        self.curvature_artist = Curvature_Artist (self, self.airfoils, show=initial_show, 
-                                                  show_derivative=False, show_legend=True)
+        self.curvature_artist = Curvature_Artist (self, self.airfoils, show_derivative=False, show_legend=True)
 
 
     def setup_viewRange (self):
@@ -238,7 +237,8 @@ class Diagram_Item_Curvature (Diagram_Item):
             l.setRowStretch    (r,2)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, 
-                                              height=160, switchable=True, switched_on=False, on_switched=self.setVisible)
+                                              height=160, switchable=True, switched_on=self._show, 
+                                              on_switched=self.setVisible)
 
         return self._section_panel 
 
@@ -337,7 +337,7 @@ class Diagram_Airfoil (Diagram):
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
 
-        self._item_airfoil = Diagram_Item_Airfoil (self, getter=self.airfoils, show=True)
+        self._item_airfoil = Diagram_Item_Airfoil (self, getter=self.airfoils)
         self._add_item (self._item_airfoil, 0, 0)
 
         self._item_airfoil.sig_geometry_changed.connect (self._on_geometry_changed)

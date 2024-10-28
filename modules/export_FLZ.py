@@ -322,8 +322,8 @@ class SEGMENT (FLZ_Element):
         sweep = atan (abs((le_left - le_right)/(1000 *width))) * 180 / pi
         refSweep = 0
 
-        flapDepthLeft  = self.wing.flaps.depths_at (leftSection_yPos) 
-        flapDepthRight = self.wing.flaps.depths_at (rightSection_yPos) 
+        flapDepthLeft  = self.wing.flaps.depth_at (leftSection_yPos) 
+        flapDepthRight = self.wing.flaps.depth_at (rightSection_yPos) 
 
         self._write (aStream, self.startTag)
 

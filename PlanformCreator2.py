@@ -17,6 +17,7 @@ from pathlib import Path
 from PyQt6.QtCore           import QMargins
 from PyQt6.QtWidgets        import QApplication, QMainWindow, QWidget, QMessageBox, QFileDialog
 from PyQt6.QtWidgets        import QGridLayout, QVBoxLayout, QHBoxLayout
+from PyQt6.QtWidgets        import QTabWidget
 from PyQt6.QtGui            import QCloseEvent
 
 # let python find the other modules in modules relativ to path of self - ! before python system modules
@@ -48,6 +49,81 @@ AppName    = "Planform Creator 2"
 AppVersion = "2.0 beta.1"
 
 
+# --------------------- tmp ----------------------------------------------------
+
+
+class Tab_Panel (QTabWidget):
+    """ 
+    Tab WIdget as parent for other items 
+    """
+
+    name = "Panel"             # will be title 
+
+    _width  = None
+    _height = None 
+
+
+    def __init__(self,  
+                 parent=None,
+                 width=None, 
+                 height=None, 
+                 **kwargs):
+        super().__init__(parent=parent, **kwargs)
+
+        self._parent = parent
+
+        if width  is not None: self._width = width
+        if height is not None: self._height = height
+
+        # set width and height 
+        Widget._set_width  (self, self._width)
+        Widget._set_height (self, self._height)
+
+        font = self.font() 
+        font.setPointSize(size.HEADER.value)
+        font.setWeight (QFont.Weight.Medium) #Medium #DemiBold #ExtraLight
+        self.setFont(font)
+
+        self.setStyleSheet('''QTabWidget::tab-bar {alignment: center};
+                           ''')
+        # tab_bar = self.tabBar()  # QTabBar
+        # tab_bar.setStyleSheet ('''tab-bar {alignment: center}''')
+        # self.setStyleSheet('''Tab_Panel::tab-bar {alignment: center};
+        #                       QTabWidget::pane {border-top: 4px solid #A0A0A0};
+        #                    ''')
+
+        # self.setStyleSheet('''QTabWidget::pane {border-top: 4px solid #A0A0A0};
+        #                       QTabWidget::tab-bar {alignment: center}
+        #                    ''')
+        # self.setStyleSheet("QTabWidget::pane    {border-top: 4px }")
+        #                                   background: yellow;
+        #                                   tab-bar {alignment: center}''')
+        # self.setStyleSheet("QTabWidget::pane    {border: 0 }")
+        # self.setStyleSheet('''QTabWidget ::tab-bar {alignment: center}''')
+
+
+
+    def __repr__(self) -> str:
+        # overwritten to get a nice print string 
+        return f"<Tab_Panel '{self.name}'>"
+
+
+    def set_background_color (self, darker_factor : int | None = None,
+                                    color : QColor | int | None  = None,
+                                    alpha : float | None = None):
+        """ 
+        Set background color of a QWidget either by
+            - darker_factor > 100  
+            - color: QColor or string for new color
+            - alpha: transparency 0..1 
+        """
+        set_background (self, darker_factor=darker_factor, color=color, alpha=alpha)
+
+
+
+
+
+
 
 #-------------------------------------------------------------------------------
 # The App   
@@ -61,8 +137,6 @@ class App_Main (QMainWindow):
 
     sig_wing_new            = pyqtSignal()              # new wing loaded 
     sig_cur_wingSection     = pyqtSignal()              # current wing section changed
-
-
 
 
     def __init__(self, paramFile):
@@ -98,7 +172,14 @@ class App_Main (QMainWindow):
 
         self._data_panel    = Container_Panel  (title="Data panel")
         self._file_panel    = Container_Panel  (title="File panel", width=240)
-        self._diagram_panel = Diagram_Planform (self, self.wing, self.cur_wingSection, welcome=self._welcome_message())
+
+        self._diagrams      = Tab_Panel        (self)
+
+        self._diag_wing     = Diagram_Wing     (self, self.wing, welcome=self._welcome_message())
+        self._diagrams.addTab (self._diag_wing, "Wing")
+
+        self._diag_planform = Diagram_Planform (self, self.wing, self.cur_wingSection)
+        self._diagrams.addTab (self._diag_planform, "Planform")
 
         l_main = self._init_layout() 
 
@@ -109,7 +190,8 @@ class App_Main (QMainWindow):
 
         # connect to signals from diagram
 
-        self._diagram_panel.sig_wingSection_new.connect  (self.set_cur_wingSection)
+        self._diag_planform.sig_wingSection_new.connect  (self.set_cur_wingSection)
+        self._diag_planform.sig_planform_changed.connect  (self._diag_wing.on_wing_changed)
 
         # connect to signals of self
 
@@ -117,8 +199,10 @@ class App_Main (QMainWindow):
 
         # connect signals to slots of diagram
 
-        self.sig_wing_new.connect        (self._diagram_panel.on_wing_new)
-        self.sig_cur_wingSection.connect (self._diagram_panel.on_cur_wingSection_changed)
+        self.sig_wing_new.connect        (self._diag_planform.on_wing_new)
+        self.sig_cur_wingSection.connect (self._diag_planform.on_cur_wingSection_changed)
+
+        self.sig_wing_new.connect        (self._diag_wing.on_wing_new)
 
 
     def __repr__(self) -> str:
@@ -157,7 +241,7 @@ class App_Main (QMainWindow):
         # main layout with diagram panel and lower 
 
         l_main = QVBoxLayout () 
-        l_main.addWidget (self._diagram_panel, stretch=2)
+        l_main.addWidget (self._diagrams, stretch=2)
         l_main.addWidget (lower)
         l_main.setContentsMargins (QMargins(5, 5, 5, 5))
 

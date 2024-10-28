@@ -117,11 +117,6 @@ class Diagram (QWidget):
                 items.append (item)
         return items
 
-    @property
-    def diagram_items_visible (self) -> list['Diagram_Item']:
-        """ list of my visible diagram items """
-        return [item for item in self.diagram_items if item.isVisible()]
-
 
     @property 
     def _graph_layout (self) -> QGraphicsGridLayout:
@@ -138,12 +133,28 @@ class Diagram (QWidget):
 
     def refresh(self): 
         """ refresh all childs (Diagram_Items) of self"""
+
+        if self.isVisible():
+            item : Diagram_Item
+            for item in self.diagram_items:
+                item.refresh() 
+
+            if self.section_panel:
+                self.section_panel.refresh()
+
+    @override
+    def showEvent (self, ev):
+        """ QShowEvent - self becomes visible  - Tab switch or first time"""
+
+        # refresh plotItems - if it is first time they are intially plotted
+        print ("show")
+
         item : Diagram_Item
         for item in self.diagram_items:
             item.refresh() 
 
-        if self.section_panel:
-            self.section_panel.refresh()
+        super().showEvent (ev) 
+
 
 
     def create_diagram_items ():
@@ -192,7 +203,7 @@ class Diagram (QWidget):
     def _on_item_visible (self, aBool):
         """ slot to handle actions when switch on/off of diagram items"""
 
-        nItems = len(self.diagram_items_visible)
+        nItems = len([item for item in self.diagram_items if item.isVisible()])
 
         if nItems == 0: 
             self._message_show ("No diagram items selected ")
@@ -262,11 +273,12 @@ class Diagram_Item (pg.PlotItem):
 
         # setup artists - must be override
 
-        self.setup_artists (initial_show=show)
+        self.setup_artists ()
 
         # setup view range - must be override
-        
-        self.setup_viewRange ()
+
+        self._viewRange_set = False
+        # self.setup_viewRange ()
 
         # setup view range - must be override
         
@@ -304,6 +316,9 @@ class Diagram_Item (pg.PlotItem):
         """ switch on/off artists of self"""
         # to override
         self._show = aBool
+
+        if aBool: 
+            self.refresh_artists ()
 
 
     @override
@@ -379,6 +394,7 @@ class Diagram_Item (pg.PlotItem):
 
     def refresh(self): 
         """ refresh my artits and section panel """
+
         if self.section_panel is not None: 
             # refresh artists only if self section is switched on 
             if self.section_panel.switched_on:
@@ -389,8 +405,14 @@ class Diagram_Item (pg.PlotItem):
         else: 
             self.refresh_artists() 
 
+        # initial, deferred setup of viewRange 
 
-    def setup_artists (self, initial_show=True):
+        if not self._viewRange_set:
+            self.setup_viewRange ()
+            self._viewRange_set = True
+
+
+    def setup_artists (self):
         """ create and setup the artists of self"""
         # must be implemented by subclass
         
@@ -425,20 +447,3 @@ class Diagram_Item (pg.PlotItem):
         # overload for constructor 
         return  self._section_panel
     
-
-    def _create_section_panel (self) -> Edit_Panel:
-        """ 
-        Create small section panel representing self in view panel
-        
-        The existence of a section_panel controls that 
-        diagram will have a view panel 
-        """
-
-        self._section_panel = self.get_section_panel ()
-
-        # connect to show switch signal of section panel 
-        if self._section_panel:
-            self._section_panel.sig_switched.connect (self.setVisible )
-
-        return None 
-

@@ -305,12 +305,26 @@ class Movable_Point (pg.TargetItem):
 
     @override
     def hoverEvent(self, ev):
-        # overridden to allow mouse hover also for points which are not mavalble
+        # overridden to allow mouse hover also for points which are not movable
         if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.MouseButton.LeftButton):
             self.setMouseHover(True)
         else:
             self.setMouseHover(False)
 
+
+    @override
+    def setPos (self,*args):
+        # overridden as change detection of TargetItem is too sensible for numerical issues
+        try:
+            newPos = pg.Point(*args)
+        except: 
+            raise TypeError(f"Could not make Point from arguments: {args!r}")
+
+        if (round(self._pos.x(), 6) !=  round(newPos.x(), 6) or
+            round(self._pos.y(), 6) !=  round(newPos.y(), 6)): 
+            # print ("not equal", self._pos, newPos, self._pos.x()+self._pos.y(), newPos.x()+newPos.y())
+            super().setPos(*args)
+ 
 
     @override
     def setMouseHover (self, hover: bool):
@@ -551,6 +565,8 @@ class Artist(QObject):
 
         All ViewBox settings are made 'outside' of an Artist
 
+        On init the artist doesn't plot data. It has to be 'plot' or 'refresh' 
+
     """
 
     name = "Abstract Artist" 
@@ -590,7 +606,7 @@ class Artist(QObject):
         self._plots = []                    # plots (PlotDataItem) made up to now 
         self._plot_symbols = []             # plot symbol for each plot 
 
-        self.plot ()
+        # do not 'plot' on init 
 
 
     @override
