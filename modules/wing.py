@@ -771,7 +771,7 @@ class Norm_Chord_Abstract:
 
     def polyline (self) -> Polyline:
         """ 
-        Normalized poyline of chord along xn
+        Normalized polyline of chord along xn
             At root it is: cn [0] = 1.0 and cnn[0] = 0.0
 
         Returns:
@@ -843,7 +843,7 @@ class Norm_Chord_Bezier (Norm_Chord_Abstract):
 
     def polyline (self) -> Polyline:
         """ 
-        Normalized poyline of chord along xn
+        Normalized polyline of chord along xn
             At root it is: cn [0] = 1.0 and cnn[0] = 0.0
 
         Returns:
@@ -893,7 +893,7 @@ class Norm_Planform:
 
         py[0]   = fromDict (dataDict, "p0y", 0.7)               # root value
         px[1]   = fromDict (dataDict, "p1x", 0.5)               # point in the middle  
-        py[1]   = fromDict (dataDict, "p1y", 0.75)
+        py[1]   = fromDict (dataDict, "p1y", 0.70)
         py[2]   = fromDict (dataDict, "p2y", 0.8)               # tip value
 
         self._ref_bezier = Bezier (px, py)
@@ -941,7 +941,7 @@ class Norm_Planform:
 
     def le_te_polyline (self) -> Polylines:
         """ 
-        Normalized poylines of leading and trailing edge
+        Normalized polylines of leading and trailing edge
             At root it is: le_yn [0] = 1.0 and te_yn[0] = 0.0
 
         Returns:
@@ -972,7 +972,7 @@ class Norm_Planform:
 
     def ref_polyline (self) -> Polyline:
         """ 
-        Normalized poylines of the reference function
+        Normalized polylines of the reference function
             which is just a horizontal line at y = 1 - rn [0]
 
         Returns:
@@ -988,6 +988,19 @@ class Norm_Planform:
         return xn, yn
 
 
+    def box_polygon (self) -> Polyline:
+        """ 
+        rectangle polygon x=0..1, y=0..1
+
+        Returns:
+            xn: normalized x coordinates
+            yn: normalized y coordinates 
+        """
+
+        xn = np.array([0.0, 0.0, 1.0, 1.0, 0.0])
+        yn = np.array([0.0, 1.0, 1.0, 0.0, 0.0])
+
+        return xn, yn
 
 
 #-------------------------------------------------------------------------------
@@ -1041,6 +1054,13 @@ class Planform2:
         """ sweep angle of reference line in degrees"""
         return self._sweep_angle
 
+    def set_sweep_agnle (self, aVal : float):
+        """ set sweep angle of reference line to aVal degrees"""
+
+        aVal = max (-75.0, aVal)
+        aVal = min ( 75.0, aVal)
+        self._sweep_angle = aVal 
+
 
     def _to_wing (self, xn : float|Array, yn : float|Array) -> ...:
         """
@@ -1078,7 +1098,7 @@ class Planform2:
 
     def le_te_polyline (self) -> Polylines:
         """ 
-        Poylines of leading and trailing edge
+        polylines of leading and trailing edge
             At root it is: le_y [0] = chord_root and te_y[0] = 0.0
             At tip it is:  le_x [-1] = te_x[-1] = span 
 
@@ -1094,7 +1114,32 @@ class Planform2:
         x, te_y = self._to_wing (xn, te_yn)
 
         return x, le_y, te_y 
-    
+
+
+    def box_polygon (self) -> Polyline:
+        """ 
+        Rectangle (trapezoid with sweep) chord * root
+        """
+
+        xn, yn = self._norm_planform.box_polygon ()
+        x, y = self._to_wing (xn, yn)
+        return x, y
+
+
+    def ref_polyline (self) -> Polyline:
+        """ 
+        Line of the reference function
+            which is just a horizontal line at yn = 1 - rn [0]
+
+        Returns:
+            xn: normalized x coordinates
+            yn: normalized y coordinates 
+        """
+
+        xn, yn = self._norm_planform.ref_polyline ()
+        x, y = self._to_wing (xn, yn)
+        return x, y
+
 
 
 #-------------------------------------------------------------------------------

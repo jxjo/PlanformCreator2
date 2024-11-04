@@ -7,7 +7,8 @@ from pathlib import Path
 import numpy as np
 
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore
+from pyqtgraph.Qt               import QtCore
+from PyQt6.QtGui                import QColor
 
 sys.path.append(Path(__file__).parent)
 sys.path.insert (1,os.path.join('..' , 'AirfoilEditor_subtree/modules'))
@@ -48,14 +49,29 @@ pi1.plot (xn,cn)
 
 # reference bezier  
 
-pi2  = l.addPlot(title="chord reference ")
+pi2 = l.addPlot(title="chord reference ")
 pi2.getViewBox().setRange (xRange=( 0,1), yRange=( 0,1), padding=0.1)
 pi2.getAxis ('left').setWidth (30)
 
 norm_planform = Norm_Planform(norm_chord)
 rxn, rn = norm_planform.rn_polyline()
 
-pi2.plot (rxn,rn, pen='green') 
+le_x    = [0.0, 1.0]
+le_y    = [0.0, 0.0]
+
+te_x    = [0.0, 1.0]
+te_y    = [1.0, 1.0]
+
+ref_item = pi2.plot (rxn,rn, pen=pg.mkPen(color='springgreen', width=1.5)) 
+le_item  = pi2.plot (le_x,le_y, pen='red', antialias=False) 
+te_item = pi2.plot (te_x,te_y, pen='yellow', antialias=False) 
+
+# fill area between ref and le, te 
+brush = pg.mkBrush (QColor('red').darker(800))
+pi2.addItem (pg.FillBetweenItem (ref_item, le_item, brush=brush ))
+
+brush = pg.mkBrush (QColor('yellow').darker(800))
+pi2.addItem (pg.FillBetweenItem (ref_item, te_item, brush=brush ))
 
 
 # --- planform reference applied  
@@ -71,10 +87,24 @@ xn, le_yn, te_yn = norm_planform.le_te_polyline()
 # ref line
 r_xn, r_yn = norm_planform.ref_polyline()
 
+# box
+box_xn, box_yn = norm_planform.box_polygon ()
 
-pi3.plot (r_xn,r_yn, pen='green') 
-pi3.plot (xn,le_yn, pen='red') 
-pi3.plot (xn,te_yn, pen='yellow') 
+
+ref_item = pi3.plot (r_xn,r_yn, pen='springgreen') 
+le_item  = pi3.plot (xn,le_yn, pen='red') 
+te_item  = pi3.plot (xn,te_yn, pen='yellow') 
+pi3.plot (box_xn, box_yn, pen='blue')
+
+# fill area between ref and le, te 
+brush = pg.mkBrush (QColor('red').darker(800))
+pi3.addItem (pg.FillBetweenItem (ref_item, le_item, brush=brush ))
+
+brush = pg.mkBrush (QColor('yellow').darker(800))
+pi3.addItem (pg.FillBetweenItem (ref_item, te_item, brush=brush ))
+
+
+
 
 # -------------------------------------------------------------------
 
@@ -94,30 +124,13 @@ pi4.getViewBox().setAspectLocked()
 planform = Planform2 (norm_planform, chord_root=200, span=800, sweep_angle=0)
 
 x, le_y, te_y = planform.le_te_polyline ()
-# scale 
-chord = 200
-span  = 800
+box_x, box_y  = planform.box_polygon ()
+ref_x, ref_y  = planform.ref_polyline ()
 
-x     = xn    * span
-y_le  = le_yn * chord
-y_te  = te_yn * chord
-ref_x = r_xn  * span
-ref_y = r_yn  * chord
-
-# flip and move
-flip_y = -1
-move_y = y_le[0]
-y_le  = y_le  * flip_y + move_y
-y_te  = y_te  * flip_y + move_y
-ref_y = ref_y * flip_y + move_y
-
-# bounding box 
-box_x = np.array([0.0, 0.0,   span,  span, 0.0])
-box_y = np.array([0.0, chord, chord, 0.0,  0.0])
 
 pi4.plot(x , le_y, pen='red')
 pi4.plot(x , te_y, pen='yellow')
-pi4.plot(ref_x, ref_y, pen='green')
+pi4.plot(ref_x, ref_y, pen='springgreen')
 pi4.plot(box_x, box_y, pen='blue')
 
 
@@ -131,20 +144,15 @@ pi6.getViewBox().invertY(True)
 # pi6.getViewBox().setRange (xRange=( 0,900), padding=0.1)
 pi6.getAxis ('left').setWidth (30)
 
-# do shear 
+planform.set_sweep_agnle (10)
 
-shear_factor =  1 / np.tan((90-angle) * np.pi / 180)    #cotangens
+x, le_y, te_y = planform.le_te_polyline ()
+box_x, box_y  = planform.box_polygon ()
+ref_x, ref_y  = planform.ref_polyline ()
 
-y_le  = y_le    + x * shear_factor  
-y_te  = y_te    + x * shear_factor
-ref_y = ref_y   + ref_x * shear_factor
-box_y = box_y   + box_x * shear_factor
-
-# calc sweep angle at 25%
-
-pi6.plot(x , y_le, pen='red')
-pi6.plot(x , y_te, pen='yellow')
-pi6.plot(ref_x, ref_y, pen='green')
+pi6.plot(x , le_y, pen='red')
+pi6.plot(x , te_y, pen='yellow')
+pi6.plot(ref_x, ref_y, pen='springgreen')
 pi6.plot(box_x, box_y, pen='blue')
 
 
