@@ -98,6 +98,13 @@ class Icon (QIcon):
     FIT        = "fit" 
     RESETVIEW  = "resetView" 
 
+    # for messageBox 
+    SUCCESS    = "success.png" 
+    WARNING    = "warning.png" 
+    INFO       = "info.png" 
+    ERROR      = "error.png" 
+
+
     cache = {}
 
     subdirs = ["icons", "..\\icons", ".."]

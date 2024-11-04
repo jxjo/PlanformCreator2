@@ -193,7 +193,7 @@ class Dxf_Artist:
 
     def plot_hingeLine (self):
 
-        y, hl = self.wing.planform.hingeLine()
+        y, hl = self.wing.flaps.hinge_polyline()
         # mirror the lines along span so that root-te will be at 0,0 
         hl = self._line_mirror (hl)
         # insert into dxf doc

@@ -67,10 +67,6 @@ class Panel_File (Panel_Planform_Abstract):
 
     name = 'File'
     
-    def _on_airfoil_widget_changed (self, *_ ):
-        """ user changed data in widget"""
-        # overloaded - do not react on self widget changes 
-        pass
 
     
     def _init_layout (self): 
@@ -80,8 +76,16 @@ class Panel_File (Panel_Planform_Abstract):
         Button (l,r,c, text="&Open", width=100, 
                 set=self.myApp.open, toolTip="Open new Planform",
                 button_style=button_style.PRIMARY)
+        Button (l,r,c+1, text="&New", width=60, 
+                set=self.myApp.new, toolTip="Create new Planform")
+        
         r += 1
         SpaceR (l,r, height=2, stretch=0)
+        r += 1
+        Button (l,r,c, text="&Save", width=100, 
+                set=self.myApp.save, toolTip="Save Planform to parameter file")
+        Button (l,r,c+1, text="Save As", width=60, 
+                set=self.myApp.saveAs, toolTip="Save Planform to new parameter file")
         r += 1
         SpaceR (l,r, stretch=4)
         r += 1

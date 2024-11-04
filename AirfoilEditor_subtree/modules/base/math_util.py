@@ -20,8 +20,7 @@ logger.setLevel(logging.WARNING)
     # from timeit import default_timer as timer
     # start = timer()
     # ...
-    # end = timer()
-    # print("Time ", end - start)  
+    # print("Time ", timer() - start)  
 
 
 
@@ -37,7 +36,9 @@ class JPoint:
     """
 
     def __init__ (self, a, b = None, 
-                  x_limits : tuple|None = None, y_limits : tuple|None = None ):
+                  x_limits : tuple|None = None, 
+                  y_limits : tuple|None = None ,
+                  name : str|None = None):
         """ 
         Create new point. The arguments a,b can be 
             - x, y cordinates 
@@ -51,6 +52,7 @@ class JPoint:
         self._y = None
         self._y_limits = y_limits 
 
+        self._name = name 
         self._fixed = False
 
         self.set_xy (a, b)
@@ -83,6 +85,11 @@ class JPoint:
     def y_limits (self) -> tuple:
         return self._y_limits
 
+    @property
+    def name (self):
+        return self._name 
+    def set_name (self, aStr: str):
+        self._name = aStr
 
     def label_changed (self, xy_initial : tuple) -> str:
         """ returns a short label 7.4@30.6 for y,x changed values as percent""" 

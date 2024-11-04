@@ -118,9 +118,8 @@ class Airfoil:
             else:
                 checkPath = os.path.join (self.workingDir, pathFileName)
             if not os.path.isfile(checkPath):
-
-                logging.error ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
                 self._name = "-- Error --"
+                raise ValueError ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
             else:
                 self.pathFileName = pathFileName
                 self._name = os.path.splitext(os.path.basename(self.pathFileName))[0]  # load will get the real name
@@ -264,13 +263,14 @@ class Airfoil:
         """ name of airfoil - when it is modified including modifications description"""
         return self._name 
         
-    def set_name (self, newName):
-        """  Set name of the airfoil 
-        Note:  This will not rename an existing airfoil (file). Use rename instead...
+    def set_name (self, newName, reset_original=False):
+        """  Set name of the airfoil. 'reset_original' will also overwrite original filename  
+        Note:  This will not rename an existing airfoil (file)...
         """
-        if not self._name_org: 
-            self._name_org = self.name
         self._name = newName
+
+        if not self._name_org or reset_original: 
+            self._name_org = self.name
 
         self.set_isModified (True)
 

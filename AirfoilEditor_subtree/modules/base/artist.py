@@ -116,7 +116,13 @@ class Movable_Point (pg.TargetItem):
 
         movable = movable and (not self._jpoint.fixed)
 
-        self.name = name if name is not None else self.name
+        if self._jpoint.name is not None:
+            self.name = self._jpoint.name                               # jpooint has precedence 
+        elif name is not None:
+            self.name = name                                            # take argument
+        else:
+            pass                                                        # take class name 
+
         self._id = id
         self._callback_changed = on_changed if callable(on_changed) else None 
 
@@ -134,8 +140,11 @@ class Movable_Point (pg.TargetItem):
         if movable:
             symbol = self._symbol_movable
             size = size if size is not None else 9 
+
+            brush_color = QColor(color) if color else qcolors.EDITABLE
+            brush_color = QColor(brush_color.darker(200))
+
             color = movable_color if movable_color is not None else qcolors.EDITABLE
-            brush = QColor(color)
             hoverBrush = qcolors.HOVER
 
             pen = pg.mkPen (color, width=1) 
@@ -147,17 +156,17 @@ class Movable_Point (pg.TargetItem):
             symbol = self._symbol_fixed
             size = size if size is not None else 9 
 
-            penColor = QColor (color).darker (150)
+            penColor = QColor (color).darker (120)
 
             pen = pg.mkPen (penColor, width=1)
-            brush = QColor (penColor) # QColor (color)
+            brush_color = QColor (penColor) # QColor (color)
 
             hoverPen = pg.mkPen (color, width=1) 
             hoverBrush = QColor(color)
 
         # init TargetItem  
 
-        super().__init__(pos=self._jpoint.xy, pen= pen, brush = brush, 
+        super().__init__(pos=self._jpoint.xy, pen= pen, brush = brush_color, 
                          hoverPen = hoverPen, hoverBrush = hoverBrush,
                          symbol=symbol, size=size, movable=movable,
                          label = self._get_label_static, 
@@ -265,6 +274,20 @@ class Movable_Point (pg.TargetItem):
 
     # TargetItem overloaded ---------------------------
 
+    @override
+    def setPos (self,*args):
+        # overridden as change detection of TargetItem is too sensible for numerical issues
+        try:
+            newPos = pg.Point(*args)
+        except: 
+            raise TypeError(f"Could not make Point from arguments: {args!r}")
+
+        if (round(self._pos.x(), 6) !=  round(newPos.x(), 6) or
+            round(self._pos.y(), 6) !=  round(newPos.y(), 6)): 
+            # print ("not equal", self._pos, newPos, self._pos.x()+self._pos.y(), newPos.x()+newPos.y())
+            super().setPos(*args)
+
+
     def setPos_silent (self, *args): 
         """ same as superclass targetItem.setPos but doesn't signal sigPositionChanged """
 
@@ -274,7 +297,8 @@ class Movable_Point (pg.TargetItem):
 
         # used for high speed refresh 
         newPos = pg.Point(xy)
-        if self._pos != newPos:
+        if (round(self._pos.x(), 6) !=  round(newPos.x(), 6) or
+            round(self._pos.y(), 6) !=  round(newPos.y(), 6)): 
             self._pos = newPos
             GraphicsObject.setPos(self, self._pos)            # call grand pa to avoid signal 
 
@@ -311,19 +335,6 @@ class Movable_Point (pg.TargetItem):
         else:
             self.setMouseHover(False)
 
-
-    @override
-    def setPos (self,*args):
-        # overridden as change detection of TargetItem is too sensible for numerical issues
-        try:
-            newPos = pg.Point(*args)
-        except: 
-            raise TypeError(f"Could not make Point from arguments: {args!r}")
-
-        if (round(self._pos.x(), 6) !=  round(newPos.x(), 6) or
-            round(self._pos.y(), 6) !=  round(newPos.y(), 6)): 
-            # print ("not equal", self._pos, newPos, self._pos.x()+self._pos.y(), newPos.x()+newPos.y())
-            super().setPos(*args)
  
 
     @override
@@ -385,8 +396,8 @@ class Movable_Bezier (pg.PlotCurveItem):
     pg.PlotCurveItem/UIGraphicsItem which represents 
     a Bezier curve which can be changed by the controlpoints
     
-    Points are implemented with Moveable_Points
-    A Moveable_Point can also be fixed ( movable=False).
+    Points are implemented with Movable_Points
+    A Movable_Point can also be fixed ( movable=False).
     See pg.TargetItem for all arguments 
 
     Callback 'on_changed' will return the (new) list of 'points'

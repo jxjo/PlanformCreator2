@@ -27,10 +27,10 @@ sys.path.insert (1,os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree/m
 sys.path.insert (1,os.path.join(Path(__file__).parent , 'modules'))
 
 from wing                   import Wing
-from wing                   import Planform, Planform_DXF, Planform_Trapezoidal, Planform_Bezier         
+from wing                   import Planform, Planform_Trapezoidal, Planform_Bezier         
 
 from base.common_utils      import * 
-from base.panels            import Container_Panel
+from base.panels            import Container_Panel, MessageBox
 from base.widgets           import *
 
 # from AirfoilEditor_subtree  import AirfoilEditor
@@ -84,23 +84,20 @@ class Tab_Panel (QTabWidget):
         font.setWeight (QFont.Weight.Medium) #Medium #DemiBold #ExtraLight
         self.setFont(font)
 
-        self.setStyleSheet('''QTabWidget::tab-bar {alignment: center};
+        # see https://doc.qt.io/qt-6/stylesheet-examples.html
+        self.setStyleSheet('''QTabWidget::pane {border-top: 2px solid #A0A0A0}
+                              QTabWidget::tab-bar {alignment: center}
                            ''')
-        # tab_bar = self.tabBar()  # QTabBar
-        # tab_bar.setStyleSheet ('''tab-bar {alignment: center}''')
-        # self.setStyleSheet('''Tab_Panel::tab-bar {alignment: center};
-        #                       QTabWidget::pane {border-top: 4px solid #A0A0A0};
-        #                    ''')
+        
 
-        # self.setStyleSheet('''QTabWidget::pane {border-top: 4px solid #A0A0A0};
-        #                       QTabWidget::tab-bar {alignment: center}
-        #                    ''')
-        # self.setStyleSheet("QTabWidget::pane    {border-top: 4px }")
-        #                                   background: yellow;
-        #                                   tab-bar {alignment: center}''')
-        # self.setStyleSheet("QTabWidget::pane    {border: 0 }")
-        # self.setStyleSheet('''QTabWidget ::tab-bar {alignment: center}''')
-
+        """
+                              QTabWidget::pane {border-top: 4px solid #A0A0A0}
+                              QTabBar::tab {border: 1px solid #A0A0A0;
+                                            border-top-left-radius: 4px;
+                                            border-top-right-radius: 4px;
+                                            min-width: 50ex;
+                                            padding: 3px}
+        """
 
 
     def __repr__(self) -> str:
@@ -181,8 +178,8 @@ class App_Main (QMainWindow):
         self._diag_planform = Diagram_Planform (self, self.wing, self.cur_wingSection)
         self._diagrams.addTab (self._diag_planform, "Planform")
 
-        self._diag_pairfoils = Diagram_Airfoils (self, self.wing)
-        self._diagrams.addTab (self._diag_pairfoils, "Airfoils")
+        self._diag_airfoils = Diagram_Airfoils (self, self.wing)
+        self._diagrams.addTab (self._diag_airfoils, "Airfoils")
 
         l_main = self._init_layout() 
 
@@ -202,10 +199,11 @@ class App_Main (QMainWindow):
 
         # connect signals to slots of diagram
 
-        self.sig_wing_new.connect        (self._diag_planform.on_wing_new)
         self.sig_cur_wingSection.connect (self._diag_planform.on_cur_wingSection_changed)
 
+        self.sig_wing_new.connect        (self._diag_planform.on_wing_new)
         self.sig_wing_new.connect        (self._diag_wing.on_wing_new)
+        self.sig_wing_new.connect        (self._diag_airfoils.on_wing_new)
 
 
     def __repr__(self) -> str:
@@ -335,23 +333,20 @@ You can view the properties of an airfoil like thickness distribution or camber,
 
         self._save_settings ()
 
-
         # save changes? 
         if self.wing().hasChanged(): 
 
-            message = "There are unsaved changes.\n\n" + \
-                       "Do you want to save before exit?"
-            # mb = Messagebox (self, title="Close "+ AppName, message=message, icon="warning", 
-            #                option_1="Yes", option_2="No", option_3="Cancel")
-            response = "Yes"
+            message = "The planform has been modified..\n\n" + \
+                      "Do you want to save before exit?"
+            button = MessageBox.save(self, "Close "+ AppName, message)
 
-            if response == "Yes":
+            if button == QMessageBox.StandardButton.Save:
                 self.save()
                 event.accept()
-            elif response == "No":
+            elif button == QMessageBox.StandardButton.Discard:
                 event.accept()
             else:
-                pass
+                event.ignore()
         else:
             event.accept()
 
@@ -365,11 +360,8 @@ You can view the properties of an airfoil like thickness distribution or camber,
     def new (self):
         """ reset - and start with example definition"""
 
-        text = "The current wing '%s' will be discarded." % self.wing().name
-        # msg  = Messagebox(self, title="Create new wing", message=text,
-        #           icon="warning", option_2="Cancel", option_1="Ok")            
-        # if msg.get() == "Ok":
-        #     self.load_wing ("")               # will create default wing
+        # text = "The current wing '%s' will be discarded." % self.wing().name
+        self.load_wing ("")                                                     # will create default wing
 
 
     def open (self):
@@ -388,15 +380,13 @@ You can view the properties of an airfoil like thickness distribution or camber,
     def save (self):
         """ save wing data to the action parameter file - if new wing to saveAs"""
 
+
         if self.paramFile:
-            saveOk = self.wing().save(self.paramFile)
-            # if saveOk:
-            #     text = "Wing successfully saved ...    " 
-            #     Messagebox(self, title="Save wing", message=text, icon="check", option_1="Ok", width=300, height=150)  
-            #     Settings().set('lastOpenend', self.paramFile)
-            # else:
-            #     text = "Paramteres couldn't be saved to '%s'" % self.paramFile
-            #     Messagebox(self, title="Save wing", message=text, icon="cancel", option_1="Close", width=300, height=150)  
+            ok = self.wing().save(self.paramFile)
+            if ok:
+                MessageBox.success (self,"Save", f"Parameters saved to:\n\n{self.paramFile}")
+            else:
+                MessageBox.error   (self,"Save", f"Parameters couldn't be saved to:\n\n{self.paramFile}")
         else:
             self.saveAs ()
 
@@ -404,21 +394,18 @@ You can view the properties of an airfoil like thickness distribution or camber,
     def saveAs (self):
         """ save wing data to a new file and set this as actual"""
 
-        filetypes  = [('PC2 files', '*.pc2')]
-        # newPathFilename = filedialog.asksaveasfilename(title='Save parameter file',
-        #                              initialdir=self.workingDir, filetypes=filetypes,
-        #                              defaultextension = '.pc2')
-        # if newPathFilename: 
-        #     saveOk =  self.wing().save(newPathFilename)
-        #     if saveOk: 
-        #         self.paramFile = os.path.normpath(newPathFilename)
-        #         self.set_title ()
-        #         text = "Wing saved to \n\n'%s'" % newPathFilename
-        #         Messagebox(self, title="Save wing", message=text, icon="check", option_1="Ok")  
-        #         Settings().set('lastOpenend', self.paramFile)
-        #     else: 
-        #         text = "Wing couldn't be saved to '%s'" % newPathFilename
-        #         Messagebox(self, title="Save wing", message=text, icon="cancel", option_1="Ok")  
+        filters  = "PlanformCreator2 files (*.pc2)"
+        newPathFilename, _ = QFileDialog.getSaveFileName(self, filter=filters)
+
+        if newPathFilename: 
+            saveOk =  self.wing().save(newPathFilename)
+            if saveOk: 
+                self.paramFile = os.path.normpath(newPathFilename)
+                self.set_title ()
+                MessageBox.success (self,"Save", f"Parameters saved to:\n\n{newPathFilename}")
+                Settings().set('lastOpenend', self.paramFile)
+            else: 
+                MessageBox.error   (self,"Save", f"Parameters couldn't be saved to:\n\n{newPathFilename}")
 
 
     def edit_settings (self):

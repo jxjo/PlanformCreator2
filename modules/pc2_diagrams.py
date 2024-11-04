@@ -269,7 +269,7 @@ class Item_Wing (Diagram_Item):
     def __init__(self, *args,  **kwargs):
 
         self._show_ref_line     = True                          # show reference line 
-        self._show_wingSections = True
+        self._show_wingSections = False
         self._show_flaps        = True
         self._artists           = []
 
@@ -306,20 +306,13 @@ class Item_Wing (Diagram_Item):
         """ define view range of this plotItem"""
 
         self.viewBox.setDefaultPadding(0.02)
-
-        self.viewBox.autoRange ()                                         # first ensure best range x,y 
-        #a=self.viewBox.viewRange()
-        # self.viewBox.setXRange( 0,a[0][1]*1.02, padding=0.02)           # then set x-Range
-
         self.viewBox.setAspectLocked()
-
         self.viewBox.invertY(True)
-        self.showGrid(x=True, y=True)
+        self.viewBox.enableAutoRange()
 
+        self.showGrid(x=False, y=False)
         self.showAxis('left', show=False)
         self.showAxis('bottom', show=True)
-
-        self.viewBox.enableAutoRange(axis=pg.ViewBox.XAxis, enable=True)
 
 
     @override
@@ -413,10 +406,7 @@ class Item_Wing_Airfoils (Diagram_Item):
 
     def __init__(self, *args,  **kwargs):
 
-        self._artists    = []
-        self._real_size  = False
-        self._show_strak = False
-
+        self.airfoil_artist : Airfoil_Artist = None
         super().__init__(*args, **kwargs)
 
 
@@ -428,11 +418,7 @@ class Item_Wing_Airfoils (Diagram_Item):
     def setup_artists (self):
         """ create and setup the artists of self"""
 
-        self._artists = []
-
-        self._artists.append( 
-            Airfoils_Artist         (self, self.wing, show_mouse_helper=False, 
-                                     show_legend=True))
+        self.airfoil_artist = Airfoil_Artist (self, self.wing, show_legend=True, real_size=True, mini_mode=True)
 
 
     @override
@@ -440,48 +426,19 @@ class Item_Wing_Airfoils (Diagram_Item):
         """ define view range of this plotItem"""
 
         self.viewBox.setDefaultPadding(0.02)
-        self.viewBox.autoRange ()                                         # first ensure best range x,y 
         self.viewBox.setAspectLocked()
+        self.viewBox.enableAutoRange()
 
         self.showGrid(x=False, y=False)
         self.showAxis('left', show=False)
-        self.showAxis('bottom', show=False)
-
-        self.viewBox.enableAutoRange(axis=pg.ViewBox.XAxis, enable=True)
+        self.showAxis('bottom', show=True)
 
 
     @override
     def refresh_artists (self):
         """ refresh my artists"""
 
-        artist : Artist
-        for artist in self._artists:
-            artist.refresh()
-
-
-    @property
-    def show_real_size (self) -> bool: 
-        """ show airfoils in real size """
-        return self._real_size
-    
-    def set_show_real_size (self, aBool : bool): 
-        self._show_real_size = aBool == True
-        for artist in self._artists:
-            if isinstance (artist, Airfoils_Artist):
-                artist.set_real_size (aBool)
-                artist.refresh()
- 
-    @property
-    def show_strak (self) -> bool: 
-        """ show also straked airfoils"""
-        return self._show_strak
-    
-    def set_show_strak (self, aBool : bool): 
-        self._show_strak = aBool == True
-        for artist in self._artists:
-            if isinstance (artist, Airfoils_Artist):
-                artist.set_show_strak (aBool)
-                artist.refresh()
+        self.airfoil_artist.refresh()
 
 
     @property
@@ -493,12 +450,12 @@ class Item_Wing_Airfoils (Diagram_Item):
             r,c = 0, 0 
             r += 1
             CheckBox (l,r,c, text="Real size", 
-                        get=lambda: self.show_real_size,
-                        set=self.set_show_real_size) 
+                        get=lambda: self.airfoil_artist.real_size,
+                        set=self.airfoil_artist.set_real_size) 
             r += 1
             CheckBox (l,r,c, text="Straked Airfoils", 
-                        get=lambda: self.show_strak,
-                        set=self.set_show_strak) 
+                        get=lambda: self.airfoil_artist.show_strak,
+                        set=self.airfoil_artist.set_show_strak) 
             r += 1
             l.setColumnStretch (3,2)
             l.setRowStretch    (r,2)
@@ -518,13 +475,11 @@ class Item_Airfoils (Diagram_Item):
     Diagram (Plot) Item for airfoils of a planform
     """
 
-    name = "Wing Diagram"                                   # used for link and section header 
+    name = "Airfoils"                                   
 
     def __init__(self, *args,  **kwargs):
 
-        self._show_wingSections = True
-        self._artists           = []
-
+        self.airfoil_artist : Airfoil_Artist = None
         super().__init__(*args, **kwargs)
 
 
@@ -536,11 +491,7 @@ class Item_Airfoils (Diagram_Item):
     def setup_artists (self):
         """ create and setup the artists of self"""
 
-        self._artists = []
-
-        self._artists.append( 
-            Airfoils_Artist         (self, self.wing, show_mouse_helper=False, 
-                                     show_legend=True))
+        self.airfoil_artist = Airfoil_Artist (self, self.wing, show_legend=True)
 
 
     @override
@@ -548,59 +499,46 @@ class Item_Airfoils (Diagram_Item):
         """ define view range of this plotItem"""
 
         self.viewBox.setDefaultPadding(0.02)
-
         self.viewBox.autoRange ()                                         # first ensure best range x,y 
-        #a=self.viewBox.viewRange()
-        # self.viewBox.setXRange( 0,a[0][1]*1.02, padding=0.02)           # then set x-Range
-
         self.viewBox.setAspectLocked()
+        self.viewBox.enableAutoRange(axis=pg.ViewBox.XAxis, enable=True)
 
         self.showGrid(x=True, y=True)
-
-        self.viewBox.enableAutoRange(axis=pg.ViewBox.XAxis, enable=True)
 
 
     @override
     def refresh_artists (self):
         """ refresh my artists"""
 
-        artist : Artist
-        for artist in self._artists:
-            artist.refresh()
-
-
-    # @property
-    # def show_wingSections (self) -> bool: 
-    #     """ show wing sections in diagrams """
-    #     return self._show_wingSections
-    
-    # def set_show_wingSections (self, aBool : bool): 
-    #     self._show_wingSections = aBool == True
-    #     for artist in self._artists:
-    #         if isinstance (artist, WingSections_Artist):
-    #             artist.set_show (aBool)
- 
+        self.airfoil_artist.refresh()
 
 
     @property
     def section_panel (self) -> Edit_Panel:
         """ return section panel within view panel"""
 
-        # if self._section_panel is None:    
-        #     l = QGridLayout()
-        #     r,c = 0, 0 
-        #     r += 1
-        #     CheckBox (l,r,c, text="Reference Line", 
-        #                 get=lambda: self.show_ref_line,
-        #                 set=self.set_show_ref_line) 
-        #     r += 1
-        #     l.setColumnStretch (3,2)
-        #     l.setRowStretch    (r,2)
+        if self._section_panel is None:    
+            l = QGridLayout()
+            r,c = 0, 0 
+            r += 1
+            CheckBox (l,r,c, text="Real size", 
+                        get=lambda: self.airfoil_artist.real_size,
+                        set=self.airfoil_artist.set_real_size) 
+            r += 1
+            CheckBox (l,r,c, text="Straked Airfoils", 
+                        get=lambda: self.airfoil_artist.show_strak,
+                        set=self.airfoil_artist.set_show_strak) 
+            r += 1
+            CheckBox (l,r,c, text="Thickness", 
+                        get=lambda: self.airfoil_artist.show_thick,
+                        set=self.airfoil_artist.set_show_thick) 
+            r += 1
+            l.setColumnStretch (3,2)
+            l.setRowStretch    (r,2)
 
-        #     self._section_panel = Edit_Panel (title=self.name, layout=l, height=None, 
-        #                                       switchable=True, hide_switched=True, 
-        #                                       on_switched=self.setVisible)
-
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height=None, 
+                                              switchable=True, hide_switched=False, 
+                                              on_switched=self.setVisible)
         return self._section_panel 
 
 
