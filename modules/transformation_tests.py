@@ -4,17 +4,16 @@
 import os
 import sys
 from pathlib import Path
-import numpy as np
 
 import pyqtgraph as pg
-from pyqtgraph.Qt               import QtCore
 from PyQt6.QtGui                import QColor
 
 sys.path.append(Path(__file__).parent)
 sys.path.insert (1,os.path.join('..' , 'AirfoilEditor_subtree/modules'))
-# sys.path.insert (1,os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree/modules'))
 from base.spline    import Bezier
 from wing           import Norm_Chord_Bezier, Norm_Planform, Planform2
+
+
 
 app = pg.mkQApp("Plotting Example")
 win  = pg.GraphicsLayoutWidget(show=True, title="Basic plotting examples")
@@ -102,6 +101,21 @@ pi3.addItem (pg.FillBetweenItem (ref_item, le_item, brush=brush ))
 
 brush = pg.mkBrush (QColor('yellow').darker(800))
 pi3.addItem (pg.FillBetweenItem (ref_item, te_item, brush=brush ))
+
+# wing sections
+sections = norm_planform.wingSections
+for section in sections:
+
+    cn = section.cn 
+    xn = [section.xn, section.xn]
+    yn = [0.0, cn]
+    pi1.plot (xn, yn, pen='deeppink')
+
+
+    le_yn, te_yn = section.le_te ()
+    xn = [section.xn, section.xn]
+    yn = [le_yn, te_yn]
+    pi3.plot (xn, yn, pen='deeppink')
 
 
 
