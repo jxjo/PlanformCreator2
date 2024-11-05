@@ -13,6 +13,7 @@ from base.common_utils          import *
 from base.spline                import Bezier
 
 from wing                       import Wing, Planform, Reference_Line, Planform_Bezier 
+from wing                       import Planform_2
 from wing                       import WingSections, WingSection
 from wing                       import Flaps, Flap
 from model.airfoil              import Airfoil, GEO_BASIC
@@ -29,6 +30,9 @@ logger.setLevel(logging.DEBUG)
 
 
 COLOR_PLANFORM = QColor ('whitesmoke')
+COLOR_LE       = QColor ('whitesmoke')
+COLOR_TE       = QColor ('lightpink')
+
 COLOR_CHORD    = QColor ('paleturquoise')
 COLOR_REF_LINE = QColor ('springgreen')
 COLOR_BANANA   = QColor ('khaki')
@@ -110,6 +114,436 @@ class Abstract_Wing_Artist (Artist):
 
 
 # -------- concrete sub classes ------------------------
+
+
+class Planform_Artist_2 (Artist):
+    """Plot the planform contour  """
+
+    sig_planform_changed     = pyqtSignal()                 # planform data changed 
+
+    def __init__ (self, *args, show_ref_line=False, **kwargs):
+
+        self._show_ref_line = show_ref_line             # show reference line 
+
+        super().__init__ (*args, **kwargs)
+
+    @property
+    def planform (self) -> Planform_2: return self.data_object
+
+    @property
+    def show_ref_line (self) -> bool:
+        """ show ref line in planform """
+        return self._show_ref_line
+    
+    def set_show_ref_line (self, aBool: bool):
+        """ set show ref line"""
+        self._show_ref_line = aBool == True
+        self.refresh()
+
+    @property
+    def wing_mode (self) -> bool:
+        """ does artist plot half of a complete wing"""
+        return False # self._wing_half is not None
+
+
+    def _plot (self): 
+    
+        if self.wing_mode:
+            if self._wing_half == self.RIGHT:
+                self._plot_title (self.wing.name, subTitle="created by Jochen",  offset=(-80,0) )
+        else:
+            self._plot_title ("Planform", subTitle="self.planform.style",  offset=(-20,-30) )
+
+        # plot planform le and te 
+
+        x, le_y, te_y = self.planform.le_te_polyline ()
+
+        color = COLOR_PLANFORM
+        pen   = pg.mkPen(color, width=2)
+        self._plot_dataItem  (x, le_y, name=f"{self.planform}", pen = pen, antialias = True, zValue=2)
+
+        pen   = pg.mkPen(COLOR_TE, width=2)
+        self._plot_dataItem  (x, te_y, name=f"{self.planform}", pen = pen, antialias = True, zValue=2)
+
+
+        # two little markers to identify straight tip 
+
+        le_y, te_y = self.planform.le_te_at (self.planform.span)
+        x          = self.planform.span
+        color_marker = QColor(COLOR_PLANFORM).darker(150)
+        self._plot_point (x,le_y,symbol="_", color=color_marker, size=7)
+        self._plot_point (x,te_y,symbol="_", color=color_marker, size=7)
+
+        # movable root chord and tip  
+
+        if self.show_mouse_helper:
+            pt = self.Movable_Root_Chord (self._pi, self.planform, 
+                                        movable=True, show_ref_line=self.show_ref_line, color=color,
+                                        on_changed=self.sig_planform_changed.emit)
+            self._add (pt) 
+            pt = self.Movable_Tip_Span (self._pi, self.planform, 
+                                        movable=True, show_ref_line=self.show_ref_line, color=color, 
+                                        on_changed=self.sig_planform_changed.emit)
+            self._add (pt) 
+
+
+        if self.show_ref_line:
+
+            # reference line 
+
+            ref_line = self.planform.reference_line
+            x,y   = ref_line.polyline()
+            pen   = pg.mkPen(COLOR_REF_LINE, width=2)
+            self._plot_dataItem  (x, y, name=ref_line.name, pen = pen, antialias = True, zValue=3)
+
+            # movable points of ref line  
+
+            if self.show_mouse_helper:
+                pt = self.Movable_Ref_Root (self._pi, self.planform, movable=True, color=COLOR_REF_LINE,
+                                            on_changed=self.sig_planform_changed.emit)
+                self._add (pt) 
+                pt = self.Movable_Ref_Tip  (self._pi, self.planform, movable=True, color=COLOR_REF_LINE, 
+                                            on_changed=self.sig_planform_changed.emit)
+                self._add (pt) 
+                pt = self.Movable_Ref_Angle (self._pi, self.planform, movable=True, color=COLOR_REF_LINE,
+                                            on_changed=self.sig_planform_changed.emit)
+                self._add (pt) 
+
+            # banana line - not in wing mode 
+
+            if not self.wing_mode:
+                x,y   = ref_line.banana_polyline()
+                color = COLOR_BANANA  
+                pen   = pg.mkPen(color, width=1)
+                self._plot_dataItem  (x, y, name='Banana Bezier', pen = pen, antialias = False, zValue=3)
+
+            # movable Banana Bezier curve   
+
+            if self.show_mouse_helper and self.planform.style == "Bezier":
+
+                pt = self.Movable_Banana_Bezier (self._pi, ref_line, movable=True, color=color.darker(120),
+                                            on_changed=self.sig_planform_changed.emit)
+                self._add (pt) 
+
+
+
+    class Movable_Abstract (Movable_Point):
+        """ 
+        Abstract: Represents a point of the reference line or planform to change. 
+        """
+        name = "Reference Point"
+
+        def __init__ (self,
+                    pi       : pg.PlotItem, 
+                    planform : Planform, 
+                    movable = False, 
+                    show_ref_line = True, 
+                    **kwargs):
+
+            self._pi = pi
+            self._planform = planform
+            self._tmp_planform_item = None 
+            self._tmp_ref_line_item = None 
+            self._show_ref_line = show_ref_line
+
+            self._ref_line = planform.reference_line
+
+            super().__init__(self._point_xy(), movable=movable, 
+                             symbol='s', size=8, show_label_static = movable,**kwargs)
+
+
+        def _point_xy (self) -> tuple: 
+            """ x,y coordinates of point """
+            raise NotImplementedError
+
+
+        def _plot_tmp_planform (self):
+            """ create or update temp planform dashed outline """
+
+            x, y = self._planform.polygon()
+
+            if self._tmp_planform_item is None:
+
+                pen = pg.mkPen(QColor(COLOR_PLANFORM).darker(150), width=1, style=Qt.PenStyle.DashLine)
+                p = pg.PlotDataItem  (x, y, pen = pen, antialias = False)
+                p.setZValue (2)
+
+                self._pi.addItem (p)
+                self._tmp_planform_item = p
+
+            else:
+
+                self._tmp_planform_item.setData (x,y)
+
+
+        def _remove_tmp_planform (self):
+            """ remove temp planform dashed outline """
+            if self._tmp_planform_item is not None:
+                self._pi.removeItem (self._tmp_planform_item)
+                self._tmp_planform_item = None 
+
+
+        def _plot_tmp_ref_line (self):
+            """ create or update temp dashed reference line """
+
+            if self._show_ref_line:
+                x,y = self._ref_line.polyline()
+
+                if self._tmp_ref_line_item is None:
+                    pen = pg.mkPen(QColor(COLOR_REF_LINE).darker(100), width=1, style=Qt.PenStyle.DashLine)
+                    p = pg.PlotDataItem  (x, y, pen = pen, antialias = False)
+                    p.setZValue (2)
+
+                    self._pi.addItem (p)
+                    self._tmp_ref_line_item = p
+
+                else:
+                    self._tmp_ref_line_item.setData (x,y)
+
+
+        def _remove_tmp_ref_line (self):
+            """ remove temp planform dashed outline """
+            if self._tmp_ref_line_item is not None:
+                self._pi.removeItem (self._tmp_ref_line_item)
+                self._tmp_ref_line_item = None 
+
+
+        @override
+        def _finished (self, _):
+            """ slot - point moving is finished"""
+            self._remove_tmp_planform ()
+            self._remove_tmp_ref_line ()
+            self._changed()
+
+
+
+    class Movable_Ref_Angle (Movable_Abstract):
+        """ 
+        Represents a point of the reference to change the angle. 
+        """
+
+        name = "Angle"
+
+        @override
+        def _point_xy (self) -> tuple: 
+            """ x,y coordinates of angle point """
+            x = self._ref_line._halfwingspan / 5                    # constant x pos
+            y = self._ref_line.x_at (x)                             # y pos depends on angle 
+            return x,y 
+
+
+        @override
+        def _moving (self, _):
+            """ self is moved"""
+            
+            self._ref_line.set_angle_by_point (self.x,self.y)       # update angle of reference line of planform 
+
+            self.setPos(self._point_xy())                           # update point position if we run against limits           
+
+            self._plot_tmp_ref_line()                               # update tmp reference line item as dashed line             
+            self._plot_tmp_planform()                               # update tmp planform plot item as dashed line
+
+
+        @override
+        def label_moving (self):
+            """ label text during move"""
+            return f"{self.name}  {self._ref_line.angle:.2f}°"
+
+
+
+    class Movable_Ref_Root (Movable_Abstract):
+        """ 
+        Represents root point of the reference to change. 
+        """
+
+        name = "@ Root"
+
+        @override
+        def _point_xy (self) -> tuple: 
+            """ x,y coordinates of ref point at root """
+            x = 0.0
+            y = self._ref_line.x_root
+            return x,y            
+
+
+        @override
+        def _moving (self, _):
+            """ self is moved"""
+            self._ref_line.set_x_root (self.y)                  # update ref line angle
+            self.setPos(self._point_xy())                       # update point position if we run against limits 
+
+            self._plot_tmp_ref_line()                           # update tmp reference line                
+            self._plot_tmp_planform()                           # and planform plot item as dashed line
+
+
+        @override
+        def label_moving (self):
+            """ label text during move"""
+            return f"{self.name} {self._ref_line.xn_root:.1%} "
+
+
+
+    class Movable_Ref_Tip (Movable_Abstract):
+        """ 
+        Represents tip point of the reference to change. 
+        """
+
+        name = "@ Tip"
+
+        def __init__ (self, *args, **kwargs):
+            super().__init__(*args,**kwargs)
+
+            self._xn_tip_org = self._ref_line.xn_tip
+            
+        @override
+        def _point_xy (self) -> tuple: 
+            """ x,y coordinates of ref point at tip"""
+            y = self._ref_line.x_at_tip
+            x = self._planform.halfwingspan
+            return x,y            
+
+
+        @override
+        def _moving (self, _):
+            """ self is moved"""
+
+            # update point position if we run against limits 
+            x_le, x_te = self._planform.planform_at_tip
+            point_y = max (x_le, self.y)
+            point_y = min (x_te, point_y)
+            point_x = self._planform.halfwingspan 
+            self.setPos((point_x, point_y))  
+
+            # update x_tip (will change angle) and xn_tip of reference line at the same time 
+            self._ref_line.set_x_tip (point_y)                
+            xn_tip = (point_y - x_le) / (x_te - x_le)
+            self._ref_line.set_xn_tip (xn_tip)
+
+            # update tmp reference line and planform plot item as dashed line
+            self._plot_tmp_ref_line()                  
+            self._plot_tmp_planform()
+
+
+        @override
+        def label_moving (self):
+            """ label text during move"""
+            return f"{self.name} {self._ref_line.xn_tip:.1%} "
+
+
+
+
+    class Movable_Root_Chord (Movable_Abstract):
+        """ 
+        Represents root point of planform to change chord. 
+        """
+        name = "Root Chord"
+
+        def __init__ (self, *args, **kwargs):
+            super().__init__ (*args, label_anchor = (0,0), **kwargs)
+
+        @override
+        def _point_xy (self) -> tuple: 
+            """ x,y coordinates of ref point at root """
+            return 0.0, self._planform.chord_root           
+
+
+        @override
+        def _moving (self, _):
+            """ self is moved"""
+            # update chord of planform 
+            self._planform.set_chord_root (self.y)                  # update ref line a
+
+            # update point position if we run against limits 
+            self.setPos(self._point_xy())                  
+
+            # update tmp reference line and planform plot item as dashed line
+            self._plot_tmp_ref_line()                  
+            self._plot_tmp_planform()
+
+
+        @override
+        def label_moving (self):
+            """ label text during move"""
+            return f"{self.name} {self._planform.chord_root:.1f}mm "
+
+
+
+    class Movable_Tip_Span (Movable_Abstract):
+        """ 
+        Represents root point of planform to change chord. 
+        """
+        name = "Span"
+
+        def __init__ (self, *args, **kwargs):
+            super().__init__ (*args, label_anchor = (0,0), **kwargs)
+
+
+        @override
+        def _point_xy (self) -> tuple: 
+            """ x,y coordinates of ref point at root """
+
+            _, x_te = self._planform.planform_at_tip
+            return self._planform.halfwingspan, x_te           
+
+
+        @override
+        def _moving (self, _):
+            """ self is moved"""
+            # update chord of planform 
+            x_le, x_te = self._planform.planform_at_tip
+            # self._planform.set_chord_tip (self.y - x_le)                # update chord at tip
+            self._planform.set_halfwingspan (self.x)                    # update halfwingspan
+
+            # update point position if we run against limits 
+            self.setPos(self._point_xy())                  
+
+            # update tmp reference line and planform plot item as dashed line
+            self._plot_tmp_ref_line()                  
+            self._plot_tmp_planform()
+
+
+        @override
+        def label_moving (self):
+            """ label text during move"""
+            return f"{self.name} {self._planform.halfwingspan:.1f}mm "
+
+
+
+
+    class Movable_Banana_Bezier (Movable_Bezier):
+        """
+        pg.PlotCurveItem/UIGraphicsItem which represents 
+        the Bezier of the banana fucntion. 
+        The Bezier curve which can be changed by the controllpoints
+        
+        Points are implemented with Moveable_Points
+        A Moveable_Point can also be fixed ( movable=False).
+        See pg.TargetItem for all arguments 
+        """
+        def __init__ (self, pi : pg.PlotItem, ref_line : Reference_Line, **kwargs):
+
+            self._pi = pi
+            self._ref_line = ref_line
+
+            super().__init__(ref_line.banana_as_jpoints (), **kwargs)
+
+
+        @override
+        @property
+        def u (self) -> list:
+            """ the Bezier parameter """
+            return self._ref_line._banana_u
+
+        @override
+        def _finished_point (self, aPoint):
+            """ slot - point move is finished """
+
+            # write back control points into original bezier 
+            self._ref_line.banana_from_jpoints (self._jpoints)
+
+            super()._finished_point (aPoint)
+
+
 
 
 class Planform_Artist (Abstract_Wing_Artist):

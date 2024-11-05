@@ -926,26 +926,30 @@ class Norm_WingSection :
     @property
     def isRoot (self) -> bool:
         """ True if self is root section"""
-        return self.xn == 0.0 
+        return self.xn() == 0.0 
 
     @property
     def isTip (self) -> bool:
         """ True if self is tip section"""
-        return self.xn == 1.0 
+        return self.xn() == 1.0 
 
-    @property
+
     def xn (self) -> float:
-        """ yn position of self"""
+        """ 
+        xn position of self. If self is based on cn, the position will be evaluated from the planform
+        """
         if self._xn is None:
-            return self._planform.xn_at (self.cn, fast=False)
+            return self._planform.xn_at (self.cn(), fast=False)
         else: 
             return self._xn
 
-    @property
+
     def cn (self) -> float:
-        """ chord cn of self"""
+        """ 
+        chord cn of self. If self is based on xn, the chord will be evaluated from the planform
+        """
         if self._cn is None:
-            return self._planform.cn_at (self.xn)
+            return self._planform.cn_at (self.xn())
         else: 
             return self._cn
 
@@ -971,7 +975,7 @@ class Norm_WingSection :
             xn, yn: normalized x,y coordinates
         """
  
-        le_yn, te_yn = self._planform.le_te_at (self.xn)
+        le_yn, te_yn = self._planform.le_te_at (self.xn())
         return le_yn, te_yn
 
 
@@ -1037,7 +1041,7 @@ class Norm_WingSections (list):
 
             _, right_sec = self.neighbours (aSection)
 
-            new_cn = (aSection.cn + right_sec.cn) / 2
+            new_cn = (aSection.cn() + right_sec.cn()) / 2
             new_flap_group = aSection.flap_group 
 
             new_section = Norm_WingSection (self._planform, {"cn": new_cn, "flap_group":new_flap_group})
@@ -1225,7 +1229,7 @@ class Norm_WingSections (list):
         """
         section : Norm_WingSection = None
         for section in self:
-            if abs( section.xn - xn) < tolerance :
+            if abs( section.xn() - xn) < tolerance :
                 return section
         return None
 
@@ -1295,8 +1299,8 @@ class Norm_Planform:
 
         py[0]   = fromDict (dataDict, "p0y", 0.7)               # root value
         px[1]   = fromDict (dataDict, "p1x", 0.5)               # point in the middle  
-        py[1]   = fromDict (dataDict, "p1y", 0.70)
-        py[2]   = fromDict (dataDict, "p2y", 0.8)               # tip value
+        py[1]   = fromDict (dataDict, "p1y", 0.8)
+        py[2]   = fromDict (dataDict, "p2y", 0.75)               # tip value
 
         self._ref_bezier = Bezier (px, py)
         self._u = np.linspace(0.0, 1.0, num=20)                 # default Bezier u parameter (for polyline)
@@ -1441,7 +1445,7 @@ class Norm_Planform:
 #-------------------------------------------------------------------------------
 
 
-class Planform2: 
+class Planform_2: 
     """ 
 
     Main object representing the planform of a wing half.
@@ -1470,6 +1474,15 @@ class Planform2:
         self._span        = span if span                is not None else fromDict (dataDict, "span", 2000.0) 
         self._chord_root  = chord_root if chord_root    is not None else fromDict (dataDict, "chord_root", 200.0)
         self._sweep_angle = sweep_angle if sweep_angle  is not None else fromDict (dataDict, "sweep_angle", 5)
+
+
+    @classmethod
+    def default (cls) -> 'Planform_2':
+        """ create default planform for demo etc."""
+
+        norm_planform = Norm_Planform (Norm_Chord_Bezier ())   
+
+        return cls (norm_planform, chord_root=200, span=1200, sweep_angle=2)
 
 
     @property
@@ -1529,6 +1542,17 @@ class Planform2:
         pass 
 
 
+    def le_te_at (self, x : float) -> tuple [float,float]:
+        """ leading and trailing edge y coordinates at x position"""
+ 
+        xn = x / self.span
+        le_yn, te_yn = self._norm_planform.le_te_at (xn)
+
+        _, le_y = self._to_wing (xn, le_yn)
+        _, te_y = self._to_wing (xn, te_yn)
+        return le_y, te_y
+
+
     def le_te_polyline (self) -> Polylines:
         """ 
         polylines of leading and trailing edge
@@ -1572,6 +1596,22 @@ class Planform2:
         xn, yn = self._norm_planform.ref_polyline ()
         x, y = self._to_wing (xn, yn)
         return x, y
+
+
+    def wingSections (self) -> list['WingSection_2']:
+        """ wing sections of self"""
+
+        # build a temp list of WingSection which are based on Norm_WingSection
+        print ("sections called")
+        sections = []
+
+        for norm_Section in self._norm_planform.wingSections:
+            sections.append (WingSection_2 (self, norm_Section)) 
+        
+        return sections
+
+
+
 
 
 
@@ -2574,6 +2614,93 @@ class Planform_Paneled (Planform_Trapezoidal):
 #-------------------------------------------------------------------------------
 # WingSections  
 #-------------------------------------------------------------------------------
+
+
+class WingSection_2 : 
+    """ 
+    WingSection in planform. 
+    
+    This is a proxy of the normalized WingSection to get 
+    data in in wing coordinates 
+    """
+
+
+    def __init__(self, planform : Planform_2, norm_section: Norm_WingSection):
+        """
+        Main constructor
+
+        Args:       
+            planform: self belongs to.
+            norm_section: the source of self 
+        """
+
+        self._planform  = planform
+        self._normed = norm_section
+                             
+
+    def __repr__(self) -> str:
+
+        if (self._normed._xn != None):
+            info = f"x={self.x():.1}mm"
+        elif (self._normed._cn != None):
+            info = f"c={self.c():.1f}mm" 
+        else:
+            info = ''
+        return f"<{type(self).__name__} {info}>"
+
+    @property
+    def _chord_root (self) -> float:
+        """ convenience """
+        return self._planform.chord_root
+
+    @property
+    def _span (self) -> float:
+        """ convenience """
+        return self._planform.span
+
+
+    def _to_wing (self, xn : float|Array, yn : float|Array) -> ...:
+        """ courtesy of planform """
+        self._planform._to_wing (xn, yn)
+
+
+    @property
+    def isRoot (self) -> bool:
+        """ True if self is root section"""
+        return self._normed.isRoot 
+
+    @property
+    def isTip (self) -> bool:
+        """ True if self is tip section"""
+        return self._normed.isTip 
+
+
+    def x (self) -> float:
+        """ x position of self"""
+        return self._normed.xn() * self._span
+
+
+    def c (self) -> float:
+        """ chord c of self  """
+        return self._normed.cn() * self._chord_root
+   
+    
+    def le_te (self) -> tuple [float,float]:
+        """ leading and trailing edge y coordinates """
+ 
+        return self._planform.le_te_at (self.x())
+
+
+    def polyline (self) -> Polyline:
+        """ self as a poyline x,y"""
+
+        x          = self.x()
+        le_y, te_y = self.le_te ()
+
+        return [x, x], [le_y, te_y]
+
+
+
 
 class WingSection:
     """ 

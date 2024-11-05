@@ -11,7 +11,7 @@ from PyQt6.QtGui                import QColor
 sys.path.append(Path(__file__).parent)
 sys.path.insert (1,os.path.join('..' , 'AirfoilEditor_subtree/modules'))
 from base.spline    import Bezier
-from wing           import Norm_Chord_Bezier, Norm_Planform, Planform2
+from wing           import Norm_Chord_Bezier, Norm_Planform, Planform_2
 
 
 
@@ -106,14 +106,14 @@ pi3.addItem (pg.FillBetweenItem (ref_item, te_item, brush=brush ))
 sections = norm_planform.wingSections
 for section in sections:
 
-    cn = section.cn 
-    xn = [section.xn, section.xn]
+    cn = section.cn() 
+    xn = [section.xn(), section.xn()]
     yn = [0.0, cn]
     pi1.plot (xn, yn, pen='deeppink')
 
 
     le_yn, te_yn = section.le_te ()
-    xn = [section.xn, section.xn]
+    xn = [section.xn(), section.xn()]
     yn = [le_yn, te_yn]
     pi3.plot (xn, yn, pen='deeppink')
 
@@ -135,7 +135,7 @@ pi4.getAxis ('left').setWidth (30)
 pi4.getViewBox().invertY(True)
 pi4.getViewBox().setAspectLocked()
 
-planform = Planform2 (norm_planform, chord_root=200, span=800, sweep_angle=0)
+planform = Planform_2 (norm_planform, chord_root=200, span=800, sweep_angle=0)
 
 x, le_y, te_y = planform.le_te_polyline ()
 box_x, box_y  = planform.box_polygon ()
@@ -150,6 +150,7 @@ pi4.plot(box_x, box_y, pen='blue')
 
 # --- shear  
 
+planform = Planform_2.default()
 angle = 5
 
 pi6 = l.addPlot(title=f"shear by angle {angle}° ")
@@ -168,6 +169,12 @@ pi6.plot(x , le_y, pen='red')
 pi6.plot(x , te_y, pen='yellow')
 pi6.plot(ref_x, ref_y, pen='springgreen')
 pi6.plot(box_x, box_y, pen='blue')
+
+# wing sections
+# sections = planform.wingSections ()
+for section in planform.wingSections ():
+    pi6.plot (*section.polyline(), pen='deeppink')
+
 
 
 if __name__ == '__main__':

@@ -15,7 +15,7 @@ from base.diagram           import *
 # from model.airfoil          import Airfoil
 
 from pc2_artists            import *
-from wing                   import Wing
+from wing                   import Wing, Planform_2
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -833,6 +833,130 @@ class Diagram_Planform (Diagram):
 
 
 
+class Diagram_Making_Of (Diagram):
+    """    
+    Diagram view to with several diagram items to show, how a planform is build 
+    """
+
+    def __init__(self, parent, **kwargs):
+
+        self._planform = Planform_2.default ()              # create demo planform
+
+        self._items    = []                                 # the diagram items of self 
+        self._item_chord = None                      
+
+        self._show_ref_line = False                          # show reference line 
+        self._show_wingSections = False
+        self._show_flaps = False
+
+        Artist.show_mouse_helper = False
+
+        super().__init__(parent, None, **kwargs)
+
+        self._viewPanel.setMinimumWidth(240)
+        self._viewPanel.setMaximumWidth(240)
+
+        self._graph_layout.setContentsMargins (20,50,20,10)  # default margins
+        self._graph_layout.setVerticalSpacing (50)
+
+
+    def planform (self) -> Planform_2: 
+        return self._planform
+
+    @property
+    def show_wingSections (self) -> bool: 
+        return self._show_wingSections
+    
+    def set_show_wingSections (self, aBool : bool): 
+        self._show_wingSections = aBool == True
+        for item in self._items:
+            item.set_show_wingSections(aBool) 
+
+
+    @property
+    def show_ref_line (self) -> bool: 
+        return self._show_ref_line
+    
+    def set_show_ref_line (self, aBool : bool): 
+        self._show_ref_line = aBool == True
+        for item in self._items:
+            item.set_show_ref_line(aBool) 
+
+
+    @property
+    def show_flaps (self) -> bool: 
+        return self._show_flaps
+    
+    def set_show_flaps (self, aBool : bool): 
+        self._show_flaps = aBool == True
+        for item in self._items:
+            item.set_show_flaps(aBool) 
+
+
+    @property
+    def show_mouse_helper (self) -> bool:
+        return Artist.show_mouse_helper
+    
+    def set_show_mouse_helper (self, aBool : bool):
+        Artist.show_mouse_helper = aBool == True
+        self.refresh ()
+
+
+    def create_diagram_items (self):
+        """ create all plot Items and add them to the layout """
+
+        item = Item_Making_Of_Planform (self, getter=self.planform)
+        self._add_item (item, 0, 0)
+
+        # item.planform_artist.sig_planform_changed.connect        (self.refresh)
+        # item.flaps_artist.sig_flaps_changed.connect              (self.refresh)
+        # item.wingSections_artist.sig_wingSection_changed.connect (self.refresh)
+        # item.wingSections_artist.sig_wingSection_new.connect     (self.refresh)
+        # item.wingSections_artist.sig_cur_wingSection.connect     (self.refresh)
+        self._items.append (item) 
+
+
+
+    # --- view section panels ---------------------------------------------------
+
+    @property
+    def section_panel (self) -> Edit_Panel:
+ 
+        if self._section_panel is None:
+
+            l = QGridLayout()
+            r,c = 0, 0
+            CheckBox (l,r,c, text="Show mouse helper", 
+                      get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
+            r += 1
+            SpaceR   (l,r,10)
+            r += 1
+            CheckBox (l,r,c, text="Reference Line", 
+                    get=lambda: self.show_ref_line,
+                    set=self.set_show_ref_line) 
+
+            r += 1
+            CheckBox (l,r,c, text="Wing Sections", 
+                      get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
+            r += 1
+            CheckBox (l,r,c, text="Flaps", 
+                      get=lambda: self.show_flaps, set=self.set_show_flaps) 
+
+            l.setColumnStretch (0,2)
+
+            self._section_panel = Edit_Panel (title="Common", layout=l, height=(60,None),
+                                              switchable=False, switched_on=True)
+        return self._section_panel 
+
+
+    # --- public slots ---------------------------------------------------
+
+    # --- private slots ---------------------------------------------------
+
+
+
+
+
 class Diagram_Wing (Diagram):
     """    
     Diagram view to show/plot Wing overview - Container for diagram items 
@@ -1002,3 +1126,62 @@ class Diagram_Airfoils (Diagram):
 
 
     # --- private slots ---------------------------------------------------
+
+
+
+class Item_Making_Of_Abstract (Diagram_Item):
+    """ 
+   Abstract Making Of Diagram (Plot) Item 
+    """
+
+
+    sig_planform_changed        = pyqtSignal()              
+
+    def __init__(self, *args, **kwargs):
+
+        self._artists : list [Artist] = []
+        super().__init__(*args, **kwargs)
+
+    def planform (self) -> Wing: 
+        print ("planform getter")
+        return self._getter()
+
+
+    @override
+    def setup_viewRange (self):
+        self.viewBox.setDefaultPadding(0.1)
+        self.viewBox.autoRange (padding=0.1)                 
+        self.viewBox.setAspectLocked()
+        self.viewBox.invertY(True)
+        self.showGrid(x=True, y=True)
+
+
+    @override
+    def refresh_artists (self):
+        for artist in self._artists:
+            artist.refresh()
+
+    def set_show_wingSections (self, aBool : bool): 
+        for artist in self._artists:
+            if isinstance (artist, WingSections_Artist):
+                artist.set_show(aBool) 
+ 
+    def set_show_ref_line (self, aBool : bool): 
+        for artist in self._artists:
+            if isinstance (artist, Planform_Artist):
+                artist.set_show_ref_line(aBool) 
+
+    def set_show_flaps (self, aBool : bool): 
+        for artist in self._artists:
+            if isinstance (artist, Flaps_Artist):
+                artist.set_show(aBool) 
+
+
+
+class Item_Making_Of_Planform (Item_Making_Of_Abstract):
+    """ Making Of Diagram (Plot) Item for Planform  """
+
+    @override
+    def setup_artists (self):
+        self._artists.append (Planform_Artist_2 (self, self.planform))
+

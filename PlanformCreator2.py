@@ -172,6 +172,9 @@ class App_Main (QMainWindow):
 
         self._diagrams      = Tab_Panel        (self)
 
+        self._diag_making = Diagram_Making_Of (self)
+        self._diagrams.addTab (self._diag_making, "Making of ...")
+
         self._diag_wing     = Diagram_Wing     (self, self.wing, welcome=self._welcome_message())
         self._diagrams.addTab (self._diag_wing, "Wing")
 
