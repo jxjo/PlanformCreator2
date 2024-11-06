@@ -185,7 +185,7 @@ class Item_Chord (Diagram_Item):
         
         self.chord_artist          = Chord_Artist          (self, self.wing, show_legend=True)
 
-        self.chord_ref_line_artist = Chord_Ref_Line_Artist (self, self.wing, show=False, show_legend=True)
+        self.chord_ref_line_artist = Norm_Ref_Line_Artist (self, self.wing, show=False, show_legend=True)
         self.ref_chord_artist      = Ref_Chord_Artist      (self, self.ref_planforms, show_legend=True)
         self.wingSections_artist   = WingSections_Artist   (self, self.wing, cur_wingSection_fn=self._cur_wingSection_fn,
                                                             norm_chord=True, show_legend=True)
@@ -842,14 +842,11 @@ class Diagram_Making_Of (Diagram):
 
         self._planform = Planform_2.default ()              # create demo planform
 
-        self._items    = []                                 # the diagram items of self 
-        self._item_chord = None                      
-
         self._show_ref_line = False                          # show reference line 
         self._show_wingSections = False
         self._show_flaps = False
 
-        Artist.show_mouse_helper = False
+        # Artist.show_mouse_helper = False
 
         super().__init__(parent, None, **kwargs)
 
@@ -857,6 +854,7 @@ class Diagram_Making_Of (Diagram):
         self._viewPanel.setMaximumWidth(240)
 
         self._graph_layout.setContentsMargins (20,50,20,10)  # default margins
+        self._graph_layout.setHorizontalSpacing (20)
         self._graph_layout.setVerticalSpacing (50)
 
 
@@ -905,16 +903,32 @@ class Diagram_Making_Of (Diagram):
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
 
+        self._graph_widget.ci.addLabel('Normed System', row=0, col=0, angle=-90,  size=f"{12}pt")
+        self._graph_layout.setColumnStretchFactor (0,0)
+
+        item = Item_Making_Of_Chord (self, getter=self.planform)
+        self._add_item (item, 0, 1)
+
+        item = Item_Making_Of_Ref_Line (self, getter=self.planform)
+        self._add_item (item, 0, 2)
+
+        item = Item_Making_Of_Chord (self, getter=self.planform)
+        self._add_item (item, 0, 3)
+
+        self._graph_widget.ci.addLabel('Wing System', row=1, col=0, angle=-90,  size=f"{12}pt")
+
         item = Item_Making_Of_Planform (self, getter=self.planform)
-        self._add_item (item, 0, 0)
+        self._add_item (item, 1, 1, colspan=3)
 
-        # item.planform_artist.sig_planform_changed.connect        (self.refresh)
-        # item.flaps_artist.sig_flaps_changed.connect              (self.refresh)
-        # item.wingSections_artist.sig_wingSection_changed.connect (self.refresh)
-        # item.wingSections_artist.sig_wingSection_new.connect     (self.refresh)
-        # item.wingSections_artist.sig_cur_wingSection.connect     (self.refresh)
-        self._items.append (item) 
 
+        # generic connect to artist changed signals 
+        item : Item_Making_Of_Abstract
+        for item in self.diagram_items:
+            for artist in item._artists:
+                try: 
+                    artist.sig_planform_changed.connect (self.refresh) 
+                except:
+                    pass
 
 
     # --- view section panels ---------------------------------------------------
@@ -1142,18 +1156,20 @@ class Item_Making_Of_Abstract (Diagram_Item):
         self._artists : list [Artist] = []
         super().__init__(*args, **kwargs)
 
+        self.setContentsMargins (20,50,20,20)
+
+
     def planform (self) -> Wing: 
-        print ("planform getter")
         return self._getter()
 
 
     @override
     def setup_viewRange (self):
-        self.viewBox.setDefaultPadding(0.1)
+        self.viewBox.setDefaultPadding(0.0)
         self.viewBox.autoRange (padding=0.1)                 
         self.viewBox.setAspectLocked()
         self.viewBox.invertY(True)
-        self.showGrid(x=True, y=True)
+        self.showGrid(x=False, y=False)
 
 
     @override
@@ -1168,7 +1184,7 @@ class Item_Making_Of_Abstract (Diagram_Item):
  
     def set_show_ref_line (self, aBool : bool): 
         for artist in self._artists:
-            if isinstance (artist, Planform_Artist):
+            if isinstance (artist, Planform_Artist_2):
                 artist.set_show_ref_line(aBool) 
 
     def set_show_flaps (self, aBool : bool): 
@@ -1183,5 +1199,47 @@ class Item_Making_Of_Planform (Item_Making_Of_Abstract):
 
     @override
     def setup_artists (self):
-        self._artists.append (Planform_Artist_2 (self, self.planform))
+        self._artists.append (Planform_Artist_2     (self, self.planform))
+        self._artists.append (Planform_Box_Artist   (self, self.planform))
 
+
+
+class Item_Making_Of_Chord (Item_Making_Of_Abstract):
+    """ Making Of Diagram (Plot) Item for Chord distribution  """
+
+    @override
+    def setup_artists (self):
+        self._artists.append (Norm_Chord_Artist     (self, self.planform))
+
+    @override
+    def setup_viewRange (self):
+        self.viewBox.autoRange ()                            
+        self.viewBox.setYRange( 0, 1.1, padding=0.0)       
+        self.viewBox.setXRange( -0.04, 1.1, padding=0.0)       
+
+        y_axis : pg.AxisItem = self.getAxis ("left")
+        y_axis.setLabel (units="%")
+        y_axis.setScale (100)
+        self.showGrid(x=False, y=False)
+
+
+
+class Item_Making_Of_Ref_Line (Item_Making_Of_Abstract):
+    """ Making Of Diagram (Plot) Item for Chord distribution  """
+
+    @override
+    def setup_artists (self):
+        artist = Norm_Ref_Line_Artist  (self, self.planform)
+        self._artists.append (artist)
+
+
+    @override
+    def setup_viewRange (self):
+        self.viewBox.autoRange ()                            
+        self.viewBox.setYRange( 0, 1.1, padding=0.0)       
+        self.viewBox.setXRange( -0.04, 1.1, padding=0.0)       
+
+        y_axis : pg.AxisItem = self.getAxis ("left")
+        y_axis.setLabel (units="%")
+        y_axis.setScale (100)
+        self.showGrid(x=False, y=False)

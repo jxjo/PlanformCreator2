@@ -159,7 +159,7 @@ pi6.getViewBox().invertY(True)
 # pi6.getViewBox().setRange (xRange=( 0,900), padding=0.1)
 pi6.getAxis ('left').setWidth (30)
 
-planform.set_sweep_agnle (10)
+planform.set_sweep_angle (10)
 
 x, le_y, te_y = planform.le_te_polyline ()
 box_x, box_y  = planform.box_polygon ()

@@ -617,7 +617,8 @@ class Artist(QObject):
         self._plots = []                    # plots (PlotDataItem) made up to now 
         self._plot_symbols = []             # plot symbol for each plot 
 
-        # do not 'plot' on init 
+        # do not 'plot' on init
+        self.plot() 
 
 
     @override

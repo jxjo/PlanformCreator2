@@ -737,6 +737,8 @@ class Norm_Chord_Abstract:
                 |-- Norm_Chord
     """
 
+    isBezier    = False
+
     def __init__(self):
         """main constructor
 
@@ -867,6 +869,51 @@ class Norm_Chord_Bezier (Norm_Chord_Abstract):
         """
         xn, cn = self._bezier.eval(self._u) 
         return xn, cn 
+
+
+    def bezier_as_jpoints (self) -> list[JPoint]: 
+        """ 
+        Bezier control points as JPoints with limits and fixed property
+            in normed coordinates 
+        """
+        jpoints = []
+
+        for i, point in enumerate(self._bezier.points):
+
+            jpoint = JPoint (point)           
+            # jpoint.set_x (jpoint.x * self.halfwingspan)     # scale to halfwingspan
+
+            if i == 0:                                      # root 
+                jpoint.set_fixed (True)
+                jpoint.set_name ('') 
+            elif i == 1:                                    # root tangent
+                jpoint.set_x_limits ((0,1))
+                jpoint.set_y_limits ((0,1))
+                jpoint.set_name ('Root Tangent') 
+            elif i == 2:                                    # tip tangent
+                jpoint.set_x_limits ((1,1))
+                jpoint.set_y_limits ((0.2,1))
+                jpoint.set_name ('Tip Tangent') 
+            else:
+                # jpoint.set_fixed (True)                     # tip
+                jpoint.set_x_limits ((1,1))
+                jpoint.set_y_limits ((0.01,0.5))
+                jpoint.set_name ('Tip Chord') 
+
+            jpoints.append(jpoint)
+
+        return jpoints
+
+
+    def bezier_from_jpoints (self, jpoints : list[JPoint]): 
+        """ set Bezier control points from JPoints  """
+
+        px, py = [], []
+        for jpoint in jpoints:
+            px.append(jpoint.x)
+            py.append(jpoint.y)
+
+        self._bezier.set_points (px, py)
 
 
 
@@ -1310,6 +1357,11 @@ class Norm_Planform:
         self._wingSections    = Norm_WingSections (self, dataDict=fromDict(dataDict, "wingSections", {}))
 
     @property
+    def isBezier (self) -> bool:
+        """ true if Bezier based chord distribution"""
+        return self._norm_chord.isBezier
+
+    @property
     def wingSections (self) -> list[Norm_WingSection]:
         """ normed wingSections of self"""
         return self._wingSections
@@ -1326,6 +1378,17 @@ class Norm_Planform:
         normalized chord at xn
         """
         return self._norm_chord.at (xn, fast=fast)
+
+
+    def cn_polyline (self) -> Polyline:
+        """ 
+        Polyline of normalized chord distribution cn
+
+        Returns:
+            xn: normalized x coordinates
+            cn: normalized y coordinates 
+        """
+        return self._norm_chord.polyline()
 
 
     def xn_at (self, cn: float, fast=True) -> float:
@@ -1425,6 +1488,45 @@ class Norm_Planform:
         return xn, yn
 
 
+    def ref_bezier_as_jpoints (self)  -> list[JPoint]:
+        """ 
+        Reference Line Bezier control points as JPoints with limits and fixed property
+        """
+
+        jpoints = []
+        for i, point in enumerate(self._ref_bezier.points):
+
+            jpoint = JPoint (point)           
+
+            if i == 0:                                      
+                jpoint.set_x_limits ((0,0))
+                jpoint.set_y_limits ((0,1))
+                jpoint.set_name ('Root')
+            elif i == 1:                                    # only movable point 
+                jpoint.set_x_limits ((0,1))
+                jpoint.set_y_limits ((-1, 1))
+                jpoint.set_name ("Banana" if jpoint.y != 0.0 else "No Banana")
+            else:                                          
+                jpoint.set_x_limits ((1,1))
+                jpoint.set_y_limits ((0,1))
+                jpoint.set_name ('Tip')
+            jpoints.append(jpoint)
+
+        return jpoints
+
+
+    def ref_bezier_from_jpoints (self, jpoints : list[JPoint]): 
+        """ set Bezier control points from JPoints which are scaled to halfwingspan  """
+
+        px, py = [], []
+        for jpoint in jpoints:
+            px.append(jpoint.x)
+            py.append(jpoint.y)
+
+        self._ref_bezier.set_points (px, py)
+
+
+
     def box_polygon (self) -> Polyline:
         """ 
         rectangle polygon x=0..1, y=0..1
@@ -1484,23 +1586,39 @@ class Planform_2:
 
         return cls (norm_planform, chord_root=200, span=1200, sweep_angle=2)
 
+    @property
+    def normed (self) -> Norm_Planform:
+        """ the normed planform of self"""
+        return self._norm_planform
 
     @property
     def span (self) -> float:
         """ wing half span"""
         return self._span 
 
+    def set_span (self, aVal : float):
+        """ set span of halfwing"""
+        aVal = max ( 0.01, aVal)
+        self._span = aVal 
+
+
     @property
     def chord_root (self) -> float:
         """ chord at root section"""
         return self._chord_root
+
+    def set_chord_root (self, aVal : float):
+        """ set chord at root """
+        aVal = max ( 0.01, aVal)
+        self._chord_root = aVal 
+
 
     @property
     def sweep_angle (self) -> float:
         """ sweep angle of reference line in degrees"""
         return self._sweep_angle
 
-    def set_sweep_agnle (self, aVal : float):
+    def set_sweep_angle (self, aVal : float):
         """ set sweep angle of reference line to aVal degrees"""
 
         aVal = max (-75.0, aVal)
@@ -1571,6 +1689,19 @@ class Planform_2:
         x, te_y = self._to_wing (xn, te_yn)
 
         return x, le_y, te_y 
+
+    def polygon (self) -> Polyline:
+        """ 
+        polygon of the planform starting at le_root clockwise 
+        """
+
+        x, le_y, te_y = self.le_te_polyline()
+
+        x = np.append (x, np.flip (x))
+        x = np.append (x, x[0:1])
+        y = np.append (le_y, np.flip (te_y))
+        y = np.append (y, y[0:1])
+        return x, y 
 
 
     def box_polygon (self) -> Polyline:

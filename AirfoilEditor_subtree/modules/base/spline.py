@@ -898,7 +898,14 @@ class Bezier:
 
         # init result (array)
         if np.isscalar(u):
-            bezier = 0.0
+            # optimize for end points 
+            if u == 0.0 and der == 0:
+                return pxy[0]
+            elif u == 1.0 and der == 0:
+                return pxy[-1]
+            else:
+                bezier = 0.0 
+            
         else: 
             bezier = np.zeros (np.size(u))
 
