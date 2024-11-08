@@ -9,18 +9,19 @@ All abstract diagram items to build a complete diagram view
 
 import logging
 
-from typing             import override
+from typing             import override, Type
 
 from PyQt6.QtCore       import QSize, QMargins, pyqtSignal, QTimer
 from PyQt6.QtWidgets    import QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, QGraphicsGridLayout
-from PyQt6.QtWidgets    import QMainWindow, QWidget, QWidgetItem
-from PyQt6.QtGui        import QPalette, QIcon
+from PyQt6.QtWidgets    import QWidget
+from PyQt6.QtGui        import QPalette, QIcon, QColor
 
 import pyqtgraph as pg                          # import PyQtGraph after PyQt6
 from pyqtgraph          import icons
 
 from base.panels        import Edit_Panel
 from base.widgets       import ToolButton, Icon
+from base.artist        import Artist
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -212,7 +213,7 @@ class Diagram (QWidget):
                 self._message_clear()
 
                 # also remove a welcome message
-                self.diagram_items[0].set_welcome (None) 
+                logger.warning ("remove :  self.diagram_items[0].set_welcome (None)") 
 
 
 
@@ -240,24 +241,31 @@ class Diagram_Item (pg.PlotItem):
 
     """
 
-    name = "Abstract Diagram_Item"              # used for link and section header
+    name        = "Abstract Diagram_Item"               # used for link and section header
+    title       = "The Title"                           # title of diagram item
+    subtitle    = "my subtitle"                         # optional subtitle 
 
     # Signals 
-    sig_visible = pyqtSignal(bool)              # when self is set to show/hide 
+    sig_visible = pyqtSignal(bool)                      # when self is set to show/hide 
 
 
     def __init__(self, parent, 
                  getter = None, 
-                 show = True,                   # show initially 
+                 show = True,                           # show initially 
                  **kwargs):
 
-        super().__init__(name=self.name,        # to link view boxes 
+        super().__init__(name=self.name,                # to link view boxes 
                          **kwargs)
 
         self._parent : Diagram = parent
         self._getter = getter
         self._show   = show 
-        self._section_panel = None 
+
+        self._section_panel = None                      # view section to the left 
+        self._artists : list [Artist] = []              # # list of my artists
+
+        self._title_item = None                         # LabelItem of the diagram title
+        self._subtitle_item = None                  
 
         ## Set up additional control button to reset range 
 
@@ -273,12 +281,11 @@ class Diagram_Item (pg.PlotItem):
 
         self.setup_artists ()
 
-        # setup view range - must be override
+        # setup view range (must be override) is done in refesh() - 
 
         self._viewRange_set = False
-        # self.setup_viewRange ()
 
-        # setup view range - must be override
+        # setup axis - can be override
         
         self.setup_axis()
 
@@ -291,12 +298,32 @@ class Diagram_Item (pg.PlotItem):
         super().setVisible (show) 
 
 
-
+    @override
     def __repr__(self) -> str:
-        # overwritten to get a nice print string 
         text = '' 
         return f"<{type(self).__name__}{text}>"
+
+
+    def _add_artist (self, artist : Artist):
+        """ add a new artist to my list"""  
     
+        self._artists.append (artist)
+     
+    def _get_artist (self, artists : Type[Artist] | list[type[Artist]]) -> list[Artist]:
+        """get my artists having class name(s)
+
+        Args:
+            artists: class or list of class of Artists to retrieve
+        Returns:
+            List of artists with this classes
+        """
+        look_for = [artists] if not isinstance (artists,list) else artists
+        result = []
+        for artist in self._artists:
+            if artist.__class__ in look_for:
+                result.append(artist)
+        return result 
+
 
     @override
     def setVisible (self, aBool):
@@ -409,6 +436,10 @@ class Diagram_Item (pg.PlotItem):
             self.setup_viewRange ()
             self._viewRange_set = True
 
+        # plot title and sub title with default values of class
+
+        self.plot_title () 
+
 
     def setup_artists (self):
         """ create and setup the artists of self"""
@@ -433,10 +464,61 @@ class Diagram_Item (pg.PlotItem):
         yaxis.setWidth (40)
 
 
-    def refresh_artists (self): 
-        """ refresh the artists of self"""
-        # must be implmented by subclass
-        pass
+    def refresh_artists (self):
+        """ refresh all artists of self - can be overridden"""
+        for artist in self._artists:
+            artist.refresh()
+
+
+    def plot_title (self, 
+                    title : str|None = None,
+                    subtitle : str|None = None, 
+                    align :str ='left', 
+                    offset : tuple = (70,5)):
+        """plot a title, optionally with a sub title, at fixed position
+
+        Args:
+            title: optional - default is class.title
+            subtitle: optional - default is class.subtitle
+            align: aligned to the left or right of th item .
+            offset: from the upper left (right) corner in pixel  
+        """
+
+        if title is None:
+            if not self.title: return                       # show no title  
+            title = self.title
+
+        if subtitle is None:
+            subtitle = self.subtitle
+
+        # remove existing title item 
+        if isinstance (self._title_item, pg.LabelItem):
+            self.scene().removeItem (self._title_item)      # was added directly to the scene via setParentItem
+            self.scene().removeItem (self._subtitle_item)    
+       
+
+        if align == 'left':
+            parentPos = (0.0)                               # parent x starts at PlotItem (including axis)       
+            itemPos   = (0,0)
+        else:  
+            parentPos = (0.98,0)
+            itemPos   = (1,0)
+
+        p1 = pg.LabelItem(title, color=QColor(Artist.COLOR_HEADER), size=f"{Artist.SIZE_HEADER}pt")    
+
+        p1.setParentItem(self)                            # add to self (Diagram Item) for absolute position 
+        p1.anchor(itemPos=itemPos, parentPos=parentPos, offset=offset)
+        p1.setZValue(5)
+        self._title_item = p1
+
+        if subtitle is not None:
+            sub_offset = (offset[0], offset[1]+30)
+            p2 = pg.LabelItem(subtitle, color=QColor(Artist.COLOR_LEGEND), size=f"{Artist.SIZE_NORMAL}pt")    
+            p2.setParentItem(self)                            # add to self (Diagram Item) for absolute position 
+            p2.anchor(itemPos=itemPos, parentPos=parentPos, offset=sub_offset)
+            p2.setZValue(5)
+            self._subtitle_item = p2 
+
 
 
     @property

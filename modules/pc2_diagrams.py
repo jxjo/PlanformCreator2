@@ -32,7 +32,9 @@ class Item_Planform (Diagram_Item):
     Diagram (Plot) Item for Planform
     """
 
-    name = "Planform Diagram"                               # used for link and section header 
+    name        = "Planform Diagram"                        # used for link and section header 
+    title       = "Planform"                 
+    subtitle    = "dynamic"                                 # will be set dynamically 
 
     sig_planform_changed        = pyqtSignal()              # planform data changed in a diagram 
 
@@ -42,16 +44,17 @@ class Item_Planform (Diagram_Item):
         self._ref_planforms_fn = ref_planforms_fn
         self._cur_wingSection_fn = cur_wingSection_fn       # bound method to get currrent wing section
 
-        self.wingSections_artist = None
-        self.planform_artist     = None
-        self.ref_planform_artist = None
-
         super().__init__(*args, **kwargs)
+
+        # set margins (inset) of self 
+        self.setContentsMargins ( 0,30,0,0)
 
 
     def wing (self) -> Wing: 
         return self._getter()
 
+    def planform (self) -> Planform_2:
+        return self.wing()._planform_2
 
     def ref_planforms (self) -> list[Planform]:
         """ list of reference planforms to show"""
@@ -60,58 +63,47 @@ class Item_Planform (Diagram_Item):
         else: 
             return []
 
+    @override
+    def plot_title(self, **kwargs):
+
+        return super().plot_title(subtitle = self.planform()._style, **kwargs)
+
 
     @override
     def setup_artists (self):
         """ create and setup the artists of self"""
         
-        self.planform_artist       = Planform_Artist       (self, self.wing, show_ref_line=True, show_legend=True)
-        self.ref_planform_artist   = Ref_Planform_Artist   (self, self.ref_planforms, show_legend=True)
-        self.wingSections_artist   = WingSections_Artist   (self, self.wing, cur_wingSection_fn=self._cur_wingSection_fn,
-                                                            norm_chord=False, show_legend=True)
-        self.flaps_artist          = Flaps_Artist          (self, self.wing,  show_legend=True)
-
+        self._add_artist (Planform_Artist       (self, self.planform))
+        self._add_artist (Ref_Line_Artist       (self, self.planform))
+        self._add_artist (Planform_Box_Artist   (self, self.planform))
+        self._add_artist (WingSections_Artist   (self, self.planform, show=True, mode=mode.PLANFORM))
+        # self.flaps_artist          = Flaps_Artist          (self, self.wing,  show_legend=True)
+ 
 
     @override
     def setup_viewRange (self):
         """ define view range of this plotItem"""
 
-        self.viewBox.setDefaultPadding(0.1)
-
-        self.viewBox.autoRange (padding=0.1)                # first ensure best range x,y 
-        #a=self.viewBox.viewRange()
-        # self.viewBox.setXRange( 0,a[0][1]*1.02, padding=0.02)           # then set x-Range
-
+        self.viewBox.autoRange (padding=0.05)                   # first ensure best range x,y 
+        # self.viewBox.setDefaultPadding(0.05)
         self.viewBox.setAspectLocked()
-
+        self.viewBox.setXRange(0, self.planform().span, padding=0.05, update=True)
         self.viewBox.invertY(True)
         self.showGrid(x=True, y=True)
 
-        # self.viewBox.enableAutoRange(axis=pg.ViewBox.XAxis, enable=True)
-
-
-    @override
-    def refresh_artists (self):
-        """ refresh my artists"""
-        self.planform_artist.refresh() 
-        self.ref_planform_artist.refresh()
-        self.wingSections_artist.refresh()
-        self.flaps_artist.refresh()
-
 
     def set_show_wingSections (self, aBool : bool): 
-        """ switch on/off wing sections"""
-        self.wingSections_artist.set_show(aBool) 
-
-
+        for artist in self._get_artist (WingSections_Artist):
+            artist.set_show (aBool) 
+ 
     def set_show_ref_line (self, aBool : bool): 
-        """ switch on/off reference line"""
-        self.planform_artist.set_show_ref_line(aBool) 
+        for artist in self._get_artist (Ref_Line_Artist):
+            artist.set_show (aBool) 
 
 
     def set_show_flaps (self, aBool : bool): 
-        """ switch on/off flaps"""
-        self.flaps_artist.set_show(aBool) 
+        for artist in self._get_artist (Flaps_Artist):
+            artist.set_show (aBool) 
 
 
     @property
@@ -132,14 +124,7 @@ class Item_Planform (Diagram_Item):
                                               switchable=True, hide_switched=False, 
                                               switched_on=self._show,
                                               on_switched=self.setVisible)
-
         return self._section_panel 
-
-
-    def set_welcome (self, aText : str):
-        """ set a Welcome text into the first artist"""
-        pass
-        # self.airfoil_artist.set_welcome (aText)
 
 
 
@@ -149,7 +134,9 @@ class Item_Chord (Diagram_Item):
     Diagram (Plot) Item for Chord Distribution
     """
 
-    name = "Chord Diagram"                                  # used for link and section header 
+    name        = "Chord Diagram"                           # used for link and section header 
+    title       = "Chord Distribution"                 
+    subtitle    = ""                                 
 
     sig_planform_changed        = pyqtSignal()              # planform data changed in a diagram 
 
@@ -158,40 +145,35 @@ class Item_Chord (Diagram_Item):
 
         self._ref_planforms_fn = ref_planforms_fn
         self._cur_wingSection_fn = cur_wingSection_fn       # bound method to get currrent wing section
-
-        self.chord_artist        = None
-        self.ref_chord_artist    = None
-        self.wingSections_artist = None
-
         super().__init__(*args, **kwargs)
 
+        # set margins (inset) of self 
+        self.setContentsMargins ( 0,50,0,0)
 
     def wing (self) -> Wing: 
         return self._getter()
 
+    def planform (self) -> Planform_2:
+        return self.wing()._planform_2
 
     def ref_planforms (self) -> list[Planform]:
         """ list of reference planforms to show"""
-
-        if self._ref_planforms_fn:
-            return self._ref_planforms_fn ()
-        else: 
-            return []
+        return self._ref_planforms_fn () if self._ref_planforms_fn else []
         
 
     @override
     def setup_artists (self):
         """ create and setup the artists of self"""
         
-        self.chord_artist          = Chord_Artist          (self, self.wing, show_legend=True)
+        self._add_artist (Norm_Chord_Artist     (self, self.planform, mode=mode.NORM_CHORD,
+                                                 show_legend=True))
 
-        self.chord_ref_line_artist = Norm_Ref_Line_Artist (self, self.wing, show=False, show_legend=True)
-        self.ref_chord_artist      = Ref_Chord_Artist      (self, self.ref_planforms, show_legend=True)
-        self.wingSections_artist   = WingSections_Artist   (self, self.wing, cur_wingSection_fn=self._cur_wingSection_fn,
-                                                            norm_chord=True, show_legend=True)
-        self.flaps_artist          = Flaps_Artist          (self, self.wing, rel_depth=True, show_legend=True)
+        # self.chord_ref_line_artist = Norm_Ref_Chord_Artist (self, self.wing, show=False, show_legend=True)
+        # self.ref_chord_artist      = Ref_Chord_Artist      (self, self.ref_planforms, show_legend=True)
+        # self.wingSections_artist   = WingSections_Artist   (self, self.wing, cur_wingSection_fn=self._cur_wingSection_fn,
+        #                                                     norm_chord=True, show_legend=True)
+        # self.flaps_artist          = Flaps_Artist          (self, self.wing, rel_depth=True, show_legend=True)
 
-        self.chord_artist.sig_planform_changed.connect (self.sig_planform_changed.emit)
 
 
     @override
@@ -211,29 +193,19 @@ class Item_Chord (Diagram_Item):
         self.showGrid(x=True, y=True)
 
 
-    @override
-    def refresh_artists (self):
-        """ refresh my artists"""
-        self.chord_artist.refresh() 
-        self.chord_ref_line_artist.refresh() 
-        self.ref_chord_artist.refresh()
-        self.wingSections_artist.refresh()
-        self.flaps_artist.refresh()
-
-
     def set_show_wingSections (self, aBool : bool): 
-        """ switch on/off wing sections"""
-        self.wingSections_artist.set_show(aBool) 
+        for artist in self._get_artist (WingSections_Artist):
+            artist.set_show (aBool) 
 
 
     def set_show_ref_line (self, aBool : bool): 
-        """ switch on/off reference line"""
-        self.chord_ref_line_artist.set_show (aBool) 
+        for artist in self._get_artist (Ref_Line_Artist):
+            artist.set_show (aBool) 
 
 
     def set_show_flaps (self, aBool : bool): 
-        """ switch on/off flaps"""
-        self.flaps_artist.set_show(aBool) 
+        for artist in self._get_artist (Flaps_Artist):
+            artist.set_show (aBool) 
 
 
     @property
@@ -243,18 +215,13 @@ class Item_Chord (Diagram_Item):
         if self._section_panel is None:    
             l = QGridLayout()
             r,c = 0, 0 
-            # CheckBox (l,r,c, text="Reference Line", 
-            #         get=lambda: self.chord_ref_line_artist.show,
-            #         set=self.chord_ref_line_artist.set_show) 
             r += 1
-            l.setColumnStretch (3,2)
             l.setRowStretch    (r,2)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, height=40, 
                                               switchable=True, hide_switched=False, 
                                               switched_on=self._show,
                                               on_switched=self.setVisible)
-
         return self._section_panel 
 
 
@@ -290,13 +257,13 @@ class Item_Wing (Diagram_Item):
 
         for half in [Planform_Artist.RIGHT, Planform_Artist.LEFT]:
 
-            self._artists.append( 
+            self._add_artist( 
                 Planform_Artist         (self, self.wing, wing_half=half, show_mouse_helper=False, 
                                          show_ref_line=True, show_legend=False))
-            self._artists.append( 
+            self._add_artist( 
                 Flaps_Artist            (self, self.wing, wing_half=half, show_mouse_helper=False, 
                                          show=self._show_flaps, show_legend=False))
-            self._artists.append( 
+            self._add_artist( 
                 WingSections_Artist     (self, self.wing, wing_half=half, show_mouse_helper=False, 
                                          show=self._show_wingSections, show_legend=False))
 
@@ -406,7 +373,7 @@ class Item_Wing_Airfoils (Diagram_Item):
 
     def __init__(self, *args,  **kwargs):
 
-        self.airfoil_artist : Airfoil_Artist = None
+        self.airfoil_artist : Planform_Airfoil_Artist = None
         super().__init__(*args, **kwargs)
 
 
@@ -418,7 +385,7 @@ class Item_Wing_Airfoils (Diagram_Item):
     def setup_artists (self):
         """ create and setup the artists of self"""
 
-        self.airfoil_artist = Airfoil_Artist (self, self.wing, show_legend=True, real_size=True, mini_mode=True)
+        self.airfoil_artist = Planform_Airfoil_Artist (self, self.wing, show_legend=True, real_size=True, mini_mode=True)
 
 
     @override
@@ -479,19 +446,22 @@ class Item_Airfoils (Diagram_Item):
 
     def __init__(self, *args,  **kwargs):
 
-        self.airfoil_artist : Airfoil_Artist = None
+        self.airfoil_artist : Planform_Airfoil_Artist = None
         super().__init__(*args, **kwargs)
 
 
     def wing (self) -> Wing: 
         return self._getter()
 
+    def planform (self) -> Wing: 
+        return self.wing()._planform_2
+
 
     @override
     def setup_artists (self):
         """ create and setup the artists of self"""
 
-        self.airfoil_artist = Airfoil_Artist (self, self.wing, show_legend=True)
+        self.airfoil_artist = Planform_Airfoil_Artist (self, self.planform, show_legend=True)
 
 
     @override
@@ -562,8 +532,6 @@ class Diagram_Planform (Diagram):
     def __init__(self, parent, wing_fn, cur_wingSection_fn : WingSection,  **kwargs):
 
         self._cur_wingSection_fn = cur_wingSection_fn       # bound method to get currrent wing section
-        self._item_planform = None                          # the diagram items of self 
-        self._item_chord = None                      
 
         self._general_panel = None                          # panel with general settings  
         self._show_ref_line = True                          # show reference line 
@@ -577,8 +545,8 @@ class Diagram_Planform (Diagram):
         self._viewPanel.setMaximumWidth(240)
 
         # set spacing between the two items
-        self._graph_layout.setContentsMargins (20,50,20,10)  # default margins
-        self._graph_layout.setVerticalSpacing (50)
+        self._graph_layout.setContentsMargins (20,10,20,10)  # default margins
+        self._graph_layout.setVerticalSpacing (30)
 
 
 
@@ -608,8 +576,8 @@ class Diagram_Planform (Diagram):
     
     def set_show_wingSections (self, aBool : bool): 
         self._show_wingSections = aBool == True
-        self._item_planform.set_show_wingSections(aBool) 
-        self._item_chord.set_show_wingSections(aBool) 
+        for item in self.diagram_items:
+            item.set_show_wingSections(aBool) 
  
 
 
@@ -620,8 +588,8 @@ class Diagram_Planform (Diagram):
     
     def set_show_ref_line (self, aBool : bool): 
         self._show_ref_line = aBool == True
-        self._item_planform.set_show_ref_line(aBool) 
-        self._item_chord.set_show_ref_line(aBool) 
+        for item in self.diagram_items:
+            item.set_show_ref_line(aBool) 
 
 
     @property
@@ -631,8 +599,8 @@ class Diagram_Planform (Diagram):
     
     def set_show_flaps (self, aBool : bool): 
         self._show_flaps = aBool == True
-        self._item_planform.set_show_flaps(aBool) 
-        self._item_chord.set_show_flaps(aBool) 
+        for item in self.diagram_items:
+            item.set_show_flaps(aBool)
 
 
     @property
@@ -671,33 +639,25 @@ class Diagram_Planform (Diagram):
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
 
-        i_p = Item_Planform (self, getter=self.wing, ref_planforms_fn=self.ref_planforms, 
+        i = Item_Planform (self, getter=self.wing, ref_planforms_fn=self.ref_planforms, 
                              cur_wingSection_fn = self._cur_wingSection_fn)
-        self._add_item (i_p, 0, 0)
+        self._add_item (i, 0, 0)
 
-        i_c = Item_Chord    (self, getter=self.wing, ref_planforms_fn=self.ref_planforms, 
+        i = Item_Chord    (self, getter=self.wing, ref_planforms_fn=self.ref_planforms, 
                             cur_wingSection_fn = self._cur_wingSection_fn, show=False)
-        self._add_item (i_c, 1, 0)
+        self._add_item (i, 1, 0)
 
-        # link both items together 
-        i_c.setXLink(Item_Planform.name)
+        i.viewBox.setXLink (Item_Planform.name)
+        # generic connect to artist changed signals 
 
-        # connect diagram item artist signals 
-
-        i_p.planform_artist.sig_planform_changed.connect        (self._on_planform_changed)
-        i_p.flaps_artist.sig_flaps_changed.connect              (self._on_flaps_changed)
-        i_p.wingSections_artist.sig_wingSection_changed.connect (self._on_wingSection_changed)
-        i_p.wingSections_artist.sig_wingSection_new.connect     (self.sig_wingSection_new.emit)
-        i_p.wingSections_artist.sig_cur_wingSection.connect     (self.sig_wingSection_new.emit)
-
-        i_c.chord_artist.sig_planform_changed.connect           (self._on_planform_changed)
-        i_c.flaps_artist.sig_flaps_changed.connect              (self._on_flaps_changed)
-        i_c.wingSections_artist.sig_wingSection_changed.connect (self._on_wingSection_changed)
-        i_c.wingSections_artist.sig_cur_wingSection.connect     (self.sig_wingSection_new.emit)
-        i_c.wingSections_artist.sig_wingSection_new.connect     (self.sig_wingSection_new.emit)
-
-        self._item_planform = i_p 
-        self._item_chord = i_c
+        for item in self.diagram_items:
+            artist : Artist_Planform
+            for artist in item._artists:
+                artist.sig_planform_changed.connect     (self._on_planform_changed) 
+                artist.sig_wingSection_changed.connect  (self._on_wingSection_changed) 
+                artist.sig_flaps_changed.connect        (self._on_flaps_changed) 
+                artist.sig_wingSection_new.connect      (self.sig_wingSection_new.emit) 
+                artist.sig_wingSection_selected.connect (self.sig_wingSection_new.emit) 
 
 
     # --- view section panels ---------------------------------------------------
@@ -826,8 +786,7 @@ class Diagram_Planform (Diagram):
 
         logger.debug (f"{str(self)} on _on_flaps_changed in diagram")
     
-        self._item_planform.flaps_artist.refresh()         
-        self._item_chord.flaps_artist.refresh()         
+        self.refresh()                              # refresh other diagram items 
         self.sig_flaps_changed.emit()               # refresh app
 
 
@@ -838,11 +797,16 @@ class Diagram_Making_Of (Diagram):
     Diagram view to with several diagram items to show, how a planform is build 
     """
 
-    def __init__(self, parent, **kwargs):
+    def __init__(self, parent, 
+                 planform : Planform_2|None = None, 
+                 **kwargs):
 
-        self._planform = Planform_2.default ()              # create demo planform
+        if planform is None: 
+            self._planform = Planform_2.default ()           # create demo planform
+        else: 
+            self._planform = planform
 
-        self._show_ref_line = False                          # show reference line 
+        self._show_ref_line = True                           # show reference line 
         self._show_wingSections = False
         self._show_flaps = False
 
@@ -853,9 +817,9 @@ class Diagram_Making_Of (Diagram):
         self._viewPanel.setMinimumWidth(240)
         self._viewPanel.setMaximumWidth(240)
 
-        self._graph_layout.setContentsMargins (20,50,20,10)  # default margins
+        self._graph_layout.setContentsMargins (20,30,20,10)  # default margins
         self._graph_layout.setHorizontalSpacing (20)
-        self._graph_layout.setVerticalSpacing (50)
+        self._graph_layout.setVerticalSpacing (20)
 
 
     def planform (self) -> Planform_2: 
@@ -867,7 +831,7 @@ class Diagram_Making_Of (Diagram):
     
     def set_show_wingSections (self, aBool : bool): 
         self._show_wingSections = aBool == True
-        for item in self._items:
+        for item in self.diagram_items:
             item.set_show_wingSections(aBool) 
 
 
@@ -877,7 +841,7 @@ class Diagram_Making_Of (Diagram):
     
     def set_show_ref_line (self, aBool : bool): 
         self._show_ref_line = aBool == True
-        for item in self._items:
+        for item in self.diagram_items:
             item.set_show_ref_line(aBool) 
 
 
@@ -887,7 +851,7 @@ class Diagram_Making_Of (Diagram):
     
     def set_show_flaps (self, aBool : bool): 
         self._show_flaps = aBool == True
-        for item in self._items:
+        for item in self.diagram_items:
             item.set_show_flaps(aBool) 
 
 
@@ -912,7 +876,7 @@ class Diagram_Making_Of (Diagram):
         item = Item_Making_Of_Ref_Line (self, getter=self.planform)
         self._add_item (item, 0, 2)
 
-        item = Item_Making_Of_Chord (self, getter=self.planform)
+        item = Item_Making_Of_Norm_Planform (self, getter=self.planform)
         self._add_item (item, 0, 3)
 
         self._graph_widget.ci.addLabel('Wing System', row=1, col=0, angle=-90,  size=f"{12}pt")
@@ -922,13 +886,11 @@ class Diagram_Making_Of (Diagram):
 
 
         # generic connect to artist changed signals 
-        item : Item_Making_Of_Abstract
         for item in self.diagram_items:
+            artist : Artist_Planform
             for artist in item._artists:
-                try: 
-                    artist.sig_planform_changed.connect (self.refresh) 
-                except:
-                    pass
+                artist.sig_planform_changed.connect         (self.refresh) 
+                artist.sig_wingSection_changed.connect      (self.refresh) 
 
 
     # --- view section panels ---------------------------------------------------
@@ -943,22 +905,31 @@ class Diagram_Making_Of (Diagram):
             CheckBox (l,r,c, text="Show mouse helper", 
                       get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
             r += 1
-            SpaceR   (l,r,10)
+            Label    (l,r,c, get="Drag little helper points with the\n mouse to modifiy the geometry. ",
+                      height=60, style=style.COMMENT).setAlignment(Qt.AlignmentFlag.AlignTop)
             r += 1
             CheckBox (l,r,c, text="Reference Line", 
-                    get=lambda: self.show_ref_line,
-                    set=self.set_show_ref_line) 
-
+                    get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
+            r += 1
+            Label    (l,r,c, get="Show or hide the chord reference\n ",
+                      height=60, style=style.COMMENT).setAlignment(Qt.AlignmentFlag.AlignTop)
             r += 1
             CheckBox (l,r,c, text="Wing Sections", 
                       get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
             r += 1
+            Label    (l,r,c, get="Show or hide the wing sections\nwhere airfoils and flaps are assigned",
+                      height=60, style=style.COMMENT).setAlignment(Qt.AlignmentFlag.AlignTop)
+            r += 1
             CheckBox (l,r,c, text="Flaps", 
                       get=lambda: self.show_flaps, set=self.set_show_flaps) 
-
+            r += 1
+            Label    (l,r,c, get="Show or hide flaps which are\ndefined by the hinge line a flap group.",
+                      height=60, style=style.COMMENT).setAlignment(Qt.AlignmentFlag.AlignTop)
+            r += 1
+            SpaceR   (l,r,2)
             l.setColumnStretch (0,2)
 
-            self._section_panel = Edit_Panel (title="Common", layout=l, height=(60,None),
+            self._section_panel = Edit_Panel (title="Options", layout=l, height=(250,None),
                                               switchable=False, switched_on=True)
         return self._section_panel 
 
@@ -1153,68 +1124,71 @@ class Item_Making_Of_Abstract (Diagram_Item):
 
     def __init__(self, *args, **kwargs):
 
-        self._artists : list [Artist] = []
         super().__init__(*args, **kwargs)
 
-        self.setContentsMargins (20,50,20,20)
+        self.setContentsMargins (40,100,40,20)
 
 
     def planform (self) -> Wing: 
         return self._getter()
 
 
-    @override
-    def setup_viewRange (self):
-        self.viewBox.setDefaultPadding(0.0)
-        self.viewBox.autoRange (padding=0.1)                 
-        self.viewBox.setAspectLocked()
-        self.viewBox.invertY(True)
-        self.showGrid(x=False, y=False)
-
-
-    @override
-    def refresh_artists (self):
-        for artist in self._artists:
-            artist.refresh()
-
     def set_show_wingSections (self, aBool : bool): 
-        for artist in self._artists:
-            if isinstance (artist, WingSections_Artist):
-                artist.set_show(aBool) 
+        for artist in self._get_artist (WingSections_Artist):
+            artist.set_show (aBool) 
  
     def set_show_ref_line (self, aBool : bool): 
-        for artist in self._artists:
-            if isinstance (artist, Planform_Artist_2):
-                artist.set_show_ref_line(aBool) 
+        for artist in self._get_artist (Ref_Line_Artist):
+            artist.set_show (aBool) 
 
-    def set_show_flaps (self, aBool : bool): 
-        for artist in self._artists:
-            if isinstance (artist, Flaps_Artist):
-                artist.set_show(aBool) 
+    # def set_show_flaps (self, aBool : bool): 
+    #     for artist in self._artists:
+    #         if isinstance (artist, Flaps_Artist):
+    #             artist.set_show(aBool) 
 
 
 
 class Item_Making_Of_Planform (Item_Making_Of_Abstract):
     """ Making Of Diagram (Plot) Item for Planform  """
 
-    @override
+    title       = "Planform"                 
+    subtitle    = "The 'Norm Planform' is scaled with span and chord. " + \
+                  "Finally the sweep angle is apllied by shearing the planform"                         
+
     def setup_artists (self):
-        self._artists.append (Planform_Artist_2     (self, self.planform))
-        self._artists.append (Planform_Box_Artist   (self, self.planform))
+        self._add_artist (Planform_Artist     (self, self.planform))
+        self._add_artist (Ref_Line_Artist       (self, self.planform))
+        self._add_artist (Planform_Box_Artist   (self, self.planform))
+        self._add_artist (WingSections_Artist (self, self.planform, show=False, mode=mode.PLANFORM))
+
+    @override
+    def setup_viewRange (self):
+        self.viewBox.setDefaultPadding (0.15)
+        self.viewBox.enableAutoRange(enable=True)
+        self.viewBox.setAspectLocked()
+        self.viewBox.invertY(True)
+        self.showGrid(x=False, y=False)
+
+        self.setContentsMargins (20,50,20,20)
+
 
 
 
 class Item_Making_Of_Chord (Item_Making_Of_Abstract):
     """ Making Of Diagram (Plot) Item for Chord distribution  """
 
-    @override
+    title       = "Chord Distribution"                  # title of diagram item
+    subtitle    = "Defines the chord along the span in a normalized system.<br>" + \
+                  "Chord at root equals to 100%"
+
     def setup_artists (self):
-        self._artists.append (Norm_Chord_Artist     (self, self.planform))
+        self._add_artist (Norm_Chord_Artist     (self, self.planform))
+        self._add_artist (WingSections_Artist (self, self.planform, show=False, mode=mode.NORM))
 
     @override
     def setup_viewRange (self):
         self.viewBox.autoRange ()                            
-        self.viewBox.setYRange( 0, 1.1, padding=0.0)       
+        self.viewBox.setYRange( 0, 1.1, padding=0.05)       
         self.viewBox.setXRange( -0.04, 1.1, padding=0.0)       
 
         y_axis : pg.AxisItem = self.getAxis ("left")
@@ -1227,19 +1201,44 @@ class Item_Making_Of_Chord (Item_Making_Of_Abstract):
 class Item_Making_Of_Ref_Line (Item_Making_Of_Abstract):
     """ Making Of Diagram (Plot) Item for Chord distribution  """
 
-    @override
-    def setup_artists (self):
-        artist = Norm_Ref_Line_Artist  (self, self.planform)
-        self._artists.append (artist)
+    title       = "Chord Reference"                 
+    subtitle    = "Describes how much of the chord is related to the leading<br>" + \
+                  "and to the trailing edge in relation to the reference line."                         
 
+    def setup_artists (self):
+        self._add_artist (Norm_Ref_Chord_Artist  (self, self.planform))
 
     @override
     def setup_viewRange (self):
         self.viewBox.autoRange ()                            
-        self.viewBox.setYRange( 0, 1.1, padding=0.0)       
         self.viewBox.setXRange( -0.04, 1.1, padding=0.0)       
 
+        self.viewBox.setYRange( -0.1, 1.0, padding=0.05)       
         y_axis : pg.AxisItem = self.getAxis ("left")
         y_axis.setLabel (units="%")
         y_axis.setScale (100)
+        self.viewBox.invertY(True)
+
+        self.showGrid(x=False, y=False)
+
+
+
+class Item_Making_Of_Norm_Planform (Item_Making_Of_Abstract):
+    """ Making Of Diagram (Plot) Item for normed Planform """
+
+    title       = "Normed Planform"                 
+    subtitle    = "Putting the chord distribution and the chord reference together<br>" + \
+                  "creates the planform in a normalized system."                         
+
+    def setup_artists (self):
+        self._add_artist (Norm_Planform_Artist  (self, self.planform))
+        self._add_artist (Ref_Line_Artist       (self, self.planform, mode=mode.NORM_PLANFORM))
+        self._add_artist (WingSections_Artist (self, self.planform, show=False, mode=mode.NORM_PLANFORM))
+
+    @override
+    def setup_viewRange (self):
+        self.viewBox.setDefaultPadding(0.05)
+        self.viewBox.autoRange ()                            
+        self.viewBox.enableAutoRange(enable=True)
+        # self.viewBox.setAspectLocked()
         self.showGrid(x=False, y=False)

@@ -133,7 +133,7 @@ class App_Main (QMainWindow):
    # Signals 
 
     sig_wing_new            = pyqtSignal()              # new wing loaded 
-    sig_cur_wingSection     = pyqtSignal()              # current wing section changed
+    sig_wingSection_selected     = pyqtSignal()              # current wing section changed
 
 
     def __init__(self, paramFile):
@@ -172,11 +172,11 @@ class App_Main (QMainWindow):
 
         self._diagrams      = Tab_Panel        (self)
 
-        self._diag_making = Diagram_Making_Of (self)
+        self._diag_making   = Diagram_Making_Of (self, planform=self.wing()._planform_2)
         self._diagrams.addTab (self._diag_making, "Making of ...")
 
-        self._diag_wing     = Diagram_Wing     (self, self.wing, welcome=self._welcome_message())
-        self._diagrams.addTab (self._diag_wing, "Wing")
+        # self._diag_wing     = Diagram_Wing     (self, self.wing, welcome=self._welcome_message())
+        # self._diagrams.addTab (self._diag_wing, "Wing")
 
         self._diag_planform = Diagram_Planform (self, self.wing, self.cur_wingSection)
         self._diagrams.addTab (self._diag_planform, "Planform")
@@ -194,7 +194,7 @@ class App_Main (QMainWindow):
         # connect to signals from diagram
 
         self._diag_planform.sig_wingSection_new.connect  (self.set_cur_wingSection)
-        self._diag_planform.sig_planform_changed.connect  (self._diag_wing.on_wing_changed)
+#        self._diag_planform.sig_planform_changed.connect  (self._diag_wing.on_wing_changed)
 
         # connect to signals of self
 
@@ -202,10 +202,10 @@ class App_Main (QMainWindow):
 
         # connect signals to slots of diagram
 
-        self.sig_cur_wingSection.connect (self._diag_planform.on_cur_wingSection_changed)
+        self.sig_wingSection_selected.connect (self._diag_planform.on_cur_wingSection_changed)
 
         self.sig_wing_new.connect        (self._diag_planform.on_wing_new)
-        self.sig_wing_new.connect        (self._diag_wing.on_wing_new)
+        # self.sig_wing_new.connect        (self._diag_wing.on_wing_new)
         self.sig_wing_new.connect        (self._diag_airfoils.on_wing_new)
 
 
@@ -275,7 +275,7 @@ class App_Main (QMainWindow):
         self._cur_wingSection = aSection
         logger.debug (f"{aSection} as current")
 
-        self.sig_cur_wingSection.emit()
+        self.sig_wingSection_selected.emit()
 
 
     def refresh(self):

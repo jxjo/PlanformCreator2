@@ -135,7 +135,7 @@ pi4.getAxis ('left').setWidth (30)
 pi4.getViewBox().invertY(True)
 pi4.getViewBox().setAspectLocked()
 
-planform = Planform_2 (norm_planform, chord_root=200, span=800, sweep_angle=0)
+planform = Planform_2 (norm_planform=norm_planform, chord_root=200, span=800, sweep_angle=0)
 
 x, le_y, te_y = planform.le_te_polyline ()
 box_x, box_y  = planform.box_polygon ()
@@ -173,7 +173,7 @@ pi6.plot(box_x, box_y, pen='blue')
 # wing sections
 # sections = planform.wingSections ()
 for section in planform.wingSections ():
-    pi6.plot (*section.polyline(), pen='deeppink')
+    pi6.plot (*section.line(), pen='deeppink')
 
 
 
