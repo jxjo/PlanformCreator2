@@ -402,9 +402,13 @@ class Airfoil_Artist (Artist):
     """Plot the airfoils contour  """
 
 
-    def __init__ (self, *args, **kwargs):
+    def __init__ (self, *args, 
+                  show_points = False,
+                  **kwargs):
 
         self._show_panels = False                       # show ony panels 
+        self._show_points = show_points is True         # show coordinate points
+
         self._label_with_airfoil_type = False           # include airfoil type in label 
         self._welcome_text = None                       # a HTML welcome text 
         self._first_time  = True                        # to show welcome message 
@@ -425,12 +429,22 @@ class Airfoil_Artist (Artist):
             self.set_show_points (False)
 
 
+    @property
+    def show_points (self): return self._show_points
     def set_show_points (self, aBool):
-        """ user switch to show point (marker ) """
+        """ user switch to show point (marker )
+        """
+        self._show_points = aBool is True 
 
-        # overridden to show leading edge of spline 
-        super().set_show_points (aBool)
+        p : pg.PlotDataItem
+        for p in self._plots:
+            if isinstance (p, pg.PlotDataItem):
+                if self.show_points:
+                    p.setSymbol('o')
+                else: 
+                    p.setSymbol(None)
         self.plot()             # do refresh will show leading edge of spline 
+
 
 
     def set_current (self, aLineLabel):

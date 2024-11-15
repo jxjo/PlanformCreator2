@@ -13,11 +13,10 @@ from base.artist                import *
 from base.common_utils          import *
 from base.spline                import Bezier
 
-from wing                       import Wing, Planform, Reference_Line, Planform_Bezier 
-from wing                       import Planform_2, Norm_Planform, Norm_Chord_Bezier
-from wing                       import WingSection_2, Norm_WingSection
-from wing                       import WingSections, WingSection
-from wing                       import Flaps, Flap
+from wing                       import Wing, Planform
+from wing                       import Planform_2, Norm_Planform, Norm_Chord_Bezier, Norm_Chord_Trapezoidal
+from wing                       import Norm_WingSection, Norm_WingSections 
+from wing                       import Norm_Flaps, Norm_Flap
 from model.airfoil              import Airfoil, GEO_BASIC
 
 from PyQt6.QtGui                import QColor, QBrush, QPen, QTransform
@@ -49,12 +48,19 @@ COLOR_SECTION  = QColor ('deeppink')
 class mode (Enum):
     """ enums for coordinate system an artist is working"""
 
-    NORM          = 1                       # x = 0..1      y = 0..1
-    NORM_CHORD    = 2                       # x = 0..span   y = 0..1
-    NORM_PLANFORM = 3                       # x = 0..1      y = 0..1
+    DEFAULT       = 0                       # no transformation, use default coordinates of artist
+
+    NORM_NORM     = 1                       # x = 0..1      y = 0..1
+    SPAN_NORM     = 2                       # x = 0..span   y = 0..1
+
+    PLANFORM_NORM = 3                       # x = 0..1      y = 0..1
     PLANFORM      = 4                       # x = 0..span   y = 0..chord
+
     WING_LEFT     = 5                       # x = -fuse..-span  y = chord
     WING_RIGHT    = 6                       # x = +fuse..+span  y = chord
+
+    NORM_REF      = 7                       # x = 0..1      y = 0..1 relative within reference 
+    SPAN_REF      = 8                       # x = 0..span   y = 0..1 relative within reference 
 
 
 
@@ -69,259 +75,78 @@ class Artist_Planform (Artist):
     """
 
     sig_planform_changed     = pyqtSignal ()                    # planform data changed 
-    sig_wingSection_selected = pyqtSignal (WingSection)         # new current wingSection 
-    sig_wingSection_new      = pyqtSignal (WingSection)         # new wingsection inserted 
+    sig_wingSection_selected = pyqtSignal (Norm_WingSection)    # new current wingSection 
+    sig_wingSection_new      = pyqtSignal (Norm_WingSection)    # new wingsection inserted 
     sig_wingSection_changed  = pyqtSignal ()                    # wingsection data changed 
     sig_flaps_changed        = pyqtSignal ()                    # flaps hinge line changed
 
 
     def __init__ (self, *args, 
-                  mode  = mode.PLANFORM,                        # coordinate system shall work 
+                  mode = mode.DEFAULT,                          # coordinate system shall work 
                   **kwargs):
 
-        self._mode               = mode
+        self._mode  = mode
+
         super().__init__ (*args, **kwargs)
-
-
-    @property
-    def planform (self) -> Planform_2: return self.data_object
-
-    @property
-    def wing (self) -> Wing: return self.planform.wing
-    
-    @property
-    def wingSections (self) -> list [Norm_WingSection]:
-        """ wingSections either normed or in planform """
-        return self.planform.normed.wingSections
-
-
-    @property
-    def wing_mode (self) -> bool:
-        """ does artist plot half of a complete wing"""
-        return self._mode == mode.WING_LEFT or self._mode == mode.WING_RIGHT
-
-
-
-    def _create_transform (self) -> QTransform:
-        """ create Transform object for flip and move depending on wing half and fuselage"""
-        t = None
-        half_fuse = self.wing.fuselage_width / 2
-        if self._mode == mode.WING_RIGHT:
-            t = QTransform()
-            t.translate (half_fuse,0) 
-        elif self._mode == mode.WING_LEFT:
-            t = QTransform.fromScale(-1, 1)             # flip around y-axis
-            t.translate (half_fuse,0) 
-        return t
 
 
     @override
     def plot (self):
-        """the artist will (re)plot - existing plots will be deleted 
-        """
-        # overridden to perform transformation of half wing to wing 
-        if self.show:
+        """the artist will (re)plot - existing plots will be deleted """
 
-            super().plot()
+        # override to add coordinate transformations prior to _plot 
 
-            if self.wing_mode:  
+        if self._mode == mode.PLANFORM:  
+            self.set_t_fn  (self.planform.t_norm_to_plan)                   # bound method for coordinate transformation
+            self.set_tr_fn (self.planform.t_plan_to_norm)                    
 
-                # create transform object for flip and move 
-                transform = self._create_transform ()
+        elif self._mode == mode.SPAN_NORM:  
+            self.set_t_fn  (self.planform.t_norm_to_span)                   # scale x to span
+            self.set_tr_fn (self.planform.t_span_to_norm)            
 
-                if transform:
-                    item : pg.PlotItem
-                    for item in self._plots:
-                        # do transform 
-                        item.setTransform (transform)
+        elif self._mode == mode.SPAN_REF:  
+            self.set_t_fn  (self.planform.t_norm_to_span)                   # scale x to span
+            self.set_tr_fn (self.planform.t_span_to_norm)            
 
+        elif self._mode == mode.WING_RIGHT:
+            self.set_t_fn  (self.wing.t_norm_to_wing_right)                 # scale span, chord, add fuselage
+
+        elif self._mode == mode.WING_LEFT:
+            self.set_t_fn  (self.wing.t_norm_to_wing_left)                  # scale span, chord, add fuselage
+
+        super().plot()
+
+
+    @property
+    def planform (self) -> Planform_2: 
+        return self.data_object
+
+    @property
+    def wing (self) -> Wing: 
+        return self.planform.wing
+    
+    @property
+    def wingSections (self) -> Norm_WingSections:
+        return self.planform.norm.wingSections
 
 
 # -------- concrete sub classes ------------------------
-
-
-class Planform_Artist (Artist_Planform):
-    """Plot planform leading and trailing edge """
-
-    def _plot (self): 
-    
-        x, le_y, te_y = self.planform.le_te_polyline ()
-
-        color = COLOR_PLANFORM
-        pen   = pg.mkPen(color, width=2)
-        self._plot_dataItem  (x, le_y, name=f"{self.planform}", pen = pen, antialias = True, zValue=2)
-
-        pen   = pg.mkPen(COLOR_TE, width=2)
-        self._plot_dataItem  (x, te_y, name=f"{self.planform}", pen = pen, antialias = True, zValue=2)
-
 
 
 
 class Ref_Line_Artist (Artist_Planform):
     """
     Plot the reference line either
-        - in normed planform
-        - in planform
+        - mode PLANFORM
+        - mode NORM_PLANFORM
     """
 
     def _plot (self): 
 
-        if self._mode == mode.NORM_PLANFORM:
-            x, y = self.planform.normed.ref_polyline()
-        elif self._mode == mode.PLANFORM: 
-            x, y = self.planform.ref_polyline()
-        else:
-            raise ValueError (f"{self._mode} not supported")
+        xn, yn = self.planform.norm.chord_ref_polyline()
 
-        pen   = pg.mkPen(COLOR_REF_LINE, width=2)
-        self._plot_dataItem  (x, y, name="Reference Line", pen = pen, antialias = True, zValue=3)
-
-
-
-    class Movable_Ref_Abstract (Movable_Point):
-        """ Abstract: a point of the reference line or planform to change. """
-        name = "Reference Point"
-
-        def __init__ (self, pi : pg.PlotItem, planform : Planform_2, 
-                    movable = False, show_ref_line = True, **kwargs):
-
-            self._pi = pi
-            self._planform = planform
-            self._tmp_planform_item = None 
-            self._tmp_ref_line_item = None 
-            self._show_ref_line = show_ref_line
-
-            super().__init__(self._point_xy(), movable=movable, 
-                             symbol='s', size=8, show_label_static = movable,**kwargs)
-
-
-        def _point_xy (self) -> tuple: 
-            """ x,y coordinates of point """
-            raise NotImplementedError
-
-
-        def _plot_tmp_planform (self):
-            """ create or update temp planform dashed outline """
-
-            x, y = self._planform.polygon()
-
-            if self._tmp_planform_item is None:
-                pen = pg.mkPen(QColor(COLOR_PLANFORM).darker(150), width=1, style=Qt.PenStyle.DashLine)
-                p = pg.PlotDataItem  (x, y, pen = pen, antialias = False)
-                p.setZValue (2)
-                self._pi.addItem (p)
-                self._tmp_planform_item = p
-            else:
-                self._tmp_planform_item.setData (x,y)
-
-
-        def _plot_tmp_ref_line (self):
-            """ create or update temp dashed reference line """
-
-            if self._show_ref_line:
-                x,y = self._planform.ref_polyline()
-
-                if self._tmp_ref_line_item is None:
-                    pen = pg.mkPen(QColor(COLOR_REF_LINE).darker(100), width=1, style=Qt.PenStyle.DashLine)
-                    p = pg.PlotDataItem  (x, y, pen = pen, antialias = False)
-                    p.setZValue (2)
-
-                    self._pi.addItem (p)
-                    self._tmp_ref_line_item = p
-                else:
-                    self._tmp_ref_line_item.setData (x,y)
-
-
-        @override
-        def _finished (self, _):
-            """ slot - point moving is finished"""
-
-            if self._tmp_planform_item is not None:
-                self._pi.removeItem (self._tmp_planform_item)
-                self._tmp_planform_item = None 
-            if self._tmp_ref_line_item is not None:
-                self._pi.removeItem (self._tmp_ref_line_item)
-                self._tmp_ref_line_item = None 
-
-            self._changed()
-
-
-
-    class Movable_Ref_Root (Movable_Ref_Abstract):
-        """ root point of the reference to change """
-
-        name = "@ Root"
-
-        @override
-        def _point_xy (self) -> tuple: 
-            """ x,y coordinates of ref point at root """
-            x = 0.0
-            y = self._ref_line.x_root
-            return x,y            
-
-
-        @override
-        def _moving (self, _):
-            """ self is moved"""
-            self._ref_line.set_x_root (self.y)                  # update ref line angle
-            self.setPos(self._point_xy())                       # update point position if we run against limits 
-
-            self._plot_tmp_ref_line()                           # update tmp reference line                
-            self._plot_tmp_planform()                           # and planform plot item as dashed line
-
-
-        @override
-        def label_moving (self):
-            """ label text during move"""
-            return f"{self.name} {self._ref_line.xn_root:.1%} "
-
-
-
-    class Movable_Ref_Tip (Movable_Ref_Abstract):
-        """ 
-        Represents tip point of the reference to change. 
-        """
-
-        name = "@ Tip"
-
-        def __init__ (self, *args, **kwargs):
-            super().__init__(*args,**kwargs)
-
-            self._xn_tip_org = self._ref_line.xn_tip
-            
-        @override
-        def _point_xy (self) -> tuple: 
-            """ x,y coordinates of ref point at tip"""
-            y = self._ref_line.x_at_tip
-            x = self._planform.halfwingspan
-            return x,y            
-
-
-        @override
-        def _moving (self, _):
-            """ self is moved"""
-
-            # update point position if we run against limits 
-            x_le, x_te = self._planform.planform_at_tip
-            point_y = max (x_le, self.y)
-            point_y = min (x_te, point_y)
-            point_x = self._planform.halfwingspan 
-            self.setPos((point_x, point_y))  
-
-            # update x_tip (will change angle) and xn_tip of reference line at the same time 
-            self._ref_line.set_x_tip (point_y)                
-            xn_tip = (point_y - x_le) / (x_te - x_le)
-            self._ref_line.set_xn_tip (xn_tip)
-
-            # update tmp reference line and planform plot item as dashed line
-            self._plot_tmp_ref_line()                  
-            self._plot_tmp_planform()
-
-
-        @override
-        def label_moving (self):
-            """ label text during move"""
-            return f"{self.name} {self._ref_line.xn_tip:.1%} "
+        pen   = pg.mkPen(COLOR_REF_LINE, width=1.5)
+        self._plot_dataItem  (xn, yn, name="Reference Line", pen = pen, antialias = True, zValue=4)
 
 
 
@@ -329,28 +154,33 @@ class Planform_Box_Artist (Artist_Planform):
     """ 
     Plot box arround planform contour (only if show_mouse_helper)
         - Modify chord_root and span 
+        - mode PLANFORM
+        - mode NORM_PLANFORM
     """
 
     def _plot (self): 
 
-        if self.show_mouse_helper:
+        x, y = self.planform.norm.box_polygon ()
 
-            x, y = self.planform.box_polygon ()
+        color = COLOR_BOX
+        pen   = pg.mkPen(color, width=1, style=Qt.PenStyle.DotLine)
 
-            color = COLOR_BOX
-            pen   = pg.mkPen(color, width=1, style=Qt.PenStyle.DotLine)
+        self._plot_dataItem  (x, y, pen = pen, antialias = False, zValue=1)
 
-            self._plot_dataItem  (x, y, pen = pen, antialias = False, zValue=1)
+        # movable root chord and tip  
 
-            # movable root chord and tip  
+        if self.show_mouse_helper and self._mode == mode.PLANFORM:          # changing span only for planform
 
             pt = self.Movable_Chord_Root    (self._pi, self.planform, color=color,
+                                            t_fn = self.t_fn, tr_fn = self.tr_fn, 
                                             on_changed=self.sig_planform_changed.emit)
             self._add (pt) 
             pt = self.Movable_Span          (self._pi, self.planform, color=color, 
+                                            t_fn = self.t_fn, tr_fn = self.tr_fn, 
                                             on_changed=self.sig_planform_changed.emit)
             self._add (pt) 
             pt = self.Movable_Angle         (self._pi, self.planform, color=color, 
+                                            t_fn = self.t_fn, tr_fn = self.tr_fn, 
                                             on_changed=self.sig_planform_changed.emit)
             self._add (pt) 
 
@@ -362,11 +192,16 @@ class Planform_Box_Artist (Artist_Planform):
         """
         name = "Box Point"
 
-        def __init__ (self, pi : pg.PlotItem, planform : Planform_2, 
-                      movable = True, **kwargs):
+        def __init__ (self, pi : pg.PlotItem, 
+                      planform : Planform_2, 
+                      movable = True, 
+                      t_fn = None, tr_fn = None,                              # transformation
+                      **kwargs):
 
             self._pi = pi
             self._planform = planform
+
+            self._t_fn, self._tr_fn  = t_fn, tr_fn
 
             self._tmp_box_item = None 
             self._tmp_planform_item = None 
@@ -391,7 +226,7 @@ class Planform_Box_Artist (Artist_Planform):
         def _plot_tmp_planform (self):
             """ create or update temp planform dashed outline """
 
-            x, y = self._planform.polygon()
+            x,y = self._t_fn(*self._planform.norm.polygon())
 
             if self._tmp_planform_item is None:
                 pen = pg.mkPen(QColor(COLOR_PLANFORM).darker(150), width=1, style=Qt.PenStyle.DashLine)
@@ -407,7 +242,7 @@ class Planform_Box_Artist (Artist_Planform):
         def _plot_tmp_box (self):
             """ create or update temp dashed reference line """
 
-            x,y = self._planform.box_polygon()
+            x,y = self._t_fn(*self._planform.norm.box_polygon())
 
             if self._tmp_box_item is None:
                 pen = pg.mkPen(QColor(COLOR_BOX).darker(100), width=1, style=Qt.PenStyle.DashLine)
@@ -440,25 +275,21 @@ class Planform_Box_Artist (Artist_Planform):
         name = "Angle"
 
         @override
-        def _point_xy (self) -> tuple: 
-            """ x,y coordinates of ref point at tip """
-            # upper right corner of box 
-            box_x, box_y = self._planform.box_polygon()
-            x, y = box_x[2], box_y[2]
-            return x, y         
+        def _point_xy (self) -> tuple:  
+            box_x, box_y = self._planform.norm.box_polygon()         # upper right corner of box 
+            xn, yn = box_x[1], box_y[1]
+            return self._t_fn (xn, yn)        
 
         @override
         def _moving (self, _):
-            """ self is moved"""
             angle = np.arctan (self.y /self.x) * 180 / np.pi
-            self._planform.set_sweep_angle (angle)          # update chord of planform 
+            self._planform.set_sweep_angle (angle)              # update chord of planform 
             super()._moving ()
-
 
         @override
         def label_moving (self):
-            """ label text during move"""
             return f"{self.name}  {self._planform.sweep_angle:.2f}°"
+
 
 
     class Movable_Chord_Root (Movable_Box_Abstract):
@@ -467,19 +298,20 @@ class Planform_Box_Artist (Artist_Planform):
 
         @override
         def _point_xy (self) -> tuple: 
-            """ x,y coordinates of ref point at root """
-            return 0.0, self._planform.chord_root           
+            box_x, box_y = self._planform.norm.box_polygon()         # middle point of right line
+            xn = box_x[3]
+            yn = box_y[3] 
+            return self._t_fn (xn, yn)
 
         @override
         def _moving (self, _):
-            """ self is moved"""
-            self._planform.set_chord_root (self.y)          # update chord of planform 
+            self._planform.set_chord_root (self.y)              # update chord of planform 
             super()._moving ()
 
         @override
         def label_moving (self):
-            """ label text during move"""
             return f"{self.name} {self._planform.chord_root:.1f}mm "
+
 
 
     class Movable_Span (Movable_Box_Abstract):
@@ -488,59 +320,62 @@ class Planform_Box_Artist (Artist_Planform):
 
         @override
         def _point_xy (self) -> tuple: 
-            """ x,y coordinates of ref point at tip """
-            # middle point of right line
-            box_x, box_y = self._planform.box_polygon()
-            x = box_x[2]
-            y = (box_y[2] + box_y[3]) / 2
-            return x, y         
+            box_x, box_y = self._planform.norm.box_polygon()         # middle point of right line
+            xn = box_x[1]
+            yn = (box_y[1] + box_y[2]) / 2
+            return self._t_fn (xn, yn)        
 
         @override
         def _moving (self, _):
-            """ self is moved"""
             self._planform.set_span (self.x)                # update span of planform 
             super()._moving ()
 
         @override
         def label_moving (self):
-            """ label text during move"""
             return f"{self.name} {self._planform.span:.1f}mm "
 
 
 
 
 class Norm_Chord_Artist (Artist_Planform):
-    """Plot the chord distribution  """
+    """
+    Plot the normed chord 
+        - mode SPAN_NORM
+        - mode NORM
+    """
 
     @property
     def planform_normed (self) -> Norm_Planform: 
-        return self.planform.normed
+        return self.planform.norm
     
     def _plot (self): 
-    
-        color = COLOR_CHORD
-        pen   = pg.mkPen(color, width=2)
-        brush = pg.mkBrush (color.darker (600))
 
-        xn, yn = self.planform.normed.cn_polyline () 
+        xn, yn = self.planform.norm.cn_polyline () 
+ 
+        name       = "Chord distribution"
+        color      = COLOR_CHORD
+        pen, brush = pg.mkPen(color, width=2), pg.mkBrush (color.darker (600))
 
-        if self._mode == mode.NORM_CHORD:
-            scale_x = self.planform.span
-        else: 
-            scale_x = 1.0 
-
-        x, y = xn * scale_x, yn
-
-        self._plot_dataItem  (x, y, name=None, pen = pen, antialias = True, 
+        self._plot_dataItem  (xn, yn, pen = pen, name=name, antialias = True, 
                               fillLevel=0.0, fillBrush=brush,  zValue=1)
 
-        if self.show_mouse_helper and self.planform.normed.isBezier:
+        # Chord Bezier curve based - move control points  
+
+        if self.show_mouse_helper and self.planform.norm.cn_is_bezier:
  
-            # movable Bezier curve   
-            pt = self.Movable_Chord_Bezier (self._pi, self.planform.normed._norm_chord, 
-                                            scale_x = scale_x, movable=True, color=COLOR_CHORD,
+            pt = self.Movable_Chord_Bezier (self._pi, self.planform,
+                                            t_fn = self.t_fn, tr_fn = self.tr_fn, 
+                                            movable=True, color=color,
                                             on_changed=self.sig_planform_changed.emit)
             self._add (pt) 
+
+        # Chord trapezoidal - defined by wing sections
+
+        elif self.planform.norm.cn_is_trapezoidal:
+
+            pass
+
+
 
 
     class Movable_Chord_Bezier (Movable_Bezier):
@@ -549,17 +384,18 @@ class Norm_Chord_Artist (Artist_Planform):
         a Bezier based chord distribution. 
         """
         def __init__ (self, pi : pg.PlotItem, 
-                      norm_chord : Norm_Chord_Bezier, 
-                      scale_x = 1.0,
+                      planform = Planform_2, 
+                      t_fn = None, tr_fn = None,                                # transformation
                       **kwargs):
 
             self._pi = pi
-            self._scale_x = scale_x
-            self._norm_chord = norm_chord
+            self._planform = planform
+            self._norm_chord : Norm_Chord_Bezier = self._planform.norm.chord
 
-            # scale x-coordinate of Bezier jpoints depending on mode 
+            self._t_fn, self._tr_fn  = t_fn, tr_fn
 
-            jpoints = self._norm_chord.bezier_as_jpoints (scale_x = self._scale_x)
+            jpoints = self._norm_chord.bezier_as_jpoints ()
+            jpoints = JPoint.transform (jpoints, transform_fn = self._t_fn)
 
             super().__init__(jpoints, **kwargs)
 
@@ -567,57 +403,103 @@ class Norm_Chord_Artist (Artist_Planform):
         @override
         @property
         def u (self) -> list:
-            """ the Bezier u parameter """
+            """ the Bezier u parameter array """
             return np.linspace(0.0, 1.0, num=50)
 
         @override
         def _finished_point (self, aPoint):
             """ slot - point move is finished """
-
             # write back control points into original bezier 
-            self._norm_chord.bezier_from_jpoints (self._jpoints, scale_x=self._scale_x)
-
+            self._norm_chord.bezier_from_jpoints (self._jpoints, transform_fn = self._tr_fn)
             super()._finished_point (aPoint)
 
 
 
 
-class Norm_Planform_Artist (Artist_Planform):
-    """Plot the normed Planform """
+class Planform_Artist (Artist_Planform):
+    """
+    Plot the Planform
+        - mode NORM_PLANFORM
+        - mode PLANFORM
+        - mode WING_RIGHT, WING_LET
+    """
+
+    def __init__ (self, *args, 
+                  as_contour = False,                               #  planform as outline 
+                  **kwargs):
+
+        self._as_contour = as_contour           
+        super().__init__ (*args, **kwargs)
+
+
+    @property 
+    def as_contour (self):
+        """ show planform as one contour - and not le and te seperatly"""
+        return self._as_contour
+    
 
     def _plot (self): 
     
-        xn, le_yn, te_yn = self.planform.normed.le_te_polyline () 
 
-        self._plot_dataItem  (xn, le_yn, pen=pg.mkPen(COLOR_LE, width=2), antialias=True, zValue=3)
-        self._plot_dataItem  (xn, te_yn, pen=pg.mkPen(COLOR_TE, width=2))
+        # plot planform in a single contour 
+
+        if self.as_contour:
+
+            xn, yn = self.planform.norm.polygon () 
+
+            self._plot_dataItem  (xn, yn, pen=pg.mkPen(COLOR_LE, width=2), antialias=True, zValue=3,
+                                    name=f"{self.planform}")
+            
+        # plot planform by leading and trailing edge 
+
+        else: 
+            xn, le_yn, te_yn = self.planform.norm.le_te_polyline () 
+
+            # fill plot depending on mode  
+
+            if self._mode == mode.PLANFORM_NORM:
+                brush_le, brush_te = pg.mkBrush (COLOR_LE.darker(800)), pg.mkBrush (COLOR_TE.darker(500))
+            else: 
+                brush_le, brush_te = None, None
+
+            # plot le and te 
+
+            self._plot_dataItem  (xn, le_yn, pen=pg.mkPen(COLOR_LE, width=2), antialias=True, zValue=3,
+                                name=f"Leading edge", fillLevel=0.0, fillBrush=brush_le)
+            
+            self._plot_dataItem  (xn, te_yn, pen=pg.mkPen(COLOR_TE, width=2),
+                                name=f"Trailing edge", fillLevel=0.0, fillBrush=brush_te)
 
 
 
 
-class Norm_Ref_Chord_Artist (Artist_Planform):
-    """Plot the reference line within chord distribution"""
+class Norm_Chord_Ref_Artist (Artist_Planform):
+    """
+    Plot chord reference within chord distribution
+        - mode SPAN_REF
+        - mode NORM_REF    
+    """
 
     def _plot (self): 
 
-        label = "Reference Line"
-
-        xn,yn = self.planform.normed.rn_polyline ()
+        xn,yn = self.planform.norm.chord_ref.polyline ()
 
         color = QColor (COLOR_REF_LINE) 
         pen = pg.mkPen(color, width=2)
+
+        label = "Reference Line"
 
         ref_item = self._plot_dataItem  (xn, yn, name=label, pen = pen, antialias = True, zValue=2)
 
         # plot dummy le and te and fill between re line 
 
-        le_x, le_y  = [0.0, 1.0], [0.0, 0.0]
-        te_x, te_y  = [0.0, 1.0], [1.0, 1.0]
+        le_x, le_y  = np.array([0.0, 1.0]), np.array([0.0, 0.0])
+        te_x, te_y  = np.array([0.0, 1.0]), np.array([1.0, 1.0])
 
         pen = pg.mkPen(COLOR_LE, width=2)
-        le_item = self._plot_dataItem  (le_x, le_y, pen=pen)
+        le_item = self._plot_dataItem  (le_x, le_y, pen=pen, name="Leading edge")
         pen = pg.mkPen(COLOR_TE, width=2)
-        te_item = self._plot_dataItem  (te_x, te_y, pen=pen)
+        te_item = self._plot_dataItem  (te_x, te_y, pen=pen, name="Trailing edge")
 
         brush = pg.mkBrush (COLOR_LE.darker(800))
         p = pg.FillBetweenItem (ref_item, le_item, brush=brush )
@@ -628,10 +510,12 @@ class Norm_Ref_Chord_Artist (Artist_Planform):
         self._add(p)
 
         # mouse helper to change ref line Bezier 
-        if self.show_mouse_helper and self.planform.normed.isBezier:
+
+        if self.show_mouse_helper:
  
             # movable Bezier curve   
-            pt = self.Movable_Ref_Chord_Bezier (self._pi, self.planform.normed, 
+            pt = self.Movable_Ref_Chord_Bezier (self._pi, self.planform.norm, 
+                                        t_fn = self.t_fn, tr_fn = self.tr_fn, 
                                         movable=True, color=COLOR_REF_LINE,
                                         on_changed=self.sig_planform_changed.emit)
             self._add (pt) 
@@ -640,78 +524,106 @@ class Norm_Ref_Chord_Artist (Artist_Planform):
 
     class Movable_Ref_Chord_Bezier (Movable_Bezier):
         """
-        pg.PlotCurveItem/UIGraphicsItem which represents 
-        a Bezier based reference line. 
-        The Bezier curve which can be changed by the control points
+        pg.PlotCurveItem representing a Bezier based chord reference. 
+
+        The Bezier curve can be changed by the control points.
+            - either 2 or 3 points 
+            - add/delete 3rd point 
         """
-        def __init__ (self, pi : pg.PlotItem, norm_planform : Norm_Planform, **kwargs):
+        def __init__ (self, pi : pg.PlotItem, 
+                      norm_planform : Norm_Planform,
+                      t_fn = None, tr_fn = None,                                # transformation
+                      **kwargs):
 
             self._pi = pi
             self._norm_planform = norm_planform
 
-            super().__init__(norm_planform.ref_bezier_as_jpoints (), **kwargs)
+            self._t_fn, self._tr_fn  = t_fn, tr_fn
+
+            # scale x-coordinate of Bezier jpoints depending on mode 
+            jpoints = self._norm_planform.chord_ref.bezier_as_jpoints ()
+            jpoints = JPoint.transform (jpoints, transform_fn = self._t_fn)
+
+            super().__init__(jpoints, **kwargs)
 
 
         @override
         @property
         def u (self) -> list:
             """ the Bezier u parameter """
-            return np.linspace(0.0, 1.0, num=50)
+            return np.linspace(0.0, 1.0, num=25)
+
+
+        @override
+        def _add_point (self, xy : tuple):
+            """ handle add point - will be called when ctrl_click on Bezier """
+
+            # only a third point may be added 
+            if len(self._jpoints) != 2: return   
+
+            # sanity - not too close to end points
+            if xy[0] > (self._jpoints[1].x * 0.1) and xy[0] < (self._jpoints[1].x * 0.9):
+
+                self._jpoints.insert (1, JPoint (xy))
+
+                logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
+
+                self._finished_point (None)
+
+                return True
+            else:
+                return False 
+            
+
 
         @override
         def _finished_point (self, aPoint):
             """ slot - point move is finished - write back control points"""
-            self._norm_planform.ref_bezier_from_jpoints (self._jpoints)
+
+            jpoints = JPoint.transform (self._jpoints, transform_fn = self._tr_fn)
+            self._norm_planform.chord_ref.bezier_from_jpoints (jpoints)
+
             super()._finished_point (aPoint)
 
 
 
 
+class Ref_Planforms_Artist (Artist_Planform):
+    """
+    Plot the planform contour of reference planforms 
+        - mode PLANFORM
+    """
+    def __init__ (self, *args, 
+                  show_chord = False,                               #  planform as outline 
+                  **kwargs):
 
-class Ref_Planform_Artist (Artist):
-    """Plot the planform contour  """
-
-    @property
-    def ref_planforms (self) -> list[Planform]:
-        """ list of reference planforms"""
-        return self.data_list
-
-    def _plot (self): 
-    
-        planform : Planform 
-        for planform in self.ref_planforms:
-
-            label = f"{planform.style}"
-
-            color = COLOR_REF_ELLI
-            width = 1
-            pen   = pg.mkPen(color, width=width)
-
-            y, x = planform.polygon()
-            self._plot_dataItem  (y, x, name=label, pen = pen, antialias = False, zValue=1)
-
-
-
-
-class Ref_Chord_Artist (Artist):
-    """Plot the chord distribution of reference planforms"""
+        self._show_chord = show_chord           
+        super().__init__ (*args, **kwargs)
 
     @property
-    def ref_planforms (self) -> list[Planform]:
-        """ list of reference planforms"""
-        return self.data_list
+    def ref_planforms (self) -> list[Planform_2]:
+
+        refs = []
+        refs.append (self.wing.planform_elliptical)
+        return refs
+
 
     def _plot (self): 
-    
-        planform : Planform 
+
+        planform : Planform_2 
         for planform in self.ref_planforms:
+
+            if self._show_chord:
+                xn, yn = planform.norm.cn_polyline () 
+            else:
+                xn, yn = planform.norm.polygon () 
+
+            label = f"Reference {planform.norm.name}"
 
             color = COLOR_REF_ELLI
             pen   = pg.mkPen(color, width=1)
 
-            yn, xn = planform.norm_chord_line () 
-            y = yn * planform.halfwingspan
-            self._plot_dataItem  (y, xn, name=f"{planform.style}", pen = pen, antialias = False, zValue=1)
+            self._plot_dataItem  (xn, yn, name=label, pen = pen, antialias = False, zValue=1)
 
 
 
@@ -719,11 +631,13 @@ class Ref_Chord_Artist (Artist):
 class WingSections_Artist (Artist_Planform):
     """
     Plot the wing sections either
-        - in normed chord distribution 
-        - in normed planform
-        - in planform
+        - mode NORM
+        - mode SPAN_NORM
+        - mode NORM_PLANFORM
+        - mode PLANFORM
     A section can be selected (current wing section) and
-    moved by x position or by chord 
+        - moved by x position or by chord           (not 'defines_cn')
+        - moved by x position and defining chord    ('defines_cn') 
     """
 
 
@@ -736,7 +650,7 @@ class WingSections_Artist (Artist_Planform):
 
 
     @property
-    def cur_wingSection (self) -> WingSection | None: 
+    def cur_wingSection (self) -> Norm_WingSection | None: 
         """ returns the current, selected wing section """
         if self._cur_wingSection_fn:
             return self._cur_wingSection_fn()
@@ -747,82 +661,97 @@ class WingSections_Artist (Artist_Planform):
     def _plot (self): 
 
         color = COLOR_SECTION
-        name  = "Wing Sections"                                     # to show in legend
+        m     = self._mode 
 
         # plot all sections
+
         section : Norm_WingSection
 
         for section in self.wingSections:
 
-            pen   = pg.mkPen(color, width=1)
-
-            if self._mode == mode.NORM:
-                x,y = section.line_in_chord ()
+            if   m == mode.NORM_NORM or m == mode.SPAN_NORM:
+                xn,yn = section.line_in_chord ()
+            elif m == mode.NORM_REF  or m == mode.SPAN_REF:
+                xn,yn = section.line_in_chord_ref ()
             else: 
-                x,y = section.line ()
-                if self._mode == mode.PLANFORM:
-                    x,y = self.planform.transform_norm (x,y)
+                xn,yn = section.line ()
 
-            p = self._plot_dataItem  (x, y,  name=name, pen = pen, antialias = False, zValue=3)
+            if section.defines_cn:
+                pen   = pg.mkPen(color, width=1.0)
+                name  = "Wing Sections fix"                                     
+            else:
+                pen   = pg.mkPen(color, width=1.0,style=Qt.PenStyle.DashLine)
+                name  = "Wing Sections flex"                                    
+
+            p = self._plot_dataItem  (xn, yn,  name=name, pen = pen, antialias = False, zValue=3)
+
+            # plot section name in different modes 
+
+            if m == mode.NORM_NORM:
+                point_xy = (xn[1],yn[1])                                      # point at te
+                anchor = (-0.2,0.8)
+            elif m == mode.NORM_REF or m == mode.SPAN_REF:
+                point_xy = (xn[0],yn[0])                                      # point at le
+                anchor = (0.5,1.2)                                            # always constant above 
+            else:
+                point_xy = (xn[0],yn[0])                                      # point at le
+                anchor = (0.5,2.0) if section.isTip else (0.5,1.2)            # label anchor 
+
+            self._plot_point (point_xy, color=color, size=0, text=section.name_short, textColor=color, anchor=anchor)
+
+            # highlight current section - add movable points for move by pos and move by chord 
+
+            if section == self.cur_wingSection and not (section.isRoot or section.isTip):
+
+                p.setShadowPen (pg.mkPen(QColor(COLOR_SECTION).darker(200), width=6))
+
+                if self.show_mouse_helper:
+                    pt = self.Movable_Section (self._pi, self.planform, section, 
+                                                mode = m, t_fn = self.t_fn, tr_fn = self.tr_fn,
+                                                move_by_pos=True,
+                                                on_changed=self.sig_wingSection_changed.emit)
+                    self._add (pt) 
+
+                    if m == mode.SPAN_REF or m == mode.NORM_REF:                # move doesn't make sense  (yn==1)
+                        movable = False
+                    else:
+                        movable = True  
+                    pt = self.Movable_Section (self._pi, self.planform, section, 
+                                                mode = m, t_fn = self.t_fn, tr_fn = self.tr_fn,
+                                                move_by_pos=False, movable=movable,
+                                                on_changed=self.sig_wingSection_changed.emit)
+                    self._add (pt) 
+
+            # make line clickable if there is a callback 
+            if self._cur_wingSection_fn:
+                p.setCurveClickable (True, width=8)
+                p.sigClicked.connect (self._section_item_clicked)
 
 
-            if not self.wing_mode:
-
-                # plot section name in planform view 
-                if self._mode == mode.NORM:
-                    point_xy = (x[1],y[1])                                      # point at te
-                    anchor = (-0.2,0.8)
-                else:
-                    point_xy = (x[0],y[0])                                      # point at le
-                    anchor = (0.5,2.0) if section.isTip else (0.5,1.2)          # label anchor 
-
-                self._plot_point (point_xy, color=color, size=0, text=section.name_short, textColor=color, anchor=anchor)
-
-                # highlight current section - add movable points for move by pos and move by chord 
-
-                # if section.index() == self.cur_wingSection and not (section.isRoot or section.isTip):
-                if section.index() == 1 :
-
-                    p.setShadowPen (pg.mkPen(QColor(COLOR_SECTION).darker(150), width=4))
-
-                    if self.show_mouse_helper:
-                        pt = self.Movable_Section (self._pi, self.planform, section, 
-                                                   mode = self._mode, 
-                                                   move_by_pos=True, name="Move by pos",
-                                                   color=COLOR_SECTION,
-                                                   on_changed=self.sig_wingSection_changed.emit)
-                        self._add (pt) 
-                        pt = self.Movable_Section (self._pi, self.planform, section, 
-                                                   mode = self._mode,
-                                                   move_by_pos=False, name="Move by chord",
-                                                   color=COLOR_SECTION,
-                                                   on_changed=self.sig_wingSection_changed.emit)
-                        self._add (pt) 
-
-                # make line clickable if there is a callback 
-                if self._cur_wingSection_fn:
-                    p.setCurveClickable (True, width=8)
-                    p.sigClicked.connect (self._section_item_clicked)
-
-                name = None                                             # legend entry only for frst item 
-
-        if not self.wing_mode:
+        if not (m == mode.WING_LEFT or m == mode.WING_RIGHT):
             # make scene cklickable to add wing section 
             #   delayed as during init scene is not yet available
             QTimer().singleShot (10, self._connect_scene_mouseClick)
 
 
     def _section_item_clicked (self, item : pg.PlotDataItem,  ev : MouseClickEvent):
-        """ a wing section item was clicked - select or delete (shift-click) it"""
+        """
+        wing section item was clicked 
+            - select
+            - delete (shift-click)
+            - select & toggle 'defines_cn' (alt-click)"""
     
-        x_pos = item.xData[0]
-        if self._mode == mode.NORM or self._mode == mode.NORM_PLANFORM:
-            xn = x_pos
-        else: 
-            xn = x_pos / self.planform.span
+        x, y   = item.xData[0], item.yData[0]
+        xn, _  = self.tr_fn (x, y)                                      # transform to norm 
 
+        section : Norm_WingSection
         for section in self.wingSections:
             if section.xn() == xn: break 
+
+        # sanity 
+        if section.xn() != xn:
+            raise ValueError ("WIng section could be detected")
+
 
         # shift-click - delete section 
 
@@ -830,6 +759,14 @@ class WingSections_Artist (Artist_Planform):
             
             new_current = self.wingSections.delete (section) 
             if new_current: 
+                QTimer().singleShot(10, lambda: self.sig_wingSection_selected.emit (section))
+
+        # alt-click - toggle defines chord  
+
+        if (ev.modifiers() & QtCore.Qt.KeyboardModifier.AltModifier): 
+            
+            toggled = section.set_defines_cn (not section.defines_cn) 
+            if toggled: 
                 QTimer().singleShot(10, lambda: self.sig_wingSection_selected.emit (section))
 
 
@@ -870,13 +807,20 @@ class WingSections_Artist (Artist_Planform):
         # handle only ctrl-click
         if not (ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier): return  
        
+        # ! #todo
+        # current 2 mouse click events arrive - why? 
+
         # get scene coordinates of click pos and map to view box 
         viewbox : pg.ViewBox = ev.currentItem
         if viewbox == self._pi.vb:                     # is this my view box (or of another plot item)? 
+            
+            ev.accept()
+
             pos : pg.Point = viewbox.mapSceneToView(ev.scenePos())
+            xn, _ = self.tr_fn (pos.x(), pos.y())
 
             # create new section  and signal ...
-            section = self.wing.wingSections.create_at (pos.x())
+            section = self.wingSections.create_at (xn)
 
             if section: 
                 QTimer().singleShot(10, lambda: self.sig_wingSection_new.emit (section))     
@@ -892,23 +836,31 @@ class WingSections_Artist (Artist_Planform):
         def __init__ (self,
                     pi      : pg.PlotItem, 
                     planform : Planform_2,
-                    section : Norm_WingSection , 
+                    section : Norm_WingSection, 
                     movable = True, 
-                    move_by_pos = True,                    # either by pos or by chord '
-                    mode = mode.PLANFORM,                  # coordinate system
+                    move_by_pos = True,                                     # either by pos or by chord '
+                    mode = mode.PLANFORM,                                   # coordinate system
+                    t_fn = None, tr_fn = None,                              # transformation
                     **kwargs):
 
             self._pi = pi
             self._planform = planform 
             self._section = section
             self._tmp_section_item = None 
-            self._move_by_pos = move_by_pos
+            self._tmp_outline_item = None 
+
+
+            # different modi of a section point 
+            self._move_by_pos   = move_by_pos
+            self._move_by_chord = not move_by_pos if not section.defines_cn else False
+            self._define_chord  = not move_by_pos if     section.defines_cn else False
 
             self._mode = mode 
+            self._t_fn, self._tr_fn  = t_fn, tr_fn
 
-            self._in_move = False                           # move recursion detection          
+            self._in_move = False                                           # move recursion detection          
 
-            super().__init__(self._point_xy(), movable=movable, 
+            super().__init__(self._point_xy(), movable=movable, color=COLOR_SECTION,
                              symbol='s', size=8, show_label_static = movable,**kwargs)
             
             # set static brush depending if point to indicate current section dependancy ...
@@ -920,14 +872,14 @@ class WingSections_Artist (Artist_Planform):
         def _line_of_section (self) -> tuple:
             """ poyline of section in display coordinate"""
 
-            # covert to display coordinates 
-            if self._mode == mode.NORM:
-                x,y = self._section.line_in_chord ()
+            if self._mode == mode.NORM_NORM or self._mode == mode.SPAN_NORM:
+                xn,yn = self._section.line_in_chord ()
+            elif self._mode == mode.NORM_REF or self._mode == mode.SPAN_REF:
+                xn,yn = self._section.line_in_chord_ref ()
             else: 
-                x,y = self._section.line ()
-                if self._mode == mode.PLANFORM:
-                    x,y = self._planform.transform_norm (x,y)
-            return x,y 
+                xn,yn = self._section.line ()
+
+            return self._t_fn (xn,yn)                               # transformed coordinates
 
 
         def _point_xy (self) -> tuple: 
@@ -937,7 +889,7 @@ class WingSections_Artist (Artist_Planform):
 
             if self._move_by_pos:
                 point_xy = (x[0],y[1])                              # point at te 
-            else:
+            elif self._move_by_chord or self._define_chord:
                 point_xy = (x[0],y[0])                              # point at 0                 
             return point_xy
 
@@ -951,25 +903,35 @@ class WingSections_Artist (Artist_Planform):
             if self._in_move: return 
             self._in_move = True 
 
+            xn, yn = self._tr_fn (self.x, self.y)
+
             # check if mouse point is between neighbour sections
-            if self._mode == mode.NORM or self._mode == mode.NORM_PLANFORM:
-                xn = self.x
-            else: 
-                xn = self.x / self._planform.span
-
             left_xn, right_xn = self._section.xn_limits()
-            xn = max (left_xn,  xn) 
-            xn = min (right_xn, xn)
+            xn = np.clip (xn, left_xn, right_xn)
 
-            if self._move_by_pos:
-                self._section.set_xn (xn)                     # update section line of  
-            else:
+
+            if   self._move_by_pos:
+                self._section.set_xn (xn)                       # update section pos
+
+            elif self._move_by_chord:
                 cn = self._section._planform.cn_at (xn)
-                self._section.set_cn (cn)
+                self._section.set_cn (cn)                       # update section pos by chord
 
-            self.setPos(self._point_xy())                       # update point position if we run against limits              
+            elif self._define_chord:
+                if self._mode == mode.PLANFORM or self._mode == mode.PLANFORM_NORM:
+                    _, te_yn = self._section.le_te ()
+                    cn = yn - te_yn                             # calculate new cn from planform
+                else: 
+                    cn = yn                                     # yn is chord 
+                left_cn, right_cn = self._section.cn_limits()   # cn shouldn't be more dann left neighbour
+                cn = np.clip (cn, right_cn, left_cn)
+                self._section.set_cn (cn)                       # update section chord
+
+
+            self.setPos(self._point_xy())                       # update point position if we run against limits  
+
             self._plot_tmp_section_line()                       # create or update temp section line
-
+            self._plot_tmp_outline ()                             # create or update temp chord polyline
             self._in_move = False
 
 
@@ -982,37 +944,58 @@ class WingSections_Artist (Artist_Planform):
                 pen = pg.mkPen(QColor(COLOR_SECTION).darker(100), width=1, style=Qt.PenStyle.DashLine)
                 p = pg.PlotDataItem  (x, y, pen = pen, antialias = False, zValue=2)
                 p.setZValue (2)
-
                 self._pi.addItem (p)
                 self._tmp_section_item = p
-
             else:
                 self._tmp_section_item.setData (x,y)
+
+
+        def _plot_tmp_outline (self):
+            """ create or update temp chord dashed outline if section defines chord """
+
+            if not self._section.defines_cn: return 
+
+            if self._mode == mode.SPAN_REF or self._mode == mode.NORM_REF:
+                return                                                  # outline doesn't make sense ...
+
+            if self._mode == mode.NORM_NORM or self._mode == mode.SPAN_NORM:
+                x,y = self._t_fn(*self._planform.norm.cn_polyline())
+                pen = pg.mkPen(QColor(COLOR_CHORD).darker(150), width=1, style=Qt.PenStyle.DashLine)
+            else:
+                x,y = self._t_fn(*self._planform.norm.polygon())
+                pen = pg.mkPen(QColor(COLOR_PLANFORM).darker(150), width=1, style=Qt.PenStyle.DashLine)
+
+            if self._tmp_outline_item is None:
+                p = pg.PlotDataItem  (x, y, pen = pen, antialias = False)
+                p.setZValue (2)
+                self._pi.addItem (p)
+                self._tmp_outline_item = p
+            else:
+                self._tmp_outline_item.setData (x,y)
 
 
         @override
         def label_static (self) -> str:
             """ the static label depending on fixed pos or chord"""
-
             if self._move_by_pos:               
-                return "Fixed by pos"   if self._section.has_fix_pos   else "Flex pos"
+                return "Fixed pos"   if self._section.has_fix_pos   else "Flex pos"
             else:
-                return "Fixed by chord" if self._section.has_fix_chord else "Flex chord"
+                return "Fixed chord" if self._section.has_fix_chord else "Flex chord"
 
 
         @override
         def label_moving (self):
             """ label text during move"""
             if self._move_by_pos:
-                if self._mode == mode.PLANFORM:
+                if self._mode == mode.PLANFORM or self._mode == mode.SPAN_NORM:
                     x = self._section.xn() * self._planform.span
                     lab = f"pos {x:.1f}mm"
                 else: 
                     lab = f"pos {self._section.xn():.2f}"
             else:
-                if self._mode == mode.NORM:
+                if self._mode == mode.NORM_NORM or self._mode == mode.SPAN_NORM:
                     lab = f"chord {self._section.cn():.1%}"
-                elif self._mode == mode.NORM_PLANFORM:
+                elif self._mode == mode.PLANFORM_NORM:
                     lab = f"chord {self._section.cn():.2f}"
                 else:
                     c = self._section.cn() * self._planform.chord_root
@@ -1027,6 +1010,9 @@ class WingSections_Artist (Artist_Planform):
             if self._tmp_section_item is not None:
                 self._pi.removeItem (self._tmp_section_item)
                 self._tmp_section_item = None 
+            if self._tmp_outline_item is not None:
+                self._pi.removeItem (self._tmp_outline_item)
+                self._tmp_outline_item = None 
 
             self._changed()
 
@@ -1034,65 +1020,75 @@ class WingSections_Artist (Artist_Planform):
 
 
 class Flaps_Artist (Artist_Planform):
-    """Plot the flaps in planform """
+    """
+    Plot the flaps in  
+        - mode PLANFORM
+        - mode SPAN_NORM
+        - mode SPAN_REF
+        - mode NORM_PLANFORM
+    """
 
     def _plot (self): 
 
-        flaps = self.wing.flaps.get()
-        if not flaps: return 
+        flaps      = self.planform.norm.flaps
+        flaps_list = flaps.get()
+        if not flaps_list: return 
 
-        colors = random_colors (len(flaps))
-
+        colors = random_colors (len(flaps_list))
         color : QColor = colors[0]
-        pen   = pg.mkPen(color, width=2)
 
-        if self._mode == mode.NORM:
+        if self._mode == mode.NORM_REF or self._mode == mode.SPAN_REF:
 
             # plot relative depth distribution in chord distribution 
 
+            x,y = flaps.hinge_cn_polyline ()  
+
+            pen   = pg.mkPen(color, width=1, style=Qt.PenStyle.DashLine)
             brush_color = color.darker(300)
             brush_color.setAlphaF (0.4)
-            brush = pg.mkBrush (brush_color)         
-            x,y = self.wing.flaps.rel_depth_polyline ()  
+            brush = pg.mkBrush (brush_color)   
+
             self._plot_dataItem  (x, y,  pen = pen, antialias = True, name="Relative Flap Depth",
                                     fillLevel=0.0, fillBrush=brush,  zValue=3)
         else:
 
             # plot single flaps 
 
-            self._plot_flaps (flaps, colors) 
+            self._plot_flaps (flaps_list, colors) 
 
-        # moving points at hinge of flaps 
+            # moving points at hinge of flaps 
 
-        if self.show_mouse_helper and not self.flaps.hinge_equal_ref_line:
-            p = self.Movable_Hinge (self._pi, self.wing.flaps, color=color, mode=self._mode,
-                                            movable=True, on_changed=self.sig_flaps_changed.emit)
-            self._add(p) 
+            if self.show_mouse_helper and not self.planform.norm.hinge_equal_ref_line:
+
+                p = self.Movable_Hinge  (self._pi, self.planform, color=color, mode=self._mode, 
+                                        t_fn = self.t_fn, tr_fn = self.tr_fn, 
+                                        movable=True, on_changed=self.sig_flaps_changed.emit)
+                self._add(p) 
                 
 
 
-    def _plot_flaps (self, flaps, colors):
+    def _plot_flaps (self, flaps : list[Norm_Flap], colors):
         """ plot the single flaps"""
 
-        if self._mode == mode.NORM: return                   # not implemented
+        gap = 0.002
+        name = "Flaps"
 
-        flap : Flap
         for i, flap in enumerate (flaps):
 
             color : QColor = colors[i]
             pen   = pg.mkPen(color, width=1)
 
             # flap contour left and right side 
-            x,y = flap.line_left(y_offset=0.5)  
-            self._plot_dataItem  (x, y,  pen = pen, antialias = False, zValue=1)
-            x,y = flap.line_right(y_offset=0.5)  
+            x,y = flap.line_left (x_offset=gap)  
+            self._plot_dataItem  (x, y,  pen = pen, name=name, antialias = False, zValue=1)
+            x,y = flap.line_right(x_offset=gap)  
             self._plot_dataItem  (x, y,  pen = pen, antialias = False, zValue=1)
 
             # hinge and te 
-            x,y = flap.line_hinge(y_offset=0.5)  
+            x,y = flap.line_hinge (x_offset=gap)  
             p1 = self._plot_dataItem  (x, y,  pen = pen, antialias = False, zValue=1)
 
-            x,y = flap.line_te(y_offset=0.5)  
+            x,y = flap.line_te (x_offset=gap)  
             p2 = self._plot_dataItem  (x, y,  pen = pen, antialias = False, zValue=1)
 
             # fill area between hinge and te 
@@ -1101,8 +1097,9 @@ class Flaps_Artist (Artist_Planform):
             self._add (p)
 
             # plot flap group in the middle of the flap - not in 'wing mode'
-            if not self.wing_mode:
-                self._plot_point (flap.center(), color=color, size=0, text=flap.name, textColor=color, anchor=(0.5,0.5))
+            if not (self._mode == mode.WING_LEFT or self._mode == mode.WING_RIGHT):
+                x, y = flap.center()
+                self._plot_point (x,y, color=color, size=0, text=flap.name, textColor=color, anchor=(0.5,0.5))
 
 
 
@@ -1117,35 +1114,47 @@ class Flaps_Artist (Artist_Planform):
         class Movable_Hinge_Point (Movable_Point):
             """ Represents hinge movable point """
 
-            def __init__ (self, *args, flaps : Flaps = None, 
-                            mode = mode.PLANFORM,                  # coordinate system
+            def __init__ (self, *args, 
+                          planform = Planform_2, 
+                          mode = mode.PLANFORM,
+                          t_fn = None, tr_fn = None,                                # transformation
                           **kwargs):
 
                 self._mode = mode
-                self._flaps = flaps 
+                self._planform = planform
+                self._t_fn  = t_fn
+                self._tr_fn = tr_fn
+                self._flaps : Norm_Flaps = planform.norm.flaps
+
                 super().__init__ (*args, **kwargs) 
 
 
             @override
             def label_moving (self):
                 """ label text during move"""
-                if self._mode == mode.NORM:
+
+                if self._mode == mode.NORM_NORM :
                     rel_depth  = self.y
                     return f"{self.name} {rel_depth:.1%}"
-                else:
-                    hinge_x    = self.y
-                    le_x, te_x = self._flaps._planform._planform_at (self.x)
-                    depth      = te_x - hinge_x
-                    depth_norm = (te_x - hinge_x) / (te_x - le_x)
-                    return f"{self.name} {depth:.1f}mm {depth_norm:.1%}"
+                
+                if self._mode == mode.PLANFORM_NORM :
+                    xn, hinge_yn = self.x, self.y
+                    return f"{self.name} {self._flaps.depth_at(xn, hinge_yn=hinge_yn):.1%}"
+
+                elif self._mode == mode.PLANFORM:
+                    xn, hinge_yn = self._tr_fn (self.x, self.y)
+                    depth_n  = self._flaps.depth_at(xn, hinge_yn=hinge_yn)
+                    _, te_yn = self._planform.norm.le_te_at (xn)                # calc real flap depth 
+                    _, y_arr = self._t_fn ([0,0], [hinge_yn, te_yn])            # transform
+                    depth    =  y_arr[1] - y_arr[0]     
+                    return f"{self.name} {depth:.1f}mm {depth_n:.1%}"
 
 
 
-        def __init__ (self, 
-                    pi : pg.PlotItem, 
-                    flaps : Flaps,
-                    mode = mode.PLANFORM,                  # coordinate system
-                    id = None, 
+        def __init__ (self, pi : pg.PlotItem, 
+                    planform = Planform_2, 
+                    mode = mode.PLANFORM,
+                    t_fn = None, tr_fn = None,                                  # transformation
                     color = None, 
                     movable = False,
                     label_anchor = (0,1),
@@ -1153,28 +1162,27 @@ class Flaps_Artist (Artist_Planform):
                     **kwargs):
 
             self._pi = pi
-            self._flaps = flaps
-            self._mode = mode
-            self._callback_changed = on_changed
-            self._id = id 
-            self.movable = movable 
+            self._planform = planform
+            self._flaps : Norm_Flaps = planform.norm.flaps
 
-            # Control jpoints  
-            if self._mode == mode.NORM:
-                self._jpoints : list[JPoint] = self._flaps.rel_depth_as_jpoints ()
+            self._mode = mode 
+            self._t_fn, self._tr_fn  = t_fn, tr_fn
+            self._callback_changed = on_changed
+
+            # Control jpoints - transform them to current coordinate system   
+
+            if self._mode == mode.NORM_NORM:
+                self._jpoints = self._flaps.rel_depth_as_jpoints ()
             else:
-                self._jpoints : list[JPoint] = self._flaps.hinge_as_jpoints ()
+                self._jpoints = self._flaps.hinge_as_jpoints (transform_fn = t_fn)
 
             # init polyline of control points as PlotCurveItem and hide 
-            pen = pg.mkPen (color, width=1, style=Qt.PenStyle.DotLine)
-            
-            super().__init__(*self.jpoints_xy(), pen=pen)
 
-            if movable:
-                self.setZValue (10)                                 # movable dotted line above other objects 
-            else: 
-                self.setZValue (5)
-           
+            x, y = self.jpoints_xy()                                # coordinates will define hinge line  
+
+            super().__init__(x, y, pen=pg.mkPen (color, width=1, style=Qt.PenStyle.DotLine))
+
+            self.setZValue (10) if movable else self.setZValue (5)             
             self.setCurveClickable (True, width=8)                  # make clickable to add new point 
             self.sigClicked.connect (self._hinge_item_clicked)
 
@@ -1182,8 +1190,9 @@ class Flaps_Artist (Artist_Planform):
 
             for i, jpoint in enumerate (self._jpoints):
 
-                p = self.Movable_Hinge_Point (jpoint, flaps=flaps, mode=mode, id = i, parent=self, 
+                p = self.Movable_Hinge_Point (jpoint, planform=planform, mode=mode, id = i, parent=self, 
                                               movable=movable, 
+                                              t_fn = t_fn, tr_fn = tr_fn,               # transformation
                                               color=color, symbol='s', size=7, label_anchor=label_anchor, **kwargs) 
                 
                 p.sigPositionChanged.connect        (self._moving_point)
@@ -1191,11 +1200,6 @@ class Flaps_Artist (Artist_Planform):
                 p.sigShiftClick.connect             (self._delete_point)
 
 
-        @property
-        def id (self):
-            """ returns id of self """
-            return self._id 
-    
 
         def jpoints_xy (self) -> tuple[list]:
             """returns coordinates of self_jpoints as x, y lists """
@@ -1220,10 +1224,14 @@ class Flaps_Artist (Artist_Planform):
             """ slot - point should be deleted """
 
             # a minimum of 3 control points 
-            if len(self._jpoints) <= 3: return   
+            if len(self._jpoints) < 3: return   
+
+            i = aPoint.id
+
+            # not root or tip 
+            if i == 0 or i == (len(self._jpoints) -1 ): return
 
             # remove from list
-            i = aPoint.id
             del self._jpoints[i]                                # update self point list 
             self.setData (*self.jpoints_xy())                   # update self (polyline) 
 
@@ -1241,26 +1249,28 @@ class Flaps_Artist (Artist_Planform):
             # get y-position on the hinge line 
             viewbox : pg.ViewBox = self.getViewBox ()               
             pos : pg.Point = viewbox.mapSceneToView(ev.scenePos())
-            y = pos.x()
+            x, y = pos.x(), pos.y()
 
-            insert_ok = self._flaps.insert_hinge_point_at (y) 
+            xn, yn = self._tr_fn (x,y)                          # reverse transformation into normed 
+            insert_ok = self._flaps.insert_hinge_point_at (xn) 
 
             if insert_ok:
                 # if successful, leave self directly without updatung points 
                 ev.accept()
                 if callable(self._callback_changed):
                     QTimer().singleShot(10, lambda: self._callback_changed())
-
+            else: 
+                ev.ignore()
 
 
         def _finished_point (self, aPoint):
             """ slot - point move is finished """
             
             self.hide()
-            if self._mode == mode.NORM:
+            if self._mode == mode.NORM_NORM:
                 self._flaps.rel_depth_from_jpoints (self._jpoints)
             else: 
-                self._flaps.hinge_from_jpoints (self._jpoints)
+                self._flaps.hinge_from_jpoints (self._jpoints, transform_fn=self._tr_fn)
 
             if callable(self._callback_changed):
                 QTimer().singleShot(10, lambda: self._callback_changed())
@@ -1299,7 +1309,7 @@ class Planform_Airfoil_Artist (Artist_Planform):
 
     @property
     def show_thick (self) -> bool:
-        """ true - plotmax thickness """
+        """ true - plot max thickness """
         return self._show_thick
     def set_show_thick (self, aBool : bool):
         self._show_thick = aBool == True
@@ -1308,11 +1318,6 @@ class Planform_Airfoil_Artist (Artist_Planform):
 
     def _plot (self): 
 
-        if self._mini_mode:
-            self._plot_title ("Airfoils", offset=(-20,+20) )
-        else:
-            sub = "Real Size" if self.real_size else ""
-            self._plot_title ("Airfoils", subTitle=sub,  offset=(-20,-30) )
 
         # plot airfoil of wing Sections 
 
@@ -1322,54 +1327,65 @@ class Planform_Airfoil_Artist (Artist_Planform):
         if self.show_strak:
             self.wingSections.do_strak (geometry=GEO_BASIC)
 
-        # section : WingSection
-        # for i, section in enumerate (self.wingSections):
-        #     airfoil = section.airfoil
-        #     if (airfoil.isLoaded) and not (not self.show_strak and airfoil.isBlendAirfoil):
+        section : Norm_WingSection
 
-        #         # plot contour 
+        for i, section in enumerate (self.wingSections):
 
-        #         if self.real_size:
-        #             le_x = section.line ()[1][0]
-        #             x = airfoil.x * section.chord + le_x 
-        #             y = airfoil.y * section.chord 
-        #         else:
-        #             x = airfoil.x
-        #             y = airfoil.y
+            airfoil = section.airfoil
+            if (airfoil.isLoaded) and not (not self.show_strak and airfoil.isBlendAirfoil):
 
-        #         color : QColor = colors[i]
-        #         if self._mini_mode:
-        #             color = color.darker(130)  
-        #             label = f"{airfoil.name}"
-        #         else:    
-        #             label = f"{airfoil.name} @ {section.name}"   
-        #         pen = pg.mkPen(color, width=1.5)
-        #         antialias = True
+                if self.real_size:
 
-        #         self._plot_dataItem  (x, y, name=label, pen = pen, antialias = antialias, zValue=2)
+                    # the coordinate transformation (mode) can't be used because 
+                    # airfoils y_coordinates are z-axis in wing...  
+                    line_x, line_y = self.planform.t_norm_to_plan (*section.line())  # get section as line 
+                    le_x, te_x = line_y[0],  line_y[1]
+                    chord = te_x - le_x
+
+                    x, y = airfoil.x * chord + le_x, airfoil.y * chord
+
+                else:
+
+                    x, y = airfoil.x, airfoil.y
+
+                color : QColor = colors[i]
+                if self._mini_mode:
+                    color = color.darker(130)  
+                    label = f"{airfoil.name}"
+                else:    
+                    label = f"{airfoil.name} @ {section.name_short}"  
+
+                if airfoil.isBlendAirfoil:
+                    pen = pg.mkPen(color, width=1.5, style=Qt.PenStyle.DashLine)
+                else:
+                    pen = pg.mkPen(color, width=1.5)
+
+                self._plot_dataItem  (x, y, name=label, pen = pen, antialias = True, zValue=2)
                 
-        #         # plot thickness highpoint with max thickness line 
+                # plot thickness highpoint with max thickness line 
 
-        #         if self.show_thick:
-        #             x,t = airfoil.geo.thickness.highpoint.xy
-        #             y_u = airfoil.geo.upper.yFn (x)                               # thickness highpoint on upper line 
-        #             y_l = airfoil.geo.lower.yFn (x)                               # thickness highpoint on lower line 
-        #             if self.real_size:
-        #                 x   = x *   section.chord + le_x 
-        #                 y_u = y_u * section.chord 
-        #                 y_l = y_l * section.chord 
-        #                 t   = t *   section.chord
-        #                 label = f"{t:.1f}mm @ {x:.0f}mm"
-        #             else: 
-        #                 label = f"{t:.1%} @ {x:.0%}"
+                if self.show_thick:
+                    x,t = airfoil.geo.thickness.highpoint.xy
+                    t_x = x
+                    y_u = airfoil.geo.upper.yFn (x)                               # thickness highpoint on upper line 
+                    y_l = airfoil.geo.lower.yFn (x)                               # thickness highpoint on lower line 
+                    if self.real_size:
+                        x   = x *   chord + le_x 
+                        y_u = y_u * chord 
+                        y_l = y_l * chord 
+                        t   = t *   chord
+                        t_x = t_x * chord 
+                        label = f"{t:.1f}mm @ {t_x:.0f}mm"
+                    else: 
+                        label = f"{t:.1%} @ {t_x:.0%}"
 
-        #             self._plot_point (x,y_u, symbol='+', color=color, text=label)
+                    self._plot_point (x,y_u, symbol='+', color=color, text=label)
 
-        #             line_x = [x,x]
-        #             line_y = [y_l, y_u]
-        #             pen = pg.mkPen(color.darker(150), width=1)
+                    line_x = [x,x]
+                    line_y = [y_l, y_u]
+                    pen = pg.mkPen(color.darker(150), width=1)
 
-        #             self._plot_dataItem  (line_x, line_y, pen = pen, antialias = False, zValue=1)
+                    self._plot_dataItem  (line_x, line_y, pen = pen, antialias = False, zValue=1)
 
 
 

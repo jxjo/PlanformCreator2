@@ -281,7 +281,7 @@ class Diagram_Item (pg.PlotItem):
 
         self.setup_artists ()
 
-        # setup view range (must be override) is done in refesh() - 
+        # setup view range (must be override) is done in refresh() - 
 
         self._viewRange_set = False
 
@@ -323,6 +323,12 @@ class Diagram_Item (pg.PlotItem):
             if artist.__class__ in look_for:
                 result.append(artist)
         return result 
+
+
+    def _show_artist (self, artist_class : Type[Artist], show : bool = True):
+        """show on/off of artist having artist_class name """
+        for artist in self._get_artist (artist_class):
+            artist.set_show (show) 
 
 
     @override
@@ -433,7 +439,10 @@ class Diagram_Item (pg.PlotItem):
         # initial, deferred setup of viewRange 
 
         if not self._viewRange_set:
-            self.setup_viewRange ()
+            # for any reason 'setup_viewRange' must be deferred as sometimes the first 
+            #     setup won't be applied (view updated)
+            QTimer.singleShot(10, self.setup_viewRange)   
+            # self.setup_viewRange ()
             self._viewRange_set = True
 
         # plot title and sub title with default values of class
@@ -474,7 +483,7 @@ class Diagram_Item (pg.PlotItem):
                     title : str|None = None,
                     subtitle : str|None = None, 
                     align :str ='left', 
-                    offset : tuple = (70,5)):
+                    offset : tuple = (50,5)):
         """plot a title, optionally with a sub title, at fixed position
 
         Args:

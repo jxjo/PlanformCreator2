@@ -3,6 +3,7 @@
 
 import os
 import sys
+import numpy as np 
 from pathlib import Path
 
 import pyqtgraph as pg
@@ -52,8 +53,20 @@ pi2 = l.addPlot(title="chord reference ")
 pi2.getViewBox().setRange (xRange=( 0,1), yRange=( 0,1), padding=0.1)
 pi2.getAxis ('left').setWidth (30)
 
-norm_planform = Norm_Planform(norm_chord)
-rxn, rn = norm_planform.rn_polyline()
+# test 2 point bezier 
+
+px = [   0,  1]
+py = [  0.5, 0.2]
+u  = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
+
+bez = Bezier (px, py)
+bez_x,bez_y = bez.eval(u)
+pi2.plot (bez_x,bez_y, pen=pg.mkPen(color='pink', width=1.5)) 
+
+# end test 
+
+norm_planform = Norm_Planform(None, norm_chord)
+rxn, rn = norm_planform._norm_chord.polyline()
 
 le_x    = [0.0, 1.0]
 le_y    = [0.0, 0.0]
@@ -63,7 +76,7 @@ te_y    = [1.0, 1.0]
 
 ref_item = pi2.plot (rxn,rn, pen=pg.mkPen(color='springgreen', width=1.5)) 
 le_item  = pi2.plot (le_x,le_y, pen='red', antialias=False) 
-te_item = pi2.plot (te_x,te_y, pen='yellow', antialias=False) 
+te_item  = pi2.plot (te_x,te_y, pen='yellow', antialias=False) 
 
 # fill area between ref and le, te 
 brush = pg.mkBrush (QColor('red').darker(800))
@@ -84,7 +97,7 @@ pi3.getAxis ('left').setWidth (30)
 xn, le_yn, te_yn = norm_planform.le_te_polyline()
 
 # ref line
-r_xn, r_yn = norm_planform.ref_polyline()
+r_xn, r_yn = norm_planform.chord_ref_polyline()
 
 # box
 box_xn, box_yn = norm_planform.box_polygon ()
@@ -135,22 +148,20 @@ pi4.getAxis ('left').setWidth (30)
 pi4.getViewBox().invertY(True)
 pi4.getViewBox().setAspectLocked()
 
-planform = Planform_2 (norm_planform=norm_planform, chord_root=200, span=800, sweep_angle=0)
+planform = Planform_2 ()
 
 x, le_y, te_y = planform.le_te_polyline ()
-box_x, box_y  = planform.box_polygon ()
 ref_x, ref_y  = planform.ref_polyline ()
 
 
 pi4.plot(x , le_y, pen='red')
 pi4.plot(x , te_y, pen='yellow')
 pi4.plot(ref_x, ref_y, pen='springgreen')
-pi4.plot(box_x, box_y, pen='blue')
 
 
 # --- shear  
 
-planform = Planform_2.default()
+planform = Planform_2()
 angle = 5
 
 pi6 = l.addPlot(title=f"shear by angle {angle}° ")
@@ -162,18 +173,12 @@ pi6.getAxis ('left').setWidth (30)
 planform.set_sweep_angle (10)
 
 x, le_y, te_y = planform.le_te_polyline ()
-box_x, box_y  = planform.box_polygon ()
 ref_x, ref_y  = planform.ref_polyline ()
 
 pi6.plot(x , le_y, pen='red')
 pi6.plot(x , te_y, pen='yellow')
 pi6.plot(ref_x, ref_y, pen='springgreen')
-pi6.plot(box_x, box_y, pen='blue')
 
-# wing sections
-# sections = planform.wingSections ()
-for section in planform.wingSections ():
-    pi6.plot (*section.line(), pen='deeppink')
 
 
 

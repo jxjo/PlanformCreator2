@@ -574,22 +574,23 @@ def basisFunction (n, i, u):
     return J 
 
 
-# class for evaluating Bezier 
 
 class Bezier: 
     """
-    Bezier curve defined by n control points min nPoints=3 (Quadratic)
+    Bezier curve defined by n control points 
+         - n = 2: straight line 
+         - n = 3: quadratic 
+         - n = 4: cubic
+         - n > 4: hiher order 
     """
 
-    def __init__ (self, px_or_p, py=None):
+    def __init__ (self, px_or_p : list, py : list|None =None):
         """
-        Bezier curve defined by n control points min nPoints=3 (Quadratic)
+        Bezier curve defined by n control points
 
-        Parameters
-        ----------
-        px,py : array_like - coordinates of the n  control points  
-          or
-        p : array_like - point tuple with x,y coordinates of the n  control points    
+        Args:
+            px_or_p: array_like - x coordinates or tuple of x,y coordinates
+            py: array_like or None - y coordinates 
         """
 
         self._px = None                         # definition points
@@ -599,13 +600,16 @@ class Bezier:
         self._y  = None
         self._u  = None                         # cached parameter u 
 
+        self._y_on_x_cache = {}
+        self._x_on_y_cache = {}
+
         self.basisFn = None                     # stored Bezier basis function for test 
 
         self.set_points(px_or_p, py)
         return
 
     @property
-    def points (self) -> list: 
+    def points (self) -> list[tuple]: 
         """ the control points as list of tuples of self """
         if not (self._px is None or self._py is None):
             return list(zip(self._px,self._py))   
@@ -624,24 +628,23 @@ class Bezier:
 
 
     @property
-    def points_x (self) -> list:  
+    def points_x (self) -> list[float]:  
         """ x coordinate of control points of self """
         return list(self._px)
 
     @property
-    def points_y (self) -> list:  
+    def points_y (self) -> list[float]:  
         """ y coordinate of control points of self """
         return list(self._py)
 
-    def set_points(self, px_or_p, py=None):
-        """  (re) sets the definition points of the Bezier curve
 
-        Parameters
-        ----------
-        px, py:  x and y coordinates of the bezier control points (at least 3)
-          or
-        p : array_like - point tuple with x,y coordinates of the n  control points    
+    def set_points(self, px_or_p : list, py :list|None =None):
+        """  
+        (re) sets the definition points of the Bezier curve
 
+        Args:
+            px_or_p: array_like - x coordinates or tuple of x,y coordinates
+            py: array_like or None - y coordinates 
         """
         
         if py is None:                          # point tuples as argument? 
@@ -650,8 +653,8 @@ class Bezier:
             px = px_or_p
 
         n = len(px)
-        if n < 3:
-            raise ValueError('Bezier: Must have at least 3 control points')
+        if n < 2:
+            raise ValueError('Bezier: Must have at least 2 control points')
         elif n != len(py): 
             raise ValueError('Bezier: Length of x,y is different')
 
@@ -662,19 +665,20 @@ class Bezier:
         self._x  = None
         self._y  = None
         self._u =  None
+        self._y_on_x_cache = {}
+        self._x_on_y_cache = {}
 
         
-    def set_point(self, iPoint, px_or_p, py=None):
-        """  (re) sets the definition points of the Bezier curve
+    def set_point(self, iPoint : int , px_or_p : tuple|float, py : float|None=None):
+        """  
+        (re) sets  definition iPoint of the Bezier curve
 
-        Parameters
-        ----------
-        iPoint:  index of point 
-        px, py:  x and y coordinates of the bezier control point at iPoint (at least 3)
-          or
-        p : array_like - point tuple with x,y coordinates of the n  control points    
-
+        Args:
+            iPoint:  index of point 
+            px_or_p: x coordinate or tuple of x,y coordinate
+            py: array_like or None - y coordinate 
         """
+
         
         if py is None:                          # point tuple as argument? 
             (px, py) = px_or_p
@@ -696,6 +700,8 @@ class Bezier:
             self._x  = None
             self._y  = None
             self._u =  None
+            self._y_on_x_cache = {}
+            self._x_on_y_cache = {}
 
 
 
@@ -754,6 +760,14 @@ class Bezier:
         y : Scalar - y evaluated at x 
         """
 
+        # check for cached value 
+        try:
+            y = self._y_on_x_cache [x]
+            return y
+        except: 
+            pass
+
+
         if fast and (not self._x is None) and (x >= self._x[0] and x <= self._x[-1]):
 
             # find closest index
@@ -786,6 +800,8 @@ class Bezier:
             y =  self._eval_1D (self._py, u)
 
             # print ("Newton iter", niter, x - self._eval_1D (self._px, u))
+
+        self._y_on_x_cache [x] = y
         return y
         
 
@@ -806,18 +822,29 @@ class Bezier:
         x : Scalar - x evaluated at y 
         """
 
+        # check for cached value 
+        try:
+            y = self._x_on_y_cache [y]
+            return y
+        except: 
+            pass
+
         if fast and (not self._y is None) and (y <= self._y[0] and y >= self._y[-1]):
             i = min(bisect.bisect(self._y, y)-1, len(self._y) -2)
             # interpolate u 
             u = ((self._u[i+1]-self._u[i])/(self._y[i+1]-self._y[i])) * (y - self._y[i]) + self._u[i]
             # evaluate y from u 
-            return self._eval_1D (self._px, u)
+            x = self._eval_1D (self._px, u)
         else: 
             u = findMin (lambda u: abs(self._eval_1D(self._py,u) - y), 0.5, bounds=(0, 1)) 
             x =  self._eval_1D (self._px, u)
             # print ("y: ",y, "  x evaluated ", x)
-            return x
- 
+
+        self._x_on_y_cache [y] = x
+
+        return x
+
+
     def curvature (self, u):
         """
         Evaluate the curvature of self at u 0..1

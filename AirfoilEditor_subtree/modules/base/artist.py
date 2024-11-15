@@ -308,6 +308,7 @@ class Movable_Point (pg.TargetItem):
         """ pg overloaded - ghandle shift_click """
         if self.movable :
             if ev.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier: 
+                ev.accept()
                 self.sigShiftClick.emit(self) 
         return super().mouseClickEvent(ev)
 
@@ -513,6 +514,23 @@ class Movable_Bezier (pg.PlotCurveItem):
         return x, y
 
 
+    @override
+    def mouseClickEvent(self, ev : MouseClickEvent):
+        """ pg overloaded - handle crtl_click """
+        if self.movable :
+            if ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier: 
+                x = round (ev.pos().x(),6)
+                y = round (ev.pos().y(),6)
+                added = self._add_point ((x,y))
+
+                if added: 
+                    ev.accept()
+                else: 
+                    ev.ignore()
+
+        return super().mouseClickEvent(ev)
+
+
     def _moving_point (self, aPoint : Movable_Point):
         """ slot - point is moved by mouse """
         i = aPoint.id
@@ -526,11 +544,25 @@ class Movable_Bezier (pg.PlotCurveItem):
             self._bezier_item.show()
 
 
+    def _add_point (self, xy : tuple) -> bool:
+        """ 
+        handle add point - will be called when ctrl_click on Bezier
+        
+        Returns: 
+            inserted: True if point was added 
+        """
+
+        # to be overridden
+        logger.debug (f"Bezier ctrl_click at x={xy[0]} y={xy[1]}")
+        return False
+
+
+
     def _delete_point (self, aPoint : Movable_Point):
         """ slot - point should be deleted """
 
-        # a minimum of 3 control points 
-        if len(self._jpoints) <= 3: return   
+        # a minimum of 2 control points 
+        if len(self._jpoints) <= 2: return   
 
         # remove from list
         i = aPoint.id
@@ -589,12 +621,14 @@ class Artist(QObject):
     COLOR_NORMAL        = "silver"
     COLOR_LEGEND        = "darkgray"
 
-    show_mouse_helper   = True                  # global setting to show mouse helper points
+    show_mouse_helper_default   = True                  # global setting to show mouse helper points
+
+
 
     def __init__ (self, pi: pg.PlotItem , 
                   getter = None,       
                   show = True,
-                  show_points = False,
+                  show_mouse_helper = None,
                   show_legend = False):
         """
  
@@ -611,14 +645,18 @@ class Artist(QObject):
         self._getter = getter               # bounded method to the model e.g. Wing 
 
         self._show = show is True           # should self be plotted? 
-        self._show_points = show_points is True 
         self._show_legend = show_legend is True 
+        self._show_mouse_helper = show_mouse_helper 
 
         self._plots = []                    # plots (PlotDataItem) made up to now 
         self._plot_symbols = []             # plot symbol for each plot 
 
+        self._t_fn  = None                  # coordinate transformation function accepting x,y
+        self._tr_fn = None                  # reverse transformation function accepting xt,yt
+
+
         # do not 'plot' on init
-        self.plot() 
+        # self.plot() 
 
 
     @override
@@ -670,21 +708,6 @@ class Artist(QObject):
 
 
     @property
-    def show_points (self): return self._show_points
-    def set_show_points (self, aBool):
-        """ user switch to show point (marker )
-        """
-        self._show_points = aBool is True 
-
-        p : pg.PlotDataItem
-        for p in self._plots:
-            if isinstance (p, pg.PlotDataItem):
-                if self.show_points:
-                    p.setSymbol('o')
-                else: 
-                    p.setSymbol(None)
-
-    @property
     def show_legend (self): return self._show_legend
     def set_show_legend (self, aBool):
         """ user switch to show legend for self plots
@@ -696,10 +719,56 @@ class Artist(QObject):
         else: 
             self._remove_legend_items ()
 
+    @property
+    def show_mouse_helper (self):
+        """ show mouse helpers of self"""
+        if self._show_mouse_helper is None:
+            return Artist.show_mouse_helper_default
+        else: 
+            return self._show_mouse_helper
+
 
     def set_show_mouse_helper (self, aBool : bool):
         """ on/off for mouse helper of self - for global setting use class variable"""
-        self.show_mouse_helper = aBool == True
+        self._show_mouse_helper = aBool == True
+
+
+    @property
+    def t_fn (self):
+        """ current active transformation function to transform x,y in view coordinates"""
+        if self._t_fn is None: 
+            return lambda x,y : (x,y)                   # dummy 1:1 tra<nsformation
+        else: 
+            return self._t_fn
+    
+    def set_t_fn (self, transform_fn):
+        """ set transformation function to transform x,y in view coordinates"""
+        if transform_fn is not None:
+            if callable (transform_fn):
+                self._t_fn = transform_fn
+            else:
+                raise ValueError ("transformation function is not callable")
+        else:
+            self._t_fn = None 
+
+
+    @property
+    def tr_fn (self):
+        """ current active reverse transformation function to transform x,y from view coordinates"""
+        if self._tr_fn is None: 
+            return lambda x,y : (x,y)                   # dummy 1:1 tra<nsformation
+        else: 
+            return self._tr_fn
+    
+    def set_tr_fn (self, transform_fn):
+        """ set reverse transformation function to transform x,y from view coordinates"""
+        if transform_fn is not None:
+            if callable (transform_fn):
+                self._tr_fn = transform_fn
+            else:
+                raise ValueError ("transformation function is not callable")
+        else:
+            self._tr_fn = None 
 
 
     def plot (self):
@@ -745,13 +814,16 @@ class Artist(QObject):
         pass
 
 
-    def _plot_dataItem (self, *args, 
+    def _plot_dataItem (self, x, y,  
                         name=None, 
                         zValue=1,
                         **kwargs) -> pg.PlotDataItem:
         """ plot DataItem and add it to self._plots etc """
 
-        p = pg.PlotDataItem  (*args, **kwargs)
+        # (optional) transformation of coordinate 
+        xt, yt = self.t_fn (x,y)
+
+        p = pg.PlotDataItem  (xt, yt, **kwargs)
 
         p.setZValue (zValue)
 
@@ -775,6 +847,9 @@ class Artist(QObject):
             x = args[0]
             y = args[1] 
 
+        # (optional) transformation of coordinate 
+        xt, yt = self.t_fn (x,y)
+
         # pen style
         color = QColor(color) if color else QColor(self.COLOR_NORMAL)
         pen = pg.mkPen (color, style=style)   
@@ -783,8 +858,7 @@ class Artist(QObject):
         brushColor = QColor(brushColor) if brushColor else color 
         brushColor.setAlphaF (brushAlpha)
         brush = pg.mkBrush(brushColor) 
-
-        p = pg.ScatterPlotItem  ([x], [y], symbol=symbol, size=size, pxMode=pxMode, 
+        p = pg.ScatterPlotItem  ([xt], [yt], symbol=symbol, size=size, pxMode=pxMode, 
                                  pen=pen, brush=brush)
         p.setZValue(3)                                      # move to foreground 
 
@@ -796,7 +870,7 @@ class Artist(QObject):
             t = pg.TextItem(text, color, anchor=anchor)
             t.setZValue(3)                                      # move to foreground 
             # ? attach to parent doesn't work (because of PlotDataItem? )
-            textPos = textPos if textPos is not None else (x,y)
+            textPos = textPos if textPos is not None else (xt,yt)
             t.setPos (*textPos)
 
             self._add (t)
@@ -919,7 +993,17 @@ class Artist(QObject):
 
         # 'manual' control if aPlot should appear in legend 
         if self.show_legend and name and isinstance (aPlot, pg.PlotDataItem): 
-            self._pi.legend.addItem (aPlot, name)
-            aPlot.opts['name'] = name
+
+            # avoid dublicates in legend
+            label_exists = False
+            for legend_item in self._pi.legend.items:
+                label_item = legend_item [1]
+                if label_item.text == name:
+                    label_exists = True
+                    break
+
+            if not label_exists:                             
+                self._pi.legend.addItem (aPlot, name)
+                aPlot.opts['name'] = name
  
         return aPlot 

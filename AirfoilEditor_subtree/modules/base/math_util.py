@@ -75,7 +75,7 @@ class JPoint:
 
     @property
     def xy (self) -> tuple[float]:
-        return (self.x, self._y)
+        return (self.x, self.y)
 
     @property
     def x_limits (self) -> tuple:
@@ -180,37 +180,43 @@ class JPoint:
         returns a new JPoint
             The function must accept x,y and has to return xt, yt
             as the new coordinate values.
+            If transform_fn is None, return self.
         """
 
-        if not callable (transform_fn):
-            raise ValueError (f"transformation function is not callable{transform_fn}")
-        
         # transform coordinate 
 
-        xt, yt = transform_fn (self.x, self.y)
+        if transform_fn is None: 
+            return self
+        else: 
+            if not callable (transform_fn):
+                raise ValueError (f"transformation function is not callable{transform_fn}")
+            xt, yt = transform_fn (self.x, self.y)
 
         # transform limits
 
         if self.x_limits is not None:
             x_min, x_max =  self.x_limits
-            xt_min = transform_fn (x_min, self.y)
-            xt_max = transform_fn (x_max, self.y)
-            xt_limits = (xt_min, xt_max)
+            xt_min,_ = transform_fn (x_min, self.y)
+            xt_max,_ = transform_fn (x_max, self.y)
+            if xt_min <= xt_max:                                    # transform may flip limits 
+                xt_limits = (xt_min, xt_max)
+            else: 
+                xt_limits = (xt_max, xt_min)
         else: 
             xt_limits = None
 
         if self.y_limits is not None:
             y_min, y_max =  self.y_limits
-            yt_min = transform_fn (self.x, y_min)
-            yt_max = transform_fn (self.x, y_max)
-            yt_limits = (yt_min, yt_max)
+            _, yt_min = transform_fn (self.x, y_min)
+            _, yt_max = transform_fn (self.x, y_max)
+            if yt_min <= yt_max:                                    # transform may flip limits 
+                yt_limits = (yt_min, yt_max)
+            else: 
+                yt_limits = (yt_max, yt_min)
         else: 
             yt_limits = None
 
         return JPoint (xt, yt, x_limits=xt_limits, y_limits=yt_limits, name=self.name)
-
-
-
 
 
     def _set_val (self, val, new_val, limits, is_fixed) -> float:
@@ -231,8 +237,15 @@ class JPoint:
 
         return new_val 
 
-    
+    @staticmethod
+    def transform (jpoints : list['JPoint'], transform_fn) -> list['JPoint']:
+        """ transforms a list of JPoints and returns them as a new list"""
 
+        jpoints_transformed = []
+        for jpoint in jpoints:
+            jpoints_transformed.append (jpoint.as_transformed (transform_fn))
+        return jpoints_transformed
+    
 
 #------------ linear interpolation -----------------------------------
 

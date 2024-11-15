@@ -14,7 +14,7 @@ from PyQt6.QtCore           import QRectF
 sys.path.append(Path(__file__).parent)
 sys.path.insert (1,os.path.join('..' , 'AirfoilEditor_subtree/modules'))
 from base.spline    import Bezier
-from wing           import Norm_Chord_Bezier, Norm_Planform, Planform_2
+from wing           import Planform_2
 
 
 
@@ -33,11 +33,8 @@ l.nextRow()
 
 # -------------------------------------------------------------------
 
-norm_chord = Norm_Chord_Bezier()
-xn, cn = norm_chord.polyline()
 
-norm_planform = Norm_Planform(norm_chord)
-planform = Planform_2 (norm_planform, chord_root=200, span=1300, sweep_angle=0)
+planform = Planform_2 ()
 
 
 # -------------------------------------------------------------------
@@ -54,15 +51,11 @@ viewBox.invertY(True)
 viewBox.setAspectLocked()
 
 x, le_y, te_y = planform.le_te_polyline ()
-box_x, box_y  = planform.box_polygon ()
-ref_x, ref_y  = planform.ref_polyline ()
 
 
 item = pi4.plot(x , le_y, pen='red')
 item.setZValue (10)
 pi4.plot(x , te_y, pen='yellow')
-pi4.plot(ref_x, ref_y, pen='springgreen')
-pi4.plot(box_x, box_y, pen='blue')
 
 # ------ image --------------------
 

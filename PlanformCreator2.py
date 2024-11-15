@@ -27,7 +27,7 @@ sys.path.insert (1,os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree/m
 sys.path.insert (1,os.path.join(Path(__file__).parent , 'modules'))
 
 from wing                   import Wing
-from wing                   import Planform, Planform_Trapezoidal, Planform_Bezier         
+from wing                   import Planform,  Planform_Bezier         
 
 from base.common_utils      import * 
 from base.panels            import Container_Panel, MessageBox
@@ -162,7 +162,8 @@ class App_Main (QMainWindow):
         Win_Util.set_initialWindowSize (self, size_frac= (0.80, 0.70), pos_frac=(0.1, 0.1),
                                         geometry=geometry, maximize=maximize)
 
-        # create the 'wing' model - with 'splash window'
+        # create the 'wing' model  
+
         self.load_wing (paramFile, initial=True)
 
         # init main layout of app
@@ -172,17 +173,17 @@ class App_Main (QMainWindow):
 
         self._diagrams      = Tab_Panel        (self)
 
-        self._diag_making   = Diagram_Making_Of (self, planform=self.wing()._planform_2)
-        self._diagrams.addTab (self._diag_making, "Making of ...")
-
-        # self._diag_wing     = Diagram_Wing     (self, self.wing, welcome=self._welcome_message())
-        # self._diagrams.addTab (self._diag_wing, "Wing")
+        self._diag_wing     = Diagram_Wing     (self, self.wing, welcome=self._welcome_message())
+        self._diagrams.addTab (self._diag_wing, "Wing")
 
         self._diag_planform = Diagram_Planform (self, self.wing, self.cur_wingSection)
         self._diagrams.addTab (self._diag_planform, "Planform")
 
         self._diag_airfoils = Diagram_Airfoils (self, self.wing)
         self._diagrams.addTab (self._diag_airfoils, "Airfoils")
+
+        self._diag_making   = Diagram_Making_Of (self, planform=self.wing()._planform_2)
+        self._diagrams.addTab (self._diag_making, "Making of ...")
 
         l_main = self._init_layout() 
 
@@ -194,7 +195,7 @@ class App_Main (QMainWindow):
         # connect to signals from diagram
 
         self._diag_planform.sig_wingSection_new.connect  (self.set_cur_wingSection)
-#        self._diag_planform.sig_planform_changed.connect  (self._diag_wing.on_wing_changed)
+        self._diag_planform.sig_planform_changed.connect  (self._diag_wing.on_wing_changed)
 
         # connect to signals of self
 
@@ -205,7 +206,7 @@ class App_Main (QMainWindow):
         self.sig_wingSection_selected.connect (self._diag_planform.on_cur_wingSection_changed)
 
         self.sig_wing_new.connect        (self._diag_planform.on_wing_new)
-        # self.sig_wing_new.connect        (self._diag_wing.on_wing_new)
+        self.sig_wing_new.connect        (self._diag_wing.on_wing_new)
         self.sig_wing_new.connect        (self._diag_airfoils.on_wing_new)
 
 
@@ -258,19 +259,21 @@ class App_Main (QMainWindow):
         return self._myWing
 
       
-    def cur_wingSection (self) -> WingSection:
+    def cur_wingSection (self) -> Norm_WingSection:
         """ Dispatcher for current WingSection between Edit and Diagram """
         if self._cur_wingSection is None: 
 
-            if len (self.wing().wingSections) > 2:
-                self._cur_wingSection = self.wing().wingSections[1]     # set second section as initial
+            normed_sections = self.wing().planform.norm.wingSections
+
+            if len (normed_sections) > 2:
+                self._cur_wingSection = normed_sections[1]              # set second section as initial
             else:        
                 self._cur_wingSection = None                            # nothing selected
 
         return self._cur_wingSection 
 
 
-    def set_cur_wingSection (self, aSection : WingSection | None):
+    def set_cur_wingSection (self, aSection : WingSection_2 | None):
         """ set current wing section"""
         self._cur_wingSection = aSection
         logger.debug (f"{aSection} as current")

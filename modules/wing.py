@@ -86,19 +86,15 @@ class Wing:
         self._chord_tip       = fromDict (dataDict, "chord_tip", self._chord_root/4)
         self._fuselage_width  = fromDict (dataDict, "fuselage_width", 80.0)
 
-        # reference line 
-        self._reference_line = Reference_Line (self, dataDict=fromDict (dataDict, "reference_line", None)) 
-
         # attach the Planform 
-        self._planform        = Planform.having (self, fromDict(dataDict, "planform", None))
+
         self._planform_2      = Planform_2 (self, fromDict(dataDict, "planform", None))
 
-        # wing sections and flaps
-        self._wingSections    = WingSections (self, dataDict=fromDict(dataDict, "wingSections", None))
-        self._flaps           = Flaps (self, dataDict=fromDict(dataDict, "flaps", None) )
+        # elliptical reference planforms   
 
-        # create reference planforms   
-        self.refPlanform_elli = Planform_Pure_Elliptical (self)     
+        self._planform_elliptical = Planform_2 (self, dataDict = self.dataDict, 
+                                                       chord = Norm_Chord_Elliptical (),
+                                                       chord_ref = self.planform.norm.chord_ref ) 
 
         # will hold the class which manages Xflr5, FLZ export including its parameters
         self._exporterXflr5     = None 
@@ -265,19 +261,13 @@ class Wing:
     def set_name(self, newName):  self._name = newName
 
 
-    @property
-    def reference_line (self) -> 'Reference_Line':
-        """ reference line object of the planform(s)"""
-        return self._reference_line
-
-
     @property 
-    def planform (self): 
-        return self._planform
-    def set_planform (self, newPlanform: 'Planform'): 
+    def planform (self) -> 'Planform_2': 
+        return self._planform_2
+    
+    def set_planform (self, newPlanform: 'Planform_2'): 
         """ assign new planform to wing"""
 
-        
         # adapt existing wing sections to new planform 
         if self.planform:                           # is there already a planform
             section : WingSection
@@ -339,21 +329,25 @@ class Wing:
     def fuselage_width (self) -> float:
         """ width of fuselage"""
         return self._fuselage_width
+    
     def set_fuselage_with (self, aVal:float):
         aVal = max(0, aVal)
         aVal = min(self.wingspan/2, aVal)
         self._fuselage_with = aVal 
 
-
     @property
-    def flaps (self) -> 'Flaps':
-        """ flaps handler """
-        return self._flaps
+    def planform_elliptical (self) -> 'Planform_2':
+        """ an elliptical reference planform having the same chord reference """
 
-    @property
-    def wingSections (self) -> 'WingSections':
-        return self._wingSections
+        if self._planform_elliptical is None: 
+            
+            self._planform_elliptical = Norm_Planform (self, dataDict = self.dataDict, 
+                                                       chord = Norm_Chord_Elliptical (),
+                                                       chord_ref = self.planform.norm.chord_ref )
+
+        return self._planform_elliptical
     
+
     @property
     def halfwingspan (self):    return (self.wingspan / 2)
 
@@ -375,7 +369,6 @@ class Wing:
             xflr5Dict           = fromDict (self.dataDict, "xlfr5", "")
             self._exporterXflr5 = Export_Xflr5(self, xflr5Dict) 
         return self._exporterXflr5     
-
 
     @property
     def exporterDxf (self): 
@@ -455,281 +448,224 @@ class Wing:
             fileList.append (sec.do_export_airfoil (toDir, useNick=useNick, teGap_mm = teGap_mm))
         return fileList
 
-    
-
-#-------------------------------------------------------------------------------
-# Reference Line   
-#-------------------------------------------------------------------------------
-
-class Reference_Line:
-    """ 
-    defines the reference line where chord distribution is applied  
-    """
-
-    name = "Reference Line"
-
-    def __init__(self, wing: 'Wing', dataDict: dict = None):
-
-        self._wing = wing
-
-        self._xn_root = fromDict (dataDict, "xn_root", 0.75)        # normed x at root
-        self._xn_tip  = fromDict (dataDict, "xn_tip", 0.80)         # normed x at tip
-        self._angle   = fromDict (dataDict, "angle", 1.0)           # angle in degrees 
-
-        # init Quadratic Bezier for banana of leading edge  
-       
-        self._banana_px = [0.0, 0.0, 0.0]                           # wing coordinate system 
-        self._banana_py = [0.0, 0.5, 1.0]
-        self._banana_px[1]   = fromDict (dataDict, "banana_p1x", 0.0)
-        self._banana_py[1]   = fromDict (dataDict, "banana_p1y", 0.5)
-
-        self._banana = None                                         # init see _norm_banana_function 
 
 
-    def _save (self) -> dict:
-        """ returns the parameters of self as a dict"""
-
-        myDict = {}
-        toDict (myDict, "xn_root",          self._xn_root) 
-        toDict (myDict, "xn_tip",           self._xn_tip) 
-        toDict (myDict, "angle",            self._angle) 
-        toDict (myDict, "banana_p1x",       self.banana_p1x) 
-        toDict (myDict, "banana_p1y",       self.banana_p1y) 
-
-        return myDict
-    
-
-    @property
-    def _chord_root (self) -> float:
-        """ chord at root"""
-        return self._wing.chord_root
-
-    @property
-    def _halfwingspan (self) -> float:
-        """ halfwingspan - for convenience """
-        return self._wing.halfwingspan
-
-
-    @property 
-    def angle (self) -> float:
-        """ angle of reference line in degrees"""
-        return self._angle 
-
-    def set_angle (self, aVal : float):
-        """ set angle of reference line in degrees"""
-        aVal = max (-60.0, aVal)
-        aVal = min ( 60.0, aVal)
-        self._angle= aVal 
-
-    def set_angle_by_point (self, py : float, px: float):
-        """ set angle of reference line with a point x,y related to root point of self"""
-
-        if (py < self._halfwingspan * 0.02) or (py > self._halfwingspan * 0.98):  return 
-
-        dy = py 
-        dx = px - self.x_root
-        dx = dx - self.banana_x_at (py)                                 # correct by banana
-        angle = np.arctan (dx/dy) * 180 / np.pi
-
-        self.set_angle (angle )
-
-
-    @property
-    def xn_root (self) -> float:
-        """ normed x at root """
-        return self._xn_root
-    
-    def set_xn_root (self, aVal : float):
-        """ set xn value at root"""
-        aVal = max (0.0, aVal)
-        aVal = min (aVal, 1.0)
-        self._xn_root = aVal
-
-    @property
-    def x_root (self) -> float:
-        """ x at root """
-        return self.xn_root * self._chord_root
-
-    def set_x_root (self, aVal : float):
-        """ set xn value at root"""
-        self.set_xn_root (aVal / self._chord_root)
-
-    @property
-    def xn_tip (self) -> float:
-        """ normed x at tip """
-        return self._xn_tip
-
-    def set_xn_tip (self, aVal : float):
-        """ set xn value at tip"""
-        aVal = max (0.0, aVal)
-        aVal = min (aVal, 1.0)
-        self._xn_tip = aVal
-    
-    # Banana quadratic Bezier free definition points 
-
-    @property
-    def _banana_u (self) -> Array:
-        """ returns u array of the banana Bezier curve"""
-        return np.linspace(0.0, 1.0, num=50)
-
-    @property
-    def banana (self) -> Bezier:
-        """ the banana Bezier curve"""
-
-        if self._banana is None: 
-            # init cache of Bezier curve so following calls will be optimized
-            self._banana = Bezier (self._banana_py, self._banana_px)
-            self._banana.eval (self._banana_u)
-        return self._banana
-
-    def banana_as_jpoints (self)  -> list[JPoint]:
-        """ 
-        Bezier control points as JPoints with limits and fixed property
-            x values scalad to halfwingspan 
-            y values normed 0..1
+    def t_norm_to_wing_right (self, xn : float|Array|list, yn : float|Array|list) -> ...:
+        """
+        Transforms normalized coordinates into wing coordinates as right side wing 
+            - apply fuselage 
+        Args:
+            xn,yn: normalized, either float, list or Array to transform 
+        Returns:
+            x,y: transformed wing coordinates as float or np.array
         """
 
+        # transform from norm to planform
+        x,y = self._planform_2.t_norm_to_plan (xn, yn)
+
+        # move for half fuselage
+        x = x + self.fuselage_width / 2
+
+        return x, y 
+
+
+    def t_norm_to_wing_left (self, xn : float|Array|list, yn : float|Array|list) -> ...:
+        """
+        Transforms normalized coordinates into wing coordinates as left side wing 
+            - apply fuselage 
+            - mirror around y-axis 
+        Args:
+            xn,yn: normalized, either float, list or Array to transform 
+        Returns:
+            x,y: transformed wing coordinates as float or np.array
+        """
+
+        # transform from norm to planform
+        x,y = self._planform_2.t_norm_to_plan (xn, yn)
+
+        # move for half fuselage
+        x = x + self.fuselage_width / 2
+
+        # mirror half wing 
+        x = -x  
+
+        return x, y 
+
+
+
+#-------------------------------------------------------------------------------
+# Normalized Chord Reference 
+#-------------------------------------------------------------------------------
+
+
+class Norm_Chord_Reference: 
+    """ 
+
+    The chord reference describes how much of the chord is given to Leading and Trailing edge.
+
+    A chord reference function - returns cr at xn.
+    e.g. cr = 0.8 means 80% of chord is towards le and 20% towards te from a horizontal reference 
+ 
+    The Reference function is defined by a quadratic Bezier which allows the planform
+     to be bended from root to tip
+
+
+    Wing
+        |-- Planform
+            |-- Norm_Planform
+                |-- Norm_Chord
+                |-- Norm_Chord_Reference
+                |-- Norm_WingSections
+                |-- Norm_Flaps
+    """
+
+    def __init__(self, dataDict: dict = None):
+
+
+        # chord reference  - init linear Bezier control points for straight line    
+       
+        px = [0.0,  1.0]
+        py = [0.75, 0.75]                                       
+
+        # alternate v 1 bezier parameters from dict  - handle banana
+
+        banana_p1y = fromDict (dataDict, "banana_p1y", None)  
+
+        if banana_p1y is not None:                            # set no banana
+            py[0]   = fromDict (dataDict, "xn_root", py[0])  
+            py[1]   = fromDict (dataDict, "xn_tip", py[-1])   
+            if banana_p1y != 0.0: 
+                banana_p1x = fromDict (dataDict, "banana_p1x", 0.0)
+                py_1_no_banana = interpolate (px[0], px[1], py[0], py[1], banana_p1x)
+                py_1_banana    = py_1_no_banana + banana_p1y
+                px.insert[1, banana_p1x]
+                py.insert[1, py_1_banana]
+
+        # regular bezier parameters from dict  
+
+        else: 
+            px   = fromDict (dataDict, "px", px)                  
+            py   = fromDict (dataDict, "py", py)                 
+
+
+        # create Bezier for chord reference function
+
+        self._cr_bezier   = Bezier (px, py)
+        self._cr_bezier_u = np.linspace(0.0, 1.0, num=20)                     # default Bezier u parameter (for polyline)
+
+
+    def at (self, xn: float, fast=True) -> float:
+        """ 
+        Chord reference function - returns cr at xn
+            e.g. cr = 0.8 means 80% of chord is towards le and 20% towards te
+                from a horizontal reference 
+            Higher Precision is achieved with interpolation of the curve (fast=False) 
+        """
+
+        return self._cr_bezier.eval_y_on_x (xn, fast=fast) 
+
+
+    def is_no_banana (self) -> bool:
+        """ 
+        True if chord reference is linear meaning 
+        no banana function (Bezier is "obsolete") 
+        """ 
+        px = self._cr_bezier.points_x
+        py = self._cr_bezier.points_y
+
+        if len(px) == 2:
+            return True
+        else:
+
+            # check if the middle bezier point is on line between the two others
+            py_1_interpol = interpolate (px[0], px[2], py[0], py[2], px[1])
+            delta_y = abs (py_1_interpol - py[1])
+            return  round (delta_y,2) == 0.0 
+
+
+    def set_is_no_banana (self):
+        """ 
+        set the reference function to linear meaning 
+        no banana function (Bezier is n=2) 
+        """ 
+        px = self._cr_bezier.points_x
+        py = self._cr_bezier.points_y
+
+        if len(px) == 3:
+
+            # remove control point in the middle 
+            del px [1]
+            del py [1]
+
+            self._cr_bezier.set_points (px, py)
+
+
+    def polyline (self) -> tuple [Array, Array]:
+        """
+        chord reference as polyline of cr 
+        """
+        xn, cr = self._cr_bezier.eval(self._cr_bezier_u) 
+        return np.array(xn), np.array(cr) 
+
+
+    def bezier_as_jpoints (self)  -> list[JPoint]:
+        """ 
+        chord reference Bezier control points as JPoints with limits and fixed property
+            - in normed coordinates 
+        """
         jpoints = []
-        for i, point in enumerate(self.banana.points):
+        n = len (self._cr_bezier.points)
+
+        for i, point in enumerate(self._cr_bezier.points):
 
             jpoint = JPoint (point)           
-            jpoint.set_x (jpoint.x * self._halfwingspan)    # scale to halfwingspan
-            jpoint.set_y (jpoint.y * self._chord_root)    
 
-            if i == 0:                                      # root fixed
-                jpoint.set_fixed (True) 
-                jpoint.set_name ('')
-            elif i == 1:                                    # only movable point 
-                jpoint.set_x_limits ((0,self._halfwingspan))
-                jpoint.set_y_limits ((-self._chord_root, self._chord_root))
-                jpoint.set_name ("Banana" if jpoint.y != 0.0 else "No Banana")
-            else:                                           # tip fixed
-                jpoint.set_fixed (True) 
-                jpoint.set_name ('')
+            if i == 0:                                      
+                jpoint.set_x_limits ((0,0))
+                jpoint.set_y_limits ((0,1))
+                jpoint.set_name ('Root')
+            elif i == (n-1):                                    
+                jpoint.set_x_limits ((1,1))
+                jpoint.set_y_limits ((0,1))
+                jpoint.set_name ('Tip')
+            elif i == 1:                                     
+                jpoint.set_x_limits ((0,1))
+                jpoint.set_y_limits ((-1, 1))
+                jpoint.set_name ("Banana")
             jpoints.append(jpoint)
 
         return jpoints
 
 
-    def banana_from_jpoints (self, jpoints : list[JPoint]): 
-        """ set banana Bezier control points from JPoints which are scaled to halfwingspan  """
-
-        self.set_banana_p1x (jpoints[1].y / self._chord_root)
-        self.set_banana_p1y (jpoints[1].x / self._halfwingspan)
- 
-
-    @property                                   
-    def banana_p1x(self) -> float: 
-        return self._banana_px[1]
-    def set_banana_p1x(self, aVal : float): 
-        aVal = max (-1, aVal) 
-        aVal = min ( 1, aVal)
-        if abs(aVal) < 0.002:                           # snap to zero 
-            aVal = 0.0
-        self._banana_px[1] = aVal 
-        self._banana = None                             # Bezier with cache will be rebuild
-
-    @property                                 
-    def banana_p1y(self) -> float:
-        return self._banana_py[1]
-    def set_banana_p1y(self, aVal : float): 
-        aVal = max (0.05, aVal) 
-        aVal = min (0.95, aVal)
-        self._banana_py[1] = aVal 
-        self._banana = None                             # Bezier with cache will be rebuild
-
-    @property
-    def banana_active (self) -> bool:
-        """ True if banana function is active and added to reference line"""
-        return self.banana_p1x != 0.0 
-
-
-    def banana_polyline (self) -> tuple [Array, Array]:
-        """ polyline of the banana in wing coordinates y, x """
-
-        yn, xn = self.banana.eval ( self._banana_u )
-        return yn * self._halfwingspan, xn * self._chord_root
-
-
-    def banana_x_at (self, y : float) -> float:
-        """  x value of the "banana curve" at position y """
-        if not self.banana_active:                                                      # optimize for no banana
-            xn = 0.0 
-        else: 
-            xn = self.banana.eval_y_on_x  (y / self._halfwingspan, fast=True)          
- 
-        return xn * self._chord_root      
-
-
-    def banana_xn_at (self, y : float) -> float:
+    def bezier_from_jpoints (self, jpoints : list[JPoint]): 
+        """ 
+        set chord referenc eBezier control points from JPoints which  
         """
-        returns the normed xn value of the "banana curve" at position y
-        """
-        if not self.banana_active:                                                      # optimize for no banana
-            xn = 0.0 
-        else: 
-            xn = self.banana.eval_y_on_x  (y / self._halfwingspan, fast=True)          
- 
-        return xn       
+
+        px, py = [], []
+        for jpoint in jpoints:
+            px.append(jpoint.x )
+            py.append(jpoint.y)
+
+        # check if banana point was moved 
+        bez_px1 = round (self._cr_bezier.points_x[1], 3)               # avoid numerical issues 
+        bez_py1 = round (self._cr_bezier.points_y[1], 3)
+        set_no_banana = False
+        if self.is_no_banana ():
+            if bez_px1 == round(px[1],3) and bez_py1 == round(py[1],3):
+                set_no_banana = True 
+
+        # update bezier 
+        self._cr_bezier.set_points (px, py)
+
+        # remain in no_banana if banana point wasn't moved
+        if set_no_banana:
+            self.set_is_no_banana()
 
 
-    def x_at (self, y) -> float:
-        """ x value of the reference line at y""" 
-
-        x = self.x_root + np.tan((self.angle/180) * np.pi) * y
-        if self.banana_active:                                                  # add banana value to line 
-            x = x + self.banana_x_at (y)
-        return x
-
-
-    def xn_at (self, y) -> float:
-        """ Returns the normed x value of the reference line at y *within* chord""" 
-
-        yn = y / self._halfwingspan                                             # normalized y pos 
-        xn = (self.xn_tip - self.xn_root) * yn + self.xn_root 
-        return xn
-
-
-    @property
-    def x_at_tip (self) -> float:
-        """ Returns the x-coordinate of the reference line at tip""" 
-        return self.x_at (self._halfwingspan)
-
-    def set_x_tip (self, x_tip : float):
-        """ set x value at tip - will change angle and not xn_tip!"""
-
-        dx = x_tip - self.x_root
-        dy = self._halfwingspan
-        angle = np.arctan (dx/dy) * 180 / np.pi                                 # new angle in degrees 
-        self.set_angle (angle) 
-
-
-    def polyline (self):
-        """ Returns self as polyline defined by [y],[x]"""
-
-        if not self.banana_active:
-            # optimize to straight line 
-            y = np.asarray([0.0, self._halfwingspan])
-            x = np.asarray([self.x_at(0.0), self.x_at(self._halfwingspan)])
-        else: 
-            # take y values from banana polyline as base 
-            y, banana_x = self.banana_polyline ()
-            line_x = self.x_root + np.tan((self.angle/180) * np.pi) * y
-            x = line_x + banana_x 
-
-        return y, x
-
-
-    def polyline_norm (self):
-        """ Returns self as polyline defined by [y],[xn]"""
-        y, x = self.polyline()
-        xn = x / self._chord_root
-        return y, xn
-
-        
 
 #-------------------------------------------------------------------------------
-# Normalized chord distibution   
+# Normalized chord    
 #-------------------------------------------------------------------------------
 
 
@@ -743,13 +679,18 @@ class Norm_Chord_Abstract:
                 |-- Norm_Chord
     """
 
-    isBezier    = False
+    name            = "Abstract"
+    isBezier        = False
+    isTrapezoidal   = False
 
-    def __init__(self):
+    chord_defined_by_sections = False                               # e.g trapezoid
+
+
+    def __init__(self, dataDict: dict = None):
         """main constructor
 
         Args:       
-            wing_half: parent self belongs to 
+            dataDict: the initial dataDict for self 
         """
 
         logger.info (str(self)  + ' created')
@@ -757,6 +698,7 @@ class Norm_Chord_Abstract:
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}>"
+
 
     def transform_norm (self, xn : float|Array|list, yn : float|Array|list) -> ...:
         """ 
@@ -787,7 +729,7 @@ class Norm_Chord_Abstract:
     @property
     def at_tip (self, ) -> float:
         """ returns normalized chord at tip """
-        raise NotImplementedError
+        self.at (1.0)
 
 
     def polyline (self) -> Polyline:
@@ -808,19 +750,19 @@ class Norm_Chord_Bezier (Norm_Chord_Abstract):
     Bezier based normalized chord distribition  
     """
 
-    isBezier    = True
-    isTemplate  = True
+    name            = "Bezier"
+    isBezier        = True
+    isTemplate      = True
 
-    description = "Chord distribution based on a Bezier curve function,\n" + \
+    description = "Chord based on a Bezier curve function,\n" + \
                   "which is defined by its root and tip tangent"
 
     # is the chord distribution defined by wing section or vice versa - overwrite 
-    sections_depend_on_planform = True           # e.g.elliptical    
-    planform_depend_on_sections = False          # e.g trapezoid
+    chord_defined_by_sections = False          # e.g trapezoid
 
 
-    def __init__(self, dataDict: dict = None):
-        super().__init__()
+    def __init__(self, planform : 'Norm_Planform', dataDict: dict = None):
+        super().__init__(planform)
         """
         Main constructor
 
@@ -852,47 +794,38 @@ class Norm_Chord_Bezier (Norm_Chord_Abstract):
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
 
-        return self._bezier.eval_y_on_x (xn, fast=fast) 
+        return round (self._bezier.eval_y_on_x (xn, fast=fast),10) 
 
 
     def xn_at (self, cn: float, fast=True) -> float:
         """ 
-        returns xn at normed chord xn
+        returns xn at normed chord cn
             Normally a linear interpolation is done for fast evaulation (fast=True). 
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
 
-        return self._bezier.eval_x_on_y (cn, fast=fast) 
-
-
-    @property
-    def at_tip (self, ) -> float:
-        """ returns normalized chord at tip """
-        return self._bezier.points_y[-1]
+        return round (self._bezier.eval_x_on_y (cn, fast=fast), 10)
 
 
     def polyline (self) -> Polyline:
         """ 
         Normalized polyline of chord along xn
-            At root it is: cn [0] = 1.0 and cnn[0] = 0.0
+            At root it is: cn [0] = 1.0  
 
         Returns:
             xn: normalized x coordinates
             cn: normalized chord
         """
         xn, cn = self._bezier.eval(self._u) 
-        return xn, cn 
+        return np.round(xn,10), np.round(cn,10) 
 
 
-    def bezier_as_jpoints (self, scale_x : float|None= None) -> list[JPoint]: 
+    def bezier_as_jpoints (self, transform_fn = None) -> list[JPoint]: 
         """ 
         Bezier control points as JPoints with limits and fixed property
-            - in normed coordinates 
-            - normed chord, scaled x coordinates
+            - in normed coordinates x..1, y..1
+            - transform_fn will transform jpoint to new coordinates 
         """
-
-        scale_x = scale_x if isinstance (scale_x, float) else 1.0 
-        x_max   = 1.0 * scale_x
 
         jpoints = []
 
@@ -900,42 +833,194 @@ class Norm_Chord_Bezier (Norm_Chord_Abstract):
 
             jpoint = JPoint (point)   
 
-            jpoint.set_x (jpoint.x * x_max)                 # scale x
-
             if i == 0:                                      # root 
                 jpoint.set_fixed (True)
                 jpoint.set_name ('') 
             elif i == 1:                                    # root tangent
-                jpoint.set_x_limits ((0,x_max))
+                jpoint.set_x_limits ((0,1))
                 jpoint.set_y_limits ((0,1))
                 jpoint.set_name ('Root Tangent') 
             elif i == 2:                                    # tip tangent
-                jpoint.set_x_limits ((x_max,x_max))
+                jpoint.set_x_limits ((1,1))
                 jpoint.set_y_limits ((0.2,1))
                 jpoint.set_name ('Tip Tangent') 
             else:
-                # jpoint.set_fixed (True)                     # tip
-                jpoint.set_x_limits ((x_max,x_max))
+                # jpoint.set_fixed (True)                   # tip
+                jpoint.set_x_limits ((1,1))
                 jpoint.set_y_limits ((0.01,0.5))
                 jpoint.set_name ('Tip Chord') 
 
-            jpoints.append(jpoint)
+            jpoints.append(jpoint.as_transformed (transform_fn))
 
         return jpoints
 
 
-    def bezier_from_jpoints (self, jpoints : list[JPoint], scale_x : float|None= None): 
-        """ set Bezier control points from JPoints  """
-
-        scale_x = scale_x if isinstance (scale_x, float) else 1.0 
-        x_max   = 1.0 * scale_x
+    def bezier_from_jpoints (self, jpoints : list[JPoint], transform_fn = None): 
+        """ 
+        set Bezier control points from JPoints
+            - transform_fn will transform jpoint coordinates prior to setting Bezier
+        """
 
         px, py = [], []
         for jpoint in jpoints:
-            px.append(jpoint.x / x_max)
-            py.append(jpoint.y)
+            jpoint_trans = jpoint.as_transformed (transform_fn)
+            px.append(jpoint_trans.x)
+            py.append(jpoint_trans.y)
 
         self._bezier.set_points (px, py)
+
+
+
+
+class Norm_Chord_Trapezoidal (Norm_Chord_Abstract):
+    """ 
+    Chord based on wing section 
+    """
+
+    name            = "Trapezoid"
+    isTrapezoidal   = True
+    style           = "trapezoidal"
+
+    description     = "Chord defined by its wing sections,\n" + \
+                      "which have the attribut 'Defines planform'" 
+
+    # is the chord defined by wing section or vice versa - overwrite 
+    chord_defined_by_sections = True          # e.g trapezoid
+
+
+    def __init__(self, planform : 'Norm_Planform', dataDict: dict = None):
+        """main constructor
+
+        Args:       
+            planform: parent self belongs to - Trapezoidal need the wing sections
+        """
+
+        self._planform = planform 
+
+        super().__init__ (dataDict=dataDict)
+
+
+    def polyline (self) -> Polyline:
+        """ 
+        Normalized polyline of chord along xn
+            At root it is: cn [0] = 1.0 
+
+        Returns:
+            xn: normalized x coordinates
+            cn: normalized chord
+        """
+
+        # get the sections which define the chord 
+
+        sections =[]
+        section : Norm_WingSection
+        for section in self._planform.wingSections:
+            if section.has_fix_pos_and_chord:
+                sections.append(section)
+
+        # collect their position and length 
+        #        
+        xn, cn = [], []
+        for section in sections:
+            xn.append(section.xn())
+            cn.append(section.cn())
+        return np.round(xn,10), np.round(cn,10) 
+
+
+    def at (self, xn: float, fast=True) -> float:
+        """ 
+        Main chord function - returns cn at xn
+        """
+
+        xn_arr, cn_arr = self.polyline()
+        cn = np.interp(xn, xn_arr, cn_arr)                      # linear interpolation in polyline
+
+        return round (cn,10) 
+
+
+    def xn_at (self, cn: float, fast=True) -> float:
+        """ 
+        returns xn at normed chord cn
+        """
+        xn_arr, cn_arr = self.polyline()
+
+        # as cn is decreasing along xn the array must be reversed to use np.interp
+        xn_arr = np.flip (xn_arr)
+        cn_arr = np.flip (cn_arr)
+
+        xn = np.interp(cn, cn_arr, xn_arr)                      # linear interpolation in polyline
+
+        return round (xn,10) 
+
+
+
+    # def adjust_planform_to_reference (self):
+    #     """
+    #     Adjust the relevant wing sections of trapezoid to become close to reference(ellipse)
+    #     """
+         
+    #     y_list, _ = self.wing.wingSections.yn_cn_having_fixed()
+
+    #     for index, yPos in enumerate(y_list):        # skip root and tip 
+    #         if not (index == 0 or index == (len(y_list)-1)): 
+
+    #             section = self.wing.wingSections.at_y (yPos)
+
+    #             if section: 
+    #                 # go a little left to get chord so ellipsoid is better approx.
+    #                 leftPos = y_list [index-1]
+    #                 refPos = leftPos + 0.95 *  (yPos - leftPos)
+    #                 newChord = self.wing.refPlanform_elli._norm_chord_at(refPos)
+    #                 section.set_norm_chord (newChord)
+    #             else: 
+    #                 raise ValueError ("Section at norm position %f not found" % yPos)
+
+
+
+
+class Norm_Chord_Elliptical (Norm_Chord_Abstract):
+    """ 
+    Chord based on a pure elliptical function 
+        As x,y are normed to 1 the function represents a circle 
+    """
+
+    name            = "Ellipse"
+    style           = "elliptical"
+    description     = "Chord being pure elliptical"
+
+
+    def at (self, xn: float, fast=True) -> float:
+        """ 
+        Main chord function - returns cn at xn
+        """
+
+        cn = np.sqrt(1.0 - (xn ** 2))                       # Pythagoras
+        return round (cn,10) 
+
+
+    def xn_at (self, cn: float, fast=True) -> float:
+        """ 
+        returns xn at normed chord cn
+        """
+        xn = np.sqrt(1.0 - (cn ** 2))                       # Pythagoras
+        return round (xn,10) 
+
+
+    def polyline (self) -> Polyline:
+        """ 
+        Normalized polyline of ellipticalchord along xn
+            At root it is: cn [0]  = 1.0  
+            At tip  it is: cn [-1] = 0.0  
+
+        Returns:
+            xn: normalized x coordinates
+            cn: normalized chord
+        """
+        alphas = np.linspace (0, np.pi /2, 50)
+        xn = np.cos (alphas)
+        cn = np.sin (alphas)
+
+        return np.round(xn,10), np.round(cn,10) 
 
 
 
@@ -966,10 +1051,10 @@ class Norm_WingSection :
         self._planform      = planform
 
         self._xn            = fromDict (dataDict, "xn", None)            # xn position
-        self._cn            = fromDict (dataDict, "cn", None)            # cn chord position 
-        self._is_cn_or_xn   = fromDict (dataDict, "is_cn_or_xn", True)   # either cn or xn for self  
+        self._cn            = fromDict (dataDict, "cn", None)            # cn chord  
+        self._defines_cn    = fromDict (dataDict, "defines_cn", True)    # section must have cn and xn 
         self._hinge_cn      = fromDict (dataDict, "hinge_cn", None)      # hinge chord position 
-        self._flap_group    = fromDict (dataDict, "_flap_group", 1)      # flap group (starting here) 
+        self._flap_group    = fromDict (dataDict, "flap_group", 1)       # flap group (starting here) 
 
         # sanity
 
@@ -977,22 +1062,33 @@ class Norm_WingSection :
             raise ValueError (f"{self} init - either xn or cn is missing")
 
         if self._xn is not None: 
-            self._xn = max (0.0, self._xn)
-            self._xn = min (1.0, self._xn)
+            self._xn = np.clip (self._xn, 0.0, 1.0)
+            self._xn = round (self._xn, 10)
         if self._cn is not None: 
-            self._cn = max (0.01, self._cn)
-            self._cn = min (0.99, self._cn)
+            self._cn = np.clip (self._cn, 0.01, 0.99)
+            self._cn = round (self._cn, 10)
 
-        # section may have either a position or chord  
+        # sanity root and tip  
         # ... trapezoid planform: section may have both which will define planform  
 
-        if self.isRoot or self.isTip:
-            self._is_cn_or_xn = False
+        if self._planform._norm_chord.chord_defined_by_sections:
+            if self._xn == 0.0 or self._cn == 1.0:
+                self._xn = 0.0
+                self._cn = 1.0
+                self._defines_cn = True
+            elif self._xn == 1.0:
+                if self._cn is None:
+                    self._cn = 0.25                                         # take default 
+                self._defines_cn = True
+            else:
+                self._defines_cn = self._xn is not None and self._cn is not None
         else: 
-            self._is_cn_or_xn = True
+            if not self.isRoot and not self.isTip:
+                self._defines_cn = False    
 
+        # create airfoil and load coordinates if exist 
 
-
+        self._init_airfoil (dataDict = fromDict (dataDict, "airfoil", None))
 
 
     def __repr__(self) -> str:
@@ -1005,21 +1101,54 @@ class Norm_WingSection :
             info = ''
         return f"<{type(self).__name__} {info}>"
 
+    @property
+    def workingDir (self) -> str:
+       """ current working directory""" 
+       self._planform.workingDir 
+
+
+    def _init_airfoil (self, dataDict = None, pathFileName = None, workingDir=None):
+        """read and create airfoil for section """
+ 
+        # read data for airfoil either from dict of parameter file 
+        #  or get filepath from user selection 
+        # then create new 'Airfoil' 
+
+        try: 
+            if dataDict: 
+                airfoil = Airfoil.onDict (dataDict, geometry=GEO_BASIC,
+                                          workingDir= self.workingDir)
+            else: 
+                airfoil = Airfoil (pathFileName= pathFileName, geometry=GEO_BASIC,
+                                   workingDir=workingDir)
+        except:
+            airfoil = None
+
+        if airfoil is not None and airfoil.isExisting:
+            airfoil.load()
+        else:
+            if self.isRoot: 
+                airfoil = Root_Example()
+            elif self.isTip:
+                airfoil = Tip_Example()
+            else:
+                airfoil = Airfoil(name="<strak>", geometry=GEO_BASIC)
+                airfoil.set_isBlendAirfoil (True)
+
+        self.airfoil : Airfoil = airfoil 
+
+
 
     @property
     def isRoot (self) -> bool:
         """ True if self is root section"""
-        return self.xn() == 0.0 
+        return self._xn == 0.0 
 
     @property
     def isTip (self) -> bool:
         """ True if self is tip section"""
-        return self.xn() == 1.0 
+        return self._xn == 1.0 
 
-    @property
-    def is_cn_or_xn (self) -> bool: 
-        """ either cn or xn defined for self"""
-        return self._is_cn_or_xn
 
     def xn (self) -> float:
         """ 
@@ -1038,15 +1167,14 @@ class Norm_WingSection :
         if aVal is None:
             self._xn = None
         else:  
-            aVal = max (0.0, aVal) 
-            aVal = min (1.0, aVal) 
-            self._xn = aVal 
+            aVal = np.clip (aVal, 0.0, 1.0)
+            self._xn = round(aVal,10)
 
-        if self.is_cn_or_xn and self._xn is not None:               # reset cn 
+        if not self.defines_cn and self._xn is not None:               # reset cn 
             self._cn = None 
         else:                                                       # tapezoid must have both
-            if self._xn is None: self._xn = self.xn()           
-            if self._cn is None: self._cn = self.cn() 
+            if self._xn is None: self._xn = round(self.xn(),10)           
+            if self._cn is None: self._cn = round(self.cn(),10) 
 
 
     def cn (self) -> float:
@@ -1066,15 +1194,15 @@ class Norm_WingSection :
         if aVal is None:
             self._cn = None
         else:  
-            aVal = max (0.0, aVal) 
-            aVal = min (1.0, aVal) 
-            self._cn = aVal 
+            aVal = np.clip (aVal, 0.0, 1.0)
+            self._cn = round(aVal,10)
 
-        if self.is_cn_or_xn and self._cn is not None:               # reset cn 
-            self._xn = None 
+        if not self.defines_cn: 
+            if self._cn is not None:                                # reset cn 
+                self._xn = None 
         else:                                                       # tapezoid must have both
-            if self._xn is None: self._xn = self.xn()           
-            if self._cn is None: self._cn = self.cn() 
+            if self._xn is None: self._xn = round(self.xn(),10)           
+            if self._cn is None: self._cn = round(self.cn(),10) 
 
     @property
     def has_fix_chord (self) -> bool:
@@ -1086,6 +1214,31 @@ class Norm_WingSection :
         """ True if position xn of self is fixed """
         return self._xn is not None
 
+    @property
+    def has_fix_pos_and_chord (self) -> bool:
+        """ True if position xn and chord cn of self is fixed """
+        return self.has_fix_chord and self.has_fix_pos 
+
+    @property 
+    def defines_cn (self) -> bool:
+        """ section defines chord (e.g. trapezoidal)"""
+        return self._defines_cn
+    
+    def set_defines_cn (self, aBool : bool):
+        """ set section defines chord (e.g. trapezoidal)"""
+
+        if not (self.isRoot or self.isTip):
+
+            # sanity - is it allowed in that planform
+            if self._planform._norm_chord.chord_defined_by_sections:
+                self._defines_cn = aBool
+                if aBool: 
+                    self.set_cn (self.cn())
+                else: 
+                    self.set_cn (None)       
+
+        return True
+
 
     def index (self) -> int:
         """ index of self with wingSections"""
@@ -1094,7 +1247,11 @@ class Norm_WingSection :
 
     def xn_limits (self) -> tuple:
          """ xn limits as tuple of self before touching the neighbour section """
-         return self._planform.wingSections.xn_limits_of (self)
+         return self._planform.wingSections.limits_of (self) [0]
+
+    def cn_limits (self) -> tuple:
+         """ cn limits as tuple of self before touching the neighbour section """
+         return self._planform.wingSections.limits_of (self) [1]
 
 
     @property
@@ -1111,8 +1268,16 @@ class Norm_WingSection :
 
     @property
     def hinge_cn (self) -> float:
-        """ relativ hinge chord position cn of self"""
+        """ relative hinge chord position cn of self"""
         return self._hinge_cn
+
+    def set_hinge_cn (self, aVal : float):
+        """ set relative hinge chord position cn of self"""
+        self._hinge_cn = np.clip (aVal, 0.0, 1.0)  
+
+    def remove_hinge_cn (self):
+        """ remove a individual relative hinge chord position cn of self"""
+        self._hinge_cn = None
 
     @property
     def flap_group (self) -> float:
@@ -1133,17 +1298,23 @@ class Norm_WingSection :
     def line (self) -> Polyline:
         """ self as a poyline x,y within normed planform"""
 
-        xn          = self.xn()
+        xn           = self.xn()
         le_yn, te_yn = self.le_te ()
-        return [xn, xn], [le_yn, te_yn]
+        return np.array([xn, xn]), np.array([le_yn, te_yn])
 
 
     def line_in_chord (self) -> Polyline:
-        """ self as a poyline x,y within normed chord distrinution"""
+        """ self as a poyline x,y within normed chord """
 
         xn          = self.xn()
-        return [xn, xn], [self.cn(), 0.0]
+        return np.array([xn, xn]), np.array([self.cn(), 0.0])
 
+
+    def line_in_chord_ref (self) -> Polyline:
+        """ self as a poyline x,y within chord reference which is just y[1]=1"""
+
+        xn          = self.xn()
+        return np.array([xn, xn]), np.array([0.0, 1.0])
 
 
 
@@ -1171,9 +1342,9 @@ class Norm_WingSections (list):
         # new wing - create default sections
         if not sections:
             logger.info ('Creating example wing sections')
-            sections.insert(0, Norm_WingSection (planform, {"xn": 0.0, "flap_group":1, "hinge_xn":0.70}))
-            sections.append(   Norm_WingSection (planform, {"cn": 0.8, "flap_group":2, "hinge_xn":0.70}))
-            sections.append(   Norm_WingSection (planform, {"xn": 1.0, "flap_group":2, "hinge_xn":0.75}))
+            sections.insert(0, Norm_WingSection (planform, {"xn": 0.0, "flap_group":1, "hinge_cn":0.70}))
+            sections.append(   Norm_WingSection (planform, {"cn": 0.8, "flap_group":2, "hinge_cn":0.70, "defines_cn": True, "xn": 0.5}))
+            sections.append(   Norm_WingSection (planform, {"xn": 1.0, "flap_group":2, "hinge_cn":0.75}))
 
         # sanity
         if not sections[0].isRoot or not sections[-1].isTip:
@@ -1183,6 +1354,12 @@ class Norm_WingSections (list):
 
         self.extend (sections)
 
+
+    @property
+    def workingDir (self) -> str:
+       """ current working directory""" 
+       self._planform.workingDir 
+   
 
     def _save (self) -> dict:
         """ returns the parameters of sections as a list of dict"""
@@ -1194,7 +1371,7 @@ class Norm_WingSections (list):
         return sections
 
 
-    def create_after (self, aSection: 'Norm_WingSection') -> 'WingSection' : 
+    def create_after (self, aSection: 'Norm_WingSection') -> 'Norm_WingSection' : 
         """
         creates and inserts a new wing section after aSection with a chord in the middle to the next neighbour 
 
@@ -1215,30 +1392,30 @@ class Norm_WingSections (list):
         return new_section
 
 
-    # def create_at (self, y : float): 
-    #     """
-    #     create and insert a new wing section at y pos 
-    #     """
-        
-    #     # check y
-    #     tolerance = self.wing.halfwingspan / 500
-    #     if y < tolerance : return 
-    #     if y > (self.wing.halfwingspan - tolerance) : return 
+    def create_at (self, xn : float)  -> 'Norm_WingSection': 
+        """
+        create and insert a new wing section at pos xn 
 
-    #     # is there already a section? Return this one 
+        Return: 
+            newSection: the new wingSection, None if a new section couldn't be created 
+        """
 
-    #     exist_sec = self.at_y (y, tolerance=tolerance)
-    #     if exist_sec: return exist_sec 
+        xn = np.clip (xn, 0.0, 1.0)
 
-    #     new_sec = WingSection (self.wing, {"y": y})
-    #     self.insert (1,new_sec)
-    #     self.sort_by_y ()
+        # is there already a section? Return this one 
 
-    #     # set flap group of new to the left neighbour 
-    #     left_sec, _ = self.neighbours (new_sec) 
-    #     new_sec.set_flap_group (left_sec.flap_group)
+        exist_sec = self.at_xn (xn)
+        if exist_sec: return None 
 
-    #     return new_sec
+        new_section = Norm_WingSection (self._planform, {"xn": xn})
+        self.insert (1,new_section)                                     # insert section somewhere
+        self.sort_by_xn ()                                               # and bring it in order 
+
+        # set flap group of new to the left neighbour 
+        left_sec, _ = self.neighbours_of (new_section) 
+        new_section.set_flap_group (left_sec.flap_group)
+
+        return new_section
 
 
     def delete (self, aSection: 'Norm_WingSection') -> Norm_WingSection: 
@@ -1276,32 +1453,31 @@ class Norm_WingSections (list):
             geometry: optional - the desired geometry of the new straked airfoils 
                                  either GEO_BASIC or GEO_SPLINE
         """
-        sec: Norm_WingSection
+        section: Norm_WingSection
 
-        # for sec in self:
-        #     if sec.airfoil.isBlendAirfoil: 
+        for section in self:
+            if section.airfoil.isBlendAirfoil: 
 
-        #         # get the neighbour wing sections  with real airfoils 
-        #         leftSec, rightSec = self.neighbours_having_airfoil(sec) 
+                # get the neighbour wing sections  with real airfoils 
 
-        #         blendBy  = (sec.norm_chord - leftSec. norm_chord) / \
-        #                    (rightSec.norm_chord - leftSec. norm_chord)
+                left_sec, right_sec = self.neighbours_having_airfoil(section) 
+                blendBy  = (section.cn() - left_sec.cn()) / (right_sec.cn() - left_sec.cn())
 
-        #         # strak - set new geometry to achieve higher quality with splined airfoils 
+                # strak - set new geometry to achieve higher quality with splined airfoils 
 
-        #         sec.airfoil.set_name (leftSec.airfoil.name, reset_original=True)     # name will be <left_name>_blend0.6
+                section.airfoil.set_name (left_sec.airfoil.name, reset_original=True)     # name will be <left_name>_blend0.6
 
-        #         sec.airfoil.do_blend (leftSec.airfoil,  rightSec.airfoil, blendBy, geometry)
-
+                section.airfoil.do_blend (left_sec.airfoil,  right_sec.airfoil, blendBy, geometry)
 
 
-    def sort_by_y (self):
+
+    def sort_by_xn (self):
         """ 
-        Re-sort wing sections to an ascending y pos. 
+        Re-sort wing sections to an ascending xn pos. 
         When changing major wing parms sections could become out of sort order when
-            they have fixed yPos and chord mixed    
+            they have fixed xn and chord mixed    
         """
-        self.sort (key=lambda sec: sec.xn) 
+        self.sort (key=lambda sec: sec.xn()) 
 
 
     def neighbours_of (self, aSection: Norm_WingSection) -> tuple [Norm_WingSection, Norm_WingSection]:
@@ -1324,59 +1500,65 @@ class Norm_WingSections (list):
         return left_sec, right_sec
 
 
-    def xn_limits_of (self, aSection: Norm_WingSection) -> tuple: 
-        """ x position limits as tuple of self before touching the neighbour section
+    def limits_of (self, aSection: Norm_WingSection) -> tuple [tuple,tuple]: 
+        """ 
+        xn position and cn chord limits as tuple of self before touching the neighbour section
         """
+        xn = aSection.xn()
+        cn = aSection.cn()
 
         if aSection.isRoot or aSection.isTip:                       # fixed 
-            left_xn  = aSection.xn()
-            right_xn = aSection.xn()
-            return left_xn, right_xn
-
+            return (xn,xn), (cn,cn) 
         else:
             left_sec, right_sec = self.neighbours_of (aSection)     # keep a safety distance to next section
             safety = self[-1].xn() / 500.0 
             if left_sec: 
                 left_xn = left_sec.xn()
+                left_cn = left_sec.cn()
             else:
-                left_xn = aSection.xn()
+                left_xn = xn
+                left_cn = cn
             if right_sec: 
                 right_xn = right_sec.xn()
+                right_cn = right_sec.cn()
             else:
-                right_xn = aSection.xn()
-            return (left_xn + safety, right_xn - safety)
+                right_xn = xn
+                right_cn = cn
+            return (left_xn + safety, right_xn - safety), (left_cn, right_cn)
 
 
 
-    def neighbours_having_airfoil (self, aSection: 'WingSection'):
+    def neighbours_having_airfoil (self, aSection: 'WingSection') -> tuple [Norm_WingSection, Norm_WingSection]:
         """
         returns the neighbour before and after a wingSection, which are not blendAirfoil
         Needed for 'strak'  - if no neighbour return None 
         """
-        leftSec :  WingSection = None
-        rightSec : WingSection = None
 
-        # try:
-        #     index = self.index (aSection) 
-        # except: 
-        #     return None, None
+        try:
+            index = self.index (aSection) 
+        except: 
+            return None, None
 
-        # sec: WingSection
-        # #left neighbour 
-        # if aSection.isRoot: leftSec = None
-        # else: 
-        #     for sec in reversed(self [0:index]):
-        #         if not sec.airfoil.isBlendAirfoil:
-        #             leftSec = sec
-        #             break 
-        # #right neighbour 
-        # if aSection.isTip: rightSec = None
-        # else: 
-        #     for sec in self [index+1: ]:
-        #         if not sec.airfoil.isBlendAirfoil:
-        #             rightSec = sec
-        #             break 
-        # return leftSec, rightSec
+        sec: Norm_WingSection
+
+        #left neighbour 
+        if aSection.isRoot: 
+            left_sec = None
+        else: 
+            for sec in reversed(self [0:index]):
+                if not sec.airfoil.isBlendAirfoil:
+                    left_sec = sec
+                    break 
+
+        #right neighbour 
+        if aSection.isTip: 
+            right_sec = None
+        else: 
+            for sec in self [index+1: ]:
+                if not sec.airfoil.isBlendAirfoil:
+                    right_sec = sec
+                    break 
+        return left_sec, right_sec
 
 
     # def y_c (self) -> tuple [list, list]:
@@ -1436,6 +1618,503 @@ class Norm_WingSections (list):
 
 
 
+#-------------------------------------------------------------------------------
+# Flap   
+#-------------------------------------------------------------------------------
+
+
+
+class Norm_Flap:
+    """ 
+    Outline of a single flap based on flap group in the wing sections  
+    """
+    def __init__(self, flaps: 'Norm_Flaps',
+                 section_left: Norm_WingSection, section_right: Norm_WingSection):
+        """
+        Main constructor for new flap belonging to a wing 
+        """
+        self._flaps = flaps
+
+        self.xn_from = section_left.xn()
+        self.xn_to   = section_right.xn()
+
+        self.flap_group   = section_left.flap_group
+        self.section_name = section_right.name_short
+
+
+    def __repr__(self) -> str:
+        #nice print string of self 
+        return f"<{type(self).__name__}>"
+
+
+    @property         
+    def planform (self) -> 'Norm_Planform':
+        return self._flaps._planform
+
+
+    @property
+    def name (self) -> str:
+        """ short unique name for flap like '2' """
+        return f"{self.flap_group}"
+    
+
+    def polyline  (self) -> tuple [Array, Array]:
+        """
+        polyline y,x of self    
+        """
+        xn_from = self.xn_from
+        xn_to   = self.xn_to
+        x,y = [], []
+
+        # we start a TE at xn_from and going clockwise around the flap upto xn_to
+        x.append(xn_from)
+        y.append(self.planform.le_te_at (xn_from)[1])
+
+        # go to hinge point
+        x.append(xn_from)
+        y.append(self._flaps.hinge_yn_at(xn_from))
+
+        # go along the hinge 
+        x.append(xn_to)
+        y.append(self._flaps.hinge_yn_at(xn_to))
+
+        # back to TE 
+        x.append(xn_to)
+        y.append(self.planform.le_te_at (xn_to)[1])
+
+        # ... finally along TE to starting point back to TE
+        xn, le_yn, te_yn = self.planform.le_te_polyline()
+        i1 = min(bisect.bisect(te_yn, xn_from)-1, len(te_yn) -2)    # get te coordinates between xn_from and yTo
+        i2 = min(bisect.bisect(te_yn, xn_to)  -1, len(te_yn) -2)
+        y = np.append (y, np.flip(te_yn[i1:i2+1]))  
+        x = np.append (x, np.flip(xn[i1:i2+1]))
+
+        return x, y
+
+
+
+    def line_left  (self, x_offset=0) -> tuple [Array, Array]:
+        """
+        polyline xn, yn of self left side   
+        """
+        xn_from = self.xn_from + x_offset
+        x,y = [], []
+
+        # we start a TE at xn_from and going clockwise around the flap upto xn_to
+        x.append(xn_from)
+        y.append(self.planform.le_te_at (xn_from)[1])
+
+        # go to hinge point
+        x.append(xn_from)
+        y.append(self._flaps.hinge_yn_at (xn_from))
+
+        return np.array(x), np.array(y)
+
+
+    def line_right  (self, x_offset=0) -> tuple [Array, Array]:
+        """
+        polyline xn, yn of self right side   
+        """
+        xn_to   = self.xn_to - x_offset
+        y,x = [], []
+
+        # we start a TE at xn_from and going clockwise around the flap upto xn_to
+        x.append(xn_to)
+        y.append(self.planform.le_te_at (xn_to)[1])
+
+        # go to hinge point
+        x.append(xn_to)
+        y.append(self._flaps.hinge_yn_at (xn_to))
+
+        return np.array(x), np.array(y)
+
+
+    def line_hinge  (self, x_offset=0) -> tuple [Array, Array]:
+        """
+        hinge line xn, yn line of self    
+        """
+        xn_from = self.xn_from + x_offset
+        xn_to   = self.xn_to   - x_offset
+        x,y = [], []
+
+        # go to hinge point
+        x.append(xn_from)
+        y.append(self._flaps.hinge_yn_at (xn_from))
+
+        # go along the hinge 
+        x.append(xn_to)
+        y.append(self._flaps.hinge_yn_at (xn_to))
+
+        return np.array(x), np.array(y)
+
+
+    def line_te  (self, x_offset=0) -> tuple [Array, Array]:
+        """
+        trailing edge polyline y,x of self    
+        """
+        xn_from = self.xn_from + x_offset
+        xn_to   = self.xn_to   - x_offset
+        y,x = [], []
+
+        # we start a TE at xn_from  
+        x.append(xn_from)
+        y.append(self.planform.le_te_at (xn_from)[1])
+
+        # ... along TE 
+        xn, _, le_yn = self.planform.le_te_polyline()
+        i1 = min(bisect.bisect(xn, xn_from)-1, len(xn) -2)    # get te coordinates between xn_from and yTo
+        i2 = min(bisect.bisect(xn, xn_to)  -1, len(xn) -2)
+        x = np.append (x, xn[i1:i2+1])
+        y = np.append (y,le_yn[i1:i2+1])  
+
+        # final TE point 
+        x = np.append(x, xn_to)
+        y = np.append(y, self.planform.le_te_at(xn_to)[1])
+ 
+        return x,y
+
+
+    def rel_depth  (self, y_offset=0) -> tuple [Array, Array]:
+        """
+        relative depth (depth/chord) polyline y,x of self    
+        """
+        xn_from = self.xn_from + y_offset
+        xn_to   = self.xn_to   - y_offset
+
+        y = np.linspace (xn_from, xn_to, 10)
+        x = np.zeros (10)
+        for i, yi in enumerate (y):
+            x[i] = self._flaps.depth_at(yi) / self.planform.chord_at (yi) 
+
+        return y, x
+
+
+    def center (self) -> tuple [float, float]:
+        """ center point of self"""
+
+        xn = (self.xn_to + self.xn_from) / 2
+
+        te_yn    = self.planform.le_te_at(xn)[1]
+        hinge_yn = self._flaps.hinge_yn_at(xn)
+        yn       = (te_yn + hinge_yn) / 2
+
+        return xn, yn 
+
+
+
+
+
+class Norm_Flaps:
+    """ 
+    Creates dynamically list of Flaps from definitions in wingSections 
+
+    Wing
+        |-- Planform
+            |-- Norm_Planform
+                |-- Norm_Flaps
+                    |-- Norm_Flap
+    """ 
+    def __init__(self, planform: 'Norm_Planform', dataDict: dict = None):
+
+        self._planform : Norm_Planform = planform
+
+        self._hinge_equal_ref_line = fromDict (dataDict, "hinge_equal_ref_line", False)       
+
+        self._hinge_xn_tip  = fromDict (dataDict, "hinge_xn_tip", 1.0)    # xn pos for tip hinge point 
+
+
+
+    def _save (self) -> dict:
+        """ returns the parameters of self as a dict"""
+
+        myDict = {}
+        toDict (myDict, "hinge_equal_ref_line",  self._hinge_equal_ref_line) 
+
+        return myDict
+
+
+    @property
+    def _wingSections (self) -> Norm_WingSections:
+        return self._planform.wingSections
+        
+    @property
+    def hinge_equal_ref_line (self) -> bool: 
+        """ True if hinge line equals reference line """
+        return self._hinge_equal_ref_line
+    
+    def set_hinge_equal_ref_line (self, aBool : bool):
+        self._hinge_equal_ref_line = aBool == True 
+
+
+    def get (self) -> list[Norm_Flap]: 
+        """
+        returns the flap objects based on wing sections flap group
+        """
+        flapList = []
+        if not self._wingSections: return flapList 
+
+        section_start  = self._wingSections[0]
+        section : Norm_WingSection
+
+        for section in self._wingSections:
+            if (section.flap_group != section_start.flap_group or \
+                section == self._wingSections[-1]) :
+                # new flap group or last section -> create flap 
+                flapList.append(Norm_Flap(self, section_start, section))
+                section_start = section 
+
+        return flapList
+
+
+    @property
+    def hinge_yn_root (self) -> float:    
+        """ normed yn 0..1 of hinge line at root """
+        if self.hinge_equal_ref_line:
+            _, yn = self._planform.chord_ref_polyline ()
+            return yn[0] 
+        else:
+            logging.warning ("hinge_yn_root tbd")
+
+    def set_hinge_xn_root (self, aVal : float):
+        if not self.hinge_equal_ref_line:
+            aVal = max (0.1, aVal)
+            aVal = min (1.0, aVal)
+            logging.warning ("set_hinge_xn_root tbd")
+
+    
+    @property
+    def hinge_xn_tip (self) -> float:    
+        """ normed xn 0..1 of hinge line at tip """
+        if self.hinge_equal_ref_line:
+            _, yn = self._planform.chord_ref_polyline ()
+            return yn[1] 
+        else:
+            logging.warning ("hinge_xn_tip tbd")
+
+    def set_hinge_xn_tip (self, aVal : float):
+        if not self.hinge_equal_ref_line:
+            aVal = max (0.1, aVal)
+            aVal = min (1.0, aVal)
+            logging.warning ("set_hinge_xn_tip tbd")
+
+
+    @property
+    def hinge_yn_tip (self) -> float:    
+        """ yn 0..1 of hinge reference point towards tip """
+        return 1.0 if self.hinge_equal_ref_line else self._hinge_yn_tip
+
+    def set_hinge_yn_tip (self, aVal : float):
+        if not self.hinge_equal_ref_line:
+            aVal = max (0.1, aVal)
+            aVal = min (1.0, aVal)
+            self._hinge_yn_tip = round(aVal,6) 
+
+
+    def hinge_yn_at (self, xn : float) -> float:
+        """n of hinge line at xn """  
+
+        xn_arr, yn_arr = self.hinge_polyline ()
+        yn = np.interp(xn, xn_arr, yn_arr)                                  # linear interpolation 
+
+        return yn
+
+
+    def hinge_polyline  (self) -> tuple [Array, Array]:
+        """
+        hinge line y,x to the very tip   
+        """
+        if self.hinge_equal_ref_line:
+
+            # just take reference polyline 
+            return self._planform.chord_ref_polyline()
+
+        else: 
+
+            # collect all hinge xn definitions in sections
+            x, y = [], []
+            section : Norm_WingSection
+            for section in self._wingSections:
+                if section.hinge_cn is not None: 
+                    xn       = section.xn ()
+                    hinge_cn = section.hinge_cn
+                    le_yn, te_yn = self._planform.le_te_at (xn)
+
+                    x.append (xn)
+                    y.append (le_yn + hinge_cn * (te_yn - le_yn))
+
+            # sanity - at least 2 points? 
+            if len (x) < 2:
+                raise ValueError ("Hinge polyline definition is corrupted")
+
+            # sanity - strictly increasing? 
+            if not np.all(np.diff(x) > 0):
+                raise ValueError ("Hinge polyline is corrupted")
+
+            return np.array(x), np.array(y)
+
+
+    def hinge_as_jpoints (self, transform_fn = None)  -> list[JPoint]:
+        """ 
+        hinge definition points as JPoints with limits and fixed property
+            - transform_fn will transform jpoint to new coordinates 
+        """
+
+        jpoints = []
+        xn_arr, yn_arr = self.hinge_polyline ()
+        for i,xn in enumerate(xn_arr):
+
+            yn = yn_arr[i]
+            jpoint = JPoint (xn, yn)                               
+
+            jpoint.set_x_limits ((xn, xn))                      # fix 
+
+            le_yn, te_yn = self._planform.le_te_at (xn)
+            jpoint.set_y_limits ((te_yn, le_yn))                # le is max, te is min
+
+            if i == 0:                                          # root fixed
+                jpoint.set_name ('Flap Root')
+            elif i == (len(yn_arr)-1):                                     
+                jpoint.set_name ('Flap Tip')
+            else:                                           
+                jpoint.set_name ('Flap')
+            jpoints.append(jpoint.as_transformed (transform_fn))
+
+        return jpoints
+
+
+    def hinge_from_jpoints (self, jpoints: list[JPoint], transform_fn = None):
+        """ 
+        set hinge from definition JPoints - updates winSection hinge_xn 
+        """
+
+        section : Norm_WingSection
+        for section in self._wingSections:
+
+            found_jpoint = None
+            for jpoint in jpoints:
+
+                xn, yn = jpoint.as_transformed (transform_fn).xy
+                if xn == section.xn(): 
+                    found_jpoint = jpoint
+                    break
+             
+            if found_jpoint: 
+                le_yn, te_yn = self._planform.le_te_at (xn) 
+                hinge_cn = (yn - le_yn) / (te_yn - le_yn)
+                section.set_hinge_cn (hinge_cn) 
+            else: 
+                section.remove_hinge_cn ()
+
+
+
+    def depth_at (self, xn : float, hinge_yn : float = None) -> float:
+        """ relative flap depth 0..1 at position xn """
+
+        if hinge_yn is None: 
+            hinge_yn = self.hinge_yn_at (xn)
+        le_yn, te_yn = self._planform.le_te_at (xn)
+
+        depth = (te_yn - hinge_yn) / (te_yn - le_yn)
+        depth = np.clip (depth, 0.0, 1.0)                                   # sanity    
+        return depth
+
+
+
+    def hinge_cn_polyline  (self) -> tuple [Array, Array]:
+        """
+        relative hinge position within chord  of self    
+        """
+        # get hinge polyline ready 
+        xn_arr, yn_arr = self.hinge_polyline ()
+
+        xn, le_yn, te_yn =  self._planform.le_te_polyline ()
+        cn = np.zeros (len(xn))
+
+        for i, xni in enumerate (xn):
+            hinge_y = np.interp(xni, xn_arr, yn_arr)                            # linear interpolation 
+            cn[i] = (hinge_y - le_yn[i]) / (te_yn[i] - le_yn[i])
+
+        return xn, cn
+
+
+
+    # def rel_depth_as_jpoints (self)  -> list[JPoint]:
+    #     """ 
+    #     relative depth of flaps at section as JPoints with limits and fixed property
+    #         x values 0..1
+    #         y values scaled to chord - fixed as it is on wingSection
+    #     """
+
+    #     jpoints = []
+    #     y_arr, x_arr = self.hinge_polyline ()
+    #     for i, y in enumerate(y_arr):
+
+    #         x = x_arr[i]
+    #         le_x, te_x = self._planform._planform_at (y)
+    #         rel_depth = (te_x - x) / (te_x - le_x)
+
+    #         jpoint = JPoint (y, rel_depth)                          # change to display coordinate system       
+
+    #         jpoint.set_x_limits ((y, y))                    # fix
+    #         jpoint.set_y_limits ((0, 1))
+
+    #         if i == 0:                                      # root fixed
+    #             jpoint.set_name ('Flap Root')
+    #         elif i == (len(y_arr)-1):                                     
+    #             jpoint.set_name ('Flap Tip')
+    #         else:                                           
+    #             jpoint.set_name ('Flap')
+    #         jpoints.append(jpoint)
+
+    #     return jpoints
+
+
+    # def rel_depth_from_jpoints (self, jpoints: list[JPoint]):
+    #     """ 
+    #     set hinge from relative depth definition JPoints - updates winSection hinge_xn 
+    #     """
+
+    #     for jpoint in jpoints:
+
+    #         y, x = jpoint.xy
+             
+    #         section = self._wingSections.at_y (y)
+
+    #         if section is None: 
+    #             raise ValueError (f"No section found at y position {jpoint.x}")
+    #         else: 
+    #             xn = 1.0 - x
+    #             section.set_hinge_xn (xn) 
+
+
+    def insert_hinge_point_at (self, xn : float) -> bool:
+        """ 
+        try to add a hinge 'break' at a section, which should be at xn
+            Return True if successful 
+        """ 
+        section = self._wingSections.at_xn (xn, tolerance = 0.01) 
+
+        if section is not None: 
+            if section.hinge_cn == None:
+
+                # calculate the current hinge position 
+                xn_arr, yn_arr = self.hinge_polyline ()
+
+                hinge_y = np.interp(xn, xn_arr, yn_arr)                            # linear interpolation 
+                le_x, te_x = self._planform.le_te_at (xn)
+
+                cn = (hinge_y - le_x) / (te_x - le_x)
+
+                # update section with hinge info 
+                section.set_hinge_cn (cn)
+
+                # ensure a new flap group will begin at this section 
+                self._wingSections.check_and_correct ()
+
+                return True
+        return False 
+
+
 
 
 
@@ -1472,49 +2151,78 @@ class Norm_Planform:
                 |-- Norm_Chord
                 |-- Norm_WingSections
                     |-- Norm_WingSection
+                |-- Norm_Flaps
+                    |-- Norm_Flap
     """
 
-    def __init__(self, norm_chord : Norm_Chord_Abstract, dataDict: dict = None):
+    def __init__(self, planform : 'Planform_2', 
+                 dataDict: dict = None, 
+                 chord : Norm_Chord_Abstract = None, 
+                 chord_ref : Norm_Chord_Reference = None):
 
+        self._planform = planform
 
-        self._norm_chord = norm_chord
+        # create Norm_Chord distribution depending on style e.g. 'Bezier'
 
-        # reference line  - init quadratic Bezier control points for  
-       
-        px = [0.0,  0.50, 1.0]
-        py = [0.75, None, 0.8]                                       # = straight line      
+        if chord is None: 
+            self._style = fromDict (dataDict, "style", 'Trapez')
+            if self._style is None:
+                logging.info (f"style is missing - using 'Bezier'")
+                style = 'Bezier'
 
-        # from dict only the variable point coordinates of Bezier
+            if self._style == 'Bezier':
+                self._norm_chord = Norm_Chord_Bezier (dataDict=dataDict)
+            elif self._style == 'Trapez':
+                self._norm_chord = Norm_Chord_Trapezoidal (self, dataDict=dataDict)
+            else:
+                raise ValueError (f"Planform style {style} not supported")
+        else: 
+            self._norm_chord = chord 
 
-        py[0]   = fromDict (dataDict, "p0y", py[0])                 # root value
-        px[1]   = fromDict (dataDict, "p1x", px[1])                 # point in the middle  
-        py[1]   = fromDict (dataDict, "p1y", py[1])
-        py[2]   = fromDict (dataDict, "p2y", py[2])                 # tip value
+        # init chord reference function either new from dataDict or as argument of self 
 
-        # alternate reference paramters from dict - handle banana
-
-        py[0]   = fromDict (dataDict, "xn_root", py[0])  
-        px[1]   = fromDict (dataDict, "banana_p1y", px[1])          # point in the middle  
-        py[2]   = fromDict (dataDict, "xn_tip", py[2])   
-
-        banana_p1y = fromDict (dataDict, "banana_p1x", 0.0)
-        if py[1] is None or banana_p1y :                            # set no banana
-            py_1_no_banana = interpolate (px[0], px[2], py[0], py[2], px[1])
-            py[1] = py_1_no_banana + banana_p1y
-
-
-        self._ref_bezier = Bezier (px, py)
-        self._u = np.linspace(0.0, 1.0, num=20)                     # default Bezier u parameter (for polyline)
+        if chord_ref is None:
+            self._chord_ref = Norm_Chord_Reference (dataDict=fromDict(dataDict, "chord_reference", {}))
+        else: 
+            self._chord_ref = chord_ref 
 
         # init wing sections 
 
         self._wingSections    = Norm_WingSections (self, dataDict=fromDict(dataDict, "wingSections", {}))
 
+        # init flaps
+
+        self._flaps           = Norm_Flaps (self, dataDict=fromDict(dataDict, "flaps", None) )
+
 
     @property
-    def isBezier (self) -> bool:
-        """ true if Bezier based chord distribution"""
-        return self._norm_chord.isBezier
+    def name (self) -> str:
+        """ name - default name of norm chord"""
+        return self._norm_chord.name
+
+    @property
+    def chord (self) -> Norm_Chord_Abstract:
+        return self._norm_chord
+
+    @property
+    def chord_ref (self) -> Norm_Chord_Reference:
+        """ chord reference function """
+        return self._chord_ref
+
+    @property
+    def workingDir (self) -> str:
+       """ current working directory""" 
+       self._planform.workingDir 
+
+    @property
+    def cn_is_bezier (self) -> bool:
+        """ true if Bezier based chord"""
+        return self.chord.isBezier
+
+    @property
+    def cn_is_trapezoidal (self) -> bool:
+        """ true if trapezoidal chord"""
+        return self.chord.isTrapezoidal
 
     @property
     def wingSections (self) -> Norm_WingSections:
@@ -1522,17 +2230,27 @@ class Norm_Planform:
         return self._wingSections
 
     @property
+    def flaps (self) -> Norm_Flaps:
+        """ returns Flaps-Handler which generates flaps of self"""
+        return self._flaps
+
+    @property
+    def hinge_equal_ref_line (self) -> bool: 
+        """ True if hinge line equals reference line """
+        return self.flaps.hinge_equal_ref_line
+    
+    @property
     def _move_y (self) -> float:
         """ dy value of move transform of planform in xn,yn coordinate system"""
         # -> trailing edge at root will be at yn=0.0  
-        return - (self.rn_at(0) - 1.0)
+        return - self.chord_ref.at(0) 
 
 
     def cn_at (self, xn: float, fast=True) -> float:
         """ 
         normalized chord at xn
         """
-        return self._norm_chord.at (xn, fast=fast)
+        return self.chord.at (xn, fast=fast)
 
 
     def cn_polyline (self) -> Polyline:
@@ -1543,103 +2261,43 @@ class Norm_Planform:
             xn: normalized x coordinates
             cn: normalized y coordinates 
         """
-        return self._norm_chord.polyline()
+        return self.chord.polyline()
 
 
     def xn_at (self, cn: float, fast=True) -> float:
         """ 
         returns xn at normed chord xn
         """
-        return self._norm_chord.xn_at (cn, fast=fast)
+        return self.chord.xn_at (cn, fast=fast)
 
 
-    def rn_at (self, xn: float, fast=True) -> float:
-        """ 
-        Main reference function - returns rn at xn
 
-            e.g. r=0.8 means 80% of chord is towards le and 20% towards te
-                from a horizonatl reference 
-            Higher Precision is achieved with interpolation of the curve (fast=False) 
+    def t_chord_to_norm (self, xn : float|Array|list, yn : float|Array|list) -> ...:
         """
-
-        return self._ref_bezier.eval_y_on_x (xn, fast=fast) 
-
-
-    def is_no_banana (self) -> bool:
-        """ 
-        True if reference function is linear meaning 
-        no banana function (Bezier is "obsolete") 
-        """ 
-        px = self._ref_bezier.points_x
-        py = self._ref_bezier.points_y
-
-        # check if the middle bezier point is on line between the two others
-        py_1_interpol = interpolate (px[0], px[2], py[0], py[2], px[1])
-        delta_y = abs (py_1_interpol - py[1])
-
-        return  round (delta_y,2) == 0.0 
-
-
-    def set_is_no_banana (self):
-        """ 
-        set the reference function to linear meaning 
-        no banana function (Bezier is "obsolete") 
-        """ 
-        px = self._ref_bezier.points_x
-        py = self._ref_bezier.points_y
-
-        # set y of the middle bezier point between the two others
-        py_1_interpol = interpolate (px[0], px[2], py[0], py[2], px[1])
-        py [1] = py_1_interpol
-
-        self._ref_bezier.set_point (1, px[1], py[1])
-
-
-    def rn_polyline (self) -> tuple [Array, Array]:
-        """
-        Polyline of rn, xn 
-        """
-        xn, rn = self._ref_bezier.eval(self._u) 
-        return xn, rn 
-
-
-    def transform_norm (self, xn : float|Array|list, yn : float|Array|list) -> ...:
-        """
-        Transforms normalized coordinates into normalized planform coordinates
-            - by shiftung yn value dependand ref line at xn  
+        Transforms chord coordinates into normalized planform coordinates
+            - by shiftung yn value dependand chord reference at xn  
             - by shifting yn with a constant value 
 
         Args:
             xn: x normalized, either float, list or Array to transform 
-            yn: y normalized, either float, list or Array to transform
+            yn: normalized chord coordinates, either float, list or Array to transform
 
         Returns:
-            x: transformed x wing coordinates as float or np.array
-            y: transformed y wing coordinates as float or np.array
+            x: transformed x normed planform coordinates as float or np.array
+            y: transformed y normed planform coordinates as float or np.array
         """
 
         if isinstance (xn, float):
-            # float - shift y value depending on its xn positionen plus static move 
-            rn  = self.rn_at (xn) 
-            cn  = self._norm_chord.at(xn)
-            te_yn = cn * (rn - 1.0)
-            y = yn + te_yn +  self._move_y
+            cd  = self.chord_ref.at (xn)                    # chord reference function
+            cn  = self.chord.at(xn)                         # chord
+            y   = cd * cn  - (1-yn) * cn                
             x = xn
 
         else: 
             # array loop over each xn as y will be depending on the position 
             x, y = np.array (xn), np.array (yn)
-
-            te_yn = np.zeros (len(xn))
-            for i, xn_i in enumerate (xn):
-                rn_i  = self.rn_at (xn_i) 
-                cn_i  = self._norm_chord.at(xn_i)
-                te_yn = cn_i * (rn_i - 1.0)
-
-                y[i]  = y[i] + te_yn
-
-            # move so trailing edge is at yn=0.0 
-            y  = y + self._move_y
+            for i in range (len(xn)):
+                x[i], y[i] = self.t_chord_to_norm (xn[i], yn[i])
 
         return x, y 
 
@@ -1651,12 +2309,10 @@ class Norm_Planform:
         At root: le_yn = 1.0 and te_yn = 0.0
         """
 
-        cn = self._norm_chord.at (xn)
+        xn, le_yn = self.t_chord_to_norm (xn, 1.0)
+        xn, te_yn = self.t_chord_to_norm (xn, 0.0)
 
-        xn, te_xn = self.transform_norm (xn, 0.0)
-        xn, le_xn = self.transform_norm (xn, cn)
-
-        return le_xn, te_xn 
+        return le_yn, te_yn 
 
 
     def le_te_polyline (self) -> Polylines:
@@ -1670,18 +2326,33 @@ class Norm_Planform:
             te_yn: normalized y coordinates of leading edge
         """
 
-        xn, cn = self._norm_chord.polyline()
+        xn, _ = self.chord.polyline()
 
-        xn, te_xn = self.transform_norm (xn, np.zeros(len(xn)))
-        xn, le_xn = self.transform_norm (xn, cn)
+        xn, le_yn = self.t_chord_to_norm (xn, np.full (len(xn), 1.0))
+        xn, te_yn = self.t_chord_to_norm (xn, np.zeros(len(xn)))
 
-        return xn, le_xn, te_xn 
+        return xn, le_yn, te_yn 
 
 
-    def ref_polyline (self) -> Polyline:
+    def polygon (self) -> Polyline:
         """ 
-        Normalized polylines of the reference function
+        polygon of the planform starting at le_root clockwise 
+        """
+
+        xn, le_yn, te_yn = self.le_te_polyline()
+
+        xn = np.append (xn, np.flip (xn))
+        xn = np.append (xn, xn[0:1])
+        yn = np.append (le_yn, np.flip (te_yn))
+        yn = np.append (yn, yn[0:1])
+        return xn, yn 
+
+
+    def chord_ref_polyline (self) -> Polyline:
+        """ 
+        Polyline of the chord reference function reference 
             which is just a horizontal line at y = 1 - rn [0]
+            in planform after transformation 
 
         Returns:
             xn: normalized x coordinates
@@ -1689,62 +2360,9 @@ class Norm_Planform:
         """
 
         xn = np.array([0.0, 1.0])
-
-        rn_root = 1.0 - self.rn_at (0.0)
-        yn = np.array([rn_root, rn_root])
+        yn = np.array([0.0, 0.0])
 
         return xn, yn
-
-
-    def ref_bezier_as_jpoints (self)  -> list[JPoint]:
-        """ 
-        Reference Line Bezier control points as JPoints with limits and fixed property
-        """
-
-        jpoints = []
-        for i, point in enumerate(self._ref_bezier.points):
-
-            jpoint = JPoint (point)           
-
-            if i == 0:                                      
-                jpoint.set_x_limits ((0,0))
-                jpoint.set_y_limits ((0,1))
-                jpoint.set_name ('Root')
-            elif i == 1:                                    # only movable point 
-                jpoint.set_x_limits ((0,1))
-                jpoint.set_y_limits ((-1, 1))
-                jpoint.set_name ("No Banana" if self.is_no_banana () else "Banana")
-            else:                                          
-                jpoint.set_x_limits ((1,1))
-                jpoint.set_y_limits ((0,1))
-                jpoint.set_name ('Tip')
-            jpoints.append(jpoint)
-
-        return jpoints
-
-
-    def ref_bezier_from_jpoints (self, jpoints : list[JPoint]): 
-        """ set Bezier control points from JPoints which are scaled to halfwingspan  """
-
-        px, py = [], []
-        for jpoint in jpoints:
-            px.append(jpoint.x)
-            py.append(jpoint.y)
-
-        # check if banana point was moved 
-        bez_px1 = round (self._ref_bezier.points_x[1], 3)               # avoid numerical issues 
-        bez_py1 = round (self._ref_bezier.points_y[1], 3)
-        set_no_banana = False
-        if self.is_no_banana ():
-            if bez_px1 == round(px[1],3) and bez_py1 == round(py[1],3):
-                set_no_banana = True 
-
-        # update bezier 
-        self._ref_bezier.set_points (px, py)
-
-        # remain in no_banana if banana point wasn't moved
-        if set_no_banana:
-            self.set_is_no_banana()
 
 
     def box_polygon (self) -> Polyline:
@@ -1755,9 +2373,10 @@ class Norm_Planform:
             xn: normalized x coordinates
             yn: normalized y coordinates 
         """
-
-        xn = np.array([0.0, 0.0, 1.0, 1.0, 0.0])
-        yn = np.array([0.0, 1.0, 1.0, 0.0, 0.0])
+        le_yn = self.chord_ref.at (0.0)
+        te_yn = le_yn - 1 
+        xn = np.array([0.0,   1.0,   1.0,   0.0,   0.0])
+        yn = np.array([le_yn, le_yn, te_yn, te_yn, le_yn])
 
         return xn, yn
 
@@ -1784,48 +2403,41 @@ class Planform_2:
     def __init__(self, 
                  wing : Wing = None, 
                  dataDict: dict = None,
-                 norm_planform : Norm_Planform = None,
-                 span : float = 1000.0,
-                 chord_root : float = 200.0, 
-                 sweep_angle : float = 1.0):
+                 chord     : Norm_Chord_Abstract = None, 
+                 chord_ref : Norm_Chord_Reference = None):
+                
 
         self._wing = wing
-        self._norm_planform = norm_planform
 
-        self._span        = fromDict (dataDict, "span", span) 
-        self._chord_root  = fromDict (dataDict, "chord_root", chord_root)
-        self._sweep_angle = fromDict (dataDict, "sweep_angle", sweep_angle)
+        self._span        = fromDict (dataDict, "span", 1000.0) 
+        self._chord_root  = fromDict (dataDict, "chord_root", 200.0)
+        self._sweep_angle = fromDict (dataDict, "sweep_angle", 1.0)
 
-        # create Norm_Planform with a Norm_Chord distribution depending on style e.g. 'Bezier'
+        # create Norm_Planform with a Norm_Chord distribution  
+        
+        self._norm = Norm_Planform (self, dataDict, chord=chord, chord_ref=chord_ref)
 
-
-        if self._norm_planform is None: 
-
-            self._style = fromDict (dataDict, "style", 'Bezier')
-            if self._style is None:
-                logging.info (f"style is missing - using 'Bezier'")
-                style = 'Bezier'
-
-            if self._style == 'Bezier':
-                norm_chord = Norm_Chord_Bezier(dataDict=dataDict)
-            else:
-                raise ValueError (f"Planform style {style} not supported")
-            
-            self._norm_planform = Norm_Planform (norm_chord, dataDict)
+         
+        self._norm_ref_elliptical = None                        # elliptical reference planform             
 
 
-    @classmethod
-    def default (cls) -> 'Planform_2':
-        """ create default planform for demo etc."""
 
-        norm_planform = Norm_Planform (Norm_Chord_Bezier ())   
-
-        return cls (norm_planform, chord_root=200, span=1200, sweep_angle=2)
 
     @property
-    def normed (self) -> Norm_Planform:
+    def wing (self) -> Wing:
+        """ wing self belongs to"""
+        return self._wing
+    
+    @property
+    def workingDir (self) -> Wing:
+        """ working directory of wing"""
+        return self.wing.workingDir
+    
+    @property
+    def norm (self) -> Norm_Planform:
         """ the normed planform of self"""
-        return self._norm_planform
+        return self._norm
+
 
     @property
     def span (self) -> float:
@@ -1862,19 +2474,79 @@ class Planform_2:
         self._sweep_angle = aVal 
 
 
-    def transform_norm (self, xn : float|Array|list, yn : float|Array|list) -> ...:
+    def t_norm_to_plan (self, xn : float|Array|list, yn : float|Array|list) -> ...:
         """
-        Transforms normalized coordinates into wing coordinates 
+        Transforms normalized coordinates into planform(wing) coordinates 
             - by scaling with chord and span 
             - by shearing with sweep angle 
+        Args:
+            xn,yn: normalized, either float, list or Array to transform 
+        Returns:
+            x,y: transformed planform coordinates as float or np.array
+        """
+
+        # sanity - convert list to np.array
+        if isinstance (xn, float):
+            x, y = xn, yn
+        else: 
+            x, y = np.array (xn), np.array (yn)
+
+        # move yn and flip  
+        y = - (y - self.norm.chord_ref.at (0))
+
+        # scale 
+        x = x * self.span
+        y = y * self.chord_root
+
+
+        # do shear 
+        shear_factor =  1 / np.tan((90-self.sweep_angle) * np.pi / 180)    # = cotangens
+        y = y + x * shear_factor  
+
+        return x, y 
+
+
+    def t_plan_to_norm (self, x : float|Array|list, y : float|Array|list) -> ...:
+        """
+        Transforms planform(wing) coordinates into normalized coordinates  
+            - reverse of 'transform_norm' 
 
         Args:
-            xn: x normalized, either float, list or Array to transform 
-            yn: y normalized, either float, list or Array to transform
-
+            x,y: planform coordinates - either float, list or Array to transform 
         Returns:
-            x: transformed x wing coordinates as float or np.array
-            y: transformed y wing coordinates as float or np.array
+            xn,yn: transformed normalized coordinates  as float or np.array
+        """
+
+        # sanity - convert list to np.array
+        if isinstance (x, float):
+            xn, yn = x, y
+        else: 
+            xn, yn = np.array (x), np.array (y)
+
+        # undo shear 
+        shear_factor =  1 / np.tan((90-self.sweep_angle) * np.pi / 180)    # = cotangens
+        yn = yn - xn * shear_factor
+
+        # un-scale 
+        xn = xn / self.span
+        yn = yn / self.chord_root
+
+        # un-move yn and flip  
+        yn = -yn + self.norm.chord_ref.at (0)
+
+        return xn, yn 
+
+
+
+    def t_norm_to_span (self, xn : float|Array|list, yn : float|Array|list) -> ...:
+        """
+        Transforms normalized coordinates xn,yn into x 0..span, yn 0..1 
+ 
+        Args:
+            xn, yn: normalized, either float, list or Array to transform 
+        Returns:
+            x: transformed x span coordinates  
+            y: equals yn  
         """
 
         # sanity - convert list to np.array
@@ -1885,109 +2557,31 @@ class Planform_2:
 
         # scale 
         x = x * self.span
-        y = y * self.chord_root
-
-        # flip and move y
-        y  = y * -1.0 + self.chord_root
-
-        # do shear 
-        shear_factor =  1 / np.tan((90-self.sweep_angle) * np.pi / 180)    # = cotangens
-        y = y + x * shear_factor  
 
         return x, y 
 
 
-    def _to_norm (self):
-
-        pass 
-
-    def c_at (self, x : float) -> tuple [float,float]:
-        """ chord at x position"""
+    def t_span_to_norm (self, x : float|Array|list, yn : float|Array|list) -> ...:
+        """
+        Transforms spanwise x coordinates x and normalized yn into normed xn,yn  
  
-        xn = x / self.span
-        return self._norm_planform.cn_at (xn) * self.chord_root
-
-
-    def le_te_at (self, x : float) -> tuple [float,float]:
-        """ leading and trailing edge y coordinates at x position"""
- 
-        xn = x / self.span
-        le_yn, te_yn = self._norm_planform.le_te_at (xn)
-
-        _, le_y = self.transform_norm (xn, le_yn)
-        _, te_y = self.transform_norm (xn, te_yn)
-        return le_y, te_y
-
-
-    def le_te_polyline (self) -> Polylines:
-        """ 
-        polylines of leading and trailing edge
-            At root it is: le_y [0] = chord_root and te_y[0] = 0.0
-            At tip it is:  le_x [-1] = te_x[-1] = span 
-
+        Args:
+            x: as span wise coordinates, either float, list or Array to transform 
+            yn: normalized, either float, list or Array to transform 
         Returns:
-            x: x coordinates
-            le_y: y coordinates of leading edge
-            te_y: y coordinates of leading edge
+            xn, yn: normalized 
         """
 
-        xn, le_yn, te_yn = self._norm_planform.le_te_polyline ()
+        # sanity - convert list to np.array
+        if isinstance (x, float):
+            xn, yn = x, yn
+        else: 
+            xn, yn = np.array (x), np.array (yn)
 
-        x, le_y = self.transform_norm (xn, le_yn)
-        x, te_y = self.transform_norm (xn, te_yn)
+        # scale 
+        xn = xn / self.span
 
-        return x, le_y, te_y 
-
-    def polygon (self) -> Polyline:
-        """ 
-        polygon of the planform starting at le_root clockwise 
-        """
-
-        x, le_y, te_y = self.le_te_polyline()
-
-        x = np.append (x, np.flip (x))
-        x = np.append (x, x[0:1])
-        y = np.append (le_y, np.flip (te_y))
-        y = np.append (y, y[0:1])
-        return x, y 
-
-
-    def box_polygon (self) -> Polyline:
-        """ 
-        Rectangle (trapezoid with sweep) chord * root
-        """
-
-        xn, yn = self._norm_planform.box_polygon ()
-        x, y = self.transform_norm (xn, yn)
-        return x, y
-
-
-    def ref_polyline (self) -> Polyline:
-        """ 
-        Line of the reference function
-            which is just a horizontal line at yn = 1 - rn [0]
-
-        Returns:
-            xn: normalized x coordinates
-            yn: normalized y coordinates 
-        """
-
-        xn, yn = self._norm_planform.ref_polyline ()
-        x, y = self.transform_norm (xn, yn)
-        return x, y
-
-
-    def wingSections (self) -> list['WingSection_2']:
-        """ wing sections of self"""
-
-        # build a temp list of WingSection which are based on Norm_WingSection
-        sections = []
-        for norm_Section in self._norm_planform.wingSections:
-            sections.append (WingSection_2 (self, norm_Section)) 
-        
-        return sections
-
-
+        return xn, yn 
 
 
 
@@ -2134,7 +2728,7 @@ class Planform:
 
 
     @property
-    def reference_line (self) -> Reference_Line:
+    def reference_line (self):
         """ reference line object of self"""
         return self.wing.reference_line
     
@@ -2608,97 +3202,13 @@ class Planform_Bezier(Planform):
 
 #-------------------------------------------------------------------------------
 
-class Planform_Pure_Elliptical (Planform):
-    """ 
-    Defines the outline of an unmodified (more or less) elliptical planform as reference
-    """
-    style       = "Elliptical"
-    isTemplate  = False
-
-
-    def _norm_chord_at (self, yn, fast=False) -> float:
-        """
-        Returns the normalized chord of an elliptical planform at yn 0..1
-        """
-
-        return np.sqrt(1.0-(yn  ** 2))
 
 
 
 
 #-------------------------------------------------------------------------------
 
-class Planform_Trapezoidal(Planform):
-    """ 
-    Defines the outline of a trapezoidal planform  
-    """
-    style       = "trapezoidal"
-    isTemplate  = True
-
-    wingSection_eitherPosOrChord = False   # both pos and chord my be defined by user
-
-    sections_depend_on_planform = False          
-    planform_depend_on_sections = True           # sections define the shape of the planform
-
-    shortDescription = "Planform defined by its wing sections,\n" + \
-                       "which have the attribut 'Defines planform'" 
-
-    def _yn (self):
-        """
-        array of y points along the spann for the different lines   
-        """
-        # just the sections yPos is needed (sections with yPos and chord defined)
-        norm_y_points, chords = self.wing.wingSections.yn_cn_having_fixed () 
-        return np.asarray(norm_y_points)
-
-
-    def _norm_chord_at (self, yn, fast=False):
-        """
-        Returns the normalized chord of the planform at yn 0..1.
-        The planform is defined by the wing sections having a position and a chord value.
-        With these a multi trapezoid is defined
-        """
-
-        y_chords, chords = self.wing.wingSections.yn_cn_having_fixed ()   # tuple y_norm, c_norm
-
-        for iSec in range(len(y_chords) - 1):
-            y_before = y_chords [iSec]
-            y_after  = y_chords [iSec+1]
-            if yn  >= y_before and  yn  <= y_after:
-                chord_before = chords[iSec]
-                chord_after  = chords[iSec+1]
-                return interpolate(y_before, y_after, chord_before, chord_after, yn) 
-
-        # not found ...? 
-        raise ValueError ("Could not interpolate for trapezoid the value ", yn)
-
-
-
-    def adjust_planform_to_reference (self):
-        """
-        Adjust the relevant wing sections of trapezoid to become close to reference(ellipse)
-        """
-         
-        y_list, _ = self.wing.wingSections.yn_cn_having_fixed()
-
-        for index, yPos in enumerate(y_list):        # skip root and tip 
-            if not (index == 0 or index == (len(y_list)-1)): 
-
-                section = self.wing.wingSections.at_y (yPos)
-
-                if section: 
-                    # go a little left to get chord so ellipsoid is better approx.
-                    leftPos = y_list [index-1]
-                    refPos = leftPos + 0.95 *  (yPos - leftPos)
-                    newChord = self.wing.refPlanform_elli._norm_chord_at(refPos)
-                    section.set_norm_chord (newChord)
-                else: 
-                    raise ValueError ("Section at norm position %f not found" % yPos)
-
-
-#-------------------------------------------------------------------------------
-
-class Planform_Paneled (Planform_Trapezoidal):
+class Planform_Paneled (Norm_Chord_Trapezoidal):
     """ 
     Helper (slave) Planform which presents the actual planform as a paneled (trapezoid) version
     Used for Xflr5 and FLZ export   
@@ -3049,7 +3559,7 @@ class WingSection_2 :
 
     def _to_wing (self, xn : float|Array, yn : float|Array) -> ...:
         """ courtesy of planform """
-        self._planform.transform_norm (xn, yn)
+        self._planform.t_norm_to_plan (xn, yn)
 
     def x (self) -> float:
         """ x position of self"""
