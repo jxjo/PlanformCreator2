@@ -1037,19 +1037,33 @@ class Flaps_Artist (Artist_Planform):
         colors = random_colors (len(flaps_list))
         color : QColor = colors[0]
 
-        if self._mode == mode.NORM_REF or self._mode == mode.SPAN_REF:
+        if self._mode == mode.SPAN_NORM or self._mode == mode.SPAN_NORM:
 
-            # plot relative depth distribution in chord distribution 
+            # plot depth distribution in chord distribution 
 
-            x,y = flaps.hinge_cn_polyline ()  
+            x,y = flaps.depth_cn_polyline ()  
 
             pen   = pg.mkPen(color, width=1, style=Qt.PenStyle.DashLine)
-            brush_color = color.darker(300)
+            brush_color = color.darker(200)
             brush_color.setAlphaF (0.4)
             brush = pg.mkBrush (brush_color)   
 
             self._plot_dataItem  (x, y,  pen = pen, antialias = True, name="Relative Flap Depth",
                                     fillLevel=0.0, fillBrush=brush,  zValue=3)
+
+        elif self._mode == mode.NORM_REF or self._mode == mode.SPAN_REF:
+
+            # plot relative depth distribution in chord distribution 
+
+            x,y = flaps.hinge_rel_cn_polyline ()  
+
+            pen   = pg.mkPen(color, width=1, style=Qt.PenStyle.DashLine)
+            brush_color = color.darker(200)
+            brush_color.setAlphaF (0.4)
+            brush = pg.mkBrush (brush_color)   
+
+            self._plot_dataItem  (x, y,  pen = pen, antialias = True, name="Relative Flap Depth",
+                                    fillLevel=1.0, fillBrush=brush,  zValue=3)
         else:
 
             # plot single flaps 

@@ -70,9 +70,9 @@ class Item_Planform (Diagram_Item):
         self._add_artist (Planform_Box_Artist   (self, self.planform, mode=mode.PLANFORM))
         self._add_artist (WingSections_Artist   (self, self.planform, mode=mode.PLANFORM, show=True, show_legend=True,
                                                  cur_wingSection_fn=self._cur_wingSection_fn))
-        self._add_artist (Flaps_Artist          (self, self.planform, mode=mode.PLANFORM, show_legend=True))
+        self._add_artist (Flaps_Artist          (self, self.planform, mode=mode.PLANFORM, show=False ,show_legend=True))
  
-        self._add_artist (Ref_Planforms_Artist   (self, self.planform, mode=mode.PLANFORM, show=False, show_legend=True))
+        self._add_artist (Ref_Planforms_Artist  (self, self.planform, mode=mode.PLANFORM, show=False, show_legend=True))
  
 
     @override
@@ -157,7 +157,7 @@ class Item_Chord (Diagram_Item):
                                                  cur_wingSection_fn=self._cur_wingSection_fn))
         self._add_artist (Ref_Planforms_Artist  (self, self.planform, mode=mode.SPAN_NORM, show_chord=True,
                                                  show_legend=True, show=False))
-        # self._add_artist (Flaps_Artist          (self, self.planform, mode=mode.SPAN_NORM))
+        self._add_artist (Flaps_Artist          (self, self.planform, mode=mode.SPAN_NORM, show=False, show_legend=True))
 
 
     @override
@@ -572,7 +572,7 @@ class Diagram_Planform (Diagram):
         self._show_ref_line = True                          # show reference line 
         self._show_ref_planform_elli = True
         self._show_wingSections = True
-        self._show_flaps = True
+        self._show_flaps = False
 
         super().__init__(parent, wing_fn, **kwargs)
 
@@ -815,14 +815,12 @@ class Diagram_Making_Of (Diagram):
     Diagram view to with several diagram items to show, how a planform is build 
     """
 
-    def __init__(self, parent, 
-                 planform : Planform_2|None = None, 
-                 **kwargs):
+    def __init__(self, parent, wing_fn, **kwargs):
 
-        if planform is None: 
-            self._planform = Planform_2 ()                      # create demo planform
-        else: 
-            self._planform = planform
+        # if planform is None: 
+        #     self._planform = Planform_2 ()                      # create demo planform
+        # else: 
+        #     self._planform = planform
 
         self._show_ref_line = True                              # show reference line 
         self._show_wingSections = False
@@ -830,7 +828,7 @@ class Diagram_Making_Of (Diagram):
 
         # Artist.show_mouse_helper = False
 
-        super().__init__(parent, None, **kwargs)
+        super().__init__(parent, wing_fn, **kwargs)
 
         self._viewPanel.setMinimumWidth(240)
         self._viewPanel.setMaximumWidth(240)
@@ -840,8 +838,12 @@ class Diagram_Making_Of (Diagram):
         self._graph_layout.setVerticalSpacing (20)
 
 
+    def wing (self) -> Wing: 
+        """ currently active wing"""
+        return self._getter()
+
     def planform (self) -> Planform_2: 
-        return self._planform
+        return self.wing().planform  # self._planform
 
     @override
     @property
@@ -964,6 +966,17 @@ class Diagram_Making_Of (Diagram):
 
 
     # --- public slots ---------------------------------------------------
+
+    def on_wing_new (self):
+        """ slot to handle new wing signal """
+
+        logger.debug (f"{str(self)} on_wing_new")
+
+        self.refresh()                                  # refresh view panels and artists 
+
+        item : Diagram_Item
+        for item in self.diagram_items:                 # adapt view range to new wing geometry 
+            item.setup_viewRange() 
 
     # --- private slots ---------------------------------------------------
 

@@ -182,7 +182,7 @@ class App_Main (QMainWindow):
         self._diag_airfoils = Diagram_Airfoils (self, self.wing)
         self._diagrams.addTab (self._diag_airfoils, "Airfoils")
 
-        self._diag_making   = Diagram_Making_Of (self, planform=self.wing()._planform_2)
+        self._diag_making   = Diagram_Making_Of (self, self.wing)
         self._diagrams.addTab (self._diag_making, "Making of ...")
 
         l_main = self._init_layout() 
@@ -208,6 +208,7 @@ class App_Main (QMainWindow):
         self.sig_wing_new.connect        (self._diag_planform.on_wing_new)
         self.sig_wing_new.connect        (self._diag_wing.on_wing_new)
         self.sig_wing_new.connect        (self._diag_airfoils.on_wing_new)
+        self.sig_wing_new.connect        (self._diag_making.on_wing_new)
 
 
     def __repr__(self) -> str:

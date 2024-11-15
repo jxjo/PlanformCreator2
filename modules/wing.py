@@ -81,20 +81,17 @@ class Wing:
         self.dataDict = dataDict
 
         self._name            = fromDict (dataDict, "wing_name", "My new Wing")
-        self._wingspan        = fromDict (dataDict, "wingspan", 2000.0) 
-        self._chord_root      = fromDict (dataDict, "chord_root", 200.0)
-        self._chord_tip       = fromDict (dataDict, "chord_tip", self._chord_root/4)
         self._fuselage_width  = fromDict (dataDict, "fuselage_width", 80.0)
 
         # attach the Planform 
 
-        self._planform_2      = Planform_2 (self, fromDict(dataDict, "planform", None))
+        self._planform_2      = Planform_2 (self, dataDict)
 
         # elliptical reference planforms   
 
-        self._planform_elliptical = Planform_2 (self, dataDict = self.dataDict, 
-                                                       chord = Norm_Chord_Elliptical (),
-                                                       chord_ref = self.planform.norm.chord_ref ) 
+        self._planform_elliptical = Planform_2 (self, dataDict, 
+                                                chord = Norm_Chord_Elliptical (),
+                                                chord_ref = self.planform.norm.chord_ref ) 
 
         # will hold the class which manages Xflr5, FLZ export including its parameters
         self._exporterXflr5     = None 
@@ -122,9 +119,6 @@ class Wing:
 
         toDict (dataDict, "pc2_version", 2)
         toDict (dataDict, "wing_name",          self._name) 
-        toDict (dataDict, "wingspan",           self._wingspan) 
-        toDict (dataDict, "chord_root",         self._chord_root) 
-        toDict (dataDict, "chord_tip",          self._chord_tip) 
         toDict (dataDict, "fuselage_width",     self._fuselage_width) 
 
         # toDict (dataDict, "rootRe",             self._rootRe) 
@@ -153,42 +147,50 @@ class Wing:
 
         logger.info (f"Converting parameters to version 2.0")
 
-        dict_v2 = copy.deepcopy (dataDict) # {}
+        dict_v2 = {} # copy.deepcopy (dataDict)  
 
         # wing 
 
         toDict (dict_v2, "pc2_version",     2)
         toDict (dict_v2, "wing_name",       fromDict (dataDict, "wingName", None))
-        toDict (dict_v2, "wingspan",        fromDict (dataDict, "wingspan", None))
+
+        span = fromDict (dataDict, "wingspan", 2000) / 2.0
+        toDict (dict_v2, "span",span)
+
         toDict (dict_v2, "chord_root",      fromDict (dataDict, "rootchord", None))
-        toDict (dict_v2, "chord_tip",       fromDict (dataDict, "tipchord", None))
+        toDict (dict_v2, "sweep_angle",     fromDict (dataDict, "hingeLineAngle", None))
         toDict (dict_v2, "fuselage_width",  0.0)
 
         # planform
 
+        chord_tip =                         fromDict (dataDict, "tipchord", None)
+        chord_root =                        fromDict (dataDict, "rootchord", None)
+        if chord_tip and chord_root:
+            cn_tip = chord_tip / chord_root
+        else: 
+            cn_tip = 0.25
+
         planDict = {}
-        planform_style = fromDict (dataDict, "planformType", 'Bezier')
+        chord_style = fromDict (dataDict, "planformType", 'Bezier')
 
-        toDict (planDict, "style",   planform_style)
+        toDict (dict_v2, "chord",   chord_style)
 
-        if planform_style == 'Bezier' or planform_style == 'Bezier TE straight':
-            toDict (planDict, "p1x",       fromDict (dataDict, "p1x", None))
-            toDict (planDict, "p2x",       fromDict (dataDict, "p2x", None))
-            toDict (planDict, "p1y",       fromDict (dataDict, "p1y", None))
+        if chord_style == 'Bezier' or chord_style == 'Bezier TE straight':
+            toDict (dict_v2, "p1y",       fromDict (dataDict, "p1x", None))
+            toDict (dict_v2, "p1x",       fromDict (dataDict, "p1y", None))
+            toDict (dict_v2, "p2y",       fromDict (dataDict, "p2x", None))
+            toDict (dict_v2, "p3y",       cn_tip)
 
-        if planDict:
-            toDict (dict_v2, "planform", planDict) 
 
         # reference line 
 
         refDict = {}
 
-        if planform_style == 'Bezier TE straight':
+        if chord_style == 'Bezier TE straight':
             # legacy planform 
-            toDict (planDict, "style",   "Bezier")
+            toDict (dict_v2, "chord",   "Bezier")
             toDict (refDict, "xn_root", 1.0)
             toDict (refDict, "xn_tip", 1.0)
-            toDict (refDict, "angle",           fromDict (dataDict, "hingeLineAngle", None))
 
         else:
             # flap hinge line -> reference line 
@@ -196,19 +198,14 @@ class Wing:
             if f:   toDict (refDict, "xn_root", (100 - f)/100)
             f = fromDict (dataDict, "flapDepthTip", None)
             if f:   toDict (refDict, "xn_tip", (100 - f)/100)
-            toDict (refDict, "angle",           fromDict (dataDict, "hingeLineAngle", None))
-
-        # new _2
-        toDict (planDict, "sweep_angle", fromDict (dataDict, "hingeLineAngle", None))
-        toDict (planDict, "chord_root",  fromDict (dataDict, "rootchord", None))
 
 
-        if planform_style == 'Bezier':
-            toDict (refDict, "banana_p1x",fromDict (dataDict, "banana_p1x", None))
-            toDict (refDict, "banana_p1y",fromDict (dataDict, "banana_p1y", None))
+        if chord_style == 'Bezier':
+            toDict (refDict, "banana_p1y",fromDict (dataDict, "banana_p1x", None))
+            toDict (refDict, "banana_p1x",fromDict (dataDict, "banana_p1y", None))
 
         if refDict:
-            toDict (dict_v2, "reference_line", refDict) 
+            toDict (dict_v2, "chord_reference", refDict) 
 
         # wing sections 
 
@@ -217,19 +214,30 @@ class Wing:
         if sectionsList: 
             for i, sectionDict in enumerate (sectionsList):
                 new_sectionDict = {}
-                toDict (new_sectionDict, "y",                   fromDict (sectionDict, "position", None))
-                toDict (new_sectionDict, "norm_chord",          fromDict (sectionDict, "norm_chord", None))
+                position = fromDict (sectionDict, "position", None)
+                if position is not None:
+                    xn = position / span
+                else: 
+                    xn = None 
+                toDict (new_sectionDict, "xn", xn)
+                toDict (new_sectionDict, "cn",                  fromDict (sectionDict, "norm_chord", None))
                 toDict (new_sectionDict, "flap_group",          fromDict (sectionDict, "flapGroup", None))
-                toDict (new_sectionDict, "eitherPosOrChord",    fromDict (sectionDict, "eitherPosOrChord", None))
+                eitherPosOrChord =                              fromDict (sectionDict, "eitherPosOrChord", None)
+                defines_cn = None
+                if eitherPosOrChord == True:
+                    defines_cn = False
+                elif eitherPosOrChord == False:
+                    defines_cn = True
+                toDict (new_sectionDict, "defines_cn", defines_cn)
                 toDict (new_sectionDict, "airfoil",             fromDict (sectionDict, "airfoil", None))
 
                 # flap hinge line 
                 if i == 0:
                     f = fromDict (dataDict, "flapDepthRoot", None)
-                    if f:   toDict (new_sectionDict, "hinge_xn", (100 - f)/100)
+                    if f:   toDict (new_sectionDict, "hinge_cn", (100 - f)/100)
                 elif i == len (sectionsList) - 1:
                     f = fromDict (dataDict, "flapDepthTip", None)
-                    if f:   toDict (new_sectionDict, "hinge_xn", (100 - f)/100)                
+                    if f:   toDict (new_sectionDict, "hinge_cn", (100 - f)/100)                
 
                 new_sectionsList.append (new_sectionDict)
 
@@ -238,16 +246,16 @@ class Wing:
 
         # flaps 
 
-        if planform_style == 'Bezier TE straight':
+        if chord_style == 'Bezier TE straight':
             flapsDict = {}
             toDict (flapsDict, "hinge_equal_ref_line", False)
             f = fromDict (dataDict, "flapDepthRoot", None)
-            if f:   toDict (flapsDict, "hinge_xn_root", (100 - f)/100)
+            if f:   toDict (flapsDict, "hinge_rel_cn_root", (100 - f)/100)
             f = fromDict (dataDict, "flapDepthTip", None)
-            if f:   toDict (flapsDict, "hinge_xn_tip", (100 - f)/100)
+            if f:   toDict (flapsDict, "hinge_rel_cn_tip", (100 - f)/100)
             # for Amokka_JX like wings, where ref line is at trailing edge the reference position must be at 0.9
             #       because flap depth increases very much at tip 
-            toDict (flapsDict, "hinge_yn_tip", 0.9)
+            toDict (flapsDict, "hinge_xn_tip", 0.9)
 
             toDict (dict_v2, "flaps", flapsDict) 
 
@@ -293,13 +301,7 @@ class Wing:
     @property
     def wingspan(self):
         """ wingspan without fuselage""" 
-        return self._wingspan
-    def set_wingspan(self, new_wingspan):
-        """ set wingspan - update sections having fixed positions """
-        if (new_wingspan > 10.0):
-            old_wingspan   = self._wingspan
-            self._wingspan = new_wingspan
-            self.wingSections.adjust_to_wing (old_wingspan)
+        return self.planform.span * 2
 
     @property
     def wingspan_total (self):
@@ -308,12 +310,7 @@ class Wing:
 
 
     @property
-    def chord_root(self): return self._chord_root
-    def set_chord_root(self, newChord):
-        """ set chord_root - update first section with new chord  """
-        if (newChord > 10.0):
-            self._chord_root = newChord
-            self.wingSections.adjust_to_wing()
+    def chord_root(self): return self.planform.chord_root
 
     @property
     def chord_tip(self): return self._chord_tip
@@ -529,12 +526,13 @@ class Norm_Chord_Reference:
 
         # alternate v 1 bezier parameters from dict  - handle banana
 
-        banana_p1y = fromDict (dataDict, "banana_p1y", None)  
+        xn_root   = fromDict (dataDict, "xn_root", None)  
 
-        if banana_p1y is not None:                            # set no banana
+        if xn_root is not None:                            # set no banana
+            banana_p1y = fromDict (dataDict, "banana_p1y", None)  
             py[0]   = fromDict (dataDict, "xn_root", py[0])  
             py[1]   = fromDict (dataDict, "xn_tip", py[-1])   
-            if banana_p1y != 0.0: 
+            if banana_p1y: 
                 banana_p1x = fromDict (dataDict, "banana_p1x", 0.0)
                 py_1_no_banana = interpolate (px[0], px[1], py[0], py[1], banana_p1x)
                 py_1_banana    = py_1_no_banana + banana_p1y
@@ -761,8 +759,8 @@ class Norm_Chord_Bezier (Norm_Chord_Abstract):
     chord_defined_by_sections = False          # e.g trapezoid
 
 
-    def __init__(self, planform : 'Norm_Planform', dataDict: dict = None):
-        super().__init__(planform)
+    def __init__(self, dataDict: dict = None):
+        super().__init__()
         """
         Main constructor
 
@@ -1329,22 +1327,22 @@ class Norm_WingSections (list):
 
     """
 
-    def __init__ (self, planform: 'Norm_Planform', dataDict: dict = {}):
+    def __init__ (self, planform: 'Norm_Planform', sectionsDict: dict = {}):
         super().__init__ ([])
 
         self._planform = planform
 
         # create all sections based on sections list in dataDict 
         sections : list[Norm_WingSection] = []
-        for sectionDict in dataDict:
-            sections.append(Norm_WingSection (myWing, sectionDict))
+        for sectionDict in sectionsDict:
+            sections.append(Norm_WingSection (planform, sectionDict))
 
         # new wing - create default sections
         if not sections:
             logger.info ('Creating example wing sections')
-            sections.insert(0, Norm_WingSection (planform, {"xn": 0.0, "flap_group":1, "hinge_cn":0.70}))
-            sections.append(   Norm_WingSection (planform, {"cn": 0.8, "flap_group":2, "hinge_cn":0.70, "defines_cn": True, "xn": 0.5}))
-            sections.append(   Norm_WingSection (planform, {"xn": 1.0, "flap_group":2, "hinge_cn":0.75}))
+            sections.append(Norm_WingSection (planform, {"xn": 0.0, "flap_group":1, "hinge_cn":0.70}))
+            sections.append(Norm_WingSection (planform, {"cn": 0.8, "flap_group":2, "hinge_cn":0.70, "defines_cn": True, "xn": 0.5}))
+            sections.append(Norm_WingSection (planform, {"xn": 1.0, "flap_group":2, "hinge_cn":0.75}))
 
         # sanity
         if not sections[0].isRoot or not sections[-1].isTip:
@@ -1818,10 +1816,11 @@ class Norm_Flaps:
 
         self._planform : Norm_Planform = planform
 
-        self._hinge_equal_ref_line = fromDict (dataDict, "hinge_equal_ref_line", False)       
+        self._hinge_equal_ref_line = fromDict (dataDict, "hinge_equal_ref_line", True)       
 
-        self._hinge_xn_tip  = fromDict (dataDict, "hinge_xn_tip", 1.0)    # xn pos for tip hinge point 
-
+        self._hinge_rel_cn_root = fromDict (dataDict, "hinge_rel_cn_root", 0.8) # yn 
+        self._hinge_rel_cn_tip  = fromDict (dataDict, "hinge_rel_cn_tip", 0.8)  # yn 
+        self._hinge_xn_tip      = fromDict (dataDict, "hinge_xn_tip", 1.0)      # alternate xn pos for tip hinge point 
 
 
     def _save (self) -> dict:
@@ -1867,47 +1866,41 @@ class Norm_Flaps:
 
 
     @property
-    def hinge_yn_root (self) -> float:    
-        """ normed yn 0..1 of hinge line at root """
+    def hinge_rel_cn_root (self) -> float:    
+        """ relative chord position 0..1 of hinge line at root """
         if self.hinge_equal_ref_line:
-            _, yn = self._planform.chord_ref_polyline ()
-            return yn[0] 
+            _, rel_cn = self._planform.chord_ref_polyline ()
+            return rel_cn[0] 
         else:
-            logging.warning ("hinge_yn_root tbd")
+            return self._hinge_rel_cn_root
 
-    def set_hinge_xn_root (self, aVal : float):
+    def set_hinge_rel_cn_root (self, aVal : float):
         if not self.hinge_equal_ref_line:
-            aVal = max (0.1, aVal)
-            aVal = min (1.0, aVal)
-            logging.warning ("set_hinge_xn_root tbd")
+            self._hinge_rel_cn_root = np.clip (round(aVal,6), 0.1, 1.0)
 
     
     @property
-    def hinge_xn_tip (self) -> float:    
-        """ normed xn 0..1 of hinge line at tip """
+    def hinge_rel_cn_tip (self) -> float:    
+        """ relative chord position 0..1 of hinge line at tip """
         if self.hinge_equal_ref_line:
-            _, yn = self._planform.chord_ref_polyline ()
-            return yn[1] 
+            _, rel_cn = self._planform.chord_ref_polyline ()
+            return rel_cn[1] 
         else:
-            logging.warning ("hinge_xn_tip tbd")
+            return self._hinge_rel_cn_tip
 
-    def set_hinge_xn_tip (self, aVal : float):
+    def set_hinge_rel_cn_tip (self, aVal : float):
         if not self.hinge_equal_ref_line:
-            aVal = max (0.1, aVal)
-            aVal = min (1.0, aVal)
-            logging.warning ("set_hinge_xn_tip tbd")
+            self._hinge_rel_cn_tip = np.clip (round(aVal,6), 0.1, 1.0)
 
 
     @property
-    def hinge_yn_tip (self) -> float:    
-        """ yn 0..1 of hinge reference point towards tip """
-        return 1.0 if self.hinge_equal_ref_line else self._hinge_yn_tip
+    def hinge_xn_tip (self) -> float:    
+        """ xn 0..1 of hinge reference point towards tip """
+        return 1.0 if self.hinge_equal_ref_line else self._hinge_xn_tip
 
-    def set_hinge_yn_tip (self, aVal : float):
+    def set_hinge_xn_tip (self, aVal : float):
         if not self.hinge_equal_ref_line:
-            aVal = max (0.1, aVal)
-            aVal = min (1.0, aVal)
-            self._hinge_yn_tip = round(aVal,6) 
+            self._hinge_xn_tip = np.clip (round(aVal,6), 0.1, 1.0)
 
 
     def hinge_yn_at (self, xn : float) -> float:
@@ -1934,13 +1927,35 @@ class Norm_Flaps:
             x, y = [], []
             section : Norm_WingSection
             for section in self._wingSections:
-                if section.hinge_cn is not None: 
+
+                if section.isTip and self.hinge_xn_tip != 1.0:
+
+                    # handle Amokka style hinge at tip where xn pos of last hinge point 
+                    # may not be at tip as hinge_cn is growing rapidly there 
+
+                    hinge_rel_cn = self.hinge_rel_cn_tip
+                    xn = self.hinge_xn_tip
+                    le_yn, te_yn = self._planform.le_te_at (xn)
+                    yn = le_yn + hinge_rel_cn * (te_yn - le_yn)
+
+                    # Linear extrapolation to tip xn=1.0 
+
+                    dy = yn  - y[-1]
+                    dx = xn -  x[-1]
+                    slope = dy / dx
+                    intercept = yn - slope * xn
+                    y_tip = slope * 1.0 + intercept
+
+                    x.append (1.0)
+                    y.append (y_tip)
+
+                elif section.hinge_cn is not None: 
                     xn       = section.xn ()
-                    hinge_cn = section.hinge_cn
+                    hinge_rel_cn = section.hinge_cn
                     le_yn, te_yn = self._planform.le_te_at (xn)
 
                     x.append (xn)
-                    y.append (le_yn + hinge_cn * (te_yn - le_yn))
+                    y.append (le_yn + hinge_rel_cn * (te_yn - le_yn))
 
             # sanity - at least 2 points? 
             if len (x) < 2:
@@ -1961,9 +1976,17 @@ class Norm_Flaps:
 
         jpoints = []
         xn_arr, yn_arr = self.hinge_polyline ()
+        i_tip = len(yn_arr)-1
+
         for i,xn in enumerate(xn_arr):
 
-            yn = yn_arr[i]
+            # in case there is a deviating tip xn value handle it 
+            if i == i_tip and self.hinge_xn_tip != 1.0:
+                xn = self.hinge_xn_tip
+                yn = self.hinge_yn_at (xn)
+            else:
+                yn = yn_arr[i]
+
             jpoint = JPoint (xn, yn)                               
 
             jpoint.set_x_limits ((xn, xn))                      # fix 
@@ -1973,10 +1996,11 @@ class Norm_Flaps:
 
             if i == 0:                                          # root fixed
                 jpoint.set_name ('Flap Root')
-            elif i == (len(yn_arr)-1):                                     
+            elif i == i_tip:                                     
                 jpoint.set_name ('Flap Tip')
             else:                                           
                 jpoint.set_name ('Flap')
+
             jpoints.append(jpoint.as_transformed (transform_fn))
 
         return jpoints
@@ -1994,14 +2018,19 @@ class Norm_Flaps:
             for jpoint in jpoints:
 
                 xn, yn = jpoint.as_transformed (transform_fn).xy
-                if xn == section.xn(): 
+                if xn == section.xn() or xn == self.hinge_xn_tip: 
                     found_jpoint = jpoint
                     break
              
             if found_jpoint: 
                 le_yn, te_yn = self._planform.le_te_at (xn) 
                 hinge_cn = (yn - le_yn) / (te_yn - le_yn)
-                section.set_hinge_cn (hinge_cn) 
+
+                # in case there is a deviating tip xn value handle it  
+                if self.hinge_xn_tip != 1.0:
+                    self.set_hinge_rel_cn_tip (hinge_cn)
+                else:             
+                    section.set_hinge_cn (hinge_cn) 
             else: 
                 section.remove_hinge_cn ()
 
@@ -2020,21 +2049,37 @@ class Norm_Flaps:
 
 
 
-    def hinge_cn_polyline  (self) -> tuple [Array, Array]:
+    def hinge_rel_cn_polyline  (self) -> tuple [Array, Array]:
         """
-        relative hinge position within chord  of self    
+        relative hinge position within chord    
         """
-        # get hinge polyline ready 
         xn_arr, yn_arr = self.hinge_polyline ()
 
         xn, le_yn, te_yn =  self._planform.le_te_polyline ()
-        cn = np.zeros (len(xn))
+        rel_depth = np.zeros (len(xn))
 
         for i, xni in enumerate (xn):
             hinge_y = np.interp(xni, xn_arr, yn_arr)                            # linear interpolation 
-            cn[i] = (hinge_y - le_yn[i]) / (te_yn[i] - le_yn[i])
+            rel_depth[i] = (le_yn[i] - hinge_y) / (le_yn[i] - te_yn[i])
 
-        return xn, cn
+        return xn, rel_depth
+
+
+    def depth_cn_polyline  (self) -> tuple [Array, Array]:
+        """
+        flap depth in chord distribution polyline   
+        """
+        hinge_xn, hinge_yn = self.hinge_polyline ()
+
+        xn, le_yn, te_yn =  self._planform.le_te_polyline()
+        depth = np.zeros (len(xn))
+
+        for i, xi in enumerate (xn):
+            hinge_y = np.interp(xi, hinge_xn, hinge_yn)         # linear interpolation 
+            depth[i] = (hinge_y - te_yn[i]) 
+
+        return xn, depth
+
 
 
 
@@ -2116,17 +2161,6 @@ class Norm_Flaps:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 #-------------------------------------------------------------------------------
 # Normalized Planform 
 #-------------------------------------------------------------------------------
@@ -2165,17 +2199,14 @@ class Norm_Planform:
         # create Norm_Chord distribution depending on style e.g. 'Bezier'
 
         if chord is None: 
-            self._style = fromDict (dataDict, "style", 'Trapez')
-            if self._style is None:
-                logging.info (f"style is missing - using 'Bezier'")
-                style = 'Bezier'
+            chord_style = fromDict (dataDict, "chord", 'Bezier')
 
-            if self._style == 'Bezier':
-                self._norm_chord = Norm_Chord_Bezier (dataDict=dataDict)
-            elif self._style == 'Trapez':
-                self._norm_chord = Norm_Chord_Trapezoidal (self, dataDict=dataDict)
+            if chord_style == 'Bezier':
+                self._norm_chord = Norm_Chord_Bezier (dataDict)
+            elif chord_style == 'Trapez':
+                self._norm_chord = Norm_Chord_Trapezoidal (self, dataDict)
             else:
-                raise ValueError (f"Planform style {style} not supported")
+                raise ValueError (f"Chord style {chord_style} not supported")
         else: 
             self._norm_chord = chord 
 
@@ -2188,7 +2219,7 @@ class Norm_Planform:
 
         # init wing sections 
 
-        self._wingSections    = Norm_WingSections (self, dataDict=fromDict(dataDict, "wingSections", {}))
+        self._wingSections    = Norm_WingSections (self, sectionsDict=fromDict(dataDict, "wingSections", {}))
 
         # init flaps
 
@@ -4571,7 +4602,7 @@ class Flaps:
 
     def hinge_polyline  (self) -> tuple [Array, Array]:
         """
-        hinge line y,x to the very tip   
+        hinge line y,x to the very tip in normed planform  
         """
         if self.hinge_equal_ref_line:
 
@@ -4663,19 +4694,18 @@ class Flaps:
 
     def rel_depth_polyline  (self) -> tuple [Array, Array]:
         """
-        relative depth (depth/chord) polyline y,x of self    
+        relative flap depth (depth/chord) polyline    
         """
-        # get hinge polyline ready 
-        y_arr, x_arr = self.hinge_polyline ()
+        hinge_xn, hinge_yn = self.hinge_polyline ()
 
-        y, le_x, te_x =  self._planform._planform_le_te()
-        x = np.zeros (len(y))
+        xn, le_yn, te_yn =  self._planform._planform_le_te()
+        rel_depth = np.zeros (len(xn))
 
-        for i, yi in enumerate (y):
-            hinge_x = np.interp(yi, y_arr, x_arr)                            # linear interpolation 
-            x[i] = (te_x[i] - hinge_x) / (te_x[i] - le_x[i])
+        for i, xi in enumerate (xn):
+            hinge_y = np.interp(xi, hinge_xn, hinge_yn)         # linear interpolation 
+            rel_depth[i] = (te_yn[i] - hinge_y) / (te_yn[i] - le_yn[i])
 
-        return y, x
+        return xn, rel_depth
 
 
 
