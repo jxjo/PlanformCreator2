@@ -90,12 +90,14 @@ class Wing:
         self._planform_ref_pc2      = None
         self._planform_ref_pc2_file = None
 
+        self._planform_panelled     = None
+
         # will hold the class which manages Xflr5, FLZ export including its parameters
 
-        self._exporterXflr5     = None 
-        self._exporterFlz       = None 
-        self._exporterDxf       = None 
-        self._export_airfoils  = None 
+        self._exporterXflr5         = None 
+        self._exporterFlz           = None 
+        self._exporterDxf           = None 
+        self._export_airfoils       = None 
 
         # miscellaneous parms
         # self._rootRe            = fromDict (dataDict, "rootRe", 400000)
@@ -295,6 +297,20 @@ class Wing:
         aVal = max(0, aVal)
         aVal = min(self.wingspan/2, aVal)
         self._fuselage_with = aVal 
+
+
+    @property
+    def planform_panelled (self) -> 'N_Planform':
+        """ 
+        shadow planform for self.planform which represents the panelled planform 
+        which is the base for Xflr5 or FLZ export"""
+
+        if self._planform_panelled is None: 
+            
+            self._planform_panelled = N_Planform (self, dataDict = self.dataDict, 
+                                                       chord = N_Chord_Panelled (),
+                                                       chord_ref = self.planform.norm.chord_ref )
+        return self._planform_panelled
 
 
     @property
@@ -862,7 +878,7 @@ class N_Chord_Bezier (N_Chord_Abstract):
 
 class N_Chord_Trapezoid (N_Chord_Abstract):
     """ 
-    Chord based on wing section 
+    Trapezoidal chord based on wing section 
     """
 
     name            = "Trapezoid"
@@ -877,10 +893,12 @@ class N_Chord_Trapezoid (N_Chord_Abstract):
 
 
     def __init__(self, planform : 'N_Planform', dataDict: dict = None):
-        """main constructor
+        """
+        Create new chord distribution 
 
         Args:       
             planform: parent self belongs to - Trapezoidal need the wing sections
+            dataDict: dictionary with parameters for self 
         """
 
         self._planform = planform 
@@ -966,9 +984,86 @@ class N_Chord_Trapezoid (N_Chord_Abstract):
 
 
 
+class N_Chord_Panelled (N_Chord_Abstract):
+    """ 
+    Trapezoidal chord distribution based on wing sections.
+
+    All existing wing sections are taken to approximate the outline with straight line.
+    This is the base for panelling a planform  
+    """
+
+    name            = "Panelled"
+    isPanelled      = True
+    style           = "trapezoidal"
+
+    # is the chord defined by wing section or vice versa - overwrite 
+    chord_defined_by_sections = True          # e.g trapezoid
+
+
+    def __init__(self, planform : 'N_Planform', dataDict: dict = None):
+        """
+        Create new chord distribution 
+
+        Args:       
+            planform: parent self belongs to - Trapezoidal need the wing sections
+            dataDict: dictionary with parameters for self 
+        """
+
+        self._planform = planform 
+
+        super().__init__ (dataDict=dataDict)
+
+
+    def polyline (self) -> Polyline:
+        """ 
+        Normalized polyline of chord along xn
+            At root it is: cn [0] = 1.0 
+
+        Returns:
+            xn: normalized x coordinates
+            cn: normalized chord
+        """
+
+        sections = self._planform.wingSections
+        section : N_WingSection
+
+        xn, cn = [], []
+        for section in sections:
+            xn.append(section.xn())
+            cn.append(section.cn())
+        return np.round(xn,10), np.round(cn,10) 
+
+
+    def at (self, xn: float, fast=True) -> float:
+        """ 
+        Main chord function - returns cn at xn
+        """
+
+        xn_arr, cn_arr = self.polyline()
+        cn = np.interp(xn, xn_arr, cn_arr)                      # linear interpolation in polyline
+
+        return round (cn,10) 
+
+
+    def xn_at (self, cn: float, fast=True) -> float:
+        """ 
+        returns xn at normed chord cn
+        """
+        xn_arr, cn_arr = self.polyline()
+
+        # as cn is decreasing along xn the array must be reversed to use np.interp
+        xn_arr = np.flip (xn_arr)
+        cn_arr = np.flip (cn_arr)
+
+        xn = np.interp(cn, cn_arr, xn_arr)                      # linear interpolation in polyline
+
+        return round (xn,10) 
+
+
+
 class N_Chord_Elliptical (N_Chord_Abstract):
     """ 
-    Chord based on a pure elliptical function 
+    Chord based on a pure elliptical function, which can be used as a reference  
         As x,y are normed to 1 the function represents a circle 
     """
 

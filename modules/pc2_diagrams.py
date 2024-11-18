@@ -254,6 +254,71 @@ class Item_Chord_Reference (Diagram_Item):
 
 
 
+class Item_Planform_Panelled (Diagram_Item):
+    """ 
+    Diagram (Plot) Item to show the panelled planform 
+    """
+
+    name        = "Panelling"                               # used for link and section header 
+    title       = "Panelled Planform"                 
+    subtitle    = ""                                 
+
+    sig_planform_changed        = pyqtSignal()              # planform data changed in a diagram 
+
+
+    def __init__(self, *args, cur_wingSection_fn = None, **kwargs):
+
+        self._cur_wingSection_fn = cur_wingSection_fn       # bound method to get currrent wing section
+        super().__init__(*args, **kwargs)
+
+        # set margins (inset) of self 
+        self.setContentsMargins ( 0,50,0,0)
+
+
+    def wing (self) -> Wing: 
+        return self._getter()
+
+    def planform (self) -> Planform:
+        return self.wing()._planform
+
+
+    @override
+    def setup_artists (self):
+        """ create and setup the artists of self"""
+        
+        self._add_artist (Planform_Artist       (self, self.planform, mode=mode.PLANFORM, show_legend=True))
+
+
+    @override
+    def setup_viewRange (self):
+        """ define view range of this plotItem"""
+
+#        self.viewBox.autoRange (padding=0.1)                   # first ensure best range x,y 
+#        self.viewBox.setAspectLocked()
+        self.viewBox.invertY(True)
+        # self.viewBox.enableAutoRange()        
+        self.showGrid(x=True, y=True)
+        print ("view range set")
+
+
+    @property
+    def section_panel (self) -> Edit_Panel:
+        """ return section panel within view panel"""
+
+        if self._section_panel is None:    
+            l = QGridLayout()
+            r,c = 0, 0 
+            r += 1
+            l.setRowStretch    (r,2)
+
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height=40, 
+                                              switchable=True, hide_switched=False, 
+                                              switched_on=self._show,
+                                              on_switched=self.setVisible)
+        return self._section_panel 
+
+
+
 class Item_Wing (Diagram_Item):
     """ 
     Diagram (Plot) Item for a complete Wing
@@ -624,6 +689,10 @@ class Diagram_Planform (Diagram):
         self._add_item (i, 2, 0)
         i.viewBox.setXLink (Item_Planform.name)
 
+        i = Item_Planform_Panelled  (self, getter=self.wing, 
+                            cur_wingSection_fn = self._cur_wingSection_fn, show=False)
+        self._add_item (i, 3, 0)
+        i.viewBox.setXLink (Item_Planform.name)
 
         # generic connect to artist changed signals 
 

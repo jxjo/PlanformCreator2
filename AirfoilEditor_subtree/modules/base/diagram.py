@@ -371,8 +371,15 @@ class Diagram_Item (pg.PlotItem):
         self._show = aBool
 
         if aBool: 
+
             self.refresh_artists ()
 
+            # initial, deferred setup of viewRange if artists were shown by refresh
+            if not self._viewRange_set:
+                # for any reason 'setup_viewRange' must be deferred as sometimes the first 
+                #     setup won't be applied (view updated)
+                QTimer.singleShot(10, self.setup_viewRange)   
+                self._viewRange_set = True
 
     @override
     def close (self):
@@ -448,23 +455,26 @@ class Diagram_Item (pg.PlotItem):
     def refresh(self): 
         """ refresh my artits and section panel """
 
+        refresh_done = False
+
         if self.section_panel is not None: 
             # refresh artists only if self section is switched on 
             if self.section_panel.switched_on:
                 self.refresh_artists()          # first artist and then panel 
+                refresh_done = True
 
             self.section_panel.refresh()
 
         else: 
             self.refresh_artists() 
+            refresh_done = True
 
-        # initial, deferred setup of viewRange 
+        # initial, deferred setup of viewRange if artists were shown by refresh
 
-        if not self._viewRange_set:
+        if not self._viewRange_set and refresh_done:
             # for any reason 'setup_viewRange' must be deferred as sometimes the first 
             #     setup won't be applied (view updated)
             QTimer.singleShot(10, self.setup_viewRange)   
-            # self.setup_viewRange ()
             self._viewRange_set = True
 
         # plot title and sub title with default values of class
