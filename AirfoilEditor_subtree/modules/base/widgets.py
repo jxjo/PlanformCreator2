@@ -1399,7 +1399,7 @@ class ToolButton (Widget, QToolButton):
 class CheckBox (Widget, QCheckBox):
     """
     Checkbox 
-        - gets its label via 'text' 
+        - gets its label via 'text' which is either string or getter 
         - when clicked, 'set' is called with argument of checkSTate 
     """
     def __init__(self, *args, 
@@ -1407,7 +1407,8 @@ class CheckBox (Widget, QCheckBox):
                  **kwargs):
         super().__init__(*args, **kwargs)
 
-        self._text = text 
+        self._text = None 
+        self._text_getter = text 
 
         self._get_properties ()
         self._set_Qwidget_static ()
@@ -1424,18 +1425,19 @@ class CheckBox (Widget, QCheckBox):
         """ get properties from parent"""
         super()._get_properties () 
         self._val = self._val is True 
+        self._text = self._get_value (self._text_getter, default='')
 
 
     def _set_Qwidget (self, **kwargs):
         """ set value and properties of self Qwidget"""
         super()._set_Qwidget (**kwargs)
         self.setChecked (self._val)
+        self.setText (self._text)
 
 
     def _set_Qwidget_static (self): 
         """ set static properties of self Qwidget like width"""
         super()._set_Qwidget_static ()
-        self.setText (self._text)
 
 
     def _on_checked(self):

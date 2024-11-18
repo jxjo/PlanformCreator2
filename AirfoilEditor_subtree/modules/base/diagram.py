@@ -104,6 +104,27 @@ class Diagram (QWidget):
         return obj if isinstance (obj, list) else [obj]
 
 
+    def _get_artist (self, artists : Type[Artist] | list[type[Artist]]) -> list[Artist]:
+        """get artists of all my items having class name(s)
+
+        Args:
+            artists: class or list of class of Artists to retrieve
+        Returns:
+            List of artists with this classes
+        """
+        result = []
+        for item in self.diagram_items: 
+            result.extend (item._get_artist (artists))
+        return result 
+
+
+    def _show_artist (self, artist_class : Type[Artist], show : bool = True):
+        """show on/off of artist having artist_class name """
+
+        for artist in self._get_artist (artist_class):
+            artist.set_show (show, refresh=self.isVisible())            # refresh only if item is visible
+
+
     @property
     def myApp (self): 
         return self._myApp
@@ -327,8 +348,9 @@ class Diagram_Item (pg.PlotItem):
 
     def _show_artist (self, artist_class : Type[Artist], show : bool = True):
         """show on/off of artist having artist_class name """
+
         for artist in self._get_artist (artist_class):
-            artist.set_show (show) 
+            artist.set_show (show, refresh=self.isVisible())            # refresh only if item is visible
 
 
     @override

@@ -12,7 +12,7 @@ from PyQt6.QtGui                import QColor
 sys.path.append(Path(__file__).parent)
 sys.path.insert (1,os.path.join('..' , 'AirfoilEditor_subtree/modules'))
 from base.spline    import Bezier
-from wing           import Norm_Chord_Bezier, Norm_Planform, Planform_2
+from wing           import N_Chord_Bezier, N_Planform, Planform
 
 
 
@@ -41,7 +41,7 @@ pi1  = l.addPlot(title="chord distribution")
 pi1.getAxis ('left').setWidth (30)
 pi1.getViewBox().setRange (xRange=( 0,1), yRange=( 0,1), padding=0.1)
 
-norm_chord = Norm_Chord_Bezier()
+norm_chord = N_Chord_Bezier()
 xn, cn = norm_chord.polyline()
 
 pi1.plot (xn,cn) 
@@ -65,7 +65,7 @@ pi2.plot (bez_x,bez_y, pen=pg.mkPen(color='pink', width=1.5))
 
 # end test 
 
-norm_planform = Norm_Planform(None, norm_chord)
+norm_planform = N_Planform(None, norm_chord)
 rxn, rn = norm_planform._norm_chord.polyline()
 
 le_x    = [0.0, 1.0]
@@ -148,7 +148,7 @@ pi4.getAxis ('left').setWidth (30)
 pi4.getViewBox().invertY(True)
 pi4.getViewBox().setAspectLocked()
 
-planform = Planform_2 ()
+planform = Planform ()
 
 x, le_y, te_y = planform.le_te_polyline ()
 ref_x, ref_y  = planform.ref_polyline ()
@@ -161,7 +161,7 @@ pi4.plot(ref_x, ref_y, pen='springgreen')
 
 # --- shear  
 
-planform = Planform_2()
+planform = Planform()
 angle = 5
 
 pi6 = l.addPlot(title=f"shear by angle {angle}° ")

@@ -390,7 +390,8 @@ class MessageBox (QMessageBox):
                 item = layout.itemAtPosition (0,0)
                 item.setAlignment (Qt.AlignmentFlag.AlignCenter )
 
-
+        self.setStyleSheet("background-color: white;")
+ 
 
     @staticmethod
     def success (parent: object, title : str, text : str, min_width=None):

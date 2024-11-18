@@ -27,7 +27,6 @@ sys.path.insert (1,os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree/m
 sys.path.insert (1,os.path.join(Path(__file__).parent , 'modules'))
 
 from wing                   import Wing
-from wing                   import Planform,  Planform_Bezier         
 
 from base.common_utils      import * 
 from base.panels            import Container_Panel, MessageBox
@@ -173,11 +172,11 @@ class App_Main (QMainWindow):
 
         self._diagrams      = Tab_Panel        (self)
 
-        self._diag_wing     = Diagram_Wing     (self, self.wing, welcome=self._welcome_message())
-        self._diagrams.addTab (self._diag_wing, "Wing")
-
         self._diag_planform = Diagram_Planform (self, self.wing, self.cur_wingSection)
         self._diagrams.addTab (self._diag_planform, "Planform")
+
+        self._diag_wing     = Diagram_Wing     (self, self.wing, welcome=self._welcome_message())
+        self._diagrams.addTab (self._diag_wing, "Wing")
 
         self._diag_airfoils = Diagram_Airfoils (self, self.wing)
         self._diagrams.addTab (self._diag_airfoils, "Airfoils")
@@ -260,7 +259,7 @@ class App_Main (QMainWindow):
         return self._myWing
 
       
-    def cur_wingSection (self) -> Norm_WingSection:
+    def cur_wingSection (self) -> N_WingSection:
         """ Dispatcher for current WingSection between Edit and Diagram """
         if self._cur_wingSection is None: 
 
@@ -274,7 +273,7 @@ class App_Main (QMainWindow):
         return self._cur_wingSection 
 
 
-    def set_cur_wingSection (self, aSection : WingSection_2 | None):
+    def set_cur_wingSection (self, aSection : N_WingSection | None):
         """ set current wing section"""
         self._cur_wingSection = aSection
         logger.debug (f"{aSection} as current")
@@ -405,14 +404,10 @@ You can view the properties of an airfoil like thickness distribution or camber,
         newPathFilename, _ = QFileDialog.getSaveFileName(self, filter=filters)
 
         if newPathFilename: 
-            saveOk =  self.wing().save(newPathFilename)
-            if saveOk: 
-                self.paramFile = os.path.normpath(newPathFilename)
-                self.set_title ()
-                MessageBox.success (self,"Save", f"Parameters saved to:\n\n{newPathFilename}")
-                Settings().set('lastOpenend', self.paramFile)
-            else: 
-                MessageBox.error   (self,"Save", f"Parameters couldn't be saved to:\n\n{newPathFilename}")
+            self.paramFile = PathHandler.relPath (newPathFilename)
+            self.save ()
+            self.set_title ()
+            Settings().set('lastOpenend', self.paramFile)
 
 
     def edit_settings (self):

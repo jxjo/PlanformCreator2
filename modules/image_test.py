@@ -14,7 +14,7 @@ from PyQt6.QtCore           import QRectF
 sys.path.append(Path(__file__).parent)
 sys.path.insert (1,os.path.join('..' , 'AirfoilEditor_subtree/modules'))
 from base.spline    import Bezier
-from wing           import Planform_2
+from wing           import Planform
 
 
 
@@ -34,7 +34,7 @@ l.nextRow()
 # -------------------------------------------------------------------
 
 
-planform = Planform_2 ()
+planform = Planform ()
 
 
 # -------------------------------------------------------------------

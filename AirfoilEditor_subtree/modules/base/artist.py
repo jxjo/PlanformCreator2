@@ -688,8 +688,10 @@ class Artist(QObject):
     @property
     def show (self): return self._show
 
-    def set_show (self, aBool):
-        """ user switch to disable ploting the data
+    def set_show (self, aBool, refresh=True):
+        """
+        switch to enable/disable ploting the data
+            - refresh=True will immediatly fresh 
         """
         self._show = aBool is True 
 
@@ -698,7 +700,7 @@ class Artist(QObject):
             self.plot()
         else: 
             p : pg.PlotDataItem
-            if self.show: 
+            if self.show and refresh: 
                 self.refresh()
             else: 
                 for p in self._plots:
