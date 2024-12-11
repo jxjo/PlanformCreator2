@@ -12,7 +12,7 @@ import logging
 from base.widgets           import * 
 from base.diagram           import * 
 
-from PyQt6.QtWidgets        import QFileDialog
+from PyQt6.QtWidgets        import QFileDialog, QGraphicsLayoutItem
 
 # from model.airfoil          import Airfoil
 
@@ -420,8 +420,9 @@ class Item_Wing (Diagram_Item):
     @override
     def plot_title(self, **kwargs):
 
+        title = f'<span style="font-size: 18pt; color: whitesmoke">{self.wing().name}</span>'
         text_with_br = self.wing().description.replace ("\n", "<br/>")      # textItem needs <br>
-        return super().plot_title (title=self.wing().name, subtitle = text_with_br, **kwargs)
+        return super().plot_title (title=title, subtitle = text_with_br, **kwargs)
 
 
     @override
@@ -552,10 +553,19 @@ class Item_Wing_Airfoils (Diagram_Item):
 
 
     @override
+    def refresh(self):
+        """ override to set legend cols"""
+        super().refresh()
+        self.legend.setColumnCount (2)
+
+
+    @override
     def setup_artists (self):
         """ create and setup the artists of self"""
 
         self._add_artist (Airfoil_Artist    (self, self.planform, show_legend=True))
+
+
 
 
     @override
@@ -599,6 +609,65 @@ class Item_Wing_Airfoils (Diagram_Item):
         return self._section_panel 
 
 
+
+
+
+class Item_Wing_Data (Diagram_Item):
+    """ 
+    Diagram (Plot) Item to show wing data 
+    """
+
+    name        = "View Wing data"
+    title       = "Wing Data"                                   # title of diagram item
+    subtitle    = ""
+
+    def __init__(self, *args,  **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.buttonsHidden      = True                          # don't show buttons and coordinates
+
+        # QTimer().singleShot (10, self._add_text)
+        
+
+
+    def wing (self) -> Wing: 
+        return self._getter()
+
+    def planform (self) -> Planform:
+        return self.wing()._planform
+
+    @override
+    def setup_viewRange (self):
+        """ define view range of this plotItem"""
+
+        self.viewBox.setDefaultPadding(0.02)
+        self.viewBox.setAspectLocked()
+        self.viewBox.enableAutoRange()
+
+        self.showGrid(x=False, y=False)
+        self.showAxis('left', show=False)
+        self.showAxis('bottom', show=False)
+
+        self.setContentsMargins ( 10,10,20,20)
+
+    @override
+    def setup_artists(self):
+
+        self._add_artist (Wing_Data_Artist (self, self.planform, show_legend=True))
+
+
+    def _add_text(self):
+        
+        graphicsLayout = pg.GraphicsLayout (self)
+        layout : QGraphicsGridLayout = graphicsLayout.layout
+
+        text = Label (layout,0,0, get="Hallo", width=100)
+        layoutItem = self.scene ().addWidget (text)
+        if isinstance (layoutItem, QGraphicsLayoutItem):
+            print ("yepee")
+        layout.addItem (layoutItem,0,0,1,1)
+        # label : pg.LabelItem = graphicsLayout.addLabel ("hallooooo", color=QColor(Artist.COLOR_LEGEND), size=f"{Artist.SIZE_NORMAL}pt")
+        self.addItem (layout)
 
 
 
@@ -1140,10 +1209,17 @@ class Diagram_Wing (Diagram_Abstract):
         item = Item_Wing (self, getter=self.wing)
         self._add_item (item, 0, 0, colspan=2)
 
+        item = Item_Wing_Data (self, getter=self.wing)
+        self._add_item (item, 1, 0)
+
         item = Item_Wing_Airfoils (self, getter=self.wing)
         self._add_item (item, 1, 1)
+
         self.graph_layout.setColumnStretchFactor (0,2)
         self.graph_layout.setColumnStretchFactor (1,3)
+
+        self.graph_layout.setRowStretchFactor (0,4)
+        self.graph_layout.setRowStretchFactor (1,3)
 
 
 

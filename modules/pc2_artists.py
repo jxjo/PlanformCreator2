@@ -185,7 +185,7 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
             self.set_help_message ("Planform: Use control points of the enclosing box to modify root chord, span and sweep angle")
 
 
-    class Movable_Box_Abstract (Movable_Point):
+    class Movable_Box_Point (Movable_Point):
         """ 
         Abstract: A point of box to change planform. 
         """
@@ -266,7 +266,7 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
 
 
 
-    class Movable_Angle (Movable_Box_Abstract):
+    class Movable_Angle (Movable_Box_Point):
         """ Point of the Box to change the angle. """
         name = "Angle"
 
@@ -287,7 +287,7 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
 
 
 
-    class Movable_Chord_Root (Movable_Box_Abstract):
+    class Movable_Chord_Root (Movable_Box_Point):
         """ Root point of planform to change chord """
         name = "Root Chord"
 
@@ -307,7 +307,7 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
 
 
 
-    class Movable_Span (Movable_Box_Abstract):
+    class Movable_Span (Movable_Box_Point):
         """ Tip point of planform to change span"""
         name = "Half Span"
 
@@ -783,11 +783,11 @@ class WingSections_Artist (Abstract_Artist_Planform):
         for section in self.wingSections:
 
             if   m == mode.NORM_NORM or m == mode.NORM_TO_SPAN:
-                xn,yn = section.line_in_chord ()
+                x,y = section.line_in_chord ()
             elif m == mode.REF_TO_NORM  or m == mode.REF_TO_SPAN:
-                xn,yn = section.line_in_chord_ref ()
+                x,y = section.line_in_chord_ref ()
             else: 
-                xn,yn = section.line ()
+                x,y = section.line ()
 
             if section.defines_cn:
                 pen   = pg.mkPen(color, width=1.0)
@@ -796,21 +796,27 @@ class WingSections_Artist (Abstract_Artist_Planform):
                 pen   = pg.mkPen(color, width=1.0,style=Qt.PenStyle.DashLine)
                 name  = "Wing Sections flex"                                    
 
-            p = self._plot_dataItem  (xn, yn,  name=name, pen = pen, antialias = False, zValue=3)
+            p = self._plot_dataItem  (x, y,  name=name, pen = pen, antialias = False, zValue=3)
 
             # plot section name in different modes 
 
             if m == mode.NORM_NORM:
-                point_xy = (xn[1],yn[1])                                      # point at te
+                point_xy = (x[1],y[1])                                          # point at te
                 anchor = (-0.2,0.8)
             elif m == mode.REF_TO_NORM or m == mode.REF_TO_SPAN:
-                point_xy = (xn[0],yn[0])                                      # point at le
-                anchor = (0.5,1.2)                                            # always constant above 
+                point_xy = (x[0],y[0])                                          # point at le
+                anchor = (0.5,1.2)                                              # always constant above 
+            elif m == mode.WING_RIGHT and section.is_root:                           
+                point_xy = (x[0],y[0])                                          # point at x = 0 
+                anchor = (1.0,2.0)                                              # shift left
+            elif m == mode.WING_LEFT and section.is_root:                           
+                point_xy = None                                                 # skip left side root 
             else:
-                point_xy = (xn[0],yn[0])                                      # point at le
-                anchor = (0.5,2.0) if section.is_tip else (0.5,1.2)            # label anchor 
+                point_xy = (x[0],y[0])                                          # point at le
+                anchor = (0.5,2.0) if section.is_tip else (0.5,1.2)              
 
-            self._plot_point (point_xy, color=color, size=0, text=section.name_short, textColor=color, anchor=anchor)
+            if point_xy:
+                self._plot_point (point_xy, color=color, size=0, text=section.name_short, textColor=color, anchor=anchor)
 
             # highlight current section - add movable points for move by pos and move by chord 
 
@@ -1827,3 +1833,43 @@ class Image_Artist (Abstract_Artist_Planform):
         def _finished (self):
             """ default slot -  when point move is finished """
             self._changed()
+
+
+
+
+
+
+class Wing_Data_Artist (Abstract_Artist_Planform):
+    """
+    Plot some data of the wing
+    """
+
+    def _plot (self): 
+ 
+        p0  = (0.15,0.3)
+        x1 = 140
+        dy = 25
+
+        y = 0 
+        self._plot_text ("Wing Span",  parentPos=p0, offset=(0, y))
+        self._plot_text (f"{self.wing.wingspan:.0f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        self._plot_text ("mm", parentPos=p0, offset=(x1, y))
+
+        y += dy
+        self._plot_text ("Wing Area",  parentPos=p0, offset=(0, y))
+        self._plot_text (f"{self.wing.wing_area/10000:.2f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        self._plot_text ("dm²", parentPos=p0, offset=(x1, y))
+
+        y += dy
+        self._plot_text ("Aspect Ratio",  parentPos=p0, offset=(0, y))
+        self._plot_text (f"{self.wing.wing_aspect_ratio:.2f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+
+        y += dy
+        self._plot_text ("Root Chord",  parentPos=p0, offset=(0, y))
+        self._plot_text (f"{self.planform.chord_root:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        self._plot_text ("mm", parentPos=p0, offset=(x1, y))
+
+        y += dy
+        self._plot_text ("MAC",  parentPos=p0, offset=(0, y))
+        self._plot_text (f"{self.planform.planform_mac:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        self._plot_text ("mm", parentPos=p0, offset=(x1, y))

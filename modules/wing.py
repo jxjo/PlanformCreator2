@@ -79,7 +79,7 @@ class Wing:
         self.dataDict = dataDict
 
         self._name                  = fromDict (dataDict, "wing_name", "My new Wing")
-        self._description           = fromDict (dataDict, "description", None)
+        self._description           = fromDict (dataDict, "description", "This is just an example planform.<br/>Use 'New' to select another template.")
         self._fuselage_width        = fromDict (dataDict, "fuselage_width", 80.0)
 
         # attach the Planform 
@@ -308,6 +308,18 @@ class Wing:
         aVal = np.clip (aVal, 0, self.wingspan/2)
         self._fuselage_width = aVal 
 
+    @property
+    def wing_area (self) -> float:
+        """ current wing area including fuselage"""
+        
+        fuselage_area = self.fuselage_width * self.planform.chord_root
+        return self.planform.planform_area * 2 + fuselage_area
+
+    @property
+    def wing_aspect_ratio (self) -> float:
+        """ aspect ratio of wing"""
+        return self.wingspan ** 2 / self.wing_area
+
 
     @property
     def planform_paneled (self) -> 'Planform_Paneled':
@@ -315,8 +327,7 @@ class Wing:
         shadow planform for self.planform which represents the panelled planform 
         which is the base for Xflr5 or FLZ export"""
 
-        if self._planform_paneled is None: 
-            
+        if self._planform_paneled is None:     
             self._planform_paneled = Planform_Paneled (self, dataDict = fromDict (self.dataDict, "panels", {})) 
 
         return self._planform_paneled
@@ -326,8 +337,7 @@ class Wing:
     def planform_elliptical (self) -> 'Planform':
         """ an elliptical reference norm planform having same span and chord reference """
 
-        if self._planform_elliptical is None: 
-            
+        if self._planform_elliptical is None:      
             self._planform_elliptical = Planform (self, dataDict = self.dataDict, 
                                                         chord_style = N_Chord_Elliptical.name,
                                                         chord_ref = self.planform.n_chord_ref )
@@ -844,7 +854,7 @@ class N_Chord_Bezier (N_Chord_Abstract):
         # init Cubic Bezier for chord distribution 
        
         px = [0.0, 0.55, 1.0,  1.0]
-        py = [1.0, 1.0, 0.55, 0.25]     
+        py = [1.0, 1.0, 0.55, 0.10]     
 
         # from dict only the variable point coordinates of Bezier
 
@@ -1705,7 +1715,7 @@ class WingSections (list):
         if not sections:
             logger.info ('Creating example wing sections')
             sections.append(WingSection (planform, {"xn": 0.0, "flap_group":1, "hinge_cn":0.70}))
-            sections.append(WingSection (planform, {"cn": 0.8, "flap_group":2, "hinge_cn":0.70}))
+            sections.append(WingSection (planform, {"cn": 0.6, "flap_group":2, "hinge_cn":0.70}))
             sections.append(WingSection (planform, {"xn": 1.0, "flap_group":2, "hinge_cn":0.75}))
 
         # sanity
@@ -2567,6 +2577,9 @@ class Planform:
         self._chord_root  = fromDict (dataDict, "chord_root", 200.0)
         self._sweep_angle = fromDict (dataDict, "sweep_angle", 1.0)
 
+        self._planform_area = None                                        # will be calculated
+        self._planform_mac  = None                                        # mean aerodynamic chord - will be calculated
+
         # create Norm_Chord distribution depending on style e.g. 'Bezier'
 
         chord_dict = fromDict(dataDict, "chord_distribution", {})
@@ -2678,6 +2691,27 @@ class Planform:
         aVal = max (-75.0, aVal)
         aVal = min ( 75.0, aVal)
         self._sweep_angle = aVal 
+
+    @property
+    def planform_area (self) -> float:
+        """ (approximated) planform area"""
+
+        if self._planform_area is None: 
+            # this is normally done automatically each time the le, te poyline is calculated
+            x, le_y, te_y = self.le_te_polyline ()
+            self._planform_area = self._calc_planform_area (x, le_y, te_y)
+        return self._planform_area
+
+    @property
+    def planform_mac (self) -> float:
+        """ (approximated) mean aerodynamic chord"""
+
+        if self._planform_mac is None: 
+            # this is normally done automatically each time the le, te poyline is calculated
+            x, le_y, te_y = self.le_te_polyline ()
+            self._planform_mac = self._calc_mac (x, le_y, te_y)
+        return self._planform_mac
+
 
     @property
     def n_chord (self) -> N_Chord_Abstract:
@@ -2820,6 +2854,10 @@ class Planform:
         x, le_y = self.t_norm_to_plan (xn, le_yn)
         x, te_y = self.t_norm_to_plan (xn, te_yn)
 
+        # as we have the data, calc area 
+        self._planform_area = self._calc_planform_area (x, le_y, te_y)
+        self._planform_mac  = self._calc_mac (x, le_y, te_y)
+        
         return x, le_y, te_y 
 
 
@@ -2827,9 +2865,14 @@ class Planform:
         """ 
         polygon of the planform starting at le_root clockwise 
         """
-
         x, le_y, te_y = self.le_te_polyline()
+        return self._polygon (x, le_y, te_y)
+    
 
+    def _polygon (self, x : np.ndarray, le_y : np.ndarray, te_y : np.ndarray) -> Polyline:
+        """ 
+        polygon of the planform starting at le_root clockwise based on le, te poyline 
+        """
         x = np.append (x, np.flip (x))
         x = np.append (x, x[0:1])
         y = np.append (le_y, np.flip (te_y))
@@ -2837,6 +2880,33 @@ class Planform:
 
         return x, y 
 
+
+    def _calc_planform_area (self, x : np.ndarray, le_y : np.ndarray, te_y : np.ndarray):
+        """ calc planform area based on le, te polyline """
+
+        # create planform polygon 
+        x, y = self._polygon (x, le_y, te_y) 
+
+        # see https://stackoverflow.com/questions/24467972/calculate-area-of-polygon-given-x-y-coordinates
+        correction = x[-1] * y[0] - y[-1]* x[0]
+        main_area = np.dot(x[:-1], y[1:]) - np.dot(y[:-1], x[1:])
+        
+        half_area =  0.5*np.abs(main_area + correction)  
+        return half_area
+
+
+    def _calc_mac (self, x : np.ndarray, le_y : np.ndarray, te_y : np.ndarray):
+        """calc mean aerodynamic chord """
+
+        # calc integral of square chord along span 
+        i_c2 = 0.0 
+        for i in range (len(x) -1):
+            dx = x[i+1] - x[i]
+            c_mean = (te_y[i] - le_y[i] + te_y[i+1] - le_y[i+1]) / 2.0          # chord mean vlaue of dx 
+            i_c2 += c_mean **2 * dx
+
+        return i_c2 / self._calc_planform_area (x, le_y, te_y )
+ 
 
     def box_polygon (self) -> Polyline:
         """ 

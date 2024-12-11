@@ -88,19 +88,49 @@ class Tab_Panel (QTabWidget):
         self.setFont(font)
 
         # see https://doc.qt.io/qt-6/stylesheet-examples.html
-        self.setStyleSheet('''QTabWidget::pane {border-top: 2px solid #A0A0A0}
-                              QTabWidget::tab-bar {alignment: center}
-                           ''')
-        
 
-        """
-                              QTabWidget::pane {border-top: 4px solid #A0A0A0}
-                              QTabBar::tab {border: 1px solid #A0A0A0;
-                                            border-top-left-radius: 4px;
-                                            border-top-right-radius: 4px;
-                                            min-width: 50ex;
-                                            padding: 3px}
-        """
+        self.setStyleSheet("""
+        QTabWidget::pane { /* The tab widget frame */
+            border-top:1px solid #ababab;
+        }
+
+        QTabWidget::tab-bar {
+            left: 400px; /* move to the right by 5px */
+        }
+
+        /* Style the tab using the tab sub-control. Note that
+            it reads QTabBar _not_ QTabWidget */
+        QTabBar::tab {
+            /*background: green; */
+            border: 1px solid #C4C4C3;
+            border-bottom: 0px;                                     /*remove */
+            border-top-left-radius: 3px;
+            border-top-right-radius: 3px;
+            min-width: 40ex;
+            padding: 6px;
+        }
+
+        QTabBar::tab:!selected {
+            margin-top: 2px; /* make non-selected tabs look smaller */
+            background: #e5e5e5
+        }
+                           
+        QTabBar::tab:hover {
+            background: rgba(255, 20, 147, 0.1);                    /* deep pink */ 
+        }
+
+        QTabBar::tab:selected {
+            background: rgba(255, 20, 147, 0.2);                    /* deep pink */ 
+        }
+
+        QTabBar::tab:selected {
+            /*color: white; */
+            color: #303030;
+            font-weight: 500;
+            border-color: #9B9B9B;
+            border-bottom-color: #C2C7CB; /* same as pane color */
+        }
+        """)
 
 
     def __repr__(self) -> str:
@@ -163,14 +193,9 @@ class App_Main (QMainWindow):
 
         self.initial_geometry   = None                      # window geometry at the bginning
         self._cur_wingSection = None                        # Dispatcher field between Diagram and Edit
-        self.pc2_file = ''                                  # paramter file with wing settings  
+        self._pc2_file = ''                                 # paramter file with wing settings  
         self._myWing : Wing = None                          # actual wing model 
 
-        # if paramFile: 
-        #     message = f"Loading\n\n{os.path.basename(paramFile)}"
-        # else: 
-        #     message = "Creating\n\na sample wing"
-        # splash_window = ToolWindow(self, message, duration=0)
 
         # get icon either in modules or in icons 
         
@@ -196,11 +221,11 @@ class App_Main (QMainWindow):
         self._tab_panel     = Tab_Panel        (self)
         self._diagrams      = []
 
+        self._add_diagram (Diagram_Making_Of(self, self.wing))
+        self._add_diagram (Diagram_Wing     (self, self.wing))
         self._add_diagram (Diagram_Planform (self, self.wing, self.wingSection))
         self._add_diagram (Diagram_Airfoils (self, self.wing))
-        self._add_diagram (Diagram_Wing     (self, self.wing))
         self._add_diagram (Diagram_Panels   (self, self.wing, self.wingSection))
-        self._add_diagram (Diagram_Making_Of(self, self.wing))
 
         self._tab_panel.set_tab (Settings().get('current_diagram', Diagram_Making_Of.__name__))
 
@@ -209,7 +234,6 @@ class App_Main (QMainWindow):
         container = QWidget()
         container.setLayout (l_main) 
         self.setCentralWidget(container)
-
 
         # connect to signals of self
 
@@ -354,8 +378,8 @@ class App_Main (QMainWindow):
     def set_title (self): 
         """ set window title"""
 
-        if self.pc2_file:
-            project = self.pc2_file
+        if self._pc2_file:
+            project = self._pc2_file
         else:
             project = "< new >"
         self.setWindowTitle (APP_NAME + "  v" + str(APP_VERSION) + "  [" + project + "]")
@@ -436,12 +460,12 @@ class App_Main (QMainWindow):
         """ save wing data to the action parameter file - if new wing to saveAs"""
 
 
-        if self.pc2_file:
-            ok = self.wing().save(self.pc2_file)
+        if self._pc2_file:
+            ok = self.wing().save(self._pc2_file)
             if ok:
-                MessageBox.success (self,"Save", f"Parameters saved to:\n\n{self.pc2_file}")
+                MessageBox.success (self,"Save", f"Parameters saved to:\n\n{self._pc2_file}")
             else:
-                MessageBox.error   (self,"Save", f"Parameters couldn't be saved to:\n\n{self.pc2_file}")
+                MessageBox.error   (self,"Save", f"Parameters couldn't be saved to:\n\n{self._pc2_file}")
         else:
             self.saveAs ()
 
@@ -453,10 +477,10 @@ class App_Main (QMainWindow):
         newPathFilename, _ = QFileDialog.getSaveFileName(self, filter=filters)
 
         if newPathFilename: 
-            self.pc2_file = PathHandler.relPath (newPathFilename)
+            self._pc2_file = PathHandler.relPath (newPathFilename)
             self.save ()
             self.set_title ()
-            Settings().set('lastOpenend', self.pc2_file)
+            Settings().set('lastOpenend', self._pc2_file)
 
 
     def edit_settings (self):
@@ -477,10 +501,10 @@ class App_Main (QMainWindow):
         self._cur_wingSection = None
 
         if pathFilename:
-            self.pc2_file = PathHandler.relPath (pathFilename)
-            Settings().set('lastOpenend', self.pc2_file)
+            self._pc2_file = PathHandler.relPath (pathFilename)
+            Settings().set('lastOpenend', self._pc2_file)
         else:
-            self.pc2_file = ""
+            self._pc2_file = ""
         self.set_title ()
 
         if not initial: 
