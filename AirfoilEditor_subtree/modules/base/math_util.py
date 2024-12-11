@@ -216,7 +216,10 @@ class JPoint:
         else: 
             yt_limits = None
 
-        return JPoint (xt, yt, x_limits=xt_limits, y_limits=yt_limits, name=self.name)
+        jPoint =  JPoint (xt, yt, x_limits=xt_limits, y_limits=yt_limits, name=self.name)
+        jPoint.set_fixed (self.fixed)
+
+        return jPoint
 
 
     def _set_val (self, val, new_val, limits, is_fixed) -> float:

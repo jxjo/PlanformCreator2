@@ -86,9 +86,11 @@ class App_Main (QMainWindow):
     sig_enter_panelling         = pyqtSignal()          # starting panelling dialog
     sig_enter_blend             = pyqtSignal()          # starting blend airfoil with
 
+    sig_closing                 = pyqtSignal(str)       # the app is closing with an airfoils pathFilename
 
-    def __init__(self, airfoil_file, parentApp=None):
-        super().__init__()
+
+    def __init__(self, airfoil_file, parent=None):
+        super().__init__(parent)
 
         self._airfoil = None                        # current airfoil 
         self._airfoil_org = None                    # airfoil saved in edit_mode 
@@ -102,8 +104,13 @@ class App_Main (QMainWindow):
         self._file_panel = None
         self._diagram_panel = None
 
-        self.parentApp = parentApp
+        self.parentApp = parent
         self.initial_geometry = None                # window geometry at the beginning
+
+        # if called from other applcation (PlanformCreator) make it modal to this 
+
+        if parent is not None:
+            self.setWindowModality(Qt.WindowModality.ApplicationModal)  
 
         # get icon either in modules or in icons 
         
@@ -136,7 +143,7 @@ class App_Main (QMainWindow):
 
         self._data_panel    = Container_Panel (title="Data panel")
         self._file_panel    = Container_Panel (title="File panel", width=240)
-        self._diagram_panel = Diagram_Airfoil (self, self.airfoils, welcome=self._welcome_message())
+        self._diagram_panel = Diagram_Airfoil (self, self.airfoils)
 
         l_main = self._init_layout() 
 
@@ -426,29 +433,6 @@ class App_Main (QMainWindow):
         return True 
 
 
-    def _welcome_message (self) -> str: 
-        """ returns a HTML welcome message which is shown on first start up """
-
-        # use Notepad++ or https://froala.com/online-html-editor/ to edit 
-
-        message = """
-<p><span style="background-color: black">
-<span style="font-size: 18pt; color: lightgray; ">Welcome to the <strong>Airfoil<span style="color:deeppink">Editor</span></strong></span></p>
-<p><span style="background-color: black">
-This is an example airfoil as no airfoil was provided on startup. Try out the functionality with this example airfoil or <strong><span style="color: silver;">Open&nbsp;</span></strong>an existing airfoil.
-</span></p>
-<p><span style="background-color: black">
-You can view the properties of an airfoil like thickness distribution or camber, analyze the curvature of the surface or <strong><span style="color: silver;">Modify</span></strong> the airfoils geometry.<br>
-<strong><span style="color: silver;">New as Bezier</span></strong> allows to convert the airfoil into an airfoil which is based on two Bezier curves.
-</span></p>
-<p><span style="background-color: black">
-<span style="color: deepskyblue;">Tip: </span>Assign the file extension '.dat' to the Airfoil Editor to open an airfoil with a double click.
-</span></p>
-    """
-        
-        return message
-
-
     def _save_settings (self):
         """ save settings to file """
 
@@ -491,6 +475,8 @@ You can view the properties of an airfoil like thickness distribution or camber,
         """ main window is closed """
 
         self._save_settings ()
+
+        self.sig_closing.emit (self.airfoil().pathFileName)
 
         event.accept()
 

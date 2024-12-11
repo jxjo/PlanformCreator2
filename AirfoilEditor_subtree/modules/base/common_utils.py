@@ -96,7 +96,7 @@ def fromDict(dict : dict, key, default='no default'):
         else:
             value = default 
             if value:
-                logger.info ('Parameter \'%s\' not specified, using default-value \'%s\'' % (key, str(value)))
+                logger.debug ('Parameter \'%s\' not specified, using default-value \'%s\'' % (key, str(value)))
     return value
 
 

@@ -58,8 +58,9 @@ class style (Enum):
 
 
 class size (Enum):
-    HEADER         = 13
-    NORMAL         = 11 
+    HEADER         = (13, QFont.Weight.ExtraLight)
+    HEADER_SMALL   = (10, QFont.Weight.DemiBold)
+    NORMAL         = (11, QFont.Weight.Normal) 
 
 ALIGN_RIGHT         = Qt.AlignmentFlag.AlignRight
 ALIGN_LEFT          = Qt.AlignmentFlag.AlignLeft
@@ -107,10 +108,10 @@ class Icon (QIcon):
 
     cache = {}
 
-    subdirs = ["icons", "..\\icons", ".."]
+    subdirs = ["icons", "..\\icons", "..", "."]
 
     @staticmethod
-    def _get_icon(icon_name : str, light_mode = None) -> QIcon:
+    def _get_icon(icon_name : str, light_mode = None, icon_dir=None) -> QIcon:
         """ load icon_name from file and store into class dict (cache) """
 
         ico = None
@@ -127,11 +128,14 @@ class Icon (QIcon):
             ico =  Icon.cache.get (icon_filename)
 
         else: 
-            # try to find in one of the subdirs relativ to __file__
-            file_dir = os.path.dirname(os.path.realpath(__file__))
+            if icon_dir:
+                root_dir = icon_dir
+            else: 
+                # try to find in one of the subdirs relativ to __file__
+                root_dir = os.path.dirname(os.path.realpath(__file__))
 
             for subdir in Icon.subdirs:
-                icon_dir = os.path.join(file_dir, subdir)
+                icon_dir = os.path.join(root_dir, subdir)
                 icon_path = os.path.join(icon_dir, icon_filename)
 
                 # found icon file 
@@ -147,12 +151,19 @@ class Icon (QIcon):
         return ico 
 
 
+    @override
+    def __init__ (self, aName, light_mode=None, icon_dir=None):
+        """ A
+        llow an Icon name to create a QIcon
 
-    def __init__ (self, aName, light_mode=None):
-        """ override - allow an Icon name to create a QIcon"""
+        Args:
+            aName:  name of icon
+            light_mode: retrieve icon for light or dark mode
+            icon_dir: optional new icon dir to look for icon file 
+        """
 
         if isinstance (aName, str): 
-            super().__init__ (Icon._get_icon (aName, light_mode=light_mode))
+            super().__init__ (Icon._get_icon (aName, light_mode=light_mode, icon_dir=icon_dir))
         else:
             super().__init__(aName) 
 
@@ -231,7 +242,7 @@ class Widget:
                  layout: QLayout, 
                  *args,                     # optional: row:int, col:int, 
                  rowSpan = 1, colSpan=1, 
-                 align = None,          # alignment within layout 
+                 align = None,              # alignment within layout 
                  width :int = None,
                  height:int = None,
                  obj = None,                # object | bound method  
@@ -322,7 +333,7 @@ class Widget:
         self._style_getter = style 
         self._style = None 
         self._palette_normal = None       # will be copy of palette - for style reset  
-        self._fontSize = fontSize
+        self._font = fontSize
 
         self._toolTip = toolTip
 
@@ -399,7 +410,7 @@ class Widget:
 
             #leave callback and refresh in a few ms 
             timer = QTimer()                                
-            timer.singleShot(2, lambda: self.refresh())     # delayed emit 
+            timer.singleShot(20, lambda: self.refresh())     # delayed emit 
         
         else: 
 
@@ -694,10 +705,10 @@ class Widget:
             widget : QWidget = self
 
         # set font 
-        if self._fontSize == size.HEADER:
+        if self._font == size.HEADER or self._font == size.HEADER_SMALL:
             font = widget.font() 
-            font.setPointSize(size.HEADER.value)
-            font.setWeight (QFont.Weight.ExtraLight) #Medium #DemiBold
+            font.setPointSize(self._font.value[0])
+            font.setWeight   (self._font.value[1])  
             widget.setFont(font)
 
         # set width and height 
@@ -737,7 +748,7 @@ class Widget:
         # if not color_role in [QPalette.ColorRole.Text, QPalette.ColorRole.WindowText]:
         #     raise ValueError (f"{self}: color_role '{color_role}' not implemented")
 
-        if aStyle in [style.WARNING, style.ERROR, style.COMMENT, style.GOOD]:
+        if aStyle in [style.WARNING, style.ERROR, style.COMMENT, style.GOOD, style.HINT]:
 
             palette : QPalette = self.palette()
             if self._palette_normal is None:                     # store normal palette for later reset 
@@ -919,10 +930,10 @@ class Field (Field_With_Label, QLineEdit):
         if refresh:
             # setText resets cursor position - save and restore in case of refresh 
             cursor_pos = self.cursorPosition() 
-            self.setText (val)
+            self.setText (str(val))
             self.setCursorPosition (cursor_pos)
         else: 
-            self.setText (val)
+            self.setText (str(val))
 
 
     def _on_finished(self):
@@ -1085,16 +1096,11 @@ class FieldF (Field_With_Label, QDoubleSpinBox):
             self.setRange (self._lim[0], self._lim[1])
 
         # set val into Qwidget handle - percent unit automatically 
-        if self._unit == '%':
-            self.setValue (self._val * 100.0)
-        else: 
-            # test dynamic decimals 
-            # if round (self._val,1) == round (self._val, self._dec):
-            #     self.setDecimals (1) 
-            # else: 
-            #     self.setDecimals (self._dec)
-
-            self.setValue (self._val)
+        if self._val is not None:
+            if self._unit == '%':
+                self.setValue (self._val * 100.0)
+            else: 
+                self.setValue (self._val)
 
 
     def _set_Qwidget_disabled (self):
@@ -1402,6 +1408,9 @@ class CheckBox (Widget, QCheckBox):
         - gets its label via 'text' which is either string or getter 
         - when clicked, 'set' is called with argument of checkSTate 
     """
+
+    _height = 26 
+
     def __init__(self, *args, 
                  text=None,
                  **kwargs):
@@ -1540,17 +1549,22 @@ class ComboSpinBox (Field_With_Label, QComboBox):
         self._set_Qwidget_static (widget=helper)
         self._set_Qwidget ()
 
+        # refresh prev/next buttons to set now actual disable state 
+        self._refresh_buttons()
+
         # put into grid / layout 
         self._layout_add (widget=helper)
 
         # connect signals 
-        self.currentTextChanged.connect(self._on_selected)
+        self.activated.connect(self._on_selected)
+        # self.currentTextChanged.connect(self._on_selected)
 
 
-    def refresh (self): 
+    @override
+    def refresh (self, disable : bool|None = None): 
         """ refresh self """
         #overloaded to refresh also (state) of spin buttons
-        super().refresh() 
+        super().refresh(disable=disable) 
         self._refresh_buttons () 
 
 
@@ -1566,16 +1580,18 @@ class ComboSpinBox (Field_With_Label, QComboBox):
         """ prev button pressed """
         cur_index = self.currentIndex() 
         if cur_index > 0:
-            self.setCurrentIndex (cur_index - 1)
+            self.setCurrentIndex (cur_index - 1)                        # selection index of combobox
             self._refresh_buttons ()
+            self._on_selected ()                                        # handle callback
 
 
     def _on_pressed_next (self): 
         " next button pressed  """
         cur_index = self.currentIndex() 
         if cur_index < (len(self._options)) - 1:
-            self.setCurrentIndex (cur_index + 1)
+            self.setCurrentIndex (cur_index + 1)                        # selection index of combobox
             self._refresh_buttons ()
+            self._on_selected ()                                        # handle callback
 
 
     def _prev_disabled (self) -> bool: 
@@ -1600,6 +1616,7 @@ class ComboSpinBox (Field_With_Label, QComboBox):
 
         super()._set_Qwidget (**kwargs)
 
+        self.clear()                                # addItems append to list
         self.addItems (self._options)
         self.setCurrentText (self._val)
 

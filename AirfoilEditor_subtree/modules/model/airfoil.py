@@ -82,7 +82,6 @@ class Airfoil:
         self._name          = name if name is not None else ''
         self._name_org      = None                 # will hold original name for modification label
         self._fileName_org  = None                 # will hold original fileName 
-        self.sourceName     = None                 # long name out of the two blended airfoils (TSrakAirfoil)
 
         if not x is None: x = x if isinstance(x,np.ndarray) else np.asarray (x)
         self._x     = x
@@ -94,9 +93,9 @@ class Airfoil:
         self._isBlendAirfoil = False             # is self blended from two other airfoils 
 
         if geometry is None: 
-            self._geometryClass  = GEO_SPLINE          # geometry startegy 
+            self._geometry_class  = GEO_SPLINE          # geometry startegy 
         else:
-            self._geometryClass  = geometry          # geometry startegy 
+            self._geometry_class  = geometry          # geometry startegy 
         self._geo            = None              # selfs instance of geometry
 
         self._nPanelsNew     = None              # repanel: no of panels - init via default
@@ -190,26 +189,37 @@ class Airfoil:
         return f"<{type(self).__name__} {info}>"
 
 
-    def _handle_geo_changed (self):
-        """ callback from geometry when it was changed (by user) """
+    def _handle_geo_changed (self, geo : Geometry = None):
+        """ 
+        callback from geometry when it was changed (by user) 
+        
+        Args:
+            geo: optional laertnative geometry which will be taken 
+        """
 
         # load new coordinates from modified geometry 
-        self._x = self.geo.x
-        self._y = self.geo.y
+        if geo is None: 
+            self._x = self.geo.x
+            self._y = self.geo.y
+            modifications = self.geo.modifications_as_label
+        else: 
+            self._x = geo.x
+            self._y = geo.y
+            modifications = geo.modifications_as_label
 
         # set new name
         if not self._name_org : self._name_org = self.name
 
-        self.set_name (self._name_org + self.geo.modifications_as_label)
+        self.set_name (self._name_org + modifications)
 
         # set new filename 
         if self._fileName_org is None: self._fileName_org = self.fileName
         fileName_without = os.path.splitext(self._fileName_org)[0]
         fileName_ext     = os.path.splitext(self._fileName_org)[1]
-        self.set_fileName (fileName_without + self.geo.modifications_as_label + fileName_ext)
+        self.set_fileName (fileName_without + modifications + fileName_ext)
 
         self.set_isModified (True)
-        logging.debug (f"{self} - geometry changed: {self.geo.modifications_as_label} ")
+        logging.debug (f"{self} - geometry changed: {modifications} ")
 
 
     # ----------  Properties ---------------
@@ -223,23 +233,12 @@ class Airfoil:
 
     @property
     def geo (self) -> Geometry:
-        """ the geometry strategy of self"""
+        """ the geometry of self"""
         if self._geo is None: 
-            self._geo = self._geometryClass (self.x, self.y,
-                                             onChange = self._handle_geo_changed)
+            self._geo = self._geometry_class (self.x, self.y, onChange = self._handle_geo_changed)
+
         return self._geo
     
-    def set_geo_strategy (self, geometry):
-        """ set new geometry strategy of self
-        Args: 
-            geometry: either GEO_BASIC or GEO_SPLIne
-        """
-        if geometry != GEO_BASIC and geometry != GEO_SPLINE: return 
-
-        if self._geometryClass != geometry:
-           self._geometryClass = geometry
-           self._geo = None 
-
 
     def set_xy (self, x, y):
         """ set new coordinates """
@@ -526,16 +525,13 @@ class Airfoil:
 
         # determine (new) airfoils name  if not provided
         if not destName:
-            if self.isBlendAirfoil:
-                destName = self.sourceName                     # Blend: take the long name of the two airfoils
+            if self.name: 
+                destName = self.name    
             else:
-                if self.name: 
-                    destName = self.name    
-                else:
-                    if self.fileName:
-                        destName = Path(self.fileName).stem        # cut '.dat'
-                    else: 
-                        raise ValueError ("Destination name of airfoil couldn't be evaluated")
+                if self.fileName:
+                    destName = Path(self.fileName).stem        # cut '.dat'
+                else: 
+                    raise ValueError ("Destination name of airfoil couldn't be evaluated")
 
         # create dir if not exist - build airfoil filename
         if dir: 
@@ -577,7 +573,7 @@ class Airfoil:
         if name is None:
             name = self.name + nameExt if nameExt else self.name
 
-        geometry = geometry if geometry else self._geometryClass
+        geometry = geometry if geometry else self._geometry_class
 
         airfoil =  Airfoil (x = np.copy (self.x), y = np.copy (self.y), 
                             name = name, pathFileName = pathFileName, 
@@ -609,12 +605,12 @@ class Airfoil:
 
 
     def do_blend (self, airfoil1 : 'Airfoil', airfoil2 : 'Airfoil', blendBy : float,
-                  geometry = None ):
+                  geometry_class = None ):
         """ blends self out of two airfoils to the left and right
         depending on the blendBy factor
         
         Args: 
-            geometry: optional - geo strategy for blend - either GEO_BASIC or GEO_SPLINE
+            geometry_class: optional - geo strategy for blend - either GEO_BASIC or GEO_SPLINE
         """
     
         # sanity - both airfoils must be loaded 
@@ -627,12 +623,13 @@ class Airfoil:
         if blendBy > 1.0: raise ValueError ("blendyBy must be <= 1.0")
 
         # other geo strategy? 
-        if not geometry is None and geometry != self._geometryClass:
-            geo = geometry (self.x, self.y)
-        else:
-            geo = self.geo 
+        if not geometry_class is None and geometry_class != self._geometry_class:
+            geo : Geometry = geometry_class (self.x, self.y)
+            geo.blend (airfoil1.geo, airfoil2.geo, blendBy)
 
-        geo.blend (airfoil1.geo, airfoil2.geo, blendBy)
+            self._handle_geo_changed (geo=geo) 
+        else:
+            self.geo.blend (airfoil1.geo, airfoil2.geo, blendBy)
 
         self.set_isBlendAirfoil (True)
 
@@ -664,7 +661,7 @@ class Airfoil_Bezier(Airfoil):
         """
         super().__init__( name = name, pathFileName=pathFileName, workingDir=workingDir)
 
-        self._geometryClass  = Geometry_Bezier      # geometry startegy 
+        self._geometry_class  = Geometry_Bezier      # geometry startegy 
         self._isLoaded       = False                # bezier definition loaded? 
 
         if cp_upper is not None: 
@@ -721,7 +718,7 @@ class Airfoil_Bezier(Airfoil):
     def geo (self) -> Geometry_Bezier:
         """ the geometry strategy of self"""
         if self._geo is None: 
-            self._geo = self._geometryClass (onChange = self._handle_geo_changed)
+            self._geo = self._geometry_class (onChange = self._handle_geo_changed)
         return self._geo
 
 
@@ -919,7 +916,7 @@ class Airfoil_Hicks_Henne(Airfoil):
         """
         super().__init__( name = name, pathFileName=pathFileName, workingDir=workingDir)
 
-        self._geometryClass  = Geometry_HicksHenne  # geometry strategy 
+        self._geometry_class  = Geometry_HicksHenne  # geometry strategy 
         self._isLoaded       = False                # hicks henne definition loaded? 
 
     @property
@@ -942,7 +939,7 @@ class Airfoil_Hicks_Henne(Airfoil):
     def geo (self) -> Geometry_HicksHenne:
         """ the geometry strategy of self"""
         if self._geo is None: 
-            self._geo = self._geometryClass (onChange = self._handle_geo_changed)
+            self._geo = self._geometry_class (onChange = self._handle_geo_changed)
         return self._geo
 
 

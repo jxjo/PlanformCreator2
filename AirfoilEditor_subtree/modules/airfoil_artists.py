@@ -110,14 +110,14 @@ class Movable_Highpoint (Movable_Point):
                          **kwargs)
 
 
-    def label_static (self):
+    def label_static (self, *_):
 
         if self._line.type == Line.Type.CAMBER and self._geo.isSymmetrical: 
             return  "No camber - symmetrical" 
         else:  
             return super().label_static()
 
-    def label_moving (self):
+    def label_moving (self, *_):
 
         if self._line.type == Line.Type.CAMBER and self._geo.isSymmetrical: 
             return  "No camber - symmetrical" 
@@ -200,7 +200,7 @@ class Movable_TE_Point (Movable_Point):
         self._changed()
 
 
-    def label_moving (self):
+    def label_moving (self, *_):
 
         return f"{self.name}  {self.y*2:.2%} "
 
@@ -271,7 +271,7 @@ class Movable_LE_Point (Movable_Point):
         self._changed()
 
 
-    def label_moving (self):
+    def label_moving (self, *_):
 
         return f"{self.name}  {self.x/2:.2%} "
 
@@ -410,8 +410,6 @@ class Airfoil_Artist (Artist):
         self._show_points = show_points is True         # show coordinate points
 
         self._label_with_airfoil_type = False           # include airfoil type in label 
-        self._welcome_text = None                       # a HTML welcome text 
-        self._first_time  = True                        # to show welcome message 
 
         super().__init__ (*args, **kwargs)
 
@@ -455,13 +453,6 @@ class Airfoil_Artist (Artist):
                 self.plot ()
 
 
-    def set_welcome (self, aText):
-        """ set a welcome HTML text, which is schon the first time"""
-        if aText != self._welcome_text:
-            self._welcome_text = aText 
-            self.plot()
-
-
     @property
     def airfoils (self) -> list [Airfoil]: return self.data_list
 
@@ -481,26 +472,6 @@ class Airfoil_Artist (Artist):
 
         for iair, airfoil in enumerate (self.airfoils):
             if (airfoil.isLoaded):
-
-                # the first airfoil get's in the title 
-
-                if iair == 0:
-                    mods = None 
-                    if airfoil.usedAsDesign:
-                        mods = self._get_modifications (airfoil)
-                    if mods:
-                        subTitle = "Mods: " + mods
-                    elif not mods and airfoil.isBezierBased:
-                        subTitle = 'Based on 2 Bezier curves'
-                    else: 
-                        subTitle = None 
-
-                    if self._first_time and airfoil.isExample and self._welcome_text is not None:
-                        self._plot_text (self._welcome_text, color=QColor(self.COLOR_LEGEND), # fontSize=self.SIZE_NORMAL, 
-                                         parentPos=(0.05,0.), itemPos=(0.0,0), offset=(30,10))
-                        self._first_time = False
-                    else: 
-                        self._plot_title (airfoil.name, subTitle=subTitle )
 
                 # no legend if it is only one airfoil 
 
@@ -567,12 +538,6 @@ class Airfoil_Artist (Artist):
                         text="LE spline"
                     self._plot_point (airfoil.geo.le_real, color=color, brushColor=brushcolor,
                                       text=text,anchor=(0.5,1) )
-
-
-    def _get_modifications (self, airfoil : Airfoil) -> str: 
-        """ returns the modifications made to the airfoil as long string"""
-
-        return ', '.join(airfoil.geo.modifications)
 
 
 

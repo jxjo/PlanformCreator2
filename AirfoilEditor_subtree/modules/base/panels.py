@@ -79,6 +79,17 @@ class Panel_Abstract (QWidget):
         else: 
             return self._getter
 
+    @property 
+    def _shouldBe_visible (self) -> bool:
+        """ True if self is visible - can be overloaded """
+        return True
+
+
+    @property 
+    def _isDisabled (self) -> bool:
+        """ True if the widgets of self are disabled  - can be overloaded """
+        return False
+
     def set_background_color (self, darker_factor : int | None = None,
                                     color : QColor | int | None  = None,
                                     alpha : float | None = None):
@@ -100,6 +111,8 @@ class Container_Panel (Panel_Abstract):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        
 
 
     def refresh (parent: QWidget):
@@ -192,18 +205,6 @@ class Edit_Panel (Panel_Abstract):
         """ returns text of title - default self.name"""
         # can be overwritten 
         return self.name 
-
-
-    @property 
-    def _shouldBe_visible (self) -> bool:
-        """ True if self is visible - can be overloaded """
-        return True
-
-
-    @property 
-    def _isDisabled (self) -> bool:
-        """ True if the widgets of self are disabled  - can be overloaded """
-        return False
 
 
     @property 
@@ -435,7 +436,7 @@ class Dialog (QDialog):
 
 
     def __init__(self,  
-                 parent=None,
+                 parent : QWidget =None,
                  getter = None, 
                  width=None, 
                  height=None, 
@@ -469,8 +470,8 @@ class Dialog (QDialog):
         self._panel = QWidget () 
         self.set_background_color (darker_factor=105)
 
-        l_panel = self._init_layout()       # subclass will create layout 
-        l_panel.setContentsMargins (QMargins(15, 10, 15, 10))   # inset left 
+        l_panel = self._init_layout()                               # subclass will create layout 
+        l_panel.setContentsMargins (QMargins(15, 10, 15, 10))       # inset left 
         # l_panel.setSpacing(2)
         self._panel.setLayout (l_panel)
 

@@ -799,9 +799,9 @@ class Bezier:
             # eval y for u value
             y =  self._eval_1D (self._py, u)
 
-            # print ("Newton iter", niter, x - self._eval_1D (self._px, u))
+            # cache value - only not fast
+            self._y_on_x_cache [x] = y
 
-        self._y_on_x_cache [x] = y
         return y
         
 
@@ -824,8 +824,8 @@ class Bezier:
 
         # check for cached value 
         try:
-            y = self._x_on_y_cache [y]
-            return y
+            x = self._x_on_y_cache [y]
+            return x
         except: 
             pass
 
@@ -840,7 +840,8 @@ class Bezier:
             x =  self._eval_1D (self._px, u)
             # print ("y: ",y, "  x evaluated ", x)
 
-        self._x_on_y_cache [y] = x
+            # cache value - only not fast
+            self._x_on_y_cache [y] = x
 
         return x
 

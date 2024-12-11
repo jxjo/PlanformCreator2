@@ -39,6 +39,13 @@ class Diagram_Item_Airfoil (Diagram_Item):
     sig_geometry_changed         = pyqtSignal()          # airfoil data changed in a diagram 
 
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # set margins (inset) of self 
+        self.setContentsMargins ( 0,30,10,20)
+
+
     def airfoils (self) -> list[Airfoil]: 
         return self._getter()
     
@@ -68,6 +75,25 @@ class Diagram_Item_Airfoil (Diagram_Item):
         self.section_panel.refresh()
 
         logger.debug (f"{str(self)} _on_blend_airfoil")
+
+
+    @override
+    def plot_title(self, **kwargs):
+
+        # the first airfoil get's in the title 
+        airfoil = self.airfoils()[0]
+
+        mods = None 
+        if airfoil.usedAsDesign:
+            mods = ', '.join(airfoil.geo.modifications) 
+        if mods:
+            subtitle = "Mods: " + mods
+        elif not mods and airfoil.isBezierBased:
+            subtitle = 'Based on 2 Bezier curves'
+        else: 
+            subtitle = "" 
+
+        super().plot_title (title=airfoil.name, subtitle=subtitle, **kwargs)
 
 
     @override
@@ -140,12 +166,6 @@ class Diagram_Item_Airfoil (Diagram_Item):
         return self._section_panel 
 
 
-    def set_welcome (self, aText : str):
-        """ set a Welcome text into the first artist"""
-
-        self.airfoil_artist.set_welcome (aText)
-
-
 
 
 class Diagram_Item_Curvature (Diagram_Item):
@@ -153,13 +173,18 @@ class Diagram_Item_Curvature (Diagram_Item):
     Diagram (Plot) Item for airfoils curvature 
     """
 
-    name = "View Curvature"
+    name        = "View Curvature"
+    title       = "Curvature"                 
+    subtitle    = None                                 # will be set dynamically 
 
     def __init__(self, *args, **kwargs):
 
         self._link_x  = False 
 
         super().__init__(*args, **kwargs)
+
+        # set margins (inset) of self 
+        self.setContentsMargins ( 0,30,10,20)
 
 
     def airfoils (self) -> list[Airfoil]: 
@@ -174,7 +199,6 @@ class Diagram_Item_Curvature (Diagram_Item):
         self.curvature_artist.set_show (aBool)
 
 
-
     @property
     def link_x (self) -> bool:
         """ is x axes linked with View Airfoil"""
@@ -186,6 +210,7 @@ class Diagram_Item_Curvature (Diagram_Item):
             self.setXLink(Diagram_Item_Airfoil.name)
         else: 
             self.setXLink(None)
+
 
     def setup_artists (self):
         """ create and setup the artists of self"""
@@ -256,10 +281,11 @@ class Diagram_Airfoil (Diagram):
     sig_new_airfoil_ref2        = pyqtSignal(object)    # new ref2 airfoil  
 
 
-    def __init__(self, *args, welcome=None, **kwargs):
+    def __init__(self, *args, **kwargs):
 
         self._item_airfoil = None                   # the diagram items of self 
         self._item_curvature = None
+        self._item_welcome = None
 
         self._bezier_match_first_time = True        # switch to show target airfoil 
 
@@ -267,11 +293,10 @@ class Diagram_Airfoil (Diagram):
 
         self._viewPanel.setMinimumWidth(240)
         self._viewPanel.setMaximumWidth(240)
-
-        # set welcome message into the first diagram item 
-
-        self.diagram_items[0].set_welcome (welcome) 
  
+         # set spacing between the two items
+        self.graph_layout.setVerticalSpacing (10)
+
 
     @property
     def airfoil_ref1 (self) -> Airfoil | None:
@@ -337,14 +362,23 @@ class Diagram_Airfoil (Diagram):
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
 
-        self._item_airfoil = Diagram_Item_Airfoil (self, getter=self.airfoils)
-        self._add_item (self._item_airfoil, 0, 0)
+        r = 0 
+        if self.airfoils()[0].isExample:
 
+            # show Welcome text if Airfoil is the Example arfoil 
+            self._item_welcome = Diagram_Item_Welcome (self)
+            self._add_item (self._item_welcome, r, 0)
+            r += 1
+
+        self._item_airfoil = Diagram_Item_Airfoil (self, getter=self.airfoils)
+        self._add_item (self._item_airfoil, r, 0)
+ 
         self._item_airfoil.sig_geometry_changed.connect (self._on_geometry_changed)
 
+        r += 1
         self._item_curvature = Diagram_Item_Curvature (self, getter=self.airfoils, show=False)
-        self._add_item (self._item_curvature, 1, 0)
-
+        self._add_item (self._item_curvature, r, 0)
+ 
 
     @property
     def section_panel (self) -> Edit_Panel:
@@ -453,6 +487,15 @@ class Diagram_Airfoil (Diagram):
 
     # --- private slots ---------------------------------------------------
 
+    @override
+    def refresh (self):
+
+        if self._item_welcome and self._item_welcome.isVisible():
+
+            self._item_welcome.hide()
+
+        super().refresh() 
+
 
     def _on_geometry_changed (self):
         """ slot to handle geometry change made in diagram """
@@ -461,3 +504,73 @@ class Diagram_Airfoil (Diagram):
     
         self.refresh()                          # refresh other diagram items 
         self.sig_airfoil_changed.emit()         # refresh app
+
+
+
+
+class Diagram_Item_Welcome (Diagram_Item):
+    """ Item with Welcome message  """
+
+    title       = ""                                    # has it's own title 
+    subtitle    = None
+
+    def __init__(self, *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+
+        self.buttonsHidden      = True                          # don't show buttons and coordinates
+
+        # set margins (inset) of self 
+        self.setContentsMargins ( 0,20,0,0)
+
+        parentPos = (0.0)                               # parent x starts at PlotItem (including axis)       
+        itemPos   = (0,0)
+        offset    = (50,5)
+
+        p1 = pg.LabelItem(self._welcome_message(), color=QColor(Artist.COLOR_HEADER), size=f"{Artist.SIZE_HEADER}pt")    
+
+        p1.setParentItem(self.viewBox)                            # add to self (Diagram Item) for absolute position 
+        p1.anchor(itemPos=itemPos, parentPos=parentPos, offset=offset)
+        p1.setZValue(5)
+        self._title_item = p1
+
+        self.setFixedHeight(200)
+
+
+    def _welcome_message (self) -> str: 
+        # use Notepad++ or https://froala.com/online-html-editor/ to edit 
+
+        message = """
+<span style="font-size: 18pt; color: whitesmoke">Welcome to <strong>Airfoil<span style="color:deeppink">Editor</span></strong></span>
+
+<span style="font-size: 10pt; color: darkgray">
+<p>
+    This is an example airfoil as no airfoil was provided on startup. Try out the functionality with this example airfoil or  
+    <strong><span style="color: silver;">Open&nbsp;</span></strong>an existing airfoil.
+    <p>
+    You can view the properties of an airfoil like thickness distribution or camber, analyze the curvature of the surface or  
+    <strong><span style="color: silver;">Modify</span></strong> the airfoils geometry. 
+    </p> 
+    <p>
+    <strong><span style="color: silver;">New as Bezier</span></strong> allows to convert the airfoil into an airfoil which is based on two Bezier curves.
+    </p> 
+    <p>
+    <span style="color: deepskyblue;">Tip: </span>Assign the file extension '.dat' to the Airfoil Editor to open an airfoil with a double click.
+    </p>
+</p>
+</span>
+"""
+        return message
+
+
+    def setup_artists (self):
+        pass
+
+    @override
+    def setup_viewRange (self):
+        self.viewBox.autoRange ()  
+        self.viewBox.setXRange( 0, 1, padding=0.08)    
+        self.showAxis('left', show=False)
+        self.showAxis('bottom', show=False)
+        self.showGrid(x=False, y=False)
+
