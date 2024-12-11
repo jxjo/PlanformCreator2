@@ -1,8 +1,10 @@
 @echo off
 echo.
-echo Pull Subtree AirfoilEditor --------- !!!!!!!!!!!!!!
+echo Remove Subtree AirfoilEditor --------- !!!!!!!!!!!!!!
 echo.
 pause
 pause
+cd ..
 git rm -rf AirfoilEditor_subtree
+cd dev
 pause

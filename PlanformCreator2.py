@@ -36,6 +36,7 @@ from base.widgets           import *
 
 from pc2_panels             import *
 from pc2_diagrams           import *
+from pc2_dialogs            import *
 
 
 import logging
@@ -44,8 +45,10 @@ logger.setLevel(logging.DEBUG)
 
 #------------------------------------------------
 
-AppName    = "Planform Creator 2"
-AppVersion = "2.0 beta.1"
+APP_NAME     = "Planform Creator 2"
+APP_VERSION  = "2.0 beta.1"
+
+TEMPLATE_DIR = "templates"
 
 
 # --------------------- tmp ----------------------------------------------------
@@ -53,7 +56,7 @@ AppVersion = "2.0 beta.1"
 
 class Tab_Panel (QTabWidget):
     """ 
-    Tab WIdget as parent for other items 
+    Tab Widget as parent for other items 
     """
 
     name = "Panel"             # will be title 
@@ -79,8 +82,9 @@ class Tab_Panel (QTabWidget):
         Widget._set_height (self, self._height)
 
         font = self.font() 
-        font.setPointSize(size.HEADER.value)
-        font.setWeight (QFont.Weight.Medium) #Medium #DemiBold #ExtraLight
+        _font = size.HEADER.value
+        font.setPointSize(_font[0])
+        font.setWeight   (_font[1])  
         self.setFont(font)
 
         # see https://doc.qt.io/qt-6/stylesheet-examples.html
@@ -102,6 +106,24 @@ class Tab_Panel (QTabWidget):
     def __repr__(self) -> str:
         # overwritten to get a nice print string 
         return f"<Tab_Panel '{self.name}'>"
+
+
+    def add_tab (self, aWidget : QWidget, name : str = None):
+        """ at an item having 'name' to self"""
+
+        if name is None:
+            name = aWidget.name
+
+        self.addTab (aWidget, name)
+
+
+    def set_tab (self, class_name : str):
+        """ set the current tab to tab with widgets class name"""
+
+        for itab in range (self.count()):
+            if self.widget(itab).__class__.__name__ == class_name:
+                self.setCurrentIndex (itab)
+                return
 
 
     def set_background_color (self, darker_factor : int | None = None,
@@ -127,21 +149,22 @@ class Tab_Panel (QTabWidget):
 
 class App_Main (QMainWindow):
 
-    name = AppName  
+    name = APP_NAME  
 
    # Signals 
 
-    sig_wing_new            = pyqtSignal()              # new wing loaded 
-    sig_wingSection_selected     = pyqtSignal()              # current wing section changed
+    sig_wing_new                = pyqtSignal()              # new wing loaded 
+    sig_planform_changed        = pyqtSignal()              # planform data changed via input fields 
+    sig_wingSection_selected    = pyqtSignal()              # current wing section changed
 
 
-    def __init__(self, paramFile):
+    def __init__(self, pc2_file):
         super().__init__()
 
-        self.initial_geometry   = None                  # window geometry at the bginning
-        self._cur_wingSection = None                    # Dispatcher field between Diagram and Edit
-        self.paramFile = ''                             # paramter file with wing settings  
-        self._myWing : Wing = None                      # actual wing model 
+        self.initial_geometry   = None                      # window geometry at the bginning
+        self._cur_wingSection = None                        # Dispatcher field between Diagram and Edit
+        self.pc2_file = ''                                  # paramter file with wing settings  
+        self._myWing : Wing = None                          # actual wing model 
 
         # if paramFile: 
         #     message = f"Loading\n\n{os.path.basename(paramFile)}"
@@ -151,7 +174,7 @@ class App_Main (QMainWindow):
 
         # get icon either in modules or in icons 
         
-        self.setWindowIcon (Icon ('AE_ico.ico'))
+        self.setWindowIcon (Icon  ('PC_ico.ico', icon_dir="modules"))
 
         # get initial window size from settings
 
@@ -163,26 +186,23 @@ class App_Main (QMainWindow):
 
         # create the 'wing' model  
 
-        self.load_wing (paramFile, initial=True)
+        self.load_wing (pc2_file, initial=True)
 
         # init main layout of app
 
         self._data_panel    = Container_Panel  (title="Data panel")
         self._file_panel    = Container_Panel  (title="File panel", width=240)
 
-        self._diagrams      = Tab_Panel        (self)
+        self._tab_panel     = Tab_Panel        (self)
+        self._diagrams      = []
 
-        self._diag_planform = Diagram_Planform (self, self.wing, self.cur_wingSection)
-        self._diagrams.addTab (self._diag_planform, "Planform")
+        self._add_diagram (Diagram_Planform (self, self.wing, self.wingSection))
+        self._add_diagram (Diagram_Airfoils (self, self.wing))
+        self._add_diagram (Diagram_Wing     (self, self.wing))
+        self._add_diagram (Diagram_Panels   (self, self.wing, self.wingSection))
+        self._add_diagram (Diagram_Making_Of(self, self.wing))
 
-        self._diag_wing     = Diagram_Wing     (self, self.wing, welcome=self._welcome_message())
-        self._diagrams.addTab (self._diag_wing, "Wing")
-
-        self._diag_airfoils = Diagram_Airfoils (self, self.wing)
-        self._diagrams.addTab (self._diag_airfoils, "Airfoils")
-
-        self._diag_making   = Diagram_Making_Of (self, self.wing)
-        self._diagrams.addTab (self._diag_making, "Making of ...")
+        self._tab_panel.set_tab (Settings().get('current_diagram', Diagram_Making_Of.__name__))
 
         l_main = self._init_layout() 
 
@@ -191,23 +211,31 @@ class App_Main (QMainWindow):
         self.setCentralWidget(container)
 
 
-        # connect to signals from diagram
-
-        self._diag_planform.sig_wingSection_new.connect  (self.set_cur_wingSection)
-        self._diag_planform.sig_planform_changed.connect  (self._diag_wing.on_wing_changed)
-
         # connect to signals of self
 
-            # self.sig_airfoil_changed.connect (self.refresh)
+        self.sig_planform_changed.connect           (self.refresh)
+        self.sig_wing_new.connect                   (self.refresh)
+
+        # connect to signals from diagram
+
+        diagram : Diagram_Abstract
+        for diagram in self._diagrams:
+            diagram.sig_wingSection_new.connect     (self.on_wingSection_selected)
+            diagram.sig_planform_changed.connect    (self.refresh)
+            diagram.sig_export_airfoils.connect     (self.export_airfoils)
+            diagram.sig_export_xflr5.connect        (self.export_xflr5)
+            diagram.sig_export_flz.connect          (self.export_flz)
+            diagram.sig_launch_flz.connect          (self.launch_flz)
+            diagram.sig_export_dxf.connect          (self.export_dxf)
 
         # connect signals to slots of diagram
 
-        self.sig_wingSection_selected.connect (self._diag_planform.on_cur_wingSection_changed)
+        diagram : Diagram_Abstract
+        for diagram in self._diagrams:
+            self.sig_wingSection_selected.connect   (diagram.on_cur_wingSection_changed)
+            self.sig_wing_new.connect               (diagram.on_wing_new)
+            self.sig_planform_changed.connect       (diagram.on_planform_changed)
 
-        self.sig_wing_new.connect        (self._diag_planform.on_wing_new)
-        self.sig_wing_new.connect        (self._diag_wing.on_wing_new)
-        self.sig_wing_new.connect        (self._diag_airfoils.on_wing_new)
-        self.sig_wing_new.connect        (self._diag_making.on_wing_new)
 
 
     def __repr__(self) -> str:
@@ -224,7 +252,10 @@ class App_Main (QMainWindow):
         #                 | Geometry  | Coordinates | ... >| 
 
         l_data = QHBoxLayout()
-        # l_data.addWidget (Panel_Geometry    (self, self.airfoil))
+        l_data.addWidget (Panel_Wing                (self, self.wing))
+        l_data.addWidget (Panel_Chord_Reference     (self, self.wing))
+        l_data.addWidget (Panel_WingSection         (self, self.wing))
+
         l_data.addStretch (1)        
         l_data.setContentsMargins (QMargins(0, 0, 0, 0))
         self._data_panel.setLayout (l_data)
@@ -239,18 +270,24 @@ class App_Main (QMainWindow):
         l_lower.addWidget (self._data_panel, stretch=1)
         l_lower.setContentsMargins (QMargins(0, 0, 0, 0))
         lower = QWidget ()
-        lower.setMinimumHeight(180)
-        lower.setMaximumHeight(180)
+        lower.setMinimumHeight(190)
+        lower.setMaximumHeight(190)
         lower.setLayout (l_lower)
 
         # main layout with diagram panel and lower 
 
         l_main = QVBoxLayout () 
-        l_main.addWidget (self._diagrams, stretch=2)
+        l_main.addWidget (self._tab_panel, stretch=2)
         l_main.addWidget (lower)
         l_main.setContentsMargins (QMargins(5, 5, 5, 5))
 
         return l_main 
+
+    def _add_diagram (self, aDiagram : Diagram_Abstract):
+        """ add a diagram to Tab panel and diagram list """
+
+        self._tab_panel.add_tab (aDiagram)
+        self._diagrams.append(aDiagram)
 
 
     def wing (self) -> Wing:
@@ -259,26 +296,47 @@ class App_Main (QMainWindow):
         return self._myWing
 
       
-    def cur_wingSection (self) -> N_WingSection:
+    def wingSection (self) -> WingSection:
         """ Dispatcher for current WingSection between Edit and Diagram """
-        if self._cur_wingSection is None: 
 
-            normed_sections = self.wing().planform.norm.wingSections
+        # ensure cur_wingSection still exists 
+        if self._cur_wingSection: 
+            try:
+                self._cur_wingSection.index ()
+            except: 
+                self._cur_wingSection = None
+
+        # handle first time or not existing 
+        if self._cur_wingSection is None: 
+            normed_sections = self.wing().planform.wingSections
 
             if len (normed_sections) > 2:
                 self._cur_wingSection = normed_sections[1]              # set second section as initial
             else:        
-                self._cur_wingSection = None                            # nothing selected
+                self._cur_wingSection = normed_sections[0]              # take root
+
 
         return self._cur_wingSection 
 
 
-    def set_cur_wingSection (self, aSection : N_WingSection | None):
-        """ set current wing section"""
-        self._cur_wingSection = aSection
-        logger.debug (f"{aSection} as current")
+    def set_wingSection (self, aSection : WingSection | str | None):
+        """ set current wing section either by object or by string"""
+
+        if isinstance (aSection, str):
+            sec = next((sec for sec in self.wing().planform.wingSections if sec.name_short == aSection), None)
+        else: 
+            sec = aSection
+
+        self._cur_wingSection = sec
+        logger.debug (f"{sec} as current")
 
         self.sig_wingSection_selected.emit()
+
+
+    def on_wingSection_selected (self, aSection : WingSection):
+        """ slot for section signal from diagram"""
+        self.set_wingSection (aSection) 
+        self.refresh()
 
 
     def refresh(self):
@@ -296,34 +354,11 @@ class App_Main (QMainWindow):
     def set_title (self): 
         """ set window title"""
 
-        if self.paramFile:
-            project = self.paramFile
+        if self.pc2_file:
+            project = self.pc2_file
         else:
             project = "< new >"
-        self.setWindowTitle (AppName + "  v" + str(AppVersion) + "  [" + project + "]")
-
-
-    def _welcome_message (self) -> str: 
-        """ returns a HTML welcome message which is shown on first start up """
-
-        # use Notepad++ or https://froala.com/online-html-editor/ to edit 
-
-        message = """
-<p><span style="background-color: black">
-<span style="font-size: 18pt; color: lightgray; ">Welcome to the <strong>Airfoil<span style="color:deeppink">Editor</span></strong></span></p>
-<p><span style="background-color: black">
-This is an example airfoil as no airfoil was provided on startup. Try out the functionality with this example airfoil or <strong><span style="color: silver;">Open&nbsp;</span></strong>an existing airfoil.
-</span></p>
-<p><span style="background-color: black">
-You can view the properties of an airfoil like thickness distribution or camber, analyze the curvature of the surface or <strong><span style="color: silver;">Modify</span></strong> the airfoils geometry.<br>
-<strong><span style="color: silver;">New as Bezier</span></strong> allows to convert the airfoil into an airfoil which is based on two Bezier curves.
-</span></p>
-<p><span style="background-color: black">
-<span style="color: deepskyblue;">Tip: </span>Assign the file extension '.dat' to the Airfoil Editor to open an airfoil with a double click.
-</span></p>
-    """
-        
-        return message
+        self.setWindowTitle (APP_NAME + "  v" + str(APP_VERSION) + "  [" + project + "]")
 
 
     def _save_settings (self):
@@ -331,6 +366,10 @@ You can view the properties of an airfoil like thickness distribution or camber,
 
         Settings().set('window_geometry', self.normalGeometry ().getRect())
         Settings().set('window_maximize', self.isMaximized())
+
+        # save current tab as classname 
+        current_diagram = self._tab_panel.currentWidget().__class__.__name__
+        Settings().set('current_diagram',current_diagram)
 
 
     @override
@@ -340,11 +379,11 @@ You can view the properties of an airfoil like thickness distribution or camber,
         self._save_settings ()
 
         # save changes? 
-        if self.wing().hasChanged(): 
+        if self.wing().has_changed(): 
 
             message = "The planform has been modified..\n\n" + \
                       "Do you want to save before exit?"
-            button = MessageBox.save(self, "Close "+ AppName, message)
+            button = MessageBox.save(self, "Close "+ APP_NAME, message)
 
             if button == QMessageBox.StandardButton.Save:
                 self.save()
@@ -366,8 +405,18 @@ You can view the properties of an airfoil like thickness distribution or camber,
     def new (self):
         """ reset - and start with example definition"""
 
-        # text = "The current wing '%s' will be discarded." % self.wing().name
-        self.load_wing ("")                                                     # will create default wing
+        # select a new template 
+
+        template_dir  = os.path.join (os.path.dirname (__file__), TEMPLATE_DIR)
+
+        dialog = Dialog_Select_Template (self, template_dir) 
+        dialog.exec()     
+
+        if dialog.template_file_selected:
+
+            #leave button callback and refresh in a few ms 
+            QTimer().singleShot(10, lambda: self.load_wing (dialog.template_file_selected))     # delayed emit 
+
 
 
     def open (self):
@@ -377,9 +426,9 @@ You can view the properties of an airfoil like thickness distribution or camber,
         newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters)
 
         if newPathFilename:                     
+
             #leave button callback and refresh in a few ms 
-            timer = QTimer()                                
-            timer.singleShot(10, lambda: self.load_wing (newPathFilename))     # delayed emit 
+            QTimer().singleShot(10, lambda: self.load_wing (newPathFilename))     # delayed emit 
 
 
 
@@ -387,12 +436,12 @@ You can view the properties of an airfoil like thickness distribution or camber,
         """ save wing data to the action parameter file - if new wing to saveAs"""
 
 
-        if self.paramFile:
-            ok = self.wing().save(self.paramFile)
+        if self.pc2_file:
+            ok = self.wing().save(self.pc2_file)
             if ok:
-                MessageBox.success (self,"Save", f"Parameters saved to:\n\n{self.paramFile}")
+                MessageBox.success (self,"Save", f"Parameters saved to:\n\n{self.pc2_file}")
             else:
-                MessageBox.error   (self,"Save", f"Parameters couldn't be saved to:\n\n{self.paramFile}")
+                MessageBox.error   (self,"Save", f"Parameters couldn't be saved to:\n\n{self.pc2_file}")
         else:
             self.saveAs ()
 
@@ -404,10 +453,10 @@ You can view the properties of an airfoil like thickness distribution or camber,
         newPathFilename, _ = QFileDialog.getSaveFileName(self, filter=filters)
 
         if newPathFilename: 
-            self.paramFile = PathHandler.relPath (newPathFilename)
+            self.pc2_file = PathHandler.relPath (newPathFilename)
             self.save ()
             self.set_title ()
-            Settings().set('lastOpenend', self.paramFile)
+            Settings().set('lastOpenend', self.pc2_file)
 
 
     def edit_settings (self):
@@ -428,51 +477,73 @@ You can view the properties of an airfoil like thickness distribution or camber,
         self._cur_wingSection = None
 
         if pathFilename:
-            self.paramFile = PathHandler.relPath (pathFilename)
-            Settings().set('lastOpenend', self.paramFile)
+            self.pc2_file = PathHandler.relPath (pathFilename)
+            Settings().set('lastOpenend', self.pc2_file)
         else:
-            self.paramFile = ""
+            self.pc2_file = ""
         self.set_title ()
 
         if not initial: 
             self.sig_wing_new.emit()
 
 
-    # def export_xflr5 (self): 
-    #     """ export wing to xflr5"""
-    #     self.wait_window (Dialog_Export_Xflr5_Flz (self, self.wing, Xflr5=True))
+    def export_xflr5 (self): 
+        """ export wing to xflr5"""
+
+        directory = QFileDialog.getExistingDirectory(self,caption="Select directory for export",
+                                                     directory=self.wing().export_xflr5.export_dir)
+        if directory: 
+
+            self.wing().export_xflr5.set_export_dir (directory)   
+            self.wing().export_xflr5.do_it () 
+            n_airfoils = self.wing().export_xflr5.n_airfoils
+
+            filename   = self.wing().export_xflr5.filename
+            MessageBox.success (self,"Export FLZ", f"'{filename}' and \n{n_airfoils} arfoils exported." )
 
 
-    # def export_flz (self): 
-    #     """ export wing to xflr5"""
-    #     self.wait_window (Dialog_Export_Xflr5_Flz (self, self.wing, Flz=True))
+    def export_flz (self): 
+        """ export wing to FLZ"""
+
+        directory = QFileDialog.getExistingDirectory(self,caption="Select directory for export",
+                                                     directory=self.wing().export_flz.export_dir)
+        if directory: 
+
+            self.wing().export_flz.set_export_dir (directory)   
+            self.wing().export_flz.do_it () 
+
+            filename   = self.wing().export_flz.filename
+            MessageBox.success (self,"Export FLZ", f"'{filename}' exported." )
 
 
-    # def export_dxf (self):
-    #     """export wing to dxf"""
-    #     self.wait_window (Dialog_Export_Dxf (self, wingFn = self.wing))
+    def launch_flz (self): 
+        """ export wing to FLZ and launch """
+
+        self.wing().export_flz.do_it ()
+
+        pathFileName = os.path.join (self.wing().export_flz.base_and_export_dir, self.wing().export_flz.filename) 
+        try: 
+            os.startfile(pathFileName, 'open')
+        except: 
+            message = "Could not launch FLZ_vortex on exported file: \n\n" + \
+                    pathFileName + \
+                    "\n\n Is FLZ_vortex neatly installed and associated with file extension '.flz'?"
+            MessageBox.error (self,"Export FLZ", str(message))
 
 
-    # def export_airfoils (self):
-    #     """export airfoils of wing"""
-    #     self.wait_window (Dialog_Export_Airfoils (self, wingFn = self.wing))
+    def export_airfoils (self):
+        """open export airfoils of wing dialog """
+
+        dialog = Dialog_Export_Airfoil (self, self.wing)  
+        dialog.exec()     
 
 
-    # def load_reference_dxf (self): 
-    #     """ load a dxf planform into the reference_dxf planform"""
-    #     current_dxf_path = self.wing().refPlanform_DXF.dxf_pathFilename
+    def export_dxf (self):
+        """open export planform to dxf dialog """
 
-    #     dxf_dialog = Dialog_Load_DXF (self, wingFn = self.wing, dxf_Path = current_dxf_path, ref=True, workingDir = self.workingDir) 
-    #     self.wait_window (dxf_dialog)
+        dialog = Dialog_Export_Dxf (self, self.wing)  
+        dialog.exec()     
 
-    #     if dxf_dialog.return_OK: 
-    #         new_dxf_Path = dxf_dialog.dxf_pathFilename
-    #         if new_dxf_Path:                            # dialog returned a valid path 
-    #             self.wing().refPlanform_DXF.set_dxfPathFilename (new_dxf_Path) 
-    #             fireEvent(self.ctk_root, PLANFORM_CHANGED)
-    #         else:                                       # remove dxf reference file - extra code to make it clear
-    #             self.wing().refPlanform_DXF.set_dxfPathFilename (None) 
-    #             fireEvent(self.ctk_root, PLANFORM_CHANGED)
 
 
 
@@ -493,7 +564,7 @@ if __name__ == "__main__":
     # paramter file as argument?  
 
     parmFile = ''
-    parser = argparse.ArgumentParser(prog=AppName, description='Create a wing planform')
+    parser = argparse.ArgumentParser(prog=APP_NAME, description='Create a wing planform')
     parser.add_argument("paramterfile", nargs='*', help="Paramter file .pc2")
     args = parser.parse_args()
 
