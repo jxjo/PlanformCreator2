@@ -36,8 +36,8 @@ When the results are satisfying the planform and the envolved airfoils are expor
 In contrast to a "paint program", the planform is defined by parameters such as 'span', 'root depth' or "sweep of hinge line". The chord distribution along the span is controlled by a mathematical function via parameters.
 The advantage is that the parameters can be changed independently of each other, allowing a quick approach to the desired wing planform.
 
-![PC2](images/Hinge_angle_controlling_planform.png "Different hine angles ")
-<sup>Examples of different hinge line angles  </sup>
+![PC2](images/planform_variations.png "Planform variations")
+<sup>All three planforms have the same chord distribution - and also the same wing area - but varying how the chord is assigned by the reference line</sup>
 </p>
 
 ## Designing a planform 
@@ -47,17 +47,25 @@ The advantage is that the parameters can be changed independently of each other,
 ### Chord distribution 
 Most important and usually defined first, is the chord distribution along the wing span. The geometric chord distribution directly and significantly determines the lift distribution along the span. The local lift coefficient depends on the local effective angle of attack (influenced by the wing shape) and on the local Reynolds number, which changes proportionally to the local chord.
 
-
-Different "planform types" are available for defining the depth distribution:
+Two different "types" are available for defining the chord distribution:
 - Bezier curve: Using a start tangent at the root and a end tangent at the wing tip, the curve of the chord distribution is defined by dragging the control points with the mouse
-- Bezier with straight trailing edge: A sub-variant of "Bezier" when the planform has a straight trailing edge. 
-- Trapezoid: For the definition of a (multiple) trapezoid wing. The chord is defined by the chord length of the individual segments.
+- Trapezoid: For the definition of a (multiple) trapezoid wing. The chord is defined by the chord length of the individual wing sections.
 
 In PC2, the chord distribution is always displayed in normalized form. Both span and chord length range from 0 to 1. This allows chord distributions - even of different wing designs - to be compared with each other without distortion.
 
-![PC2](images/Normalized_chord_distribution.png "Varying chord distribution")
-<sup>Variations of the chord distribution using a Bezier curve  </sup>
+![PC2](images/chord_distribution.png "Varying chord distribution")
+<sup>Variations of the chord distribution using a Bezier curve. The blue curve is a pure elliptical chord distribution as reference  </sup>
 </p>
+
+### Chord Reference Line 
+The hinge line is the main 'construction line' of PC2. By determining flap depth at the root and tip, the chord distribution is, figuratively speaking, threaded onto the hinge line, which results in a final planform. Thereby both flap depth at the root and flap depth at tip strongly influences the planform:
+
+![PC2](images/Flap_depth_controlling_planform.png "Different flap depths")
+<sup>Impact of different flap depths on planform of the wing </sup>
+</p>
+
+
+
 
 ### Hinge Line and Flap Depth
 The hinge line is the main 'construction line' of PC2. By determining flap depth at the root and tip, the chord distribution is, figuratively speaking, threaded onto the hinge line, which results in a final planform. Thereby both flap depth at the root and flap depth at tip strongly influences the planform:
