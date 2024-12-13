@@ -79,7 +79,7 @@ class Wing:
         self.dataDict = dataDict
 
         self._name                  = fromDict (dataDict, "wing_name", "My new Wing")
-        self._description           = fromDict (dataDict, "description", "This is just an example planform.<br/>Use 'New' to select another template.")
+        self._description           = fromDict (dataDict, "description", "This is just an example planform.\nUse 'New' to select another template.")
         self._fuselage_width        = fromDict (dataDict, "fuselage_width", 80.0)
 
         # attach the Planform 
@@ -175,7 +175,7 @@ class Wing:
         else: 
             cn_tip = 0.25
 
-        chord_style = fromDict (dataDict, "planformType", N_Chord_Bezier.name)
+        chord_style = fromDict (dataDict, "planformType", N_Distrib_Bezier.name)
 
         chord_dict = {}
 
@@ -195,23 +195,25 @@ class Wing:
 
         if chord_style == 'Bezier TE straight':
             # legacy planform 
-            toDict (chord_dict, "chord_style",   N_Chord_Bezier.name)
+            toDict (chord_dict, "chord_style",   N_Distrib_Bezier.name)
             toDict (dict_v2, "chord_distribution",  chord_dict)
 
-            toDict (refDict, "xn_root", 1.0)
-            toDict (refDict, "xn_tip", 1.0)
+            toDict (refDict, "p0y", 1.0)
+            toDict (refDict, "p1y", 1.0)
 
         else:
             # flap hinge line -> reference line 
             f = fromDict (dataDict, "flapDepthRoot", None)
-            if f:   toDict (refDict, "xn_root", (100 - f)/100)
+            if f:   toDict (refDict, "p0y", (100 - f)/100)
             f = fromDict (dataDict, "flapDepthTip", None)
-            if f:   toDict (refDict, "xn_tip", (100 - f)/100)
+            if f:   toDict (refDict, "p1y", (100 - f)/100)
 
 
         if chord_style == 'Bezier':
-            toDict (refDict, "banana_p1y",fromDict (dataDict, "banana_p1x", None))
-            toDict (refDict, "banana_p1x",fromDict (dataDict, "banana_p1y", None))
+            refLineDict = {}
+            toDict (refLineDict, "banana_p1y",fromDict (dataDict, "banana_p1x", None))
+            toDict (refLineDict, "banana_p1x",fromDict (dataDict, "banana_p1y", None))
+            toDict (dict_v2, "reference_line", refLineDict) 
 
         if refDict:
             toDict (dict_v2, "chord_reference", refDict) 
@@ -339,7 +341,7 @@ class Wing:
 
         if self._planform_elliptical is None:      
             self._planform_elliptical = Planform (self, dataDict = self.dataDict, 
-                                                        chord_style = N_Chord_Elliptical.name,
+                                                        chord_style = N_Distrib_Elliptical.name,
                                                         chord_ref = self.planform.n_chord_ref )
         return self._planform_elliptical
     
@@ -524,47 +526,27 @@ class N_Chord_Reference:
     A chord reference function - returns cr at xn.
     e.g. cr = 0.8 means 80% of chord is towards le and 20% towards te from a horizontal reference 
  
-    The Reference function is defined by a quadratic Bezier which allows the planform
-     to be bended from root to tip
-
 
     Wing
         |-- Planform
             |-- Norm_Planform
-                |-- Norm_Chord
+                |-- Norm_Distribution
                 |-- Norm_Chord_Reference
-                |-- Norm_WingSections
-                |-- Norm_Flaps
+                |-- Norm_Reference_Line
     """
 
     def __init__(self, dataDict: dict = None):
 
-
         # chord reference  - init linear Bezier control points for straight line    
+
+        # ! self being quadratic Bezier (Banana) deactivated !
+        #   Banana is handled with Reference_Line 
        
         px = [0.0,  1.0]
-        py = [0.75, 0.75]                                       
+        py = [None, None]                                       
 
-        # alternate v 1 bezier parameters from dict  - handle banana
-
-        xn_root   = fromDict (dataDict, "xn_root", None)  
-
-        if xn_root is not None:                            # set no banana
-            banana_p1y = fromDict (dataDict, "banana_p1y", None)  
-            py[0]   = fromDict (dataDict, "xn_root", py[0])  
-            py[1]   = fromDict (dataDict, "xn_tip", py[-1])   
-            if banana_p1y: 
-                banana_p1x = fromDict (dataDict, "banana_p1x", 0.0)
-                py_1_no_banana = interpolate (px[0], px[1], py[0], py[1], banana_p1x)
-                py_1_banana    = py_1_no_banana + banana_p1y
-                px.insert[1, banana_p1x]
-                py.insert[1, py_1_banana]
-
-        # regular bezier parameters from dict  
-
-        else: 
-            px   = fromDict (dataDict, "px", px)                  
-            py   = fromDict (dataDict, "py", py)                 
+        py[0]   = fromDict (dataDict, "p0y", 0.75)                 
+        py[1]   = fromDict (dataDict, "p1y", 0.75)                 
 
         # create Bezier for chord reference function
 
@@ -576,8 +558,8 @@ class N_Chord_Reference:
         """ returns a data dict with the paramters of self"""
 
         d = {}
-        toDict (d, "px",        self._cr_bezier.points_x)
-        toDict (d, "py",        self._cr_bezier.points_y)
+        toDict (d, "p0y",        self._cr_bezier.points_y[0])
+        toDict (d, "p1y",        self._cr_bezier.points_y[1])
         return d
 
 
@@ -612,63 +594,6 @@ class N_Chord_Reference:
         """
 
         return self._cr_bezier.eval_y_on_x (xn, fast=fast) 
-
-
-    def is_straight_line (self) -> bool:
-        """ 
-        returns True if Bezier is either a Line 
-        or the 3 control points define (nearly a line)"""
-
-        px = self._cr_bezier.points_x
-        py = self._cr_bezier.points_y
-
-        if len(px) == 2:
-            return True
-        else:
-
-            # check if the middle bezier point is on line between the two others
-            py_1_interpol = interpolate (px[0], px[2], py[0], py[2], px[1])
-            delta_y = abs (py_1_interpol - py[1])
-            return round (delta_y,2) == 0.0 
-
-
-    @property
-    def is_banana (self) -> bool:
-        """ 
-        True if chord reference is not linear but a curve meaning 
-        banana function 
-        """ 
-        px = self._cr_bezier.points_x
-        if len(px) == 2:
-            return False
-        else:
-            return True 
-
-
-    def set_is_banana (self, aBool):
-        """ 
-        set the reference function to a Bezier curve and not a straight line
-          meaning banana function (Bezier is n=2) 
-        """ 
-        px = self._cr_bezier.points_x
-        py = self._cr_bezier.points_y
-
-        if len(px) == 3 and aBool == False:
-
-            # remove control point in the middle -> straight line 
-            del px [1]
-            del py [1]
-
-            self._cr_bezier.set_points (px, py)
-
-        elif len(px) == 2 and aBool == True:
-
-            # add cotrol point in the middle 
-            px_new = 0.5
-            py_new = interpolate (px[0], px[1], py[0], py[1], px_new)
-            points = self._cr_bezier.points
-            points.insert (1, (px_new, py_new))
-            self._cr_bezier.set_points (points)
 
 
     def polyline (self) -> tuple [Array, Array]:
@@ -719,15 +644,208 @@ class N_Chord_Reference:
             py.append(jpoint.y)
 
         # check if banana point was moved 
-        bez_px1 = round (self._cr_bezier.points_x[1], 3)               # avoid numerical issues 
-        bez_py1 = round (self._cr_bezier.points_y[1], 3)
+        # bez_px1 = round (self._cr_bezier.points_x[1], 3)               # avoid numerical issues 
+        # bez_py1 = round (self._cr_bezier.points_y[1], 3)
+        # set_no_banana = False
+        # if not self.is_banana :
+        #     if bez_px1 == round(px[1],3) and bez_py1 == round(py[1],3):
+        #         set_no_banana = True 
+
+        # update bezier 
+        self._cr_bezier.set_points (px, py)
+
+
+
+
+
+#-------------------------------------------------------------------------------
+# Normalized Reference line 
+#-------------------------------------------------------------------------------
+
+
+class N_Reference_Line: 
+    """ 
+
+    The reference line is in normed coordinates a horizontal line at yn=0
+    The coord distribution is applied at that line according to chord reference. 
+
+    Optionally the referecne line can be a Bezier curve (banana function) which will 
+    curve the planform like a bow 
+ 
+    Wing
+        |-- Planform
+            |-- Norm_Planform
+                |-- Norm_Distribution
+                |-- Norm_Chord_Reference
+                |-- Norm_Reference_Line
+    """
+
+    def __init__(self, dataDict: dict = None):
+
+
+        # reference line  - init linear Bezier control points for straight line    
+       
+        px = [0.0, 1.0]
+        py = [0.0, 0.0]                                       
+
+        # handle banana
+
+        banana_p1y = fromDict (dataDict, "banana_p1y", None)  
+        banana_p1x = fromDict (dataDict, "banana_p1x", 0.0)
+        if banana_p1y: 
+            px.insert(1, banana_p1x)
+            py.insert(1, banana_p1y)
+
+        # create Bezier for chord reference function
+
+        self._ref_bezier  : Bezier = Bezier (px, py)
+        self._ref_bezier_u = np.linspace(0.0, 1.0, num=20)             # default Bezier u parameter (for polyline)
+
+
+    def _as_dict (self) -> dict:
+        """ returns a data dict with the paramters of self"""
+
+        d = {}
+        if self.is_banana:
+            toDict (d, "banana_p1x",        self._ref_bezier.points_x[1])
+            toDict (d, "banana_p1y",        self._ref_bezier.points_y[1])
+        return d
+
+
+    def at (self, xn: float | np.ndarray, fast=True) -> float:
+        """ 
+        reference line yn at xn  (noramlly = 0.0 except if Banana-Bezier)
+            Higher Precision is achieved with interpolation of the curve (fast=False) 
+        """
+        if isinstance (xn, float) or isinstance (xn, int):
+            if self._ref_bezier.npoints == 2:                       # optimize straight line 
+                return 0.0 
+            else: 
+                return self._ref_bezier.eval_y_on_x (xn, fast=fast) 
+        else: 
+            yn = np.zeros (len(xn))
+            if self.is_banana:
+                for i in range (len(xn)):
+                    yn[i] = self.at (xn[i], fast=fast)
+            return yn
+
+
+
+    def is_straight_line (self) -> bool:
+        """ 
+        returns True if Bezier is either a Line 
+        or the 3 control points define (nearly a line)"""
+
+        if self._ref_bezier.npoints == 2:
+            return True
+        else:
+
+            px = self._ref_bezier.points_x
+            py = self._ref_bezier.points_y
+
+            # check if the middle bezier point is on line between the two others
+            py_1_interpol = interpolate (px[0], px[2], py[0], py[2], px[1])
+            delta_y = abs (py_1_interpol - py[1])
+            return round (delta_y,2) == 0.0 
+
+
+    @property
+    def is_banana (self) -> bool:
+        """ 
+        True if chord reference is not linear but a curve meaning 
+        banana function 
+        """ 
+
+        return self._ref_bezier.npoints > 2
+
+
+    def set_is_banana (self, aBool):
+        """ 
+        set the reference function to a Bezier curve and not a straight line
+          meaning banana function (Bezier is n=2) 
+        """ 
+        px = self._ref_bezier.points_x
+        py = self._ref_bezier.points_y
+
+        if len(px) == 3 and aBool == False:
+
+            # remove control point in the middle -> straight line 
+            del px [1]
+            del py [1]
+
+            self._ref_bezier.set_points (px, py)
+
+        elif len(px) == 2 and aBool == True:
+
+            # add cotrol point in the middle 
+            px_new = 0.5
+            py_new = interpolate (px[0], px[1], py[0], py[1], px_new)
+            points = self._ref_bezier.points
+            points.insert (1, (px_new, py_new))
+            self._ref_bezier.set_points (points)
+
+
+    def polyline (self) -> tuple [Array, Array]:
+        """
+        chord reference as polyline of cr 
+        """
+
+        if self.is_banana:
+            xn, yr = self._ref_bezier.eval(self._ref_bezier_u) 
+        else:
+            xn = [0.0, 1.0]
+            yr = [0.0, 0.0]
+
+        return np.array(xn), np.array(yr) 
+
+
+    def bezier_as_jpoints (self)  -> list[JPoint]:
+        """ 
+        chord reference Bezier control points as JPoints with limits and fixed property
+            - in normed coordinates 
+        """
+        jpoints = []
+        n = len (self._ref_bezier.points)
+
+        for i, point in enumerate(self._ref_bezier.points):
+
+            jpoint = JPoint (point)           
+
+            if i == 0:                                      
+                jpoint.set_fixed (True)
+                jpoint.set_name ('Root')
+            elif i == (n-1):                                    
+                jpoint.set_fixed (True)
+                jpoint.set_name ('Tip')
+            elif i == 1:                                     
+                jpoint.set_x_limits ((0,1))
+                jpoint.set_y_limits ((-2,2))
+                jpoint.set_name ("Banana")
+            jpoints.append(jpoint)
+
+        return jpoints
+
+
+    def bezier_from_jpoints (self, jpoints : list[JPoint]): 
+        """ 
+        set chord referenc eBezier control points from JPoints which  
+        """
+
+        px, py = [], []
+        for jpoint in jpoints:
+            px.append(jpoint.x )
+            py.append(jpoint.y)
+
+        # check if banana point was moved 
+        bez_px1 = round (self._ref_bezier.points_x[1], 3)               # avoid numerical issues 
+        bez_py1 = round (self._ref_bezier.points_y[1], 3)
         set_no_banana = False
         if not self.is_banana :
             if bez_px1 == round(px[1],3) and bez_py1 == round(py[1],3):
                 set_no_banana = True 
 
         # update bezier 
-        self._cr_bezier.set_points (px, py)
+        self._ref_bezier.set_points (px, py)
 
         # remain in no_banana if banana point wasn't moved
         if set_no_banana:
@@ -740,7 +858,7 @@ class N_Chord_Reference:
 #-------------------------------------------------------------------------------
 
 
-class N_Chord_Abstract: 
+class N_Distrib_Abstract: 
     """ 
     Abstract super class - defines the normalized chord distribition  
 
@@ -825,7 +943,7 @@ class N_Chord_Abstract:
 
 
 
-class N_Chord_Bezier (N_Chord_Abstract): 
+class N_Distrib_Bezier (N_Distrib_Abstract): 
     """ 
     Bezier based normalized chord distribition  
     """
@@ -963,7 +1081,7 @@ class N_Chord_Bezier (N_Chord_Abstract):
 
 
 
-class N_Chord_Trapezoid (N_Chord_Abstract):
+class N_Distrib_Trapezoid (N_Distrib_Abstract):
     """ 
     Trapezoidal chord based on wing section 
     """
@@ -1048,7 +1166,7 @@ class N_Chord_Trapezoid (N_Chord_Abstract):
 
 
 
-class N_Chord_Paneled (N_Chord_Abstract):
+class N_Distrib_Paneled (N_Distrib_Abstract):
     """ 
     Trapezoidal chord distribution based on wing sections.
 
@@ -1159,7 +1277,7 @@ class N_Chord_Paneled (N_Chord_Abstract):
 
 
 
-class N_Chord_Elliptical (N_Chord_Abstract):
+class N_Distrib_Elliptical (N_Distrib_Abstract):
     """ 
     Chord based on a pure elliptical function, which can be used as a reference  
         As x,y are normed to 1 the function represents a circle 
@@ -1254,7 +1372,7 @@ class WingSection :
 
         # sanity root and tip  
 
-        if self._planform.n_chord.chord_defined_by_sections:
+        if self._planform.n_distrib.chord_defined_by_sections:
 
             # ... trapezoid planform: section may have both which will define planform  
 
@@ -1490,7 +1608,7 @@ class WingSection :
 
         if not (self.is_root):
             # sanity - is it allowed in that planform
-            if self._planform.n_chord.chord_defined_by_sections:
+            if self._planform.n_distrib.chord_defined_by_sections:
                 self._defines_cn = aBool
                 if aBool: 
                     self.set_cn (self.cn)
@@ -1512,7 +1630,7 @@ class WingSection :
         if self.is_root:
             return False                                                # chord at root always 1.0 
         elif self.is_tip:
-            return self._planform.n_chord.chord_defined_by_sections     # for trapezoid yes 
+            return self._planform.n_distrib.chord_defined_by_sections     # for trapezoid yes 
         else: 
             return True
 
@@ -2168,7 +2286,7 @@ class Flaps:
         """
         if self.hinge_equal_ref_line:
 
-            x, y =  self._planform.chord_ref_polyline()                 # just take reference polyline 
+            x, y =  self._planform.ref_polyline()                 # just take reference polyline 
 
         else: 
 
@@ -2568,7 +2686,8 @@ class Planform:
                  wing : Wing, 
                  dataDict: dict = None,
                  chord_style : str = None, 
-                 chord_ref : N_Chord_Reference = None):
+                 chord_ref : N_Chord_Reference = None,
+                 ref_line : N_Reference_Line = None):
                 
 
         self._wing = wing
@@ -2585,19 +2704,19 @@ class Planform:
         chord_dict = fromDict(dataDict, "chord_distribution", {})
         
         if chord_style is None: 
-            chord_style = fromDict (chord_dict, "chord_style", N_Chord_Bezier.name)
+            chord_style = fromDict (chord_dict, "chord_style", N_Distrib_Bezier.name)
 
-        if chord_style == N_Chord_Bezier.name:
-            self._n_chord = N_Chord_Bezier (chord_dict)
+        if chord_style == N_Distrib_Bezier.name:
+            self._n_distrib = N_Distrib_Bezier (chord_dict)
 
-        elif chord_style == N_Chord_Trapezoid.name:
-            self._n_chord = N_Chord_Trapezoid (self)
+        elif chord_style == N_Distrib_Trapezoid.name:
+            self._n_distrib = N_Distrib_Trapezoid (self)
 
-        elif chord_style == N_Chord_Elliptical.name:
-            self._n_chord = N_Chord_Elliptical ()
+        elif chord_style == N_Distrib_Elliptical.name:
+            self._n_distrib = N_Distrib_Elliptical ()
 
-        elif chord_style == N_Chord_Paneled.name:
-            self._n_chord = N_Chord_Paneled (self)
+        elif chord_style == N_Distrib_Paneled.name:
+            self._n_distrib = N_Distrib_Paneled (self)
         else:
             raise ValueError (f"Chord style {chord_style} not supported")
 
@@ -2609,6 +2728,13 @@ class Planform:
         else: 
             self._n_chord_ref = chord_ref 
             self._is_slave    = True 
+
+        # init reference line either new from dataDict or as argument of self
+
+        if ref_line is None:
+            self._n_ref_line = N_Reference_Line (dataDict=fromDict(dataDict, "reference_line", {}))
+        else: 
+            self._n_ref_line = ref_line 
 
         # init wing sections 
         
@@ -2627,8 +2753,9 @@ class Planform:
         toDict (dataDict, "chord_root",         self.chord_root) 
         toDict (dataDict, "sweep_angle",        self.sweep_angle) 
 
-        toDict (dataDict, "chord_distribution", self.n_chord._as_dict()) 
+        toDict (dataDict, "chord_distribution", self.n_distrib._as_dict()) 
         toDict (dataDict, "chord_reference",    self.n_chord_ref._as_dict()) 
+        toDict (dataDict, "reference_line",     self.n_ref_line._as_dict()) 
         toDict (dataDict, "wingSections",       self.wingSections._as_list_of_dict()) 
         toDict (dataDict, "flaps",              self.flaps._as_dict()) 
 
@@ -2641,7 +2768,7 @@ class Planform:
     @property
     def name (self) -> str:
         """ name - default name of norm chord"""
-        return self._n_chord.name
+        return self._n_distrib.name
     
     @property
     def workingDir (self) -> Wing:
@@ -2714,14 +2841,19 @@ class Planform:
 
 
     @property
-    def n_chord (self) -> N_Chord_Abstract:
+    def n_distrib (self) -> N_Distrib_Abstract:
         """ normalized chord distribution object """
-        return self._n_chord
+        return self._n_distrib
 
     @property
     def n_chord_ref (self) -> N_Chord_Reference:
         """ normalized chord reference object """
         return self._n_chord_ref
+
+    @property
+    def n_ref_line (self) -> N_Reference_Line:
+        """ normalized refrence line object """
+        return self._n_ref_line
 
     @property
     def wingSections (self) -> WingSections:
@@ -2754,7 +2886,7 @@ class Planform:
             xn = x / self.span
         else: 
             xn = x
-        return self.n_chord.at (xn, fast=fast)
+        return self.n_distrib.at (xn, fast=fast)
 
 
     def cn_polyline (self, normed=False) -> Polyline:
@@ -2767,7 +2899,7 @@ class Planform:
             x:      either x or xn  coordinates
             cn:     normalized chord values 
         """
-        xn, cn = self.n_chord.polyline()
+        xn, cn = self.n_distrib.polyline()
 
         if not normed:
             x = xn * self.span
@@ -2786,7 +2918,7 @@ class Planform:
         Returns:
             xn:     normalized x position
         """
-        return self.n_chord.xn_at (cn, fast=fast)
+        return self.n_distrib.xn_at (cn, fast=fast)
 
 
     def x_at_cn (self, cn: float, fast=True) -> float:
@@ -2799,7 +2931,7 @@ class Planform:
         Returns:
             x:      x position 
         """
-        return self.n_chord.xn_at (cn, fast=fast) * self.span
+        return self.n_distrib.xn_at (cn, fast=fast) * self.span
 
 
     def le_te_at (self, x: float) -> tuple [float, float]:
@@ -2830,7 +2962,7 @@ class Planform:
             c:      chord
         """
         xn = x / self.span
-        cn = self.n_chord.at (xn, fast=fast)
+        cn = self.n_distrib.at (xn, fast=fast)
         c  = cn * self.chord_root
         return c
 
@@ -2846,7 +2978,7 @@ class Planform:
             te_y:   y coordinates of leading edge
         """
 
-        xn, cn = self.n_chord.polyline()
+        xn, cn = self.n_distrib.polyline()
 
         xn, le_yn = self.t_chord_to_norm (xn, np.full (len(xn), 1.0), cn=cn)
         xn, te_yn = self.t_chord_to_norm (xn, np.zeros(len(xn))     , cn=cn)
@@ -2916,8 +3048,12 @@ class Planform:
             x: x coordinates
             y: y coordinates 
         """
-        le_yn = 0.0
-        te_yn = 1.0
+
+        # in normed - ref line is at yn=0 - so correct with chord reference at x=0
+        cr_0 = self.n_chord_ref.at (0)
+        le_yn = 0.0 - cr_0
+        te_yn = 1.0 - cr_0
+
         xn = np.array([0.0,   1.0,   1.0,   0.0,   0.0])
         yn = np.array([le_yn, le_yn, te_yn, te_yn, le_yn])
 
@@ -2926,9 +3062,10 @@ class Planform:
         return x, y
 
 
-    def chord_ref_polyline (self, normed=False) -> Polyline:
+    def ref_polyline (self, normed=False) -> Polyline:
         """
-        chord reference within a planform  which is just a straight line
+        reference within a planform  which is normally a straight line
+        except Banana (Bezier quadratic) is applied
 
         Args:
             normed: True - x value is normed xn value
@@ -2937,14 +3074,12 @@ class Planform:
             y: y coordinates         
         """
 
-        cr_0 = self.n_chord_ref.at (0.0)
-        # within normed planform it is a horizonzal line at cr_0 
-        xn, yn = [0.0, 1.0], [cr_0, cr_0]
+        xn, yn = self.n_ref_line.polyline ()
 
         if normed: 
             return xn,yn
         else:
-            return self.t_norm_to_plan  ([0.0, 1.0], [cr_0, cr_0])
+            return self.t_norm_to_plan (xn, yn)
 
 
     def t_chord_to_norm (self, xcn : float|Array|list, 
@@ -2953,7 +3088,7 @@ class Planform:
         """
         Transforms chord coordinates into normalized planform coordinates
             - by shiftung yn value dependand chord reference at xn  
-            - by shifting yn with a constant value 
+        In normalized planform coordinates the reference line will be at yn=0, le_y poitive, te_y negative
 
         Args:
             xcn: xn normalized, either float, list or Array to transform 
@@ -2972,16 +3107,16 @@ class Planform:
             cr  = self.n_chord_ref.at (xcn)                          # chord reference function
 
             if cn is None:
-                cn  = self.n_chord.at(xcn)                           # chord
+                cn  = self.n_distrib.at(xcn)                           # chord
 
             # apply chord reference function
             le_yn =   cn * cr                                
             te_yn = - cn * (1-cr)   
             yn = interpolate (0.0, 1.0, te_yn, le_yn, ycn)
 
-            # move and flip 
-            cr_0 = self.n_chord_ref.at (0)
-            yn = - (yn - cr_0)
+            # flip yn 
+            yn = - yn 
+
             yn = round (yn,10)
             xn = round (xcn, 10)
 
@@ -3009,15 +3144,21 @@ class Planform:
         """
 
         # sanity - convert list to np.array
-        if isinstance (xn, float):
-            x, y = xn, yn
+        if isinstance (xn, float) or isinstance (xn, int):
+            _xn, _yn = float(xn), float(yn)
         else: 
-            x, y = np.array (xn), np.array (yn)
+            _xn, _yn = np.array (xn), np.array (yn)
+
+        # move reference line which is in norm at yn=0, so le_y at x=0 will be 0.0 
+        cr_0 = self.n_chord_ref.at (0)
+        _yn = _yn + cr_0
+
+        # apply banana of reference line 
+        _yn = _yn + self.n_ref_line.at (_xn, fast=False)
 
         # scale 
-        x = x * self.span
-        y = y * self.chord_root
-
+        x = _xn * self.span
+        y = _yn * self.chord_root
 
         # do shear 
         shear_factor =  1 / np.tan((90-self.sweep_angle) * np.pi / 180)    # = cotangens
@@ -3041,18 +3182,13 @@ class Planform:
 
         # sanity - convert list to np.array
         if isinstance (yn, float):
-            x, y = x, yn
+            _xn, _yn = x / self.span, yn
         else: 
-            x, y = np.array (x), np.array (yn)
+            _xn, _yn = np.array (x) / self.span, np.array (yn)
 
-        # scale 
-        y = y * self.chord_root
+        _, y = self.t_norm_to_plan (_xn, _yn)
 
-        # shear 
-        shear_factor =  1 / np.tan((90-self.sweep_angle) * np.pi / 180)    # = cotangens
-        y = y + x * shear_factor  
-
-        return np.round(y,10) 
+        return y
 
 
 
@@ -3069,17 +3205,24 @@ class Planform:
 
         # sanity - convert list to np.array
         if isinstance (x, float):
-            xn, yn = x, y
+            _x, _y = x, y
         else: 
-            xn, yn = np.array (x), np.array (y)
+            _x, _y = np.array (x), np.array (y)
 
         # undo shear 
         shear_factor =  1 / np.tan((90-self.sweep_angle) * np.pi / 180)    # = cotangens
-        yn = yn - xn * shear_factor
+        _y = _y - _x * shear_factor
 
-        # un-scale 
-        xn = np.round(xn / self.span, 10)
-        yn = np.round(yn / self.chord_root, 10)
+        # undo scale 
+        xn = np.round(_x / self.span, 10)
+        yn = np.round(_y / self.chord_root, 10)
+
+        # undo banana of reference line 
+        yn = yn - self.n_ref_line.at (xn, fast=False)
+
+        # undo move reference line
+        cr_0 = self.n_chord_ref.at (0)
+        yn = yn - cr_0
 
         return xn, yn 
 
@@ -3098,12 +3241,13 @@ class Planform:
 
         # sanity - convert list to np.array
         if isinstance (xn, float):
-            x, y = xn, yn
+            _xn, _yn = xn, yn
         else: 
-            x, y = np.array (xn), np.array (yn)
+            _xn, _yn = np.array (xn), np.array (yn)
 
         # scale 
-        x = np.round (x * self.span, 10)
+        y = _yn
+        x = np.round (_xn * self.span, 10)
 
         return x, y 
 
@@ -3156,11 +3300,12 @@ class Planform_Paneled (Planform):
 
         # create Norm_Chord distribution based on parent planform 
 
-        self._n_chord = N_Chord_Paneled (self._parent_planform, dataDict)
+        self._n_distrib     = N_Distrib_Paneled (self._parent_planform, dataDict)
 
         # main objects from parent
 
         self._n_chord_ref   = self._parent_planform.n_chord_ref 
+        self._n_ref_line    = self._parent_planform.n_ref_line 
         self._wingSections  = self._parent_planform.wingSections
         self._flaps         = self._parent_planform.flaps
 
@@ -3270,15 +3415,15 @@ class Planform_Paneled (Planform):
     @property
     def cn_tip_min (self) -> float:             
         """ minimum chord at tip when generating panels"""
-        return self._n_chord.cn_tip_min
+        return self._n_distrib.cn_tip_min
     
     def set_cn_tip_min (self, aVal):
-        self._n_chord.set_cn_tip_min (aVal)
+        self._n_distrib.set_cn_tip_min (aVal)
 
     @property
     def is_cn_tip_min_applied (self) -> bool:
         """ True if sections were reduced due to min tip chord"""
-        return self._n_chord.is_cn_tip_min_applied
+        return self._n_distrib.is_cn_tip_min_applied
 
     @property
     def wy_distribution_fns_names (self):
@@ -3330,7 +3475,7 @@ class Planform_Paneled (Planform):
 
         # walk along span by section and add x stations 
 
-        xn_sec = self.n_chord.polyline()[0]                     # take poyline as it can be already reduced
+        xn_sec = self.n_distrib.polyline()[0]                     # take poyline as it can be already reduced
 
         xn_rel_stations = self._xn_rel_stations()
         xn_stations = np.array ([0.0])
@@ -3500,8 +3645,8 @@ class Planform_Paneled (Planform):
 
                 # test chord difference in the middle of the section 
                 xni = (sections[i_sec].xn + sections[i_sec+1].xn) / 2
-                cn_panel  = self._n_chord.at (xni)
-                cn_parent = self._parent_planform.n_chord.at (xni)
+                cn_panel  = self._n_distrib.at (xni)
+                cn_parent = self._parent_planform.n_distrib.at (xni)
                 if (cn_parent - cn_panel) > self.cn_diff_max:
 
                     # too much difference - insert section at mean cn value 

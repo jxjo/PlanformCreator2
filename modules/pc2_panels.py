@@ -17,7 +17,7 @@ from base.panels            import Edit_Panel, Container_Panel
 from airfoil_widgets        import Airfoil_Open_Widget
 
 from wing                   import Wing, Planform, WingSections, WingSection, Flaps
-from wing                   import N_Chord_Abstract, N_Chord_Reference
+from wing                   import N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line
 
 from pc2_dialogs            import Dialog_TextEdit
 
@@ -54,11 +54,14 @@ class Panel_Planform_Abstract (Edit_Panel):
     def planform (self) -> Planform:
         return self.wing().planform
     
-    def n_chord (self) -> N_Chord_Abstract:
-        return self.wing().planform.n_chord
+    def n_chord (self) -> N_Distrib_Abstract:
+        return self.wing().planform.n_distrib
 
     def n_chord_ref (self) -> N_Chord_Reference:
         return self.wing().planform.n_chord_ref
+    
+    def n_ref_line (self) -> N_Reference_Line:
+        return self.wing().planform.n_ref_line
     
     def flaps (self) -> Flaps:
         return self.wing().planform.flaps
@@ -239,8 +242,8 @@ class Panel_Chord_Reference (Panel_Planform_Abstract):
         FieldF (l,r,c+3, lab="at Tip", width=70, unit="%", step=1, lim=(0,100), dec=1,
                 obj=self.n_chord_ref, prop=N_Chord_Reference.cr_tip)
         r += 1
-        CheckBox (l,r,c, text="Reference is a curve (banana)", colSpan=5,
-                  obj=self.n_chord_ref, prop=N_Chord_Reference.is_banana)
+        CheckBox (l,r,c, text="Reference line is a curve (banana)", colSpan=5,
+                  obj=self.n_ref_line, prop=N_Reference_Line.is_banana)
         r += 1
         CheckBox (l,r,c, text="Flaps hinge line equals Reference line", colSpan=5,  
                   obj=self.flaps, prop=Flaps.hinge_equal_ref_line)     

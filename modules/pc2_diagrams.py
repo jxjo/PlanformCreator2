@@ -1045,7 +1045,7 @@ class Diagram_Making_Of (Diagram_Abstract):
     Diagram view to with several diagram items to show, how a planform is build 
     """
 
-    name   = "Making of"                                        # will be shown in Tabs 
+    name   = "Welcome"                                        # will be shown in Tabs 
 
     def __init__(self, *args, **kwargs):
 
@@ -1199,7 +1199,7 @@ class Diagram_Wing (Diagram_Abstract):
 
         # set spacing between the two items
 
-        self.graph_layout.setContentsMargins (20,50,20,10)  # default margins
+        self.graph_layout.setContentsMargins (20,30,20,10)  # default margins
         self.graph_layout.setVerticalSpacing (50)
 
 

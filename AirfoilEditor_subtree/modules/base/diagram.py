@@ -69,7 +69,8 @@ class Diagram (QWidget):
         #  add a message view box at bottom   
 
         self._message_vb = pg.ViewBox()
-        self.graph_layout.addItem (self._message_vb, 5, 0)
+        nrows = self.graph_layout.rowCount()
+        self.graph_layout.addItem (self._message_vb, nrows, 0)
         self._message_vb.hide()
     
 

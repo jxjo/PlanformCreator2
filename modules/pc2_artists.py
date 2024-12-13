@@ -13,7 +13,7 @@ from base.artist                import *
 from base.common_utils          import *
 
 from wing                       import Wing
-from wing                       import Planform, N_Chord_Bezier
+from wing                       import Planform, N_Distrib_Bezier
 from wing                       import WingSection, WingSections 
 from wing                       import Flaps, Flap, Image_Definition
 from model.airfoil              import Airfoil, GEO_BASIC
@@ -145,10 +145,126 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
 
     def _plot (self): 
 
-        x, y = self.planform.chord_ref_polyline()
+        x, y = self.planform.ref_polyline()
 
         pen   = pg.mkPen(COLOR_REF_LINE, width=1.5)
         self._plot_dataItem  (x, y, name="Reference Line", pen = pen, antialias = True, zValue=4)
+
+        # mouse helper to change ref line Bezier 
+
+        if self.show_mouse_helper:
+ 
+            # movable Bezier curve   
+            pt = self.Movable_Ref_Line_Bezier (self._pi, self.planform, 
+                                        t_fn = self.t_fn, tr_fn = self.tr_fn, 
+                                        movable=True, color=COLOR_REF_LINE,
+                                        on_changed=self.sig_planform_changed.emit)
+            self._add (pt) 
+
+            if self.planform.n_ref_line.is_straight_line():
+                msg = "Reference line: ctrl-click to add point for 'banana'"
+            else: 
+                msg = "Reference line: Move Bezier control point to modify, shift-click to remove 'banana' point"
+            self.set_help_message (msg)
+
+
+
+    class Movable_Ref_Line_Bezier (Movable_Bezier):
+        """
+        pg.PlotCurveItem representing a Bezier based chord reference. 
+
+        The Bezier curve can be changed by the control points.
+            - either 2 or 3 points 
+            - add/delete 3rd point 
+        """
+
+        class Movable_Ref_Line_Point (Movable_Point):
+            """ 
+            Represents one control point of Movable_Ref_Chord_Bezier
+                - subclassed to get individual label 
+            """
+
+            def __init__ (self, *args, **kwargs):
+                super().__init__ (*args, **kwargs)
+
+                self._show_label_static = not self._jpoint.fixed               # label only if movable (banana)
+
+
+            @override
+            def label_static (self, *_) -> str:
+                """ the static label - can be overloaded """
+                if not self._jpoint.fixed:
+                    return f"{self.name}" 
+                else:
+                    return None
+
+            @override
+            def label_moving (self,x,y):
+                """ nice label for hover and moving """
+
+                if self._jpoint.fixed:
+                    return ""
+                else: 
+                    return f"{self.name} {y:.1f}mm at {x:.1f}mm"
+
+
+
+        def __init__ (self, pi : pg.PlotItem, 
+                      planform : Planform,
+                      t_fn = None, tr_fn = None,                                # transformation
+                      **kwargs):
+
+            self._pi = pi
+            self._planform = planform
+
+            self._t_fn, self._tr_fn  = t_fn, tr_fn
+
+            # scale x-coordinate of Bezier jpoints depending on mode 
+            jpoints = self._planform.n_ref_line.bezier_as_jpoints ()
+            jpoints = JPoint.transform (jpoints, transform_fn = self._planform.t_norm_to_plan)
+
+            super().__init__(jpoints, movable_point_class=self.Movable_Ref_Line_Point, **kwargs)
+
+
+        @override
+        @property
+        def u (self) -> list:
+            """ the Bezier u parameter """
+            return np.linspace(0.0, 1.0, num=25)            # just a few points for speed 
+
+
+        @override
+        def _add_point (self, xy : tuple):
+            """ handle add point - will be called when ctrl_click on Bezier """
+
+            # only a third point may be added 
+            if len(self._jpoints) != 2: return   
+
+            # sanity - not too close to end points
+            if xy[0] > (self._jpoints[1].x * 0.1) and xy[0] < (self._jpoints[1].x * 0.9):
+
+                self._jpoints.insert (1, JPoint (xy))
+
+                logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
+
+                self._finished_point (None)
+
+                return True
+            else:
+                return False 
+            
+
+        @override
+        def _finished_point (self, aPoint):
+            """ slot - point move is finished - write back control points"""
+
+            jpoints = JPoint.transform (self._jpoints, transform_fn = self._planform.t_plan_to_norm)
+            self._planform.n_ref_line.bezier_from_jpoints (jpoints)
+
+            super()._finished_point (aPoint)
+
+
+
 
 
 
@@ -339,7 +455,7 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
     def _plot (self): 
 
         if self._mode == mode.NORM_NORM:
-            x, yn = self.planform.n_chord.polyline()
+            x, yn = self.planform.n_distrib.polyline()
             t_fn, tr_fn = self.t_fn, self.tr_fn
         else: 
             x, yn = self.planform.cn_polyline ()
@@ -354,7 +470,7 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
 
         # Chord Bezier curve based - move control points  
 
-        if self.show_mouse_helper and self.planform.n_chord.isBezier:
+        if self.show_mouse_helper and self.planform.n_distrib.isBezier:
  
             pt = self.Movable_Chord_Bezier (self._pi, self.planform,
                                             t_fn = t_fn, tr_fn = tr_fn, 
@@ -366,7 +482,7 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
 
         # Chord trapezoidal - defined by wing sections
 
-        elif self.planform.n_chord.isTrapezoidal:
+        elif self.planform.n_distrib.isTrapezoidal:
 
             pass
 
@@ -384,7 +500,7 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
 
             self._pi = pi
             self._planform = planform
-            self._norm_chord : N_Chord_Bezier = self._planform.n_chord
+            self._norm_chord : N_Distrib_Bezier = self._planform.n_distrib
             self._t_fn, self._tr_fn  = t_fn, tr_fn
 
             jpoints = self._norm_chord.bezier_as_jpoints ()
@@ -426,15 +542,13 @@ class Planform_Artist (Abstract_Artist_Planform):
         super().__init__ (*args, mode = mode, **kwargs)
 
 
-
     @property 
     def as_contour (self):
         """ show planform as one contour - and not le and te seperatly"""
         return self._as_contour
-    
+
 
     def _plot (self): 
-    
 
         # plot planform in a single contour 
 
@@ -450,13 +564,6 @@ class Planform_Artist (Abstract_Artist_Planform):
         else: 
             x, le_y, te_y = self.planform.le_te_polyline () 
 
-            # fill plot depending on mode  
-
-            # if self._mode == mode.PLANFORM_NORM:
-            #     brush_le, brush_te = pg.mkBrush (COLOR_LE.darker(800)), pg.mkBrush (COLOR_TE.darker(500))
-            #     ref_x, ref_y = self.planform.norm.chord_ref_polyline ()                         # get ref_line for fill level of brush 
-            #     fillLevel = ref_y[0]
-            # else: 
             brush_le, brush_te = None, None
             fillLevel = 0 
 
@@ -575,11 +682,7 @@ class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
                                         on_changed=self.sig_planform_changed.emit)
             self._add (pt) 
 
-            if self.planform.n_chord_ref.is_straight_line():
-                msg = "Chord reference: Move control points to modify, ctrl-click to add point for 'banana'"
-            else: 
-                msg = "Chord reference: Move Bezier control points to modify, shift-click to remove 'banana' point"
-            self.set_help_message (msg)
+            self.set_help_message ("Chord reference: Move control points to modify")
 
 
 
@@ -636,24 +739,8 @@ class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
         @override
         def _add_point (self, xy : tuple):
             """ handle add point - will be called when ctrl_click on Bezier """
-
-            # only a third point may be added 
-            if len(self._jpoints) != 2: return   
-
-            # sanity - not too close to end points
-            if xy[0] > (self._jpoints[1].x * 0.1) and xy[0] < (self._jpoints[1].x * 0.9):
-
-                self._jpoints.insert (1, JPoint (xy))
-
-                logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
-
-                self._finished_point (None)
-
-                return True
-            else:
-                return False 
+            return False 
             
-
 
         @override
         def _finished_point (self, aPoint):
@@ -719,7 +806,7 @@ class Ref_Planforms_Artist (Abstract_Artist_Planform):
             else:
                 x, y = planform.polygon () 
 
-            if planform.n_chord.isElliptical:
+            if planform.n_distrib.isElliptical:
                 color = COLOR_REF_ELLI
                 name  = f"Reference {planform.name}" 
             else:  

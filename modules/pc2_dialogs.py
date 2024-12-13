@@ -555,9 +555,8 @@ class Dialog_Select_Template (Dialog):
         def setup_artists (self):
             """ create and setup the artists of self"""
             
-            self._add_artist (Planform_Artist       (self, self.planform, as_contour=True))
-            self._add_artist (Ref_Line_Artist       (self, self.planform))
-            # self._add_artist (Flaps_Artist          (self, self.planform, show_mouse_helper=False))
+            self._add_artist (Planform_Artist       (self, self.planform, as_contour=True, show_mouse_helper=False))
+            self._add_artist (Ref_Line_Artist       (self, self.planform, show_mouse_helper=False))
     
 
         @override

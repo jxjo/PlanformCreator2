@@ -1,28 +1,27 @@
-# Planform Creator 2 
 
+![PC2](images/PC2_logo.png "Logo")
 
-> [!NOTE]
- The [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) moved to a repo of its own. You can downlaod the app from there.
 
 ##
 
-Planform Creator 2 - short PC2 - is an app to design a wing focusing on model sailplanes 
-
-![PC2](images/PlanformCreator2_App.png "First screenshot")
+The Planform Creator 2 - short PC2 - is an app to design the planform of a wing focusing on model sailplanes 
 
 Main features: 
 
-* Define a planform based on chord distribution functions
-* Major further parameters are the hinge line and flap depth at root and tip
+* Define a planform based on a chord distribution along the wing span
+* A chord reference defines how the chord is assigned towards leading and trailing edge  
 * Add wing sections with fixed position or relative chord length
+* View airfoil at wing sections and edit its properties using the [Airfoil Editor](https://github.com/jxjo/AirfoilEditor)
 * Generate blended airfoils for intermediate wing sections ('strak')
-* Import dxf outline of a wing as template for a wing 
+* Define flaps hinge line and flaps 
+* Import image of an existing wing as abackground image for design
+* Auto panelling of the planform as preparation for aerodynamic calculation 
 * Export wing definition and airfoils to
-  * Xflr5 or FLZ_vortex
+  * Xflr5 
+  * FLZ_vortex
   * dxf file  - for use in CAD
-* View airfoil and edit its properties 
 
-The project was inspired and is partially based on the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine) - Thanks Matthias!  
+The project was inspired by the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine) - Thanks Matthias!  
 
 ## Basic concepts
 
