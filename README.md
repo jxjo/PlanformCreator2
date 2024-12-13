@@ -21,7 +21,7 @@ Main features:
   * FLZ_vortex
   * dxf file  - for use in CAD
 
-The project was inspired by the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine) - Thanks Matthias!  
+The project was inspired by the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine) - Thanks Matthias!   
 
 ## Basic concepts
 
