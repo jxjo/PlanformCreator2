@@ -1406,7 +1406,7 @@ class WingSection :
 
         # create airfoil and load coordinates if exist 
 
-        self._airfoil = self._get_airfoil (dataDict = fromDict (dataDict, "airfoil", None))
+        self._airfoil = self._get_airfoil (pathFileName = fromDict (dataDict, "airfoil", None), workingDir=self.workingDir)
 
 
     def __repr__(self) -> str:
@@ -1429,6 +1429,8 @@ class WingSection :
         toDict (d, "defines_cn",    self._defines_cn if self._defines_cn else None)
         toDict (d, "hinge_cn",      self._hinge_cn)
         toDict (d, "flap_group",    self.flap_group)
+        if not self.airfoil.isBlendAirfoil:
+            toDict (d, "airfoil",    self.airfoil.pathFileName)
         return d
 
 

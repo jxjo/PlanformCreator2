@@ -342,9 +342,10 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         c = 7
         r = 1
-        Field  (l,r,c,   lab="Airfoil",  colSpan=1, # width=(140,None),
-                get=lambda: self._wingSection().airfoil.name)
-        Airfoil_Open_Widget (l,r,c+2, asIcon=True, set=self._wingSection().set_airfoil, signal=True)
+        Field  (l,r,c,   lab="Airfoil",  colSpan=1, get=lambda: self._wingSection().airfoil.name)
+
+        Airfoil_Open_Widget (l,r,c+2, asIcon=True, obj=self._wingSection, prop=WingSection.airfoil, signal=True)
+
         ToolButton (l,r,c+3, icon=Icon.DELETE, set=self._remove_airfoil,
                     toolTip="Remove airfoil - airfoil will be blended", 
                     disable=lambda: self._wingSection().airfoil.isBlendAirfoil)
@@ -431,7 +432,8 @@ class Panel_WingSection (Panel_Planform_Abstract):
     def _edit_airfoil (self):
         """ edit airfoil with AirfoilEditor"""
 
-        ae = App_Main (self._wingSection().airfoil.pathFileName, parent=self.myApp)
+        airfoil = self._wingSection().airfoil
+        ae = App_Main (os.path.join(airfoil.workingDir, airfoil.pathFileName), parent=self.myApp)
         ae.sig_closing.connect (self._on_edit_finished) 
 
         ae.show()

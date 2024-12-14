@@ -1728,7 +1728,7 @@ class Airfoil_Name_Artist (Abstract_Artist_Planform):
 
                 point_y -= dy                                                     # plot above le
 
-                color = colors[isec].darker(120)
+                color = colors[isec].darker(110)
 
                 self._plot_point (point_x, point_y, color=color, size=0, text=name, textColor=color, anchor=anchor)
 
@@ -1868,6 +1868,7 @@ class Image_Artist (Abstract_Artist_Planform):
 
         self._qimage = QImage()
         self._qimage.load (self.img_def.pathFilename)
+        self._qimage.convertTo (QImage.Format.Format_ARGB32)                    # ensure not an indexed 8bit 
 
         self._create_imageItem ()
 

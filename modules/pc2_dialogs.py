@@ -287,8 +287,8 @@ class Dialog_Edit_Image (Dialog):
     Dialog to define image settings for background image
     """
 
-    _width  = 1200
-    _height = 700
+    _width  = 1150
+    _height = 670
 
     name = "Adjust Background Image"
 

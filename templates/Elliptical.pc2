@@ -14,12 +14,12 @@
     "black_level":73,
     "white_level":201,
     "point_le":[
-      466.65,
-      166.59
+      103.38,
+      38.07
     ],
     "point_te":[
-      863.12,
-      238.04
+      500.2,
+      109.32
     ]
   },
   "halfspan":925.0,
@@ -27,14 +27,14 @@
   "sweep_angle":0.0,
   "chord_distribution":{
     "chord_style":"Bezier",
-    "p1x":0.75905,
-    "p1y":0.974427,
-    "p2y":0.278739,
+    "p1x":0.619922,
+    "p1y":0.991035,
+    "p2y":0.441747,
     "p3y":0.028423
   },
   "chord_reference":{
-    "p0y":0.75,
-    "p1y":0.75
+    "p0y":0.364545,
+    "p1y":0.398367
   },
   "reference_line":{},
   "wingSections":[

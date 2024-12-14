@@ -463,7 +463,8 @@ class App_Main (QMainWindow):
         if self._pc2_file:
             ok = self.wing().save(self._pc2_file)
             if ok:
-                MessageBox.success (self,"Save Planform", f"{self._pc2_file} successfully saved", min_height= 60)
+                _, filename = os.path.split(self._pc2_file)
+                MessageBox.success (self,"Save Planform", f"{filename} successfully saved", min_height= 60)
             else:
                 MessageBox.error   (self,"Save Planform", f"{self._pc2_file} couldn't be saved", min_height= 60)
         else:

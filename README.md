@@ -77,6 +77,15 @@ Another use case for applying the 'banana function' is to finetune the flap dept
 
 <img src="./images/planform_banana.png" width="800" />
 
+#### Background image
+
+If you want to recreate an wing based on an existing image, you made load this image as a background image into the app. Having a planform as contour line in the background, it is (most of the times) straight forward to define the chord distribution and the chord reference for a best fit.
+
+There is a little image editor to scale the image and adapt the colors to a 'dark mode' of the image which is best suited as a background. 
+
+Scaling of the image is done by moving the two scale markers to the leading edge of the root and to the very tip point.  
+
+<img src="images/background_image.png" width="800" />
 
 
 
@@ -111,30 +120,30 @@ In many cases the hinge line equals the 'reference line' of the planform. This i
 More flexibility is achieved through a separate definition of the hinge line with a hinge point at the root section and the tip section. 
 In certain cases, for example with a curved reference line, kinks in the hinge line can be defined at a wing section.
 
-<img src="images/flap_hinge_line.png" width="550" />
-
+<img src="images/flap_hinge_line.png" width="500" />
 
 
 ### Airfoils
 
-A wing section can either be assigned a fixed airfoil or the airfoil can be left open. In this case, a 'strak' (or 'blended') airfoil is created for this wing Section by blending the left and right neighboring airfoils. The "blending ratio" is derived from the ratio of the respective chord length of the wing sections.
+A wing section can either be assigned a fixed airfoil or the airfoil can be left open. In this case, a 'strak' (or 'blended') airfoil is created for this wing section by blending the left and right neighboring airfoils. The 'blending ratio' is derived from the ratio of the respective chord length of the wing sections.
 
-![PC2](images/Wing_sections_and_Airfoils.png "Wing sections and airfoils")
+For the root and the tip section an airfoil is mandatory. Initially example airfoils are assigned to these two sections.
 
-<sup>Wing sections with the corresponding airfoils. The airfoil at 'section 3' is created by blending JX-GP-100 and JX-GP-055. The airfoils have a "nick name" - here "GP" - to ease readability.  </sup>
-</p>
+<img src="images/airfoil_names.png" width="700" />
+
+<sup>Wing sections with the corresponding airfoils. The airfoil at 'section 2' is created by blending JX-GP-100 and JX-GP-055.</sup>
+
 
 The airfoils can either be viewed in normal, normed scale or in their 'real' scale within their wing sections:
 
-![PC2](images/Airfoils_in_wing_sections.png "Airfoils in wing sections")
+<img src="images/airfoil_real_size.png" width="700" />
 
-Optionally, a short 'nick name' can be assigned to the airfoils of a wing. The nick name gets a number in addition, which results from a re-number specification at the root (basis is the percentage chord length of a wing section to the root chord length).  
 
-All airfoils, including the generated 'strak' airfoils, can be exported as a .dat file at the end. Very practical is the optional setting of a continuous trailing edge thickness ('Te gap') in mm, which eliminates the often necessary manual reworking of the airfoils in CAD. 
+All airfoils, including the generated 'straked' airfoils, can be exported as a .dat file at the end. Very practical is the optional setting of a continuous trailing edge thickness ('Te gap') in mm, which eliminates the often necessary manual reworking of the airfoils in CAD. 
 
-A spin off from this project is the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) which allows the typical modifications of an airfoil during wing design. 
+Included in the Planform Creator 2 isthe  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) which allows the typical modifications of an airfoil during wing design. 
 
-![PC2](AirfoilEditor_subtree/images/AirfoilEditor_App.png "Screenshot of the AirfoilEditor ")
+![PC2](images/AirfoilEditor_app.png "Screenshot of the AirfoilEditor ")
 <sup>The AirfoilEditor can also be used as a stand-alone program. Linked with the file extension ".dat" it acts as a smart display and edit app for airfoils.</sup>
 
 ## Bridge to Xflr5 and FLZ_vortex

@@ -147,6 +147,9 @@ class Item_Planform (Diagram_Item):
     def __init__(self, *args, wingSection_fn = None, **kwargs):
 
         self._wingSection_fn = wingSection_fn               # bound method to get currrent wing section
+
+        self._show_airfoils     = False
+        self._show_strak        = False
         self._show_bounding_box = True
 
         super().__init__(*args, **kwargs)
@@ -191,6 +194,27 @@ class Item_Planform (Diagram_Item):
         self.viewBox.invertY(True)
         self.showGrid(x=True, y=True)
 
+
+    @property
+    def show_airfoils (self) -> bool: 
+        return self._show_airfoils
+    
+    def set_show_airfoils (self, aBool : bool): 
+        self._show_airfoils = aBool == True
+        self._show_artist (Airfoil_Name_Artist, aBool)
+        self.section_panel.refresh()                                # enable straked checkbox 
+
+
+    @property
+    def show_strak (self) -> bool: 
+        return self._show_strak
+    
+    def set_show_strak (self, aBool : bool): 
+        self._show_strak = aBool == True
+        artist : Airfoil_Name_Artist = self._get_artist (Airfoil_Name_Artist) [0]
+        artist.set_show_strak (aBool)
+
+
     @property
     def show_bounding_box (self) -> bool: 
         return self._show_bounding_box
@@ -209,8 +233,14 @@ class Item_Planform (Diagram_Item):
             r,c = 0, 0
             CheckBox (l,r,c, text="Bounding Box", 
                       get=lambda: self.show_bounding_box, set=self.set_show_bounding_box) 
-            
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=60, 
+            r += 1
+            CheckBox (l,r,c, text="Airfoils", 
+                      get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
+            CheckBox (l,r,c+1, text="also straked", 
+                        get=lambda: self.show_strak, set=self.set_show_strak,
+                        disable=lambda: not self.show_airfoils)    
+                     
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height=100, 
                                               switchable=True, hide_switched=False, 
                                               switched_on=self._show,
                                               on_switched=self.setVisible)
@@ -782,7 +812,6 @@ class Diagram_Planform (Diagram_Abstract):
         self._show_ref_planform_elli = True
         self._show_wingSections = False
         self._show_flaps = False
-        self._show_airfoils = False
 
         super().__init__(*args,  **kwargs)
 
@@ -816,15 +845,6 @@ class Diagram_Planform (Diagram_Abstract):
     def set_show_flaps (self, aBool : bool): 
         self._show_flaps = aBool == True
         self._show_artist (Flaps_Artist, aBool)
-
-
-    @property
-    def show_airfoils (self) -> bool: 
-        return self._show_airfoils
-    
-    def set_show_airfoils (self, aBool : bool): 
-        self._show_airfoils = aBool == True
-        self._show_artist (Airfoil_Name_Artist, aBool)
 
 
     @property
@@ -912,8 +932,6 @@ class Diagram_Planform (Diagram_Abstract):
             CheckBox (l,r,c, text="Show mouse helper", 
                       get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
             r += 1
-            SpaceR   (l,r,10)
-            r += 1
             CheckBox (l,r,c, text="Reference Line", 
                     get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
             r += 1
@@ -922,9 +940,6 @@ class Diagram_Planform (Diagram_Abstract):
             r += 1
             CheckBox (l,r,c, text="Flaps", 
                       get=lambda: self.show_flaps, set=self.set_show_flaps) 
-            r += 1
-            CheckBox (l,r,c, text="Airfoils", 
-                      get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
 
             l.setColumnStretch (0,2)
 

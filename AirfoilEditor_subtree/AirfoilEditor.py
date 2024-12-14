@@ -37,7 +37,7 @@ from model.airfoil_geometry import Panelling_Spline, Panelling_Bezier
 from model.airfoil_examples import Example
 
 from base.common_utils      import * 
-from base.panels            import Container_Panel
+from base.panels            import Container_Panel, MessageBox
 from base.widgets           import *
 
 from airfoil_widgets        import * 
@@ -129,7 +129,7 @@ class App_Main (QMainWindow):
         # init airfoil 
 
         if airfoil_file and (not os.path.isfile (airfoil_file)): 
-            QMessageBox.critical (self, self.name , f"\n'{airfoil_file}' does not exist.\nShowing example airfoil.\n")
+            MessageBox.error   (self,self.name, f"{airfoil_file} does not exist.\nShowing example airfoil.", min_height= 60)
             airfoil = Example()
             self.move (200,150)                     # messagebox will move main window 
         elif airfoil_file is None : 

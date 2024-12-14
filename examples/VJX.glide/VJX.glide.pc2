@@ -1,7 +1,7 @@
 {
   "pc2_version":2,
   "wing_name":"VJX.glide",
-  "description":"High end F3F wing \nfor medium to light conditions",
+  "description":"High end F3F wing\nfor medium to light conditions",
   "fuselage_width":40.0,
   "airfoil_nick_prefix":"JX-",
   "airfoil_nick_base":100,
@@ -25,11 +25,13 @@
     {
       "xn":0.0,
       "hinge_cn":0.72,
-      "flap_group":1
+      "flap_group":1,
+      "airfoil":"JX-G-Root.dat"
     },
     {
       "xn":0.068027,
-      "flap_group":1
+      "flap_group":1,
+      "airfoil":"JX-GP-100.dat"
     },
     {
       "xn":0.408163,
@@ -37,16 +39,19 @@
     },
     {
       "cn":0.55,
-      "flap_group":2
+      "flap_group":2,
+      "airfoil":"JX-GP-055.dat"
     },
     {
       "cn":0.33,
-      "flap_group":2
+      "flap_group":2,
+      "airfoil":"JX-GP-033.dat"
     },
     {
       "xn":1.0,
       "hinge_cn":0.73,
-      "flap_group":2
+      "flap_group":2,
+      "airfoil":"JX-GP-033.dat"
     }
   ],
   "flaps":{
