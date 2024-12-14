@@ -98,26 +98,20 @@ A special case arises with trapezoidal planforms. Here wing sections are also us
 
 <img src="images/wing_sections_trapezoidal.png" width="800" />
 
-
 <sup>In this trapezoidal planform, wing sections 'root', '1' and 'tip' define the planform. Wing section '2' is just a helper section to have an additional flap at this position. </sup>
 
 
 
 ### Hinge Line and Flap Depth
 
-Flaps are defined by their 'hinge line' and their bounding wing sections to the left and to the right. 
+Flaps are defined by their 'hinge line' and their bounding wing sections to the left and to the right. A wing section can have a 'flap group' assigned. All subsequent wing sections with the same flap group will define a new flap.
 
 In many cases the hinge line equals the 'reference line' of the planform. This is also the default case when defining flpas. 
 
 More flexibility is achieved through a separate definition of the hinge line with a hinge point at the root section and the tip section. 
-
 In certain cases, for example with a curved reference line, kinks in the hinge line can be defined at a wing section.
 
-The hinge line is the main 'construction line' of PC2. By determining flap depth at the root and tip, the chord distribution is, figuratively speaking, threaded onto the hinge line, which results in a final planform. Thereby both flap depth at the root and flap depth at tip strongly influences the planform:
-
-![PC2](images/Flap_depth_controlling_planform.png "Different flap depths")
-<sup>Impact of different flap depths on planform of the wing </sup>
-</p>
+<img src="images/flap_hinge_line.png" width="550" />
 
 
 
