@@ -53,6 +53,9 @@ Two different "types" are available for defining the chord distribution:
 
 In PC2, the chord distribution is always displayed in normalized form. Both span and chord length range from 0 to 1. This allows chord distributions - even of different wing designs - to be compared with each other without distortion.
 
+![PC2](images/chord_distribution_reference.png "Varying chord distribution")
+
+
 ![PC2](images/chord_distribution.png "Varying chord distribution")
 <sup>Variations of the chord distribution using a Bezier curve. The blue curve is a pure elliptical chord distribution as reference  </sup>
 </p>
@@ -148,7 +151,7 @@ The generated planform shouldn't be used directly for a 3D construction in the C
   
 An attempt was made to provide a simple, intuitive UI to be able to 'playfully' explore the program and the design of a new wing. 
 
-![PC2](images/PlanformCreator2_App_2.png "Planform Creator 2")
+![PC2](images/PC2_app.png "Planform Creator 2")
 
 The upper tabs are used to switch between the different main display views. On the left (in the 'View' area) are the selection buttons to customize the selected view. A zoom and pan function allows to look at details.
 
