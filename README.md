@@ -77,7 +77,7 @@ Another use case for applying the 'banana function' is to finetune the flap dept
 
 <img src="./images/planform_banana.png" width="800" />
 
-#### Background image
+### Background image
 
 If you want to recreate an wing based on an existing image, you made load this image as a background image into the app. Having a planform as contour line in the background, it is (most of the times) straight forward to define the chord distribution and the chord reference for a best fit.
 
@@ -123,20 +123,20 @@ In certain cases, for example with a curved reference line, kinks in the hinge l
 <img src="images/flap_hinge_line.png" width="500" />
 
 
-### Airfoils
+## Airfoils
 
 A wing section can either be assigned a fixed airfoil or the airfoil can be left open. In this case, a 'strak' (or 'blended') airfoil is created for this wing section by blending the left and right neighboring airfoils. The 'blending ratio' is derived from the ratio of the respective chord length of the wing sections.
 
 For the root and the tip section an airfoil is mandatory. Initially example airfoils are assigned to these two sections.
 
-<img src="images/airfoil_names.png" width="700" />
+<img src="images/airfoil_names.png" width="800" />
 
 <sup>Wing sections with the corresponding airfoils. The airfoil at 'section 2' is created by blending JX-GP-100 and JX-GP-055.</sup>
 
 
 The airfoils can either be viewed in normal, normed scale or in their 'real' scale within their wing sections:
 
-<img src="images/airfoil_real_size.png" width="700" />
+<img src="images/airfoil_real_size.png" width="800" />
 
 
 All airfoils, including the generated 'straked' airfoils, can be exported as a .dat file at the end. Very practical is the optional setting of a continuous trailing edge thickness ('Te gap') in mm, which eliminates the often necessary manual reworking of the airfoils in CAD. 
