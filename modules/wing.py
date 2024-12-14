@@ -158,6 +158,7 @@ class Wing:
 
         toDict (dict_v2, "pc2_version",     2)
         toDict (dict_v2, "wing_name",       fromDict (dataDict, "wingName", None))
+        toDict (dict_v2, "description",     "< add a description >")
 
         halfspan = fromDict (dataDict, "wingspan", 2000) / 2.0
         toDict (dict_v2, "halfspan",        halfspan)
@@ -487,7 +488,10 @@ class Wing:
         """
 
         # move for half fuselage
-        t_x = np.array(x + self.fuselage_width / 2)
+        if isinstance (x,float):
+            t_x = x + self.fuselage_width / 2
+        else: 
+            t_x = np.array(x + self.fuselage_width / 2)
 
         return t_x, y 
 
@@ -504,7 +508,10 @@ class Wing:
         """
 
         # move for half fuselage
-        t_x = np.array(x + self.fuselage_width / 2)
+        if isinstance (x,float):
+            t_x = x + self.fuselage_width / 2
+        else: 
+            t_x = np.array(x + self.fuselage_width / 2)
 
         # mirror half wing 
         t_x = -t_x  
@@ -1646,7 +1653,8 @@ class WingSection :
 
     def x_limits (self) -> tuple:
          """ x limits as tuple of self before touching the neighbour section """
-         return self.xn_limits()[0] * self._planform.span, self.xn_limits()[1] * self._planform.span
+         xn_limits = self.xn_limits()
+         return xn_limits[0] * self._planform.span, xn_limits[1] * self._planform.span
 
     def cn_limits (self) -> tuple:
          """ cn limits as tuple of self before touching the neighbour section """
@@ -1654,7 +1662,8 @@ class WingSection :
 
     def c_limits (self) -> tuple:
          """ c chord limits as tuple of self before touching the neighbour section """
-         return self.cn_limits()[0] * self._planform.chord_root, self.cn_limits()[1] * self._planform.chord_root
+         cn_limits = self.cn_limits()
+         return cn_limits[0] * self._planform.chord_root, cn_limits[1] * self._planform.chord_root
 
 
     @property
@@ -2005,10 +2014,13 @@ class WingSections (list):
         xn = aSection.xn
         cn = aSection.cn
 
-        if aSection.is_root_or_tip:                       # fixed 
+        if aSection.is_tip and aSection.defines_cn:                             # special case trapezoid - tip section defines chord 
+            left_sec, right_sec = self.neighbours_of (aSection)     
+            return (xn,xn), (0.01, left_sec.cn) 
+        if aSection.is_root_or_tip:                                             # normally root and tip fixed 
             return (xn,xn), (cn,cn) 
         else:
-            left_sec, right_sec = self.neighbours_of (aSection)     # keep a safety distance to next section
+            left_sec, right_sec = self.neighbours_of (aSection)                 # keep a safety distance to next section
             safety = self[-1].xn / 500.0 
             if left_sec: 
                 left_xn = left_sec.xn

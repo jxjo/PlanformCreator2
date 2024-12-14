@@ -116,17 +116,17 @@ class Tab_Panel (QTabWidget):
         }
                            
         QTabBar::tab:hover {
-            background: rgba(255, 20, 147, 0.1);                    /* deep pink */ 
+            background: rgba(255, 255, 255, 0.2) /* rgba(255, 20, 147, 0.1); */               /* deep pink */ 
         }
 
         QTabBar::tab:selected {
-            background: rgba(255, 20, 147, 0.2);                    /* deep pink */ 
+            background: rgba(255, 255, 255, 0.9) /* background: rgba(255, 20, 147, 0.2); */                   /* deep pink */ 
         }
 
         QTabBar::tab:selected {
             /*color: white; */
             color: #303030;
-            font-weight: 500;
+            font-weight: 600;
             border-color: #9B9B9B;
             border-bottom-color: #C2C7CB; /* same as pane color */
         }
@@ -463,9 +463,9 @@ class App_Main (QMainWindow):
         if self._pc2_file:
             ok = self.wing().save(self._pc2_file)
             if ok:
-                MessageBox.success (self,"Save", f"Parameters saved to:\n\n{self._pc2_file}")
+                MessageBox.success (self,"Save Planform", f"{self._pc2_file} successfully saved", min_height= 60)
             else:
-                MessageBox.error   (self,"Save", f"Parameters couldn't be saved to:\n\n{self._pc2_file}")
+                MessageBox.error   (self,"Save Planform", f"{self._pc2_file} couldn't be saved", min_height= 60)
         else:
             self.saveAs ()
 

@@ -52,7 +52,7 @@ class style (Enum):
     NORMAL        = (None, None)
     COMMENT       = ("dimgray","lightGray")  
     ERROR         = ('red', 'red')
-    HINT          = ("blue", "blue")
+    HINT          = ("dodgerblue", "dodgerblue")
     WARNING       = ('orange','orange')
     GOOD          = ('mediumspringgreen','mediumspringgreen')
 
@@ -322,7 +322,9 @@ class Widget:
             self._disabled = True  
 
         self._hidden   = False                          
-        if callable (hide):
+        if isinstance(hide, bool):
+            self._hidden_getter = hide
+        elif callable (hide):
             self._hidden_getter = hide
         else: 
             self._hidden_getter = None

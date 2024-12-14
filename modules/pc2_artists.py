@@ -145,7 +145,10 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
 
     def _plot (self): 
 
-        x, y = self.planform.ref_polyline()
+        if self._mode == mode.WING_LEFT or self._mode == mode.WING_RIGHT:
+            x, y = self.planform.ref_polyline()
+        else:
+            x, y = self.planform.n_ref_line.polyline ()
 
         pen   = pg.mkPen(COLOR_REF_LINE, width=1.5)
         self._plot_dataItem  (x, y, name="Reference Line", pen = pen, antialias = True, zValue=4)
@@ -221,7 +224,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
 
             # scale x-coordinate of Bezier jpoints depending on mode 
             jpoints = self._planform.n_ref_line.bezier_as_jpoints ()
-            jpoints = JPoint.transform (jpoints, transform_fn = self._planform.t_norm_to_plan)
+            jpoints = JPoint.transform (jpoints, transform_fn = self._t_fn)
 
             super().__init__(jpoints, movable_point_class=self.Movable_Ref_Line_Point, **kwargs)
 
@@ -258,7 +261,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
         def _finished_point (self, aPoint):
             """ slot - point move is finished - write back control points"""
 
-            jpoints = JPoint.transform (self._jpoints, transform_fn = self._planform.t_plan_to_norm)
+            jpoints = JPoint.transform (self._jpoints, transform_fn = self._tr_fn)
             self._planform.n_ref_line.bezier_from_jpoints (jpoints)
 
             super()._finished_point (aPoint)
@@ -895,7 +898,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
                 anchor = (0.5,1.2)                                              # always constant above 
             elif m == mode.WING_RIGHT and section.is_root:                           
                 point_xy = (x[0],y[0])                                          # point at x = 0 
-                anchor = (1.0,2.0)                                              # shift left
+                anchor = (1.0,1.2)                                              # shift left
             elif m == mode.WING_LEFT and section.is_root:                           
                 point_xy = None                                                 # skip left side root 
             else:
@@ -912,6 +915,9 @@ class WingSections_Artist (Abstract_Artist_Planform):
                 p.setShadowPen (pg.mkPen(QColor(COLOR_SECTION).darker(200), width=6))
 
                 if self.show_mouse_helper:
+
+                    # mouse helper for position 
+
                     movable = not (section.is_root_or_tip)
                     pt = self.Movable_Section (self._pi, self.planform, section, 
                                                 mode = m, t_fn = self.t_fn, tr_fn = self.tr_fn,
@@ -919,10 +925,13 @@ class WingSections_Artist (Abstract_Artist_Planform):
                                                 on_changed=self.sig_wingSection_changed.emit)
                     self._add (pt) 
 
-                    if m == mode.REF_TO_SPAN or m == mode.REF_TO_NORM:                # move doesn't make sense  (yn==1)
+                    # mouse helper for chord 
+                    
+                    if m == mode.REF_TO_SPAN or m == mode.REF_TO_NORM:                  # move doesn't make sense  (yn==1)
                         movable = False
                     else:
-                        movable = True and not section.is_root_or_tip
+                        movable = True and not section.is_root_or_tip \
+                                  or (section.defines_cn and section.is_tip)            # define tip chord
 
                     pt = self.Movable_Section (self._pi, self.planform, section, 
                                                 mode = m, t_fn = self.t_fn, tr_fn = self.tr_fn,
@@ -1146,13 +1155,13 @@ class WingSections_Artist (Abstract_Artist_Planform):
                 if self._mode == mode.DEFAULT:
                     _, te_y = self._section.le_te ()
                     c  = te_y - y                                   # calculate new c from trailing edge
-                    left_c, right_c = self._section.c_limits()      # c shouldn't be more than left neighbour
-                    c = np.clip (c, right_c, left_c)
+                    lower_c, upper_c = self._section.c_limits()     # c shouldn't be more than left neighbour
+                    c = np.clip (c, lower_c, upper_c)
                     self._section.set_c (c)                         # update section chord
                 else: 
                     cn = yn                                         # yn is chord 
-                    left_cn, right_cn = self._section.cn_limits()   # cn shouldn't be more than left neighbour
-                    cn = np.clip (cn, right_cn, left_cn)
+                    lower_cn, upper_cn = self._section.cn_limits()  # cn shouldn't be more than left neighbour
+                    cn = np.clip (cn, lower_cn, upper_cn)
                     self._section.set_cn (cn)                       # update section chord
 
 

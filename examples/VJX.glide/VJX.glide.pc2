@@ -1,62 +1,64 @@
 {
-  "wingName":"VJX.glide",
-  "wingspan":2940.0,
-  "rootchord":230.0,
-  "tipchord":3.0,
-  "hingeLineAngle":-0.7,
-  "flapDepthRoot":28.0,
-  "flapDepthTip":27.0,
-  "rootRe":400000,
-  "airfoilNickPrefix":"GP",
-  "planformType":"Bezier",
-  "p1x":0.958047,
-  "p2x":0.395571,
-  "p1y":0.856495,
+  "pc2_version":2,
+  "wing_name":"VJX.glide",
+  "description":"High end F3F wing \nfor medium to light conditions",
+  "fuselage_width":40.0,
+  "airfoil_nick_prefix":"JX-",
+  "airfoil_nick_base":100,
+  "background_image":{},
+  "halfspan":1470.0,
+  "chord_root":230.0,
+  "sweep_angle":-0.7,
+  "chord_distribution":{
+    "chord_style":"Bezier",
+    "p1x":0.856495,
+    "p1y":0.958047,
+    "p2y":0.395571,
+    "p3y":0.013043
+  },
+  "chord_reference":{
+    "p0y":0.72,
+    "p1y":0.73
+  },
+  "reference_line":{},
   "wingSections":[
     {
-      "position":0.0,
-      "norm_chord":1.0,
-      "flapGroup":1,
-      "airfoil":{
-        "file":"JX-G-Root.dat"
-      }
+      "xn":0.0,
+      "hinge_cn":0.72,
+      "flap_group":1
     },
     {
-      "position":100.0,
-      "flapGroup":1,
-      "airfoil":{
-        "file":"JX-GP-100.dat"
-      }
+      "xn":0.068027,
+      "flap_group":1
     },
     {
-      "position":600.0,
-      "flapGroup":2,
-      "airfoil":{
-        "name":"<strak>"
-      }
+      "xn":0.408163,
+      "flap_group":2
     },
     {
-      "norm_chord":0.55,
-      "flapGroup":2,
-      "airfoil":{
-        "file":"JX-GP-055.dat"
-      }
+      "cn":0.55,
+      "flap_group":2
     },
     {
-      "norm_chord":0.33,
-      "flapGroup":2,
-      "airfoil":{
-        "file":"JX-GP-033.dat"
-      }
+      "cn":0.33,
+      "flap_group":2
     },
     {
-      "position":1470.0,
-      "norm_chord":0.013043,
-      "flapGroup":2,
-      "airfoil":{
-        "file":"JX-GP-033.dat"
-      }
+      "xn":1.0,
+      "hinge_cn":0.73,
+      "flap_group":2
     }
   ],
-  "refPlanform_dxfPath":"VJX.glide_planform.dxf"
+  "flaps":{
+    "hinge_equal_ref_line":false
+  },
+  "panels":{
+    "wy_panels":8,
+    "wy_distribution":"uniform",
+    "wx_panels":8,
+    "wx_distribution":"uniform",
+    "width_min":0.02,
+    "cn_tip_min":0.05,
+    "cn_diff_max":0.02
+  }
 }

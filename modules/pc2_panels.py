@@ -227,12 +227,12 @@ class Panel_Chord_Reference (Panel_Planform_Abstract):
     """ Main geometry data of wing"""
 
     name    = 'Chord Distribution and Reference'
-    _width  = (410, None)
+    _width  = (380, None)
 
     def _init_layout (self): 
         l = QGridLayout()
         r,c = 0, 0 
-        Label  (l,r,c,   get="Distribution function", style=style.COMMENT)
+        Label  (l,r,c,   get="Chord Distribution", style=style.COMMENT)
         Label  (l,r,c+1, get=lambda: self.n_chord().name, fontSize=size.HEADER_SMALL)  
         r += 1
         SpaceR (l,r, height=26, stretch=0)        
@@ -250,7 +250,7 @@ class Panel_Chord_Reference (Panel_Planform_Abstract):
         r += 1
         SpaceR (l,r, height=5, stretch=2)        
 
-        l.setColumnMinimumWidth (0,120)
+        l.setColumnMinimumWidth (0,110)
         l.setColumnMinimumWidth (2,15)
         l.setColumnMinimumWidth (3,50)
         l.setColumnStretch (5,2)
@@ -284,7 +284,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
     """ Main geometry data of wing"""
 
     name = 'Wing Section'
-    _width  = (700, None)
+    _width  = (680, None)
 
 
     @override
@@ -317,15 +317,13 @@ class Panel_WingSection (Panel_Planform_Abstract):
                 obj=self._wingSection, prop=WingSection.x, disable=lambda: not self._wingSection().is_set_xn_allowed,
                 style=lambda: self._style_for_fixed(self._wingSection().is_xn_fix) )
         FieldF (l,r,c+3, lab="of span", width=65, unit="%", step=1, lim=(0, 100), dec=1,
-                obj=self._wingSection, prop=WingSection.xn, disable=lambda: not self._wingSection().is_set_xn_allowed,
-                style=lambda: self._style_for_fixed(self._wingSection().is_xn_fix))
+                obj=self._wingSection, prop=WingSection.xn, disable=lambda: not self._wingSection().is_set_xn_allowed)
         r += 1
         FieldF (l,r,c,   lab="Chord", width=85, unit="mm", step=1, lim=(1, self.planform().span), dec=1,
                 obj=self._wingSection, prop=WingSection.c, disable=lambda: not self._wingSection().is_set_cn_allowed,
                 style=lambda: self._style_for_fixed(self._wingSection().is_cn_fix))
         FieldF (l,r,c+3, lab="of root", width=65, unit="%", step=1, lim=(1, 100), dec=1,
-                obj=self._wingSection, prop=WingSection.cn, disable=lambda: not self._wingSection().is_set_cn_allowed,
-                style=lambda: self._style_for_fixed(self._wingSection().is_cn_fix))
+                obj=self._wingSection, prop=WingSection.cn, disable=lambda: not self._wingSection().is_set_cn_allowed)
         r += 1
         Label  (l,r,c, get="Flaps hinge line is defined by reference line", colSpan=5, style=style.COMMENT,
                 hide=lambda: not self.flaps().hinge_equal_ref_line )
@@ -418,7 +416,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
         elif self._wingSection().is_xn_fix:
             text = "Section is at fixed span position"
         elif self._wingSection().is_cn_fix:
-            text = "Section is at fixed chord position"
+            text = "Section has a fixed chord position"
         else: 
             text = ""
         return text 

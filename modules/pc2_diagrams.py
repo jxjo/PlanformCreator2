@@ -147,6 +147,7 @@ class Item_Planform (Diagram_Item):
     def __init__(self, *args, wingSection_fn = None, **kwargs):
 
         self._wingSection_fn = wingSection_fn               # bound method to get currrent wing section
+        self._show_bounding_box = True
 
         super().__init__(*args, **kwargs)
 
@@ -172,7 +173,7 @@ class Item_Planform (Diagram_Item):
         
         self._add_artist (Planform_Artist       (self, self.planform, show_legend=True))
         self._add_artist (Planform_Box_Artist   (self, self.planform))
-        self._add_artist (Ref_Line_Artist       (self, self.planform, show_legend=True))
+        self._add_artist (Ref_Line_Artist       (self, self.planform, mode=mode.NORM_TO_PLANFORM, show_legend=True))
         self._add_artist (WingSections_Artist   (self, self.planform, show=False, show_legend=True,
                                                        wingSection_fn=self._wingSection_fn))
         self._add_artist (Flaps_Artist          (self, self.planform, show=False ,show_legend=True))
@@ -190,6 +191,14 @@ class Item_Planform (Diagram_Item):
         self.viewBox.invertY(True)
         self.showGrid(x=True, y=True)
 
+    @property
+    def show_bounding_box (self) -> bool: 
+        return self._show_bounding_box
+    
+    def set_show_bounding_box (self, aBool : bool): 
+        self._show_bounding_box = aBool == True
+        self._show_artist (Planform_Box_Artist, aBool)
+
 
     @property
     def section_panel (self) -> Edit_Panel:
@@ -197,8 +206,11 @@ class Item_Planform (Diagram_Item):
 
         if self._section_panel is None:    
             l = QGridLayout()
-
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=40, 
+            r,c = 0, 0
+            CheckBox (l,r,c, text="Bounding Box", 
+                      get=lambda: self.show_bounding_box, set=self.set_show_bounding_box) 
+            
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height=60, 
                                               switchable=True, hide_switched=False, 
                                               switched_on=self._show,
                                               on_switched=self.setVisible)
@@ -441,6 +453,8 @@ class Item_Wing (Diagram_Item):
         self._add_artist (Ref_Line_Artist       (self, self.planform, mode=mode.WING_LEFT))
         self._add_artist (Flaps_Artist          (self, self.planform, mode=mode.WING_LEFT))
         self._add_artist (WingSections_Artist   (self, self.planform, mode=mode.WING_LEFT, show=False))
+
+        # switch off mose helper 
 
         for artist in self._artists: artist.set_show_mouse_helper (False) 
 
@@ -901,9 +915,7 @@ class Diagram_Planform (Diagram_Abstract):
             SpaceR   (l,r,10)
             r += 1
             CheckBox (l,r,c, text="Reference Line", 
-                    get=lambda: self.show_ref_line,
-                    set=self.set_show_ref_line) 
-
+                    get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
             r += 1
             CheckBox (l,r,c, text="Wing Sections", 
                       get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
@@ -1131,15 +1143,16 @@ class Diagram_Making_Of (Diagram_Abstract):
         self.graph_layout.setColumnStretchFactor (1,3)
         self.graph_layout.setColumnStretchFactor (2,3)
 
-        # generic connect to artist changed signals 
+         # generic connect to artist changed signals 
+
         for item in self.diagram_items:
             artist : Abstract_Artist_Planform
             for artist in item._artists:
-                artist.sig_planform_changed.connect         (self.refresh) 
-                artist.sig_wingSection_changed.connect      (self.refresh) 
-                artist.sig_wingSection_new.connect          (self.refresh) 
-                artist.sig_flaps_changed.connect            (self.refresh) 
-
+                artist.sig_planform_changed.connect     (self._on_planform_changed) 
+                artist.sig_wingSection_changed.connect  (self._on_wingSection_changed) 
+                artist.sig_flaps_changed.connect        (self._on_flaps_changed) 
+                artist.sig_wingSection_new.connect      (self.sig_wingSection_new.emit) 
+                artist.sig_wingSection_selected.connect (self.sig_wingSection_new.emit) 
 
 
     # --- view section panels ---------------------------------------------------
@@ -1443,11 +1456,13 @@ class Diagram_Panels (Diagram_Abstract):
             r += 1
             SpaceR      (l,r,6,0)
             r += 1
-            Button      (l,r,c, text="Export FLZ", width=100, set=self.sig_export_flz.emit)
+            Button      (l,r,c, text="Export FLZ", width=100, set=self.sig_export_flz.emit,
+                                hide= not os.name == 'nt' )                                 # only Windows
             r += 1
             SpaceR      (l,r,2,0)
             r += 1
-            Button      (l,r,c, text="Launch FLZ", width=100, set=self.sig_launch_flz.emit)
+            Button      (l,r,c, text="Launch FLZ", width=100, set=self.sig_launch_flz.emit,
+                                hide= not os.name == 'nt')                                  # only Windows
             r += 1
             SpaceR      (l,r,10,3)
 
@@ -1546,7 +1561,7 @@ class Item_Making_Of_Planform (Item_Making_Of_Abstract):
 
     def setup_artists (self):
         self._add_artist (Planform_Artist     (self, self.planform))
-        self._add_artist (Ref_Line_Artist     (self, self.planform))
+        self._add_artist (Ref_Line_Artist     (self, self.planform, mode=mode.NORM_TO_PLANFORM))
         self._add_artist (Planform_Box_Artist (self, self.planform))
         self._add_artist (WingSections_Artist (self, self.planform, show=False))
         self._add_artist (Flaps_Artist        (self, self.planform, show=False))

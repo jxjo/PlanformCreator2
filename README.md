@@ -36,9 +36,7 @@ When the results are satisfying the planform and the envolved airfoils are expor
 In contrast to a "paint program", the planform is defined by parameters such as 'span', 'root depth' or "sweep of hinge line". The chord distribution along the span is controlled by a mathematical function via parameters.
 The advantage is that the parameters can be changed independently of each other, allowing a quick approach to the desired wing planform.
 
-![PC2](images/planform_variations.png "Planform variations")
-<sup>All three planforms have the same chord distribution - and also the same wing area - but varying how the chord is assigned by the reference line</sup>
-</p>
+
 
 ## Designing a planform 
 
@@ -55,35 +53,66 @@ In PC2, the chord distribution is always displayed in normalized form. Both span
 
 The second main definition is the 'Chord Reference' which defines how much of the chord is assigned towards leading and trailing edge along a virtual 'Chord Reference Line'.  
 
-![PC2](images/chord_distribution_reference.png "Chord distribution and Reference")
+<img src="images/chord_distribution_reference.png" width="800" />
 
 By combining these two functions, scaling the result to a halfwing span and optionally shearing ther result by a 'Sweep Angle' the final planform is created
 
-![PC2](images/planform_by_chord.png "Planform from Chord distribution and Reference")
+<img src="images/planform_by_chord.png" width="800" />
 
 
 #### Variations of the Chord Reference 
 
 The concept of "Chord Reference" is quite powerful to create variations of a planform. As the chord distribution is constant, all variations will have the same area and almost identical aerodynamic properties in first approximation. 
 
-The following diagram shows the impact of different chord references while the chord distribution is constant
+The following diagram shows the impact of different chord references while keeping the chord distribution constant.
  
 <img src="images/planform_variations.png" width="800" />
-
-![PC2](images/planform_variations.png "Variations of chord reference")
 
 
 
 #### Everything banana?
-A little speciality is the so called "banana function". It allows to bent the wing in spanwise direction like a banana without changing the chord distribution. The function does not actually serve to visually embellish the wing, but it allows the normally linear flap depth distribution to be modified flexibly to finetune lift distribution when flaps are set. 
+A little speciality is the so called "banana function". It allows to bent the wing in spanwise direction like a banana without changing chord distribution and reference. The result can be a planform like the populae 'bow-style' flying wings. 
+
+Another use case for applying the 'banana function' is to finetune the flap depth alogn the wing span. As the flap hinge line (see further below) is a straght line, benting the planform will directly influence the flap depth. 
 
 <img src="./images/planform_banana.png" width="800" />
 
-<sup>Modifying the flap depth distribution with the 'banana function'</sup>
-</p>
+
+
+
+### Wing sections
+
+Once the planform has been defined, another artifact comes into play: 'wing sections'. A wing section has main tasks:
+* Define the position of an airfoil within a planform
+* Define the position of the flap hinge line and the start of a 'flap group'.
+
+A wing always has at least 2 wing sections - a root and a tip section. In between, any number of wing sections can be created. There are two modes how the location of a wing section can be defined: 
+- by span position: The wing section will always remains at this relative span position, even if the wing span or chord distribution is changed. Positioning by span position is helpful for example to define flaps.
+- chord length: The wing section is tied to a certain relative chord. When changing the chord distribution, the wing section will moves around in order to always have the same chord length. This is especially useful to have an airfoil at a certain chord length (= Reynolds number) within the wing.
+
+<img src="images/wing_sections.png" width="800" />
+
+<sup>In this example, wing section '1' at a fixed position is used to define the width of flap and aileron, while section '2' is the home of airfoil 'JX-GP-055' ensuring a certain chord. </sup>
+
+A special case arises with trapezoidal planforms. Here wing sections are also used to define the chord distribution by having both: a fixed chord and a fixed span position. 
+
+<img src="images/wing_sections_trapezoidal.png" width="800" />
+
+
+<sup>In this trapezoidal planform, wing sections 'root', '1' and 'tip' define the planform. Wing section '2' is just a helper section to have an additional flap at this position. </sup>
+
 
 
 ### Hinge Line and Flap Depth
+
+Flaps are defined by their 'hinge line' and their bounding wing sections to the left and to the right. 
+
+In many cases the hinge line equals the 'reference line' of the planform. This is also the default case when defining flpas. 
+
+More flexibility is achieved through a separate definition of the hinge line with a hinge point at the root section and the tip section. 
+
+In certain cases, for example with a curved reference line, kinks in the hinge line can be defined at a wing section.
+
 The hinge line is the main 'construction line' of PC2. By determining flap depth at the root and tip, the chord distribution is, figuratively speaking, threaded onto the hinge line, which results in a final planform. Thereby both flap depth at the root and flap depth at tip strongly influences the planform:
 
 ![PC2](images/Flap_depth_controlling_planform.png "Different flap depths")
@@ -91,23 +120,6 @@ The hinge line is the main 'construction line' of PC2. By determining flap depth
 </p>
 
 
-
-![PC2](images/chord_distribution.png "Varying chord distribution")
-<sup>Variations of the chord distribution using a Bezier curve. The blue curve is a pure elliptical chord distribution as reference  </sup>
-</p>
-
-
-
-### Wing sections
-
-The airfoils of the wing are defined at 'wing sections'. A wing always has at least 2 wing sections - at root and wing tip. In between, any number of wing sections can be created. There are two types of wing sections, which are defined by their ...
-- span position: The wing section always remains at this position, even if, the wing span or chord distribution is changed
-- chord length: The wing section moves with the planform when it is changed in order to always have the same chord length. This is especially useful to have an airfoil at a certain chord length (= Reynolds number) within the wing.
-
-![PC2](images/Wing_sections_and_Flaps.png "Wing sections")
-<sup>For this wing, in addition to the root and the wing tip, 4 further wing sections were defined: 2 with a fixed position and 2 with a fixed wing depth. The wing sections were assigned to a flap group so that the individual flaps can also be displayed. </sup>
-
-Finally, a wing section can be assigned to a "flap group". The flaps defined in this way have no further function in PC2 and are only used for display. When exporting to FLZ_vortex, however, the flap definition is included and can be used there to simulate flap deflections.
 
 ### Airfoils
 

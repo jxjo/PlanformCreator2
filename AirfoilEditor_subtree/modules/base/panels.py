@@ -395,18 +395,18 @@ class MessageBox (QMessageBox):
  
 
     @staticmethod
-    def success (parent: object, title : str, text : str, min_width=None):
+    def success (parent: object, title : str, text : str, min_width=None, min_height=None):
         """ success message with Ok button"""
 
-        msg = MessageBox (parent, title, text, Icon (Icon.SUCCESS), min_width=min_width)
+        msg = MessageBox (parent, title, text, Icon (Icon.SUCCESS), min_width=min_width, min_height= min_height)
         msg.exec()
 
 
     @staticmethod
-    def error (parent: object, title : str, text : str, min_width=None):
+    def error (parent: object, title : str, text : str, min_width=None, min_height=None):
         """ critical message with Ok button"""
 
-        msg = MessageBox (parent, title, text, Icon (Icon.ERROR), min_width=min_width)
+        msg = MessageBox (parent, title, text, Icon (Icon.ERROR), min_width=min_width, min_height= min_height)
         msg.exec()
 
 
