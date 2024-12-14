@@ -44,7 +44,7 @@ The advantage is that the parameters can be changed independently of each other,
 
 'Form follows Function' - this is especially true in PC2: The planform of a wing results from a combination of functions and parameters. 
 
-### Chord distribution 
+### Chord distribution and Chord Reference
 Most important and usually defined first, is the chord distribution along the wing span. The geometric chord distribution directly and significantly determines the lift distribution along the span. The local lift coefficient depends on the local effective angle of attack (influenced by the wing shape) and on the local Reynolds number, which changes proportionally to the local chord.
 
 Two different "types" are available for defining the chord distribution:
@@ -53,21 +53,34 @@ Two different "types" are available for defining the chord distribution:
 
 In PC2, the chord distribution is always displayed in normalized form. Both span and chord length range from 0 to 1. This allows chord distributions - even of different wing designs - to be compared with each other without distortion.
 
-![PC2](images/chord_distribution_reference.png "Varying chord distribution")
+The second main definition is the 'Chord Reference' which defines how much of the chord is assigned towards leading and trailing edge along a virtual 'Chord Reference Line'.  
+
+![PC2](images/chord_distribution_reference.png "Chord distribution and Reference")
+
+By combining these two functions, scaling the result to a halfwing span and optionally shearing ther result by a 'Sweep Angle' the final planform is created
+
+![PC2](images/planform_by_chord.png "Planform from Chord distribution and Reference")
 
 
-![PC2](images/chord_distribution.png "Varying chord distribution")
-<sup>Variations of the chord distribution using a Bezier curve. The blue curve is a pure elliptical chord distribution as reference  </sup>
+#### Variations of the Chord Reference 
+
+The concept of "Chord Reference" is quite powerful to create variations of a planform. As the chord distribution is constant, all variations will have the same area and almost identical aerodynamic properties in first approximation. 
+
+The following diagram shows the impact of different chord references while the chord distribution is constant
+ 
+<img src="images/planform_variations.png" width="800" />
+
+![PC2](images/planform_variations.png "Variations of chord reference")
+
+
+
+#### Everything banana?
+A little speciality is the so called "banana function". It allows to bent the wing in spanwise direction like a banana without changing the chord distribution. The function does not actually serve to visually embellish the wing, but it allows the normally linear flap depth distribution to be modified flexibly to finetune lift distribution when flaps are set. 
+
+<img src="./images/planform_banana.png" width="800" />
+
+<sup>Modifying the flap depth distribution with the 'banana function'</sup>
 </p>
-
-### Chord Reference Line 
-The hinge line is the main 'construction line' of PC2. By determining flap depth at the root and tip, the chord distribution is, figuratively speaking, threaded onto the hinge line, which results in a final planform. Thereby both flap depth at the root and flap depth at tip strongly influences the planform:
-
-![PC2](images/Flap_depth_controlling_planform.png "Different flap depths")
-<sup>Impact of different flap depths on planform of the wing </sup>
-</p>
-
-
 
 
 ### Hinge Line and Flap Depth
@@ -78,13 +91,12 @@ The hinge line is the main 'construction line' of PC2. By determining flap depth
 </p>
 
 
-### Everything banana?
-A little speciality is the so called "banana function". It allows to bent the wing in spanwise direction like a banana without changing the chord distribution. The function does not actually serve to visually embellish the wing, but it allows the normally linear flap depth distribution to be modified flexibly to finetune lift distribution when flaps are set. 
 
-<img src="./images/Banana_function.png" width="700" />
-
-<sup>Modifying the flap depth distribution with the 'banana function'</sup>
+![PC2](images/chord_distribution.png "Varying chord distribution")
+<sup>Variations of the chord distribution using a Bezier curve. The blue curve is a pure elliptical chord distribution as reference  </sup>
 </p>
+
+
 
 ### Wing sections
 
