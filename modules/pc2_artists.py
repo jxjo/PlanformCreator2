@@ -65,6 +65,8 @@ class mode (Enum):
     REF_TO_NORM   = 7                       # x = 0..1      y = 0..1 relative within reference 
     REF_TO_SPAN   = 8                       # x = 0..span   y = 0..1 relative within reference 
 
+    REF_TO_PLAN   = 9                       # x = 0..1      y = 0..1 relative within reference 
+
 
 
 # -------- Abstract super class ------------------------
@@ -110,6 +112,10 @@ class Abstract_Artist_Planform (Artist):
         elif self._mode == mode.REF_TO_SPAN:  
             self.set_t_fn  (self.planform.t_norm_to_span)                   # scale x to span
             self.set_tr_fn (self.planform.t_span_to_norm)            
+
+        elif self._mode == mode.REF_TO_PLAN:  
+            self.set_t_fn  (self.planform.t_ref_to_plan)                    # scale x,y to plan
+            self.set_tr_fn (self.planform.t_plan_to_ref)            
 
         elif self._mode == mode.WING_RIGHT:
             self.set_t_fn  (self.wing.t_plan_to_wing_right)                 # scale span, chord, add fuselage
@@ -174,7 +180,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
 
     class Movable_Ref_Line_Bezier (Movable_Bezier):
         """
-        pg.PlotCurveItem representing a Bezier based chord reference. 
+        pg.PlotCurveItem representing a Bezier based reference line. 
 
         The Bezier curve can be changed by the control points.
             - either 2 or 3 points 
@@ -183,7 +189,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
 
         class Movable_Ref_Line_Point (Movable_Point):
             """ 
-            Represents one control point of Movable_Ref_Chord_Bezier
+            Represents one control point of Movable_Ref_Line_Bezier
                 - subclassed to get individual label 
             """
 

@@ -176,7 +176,7 @@ class Item_Planform (Diagram_Item):
         
         self._add_artist (Planform_Artist       (self, self.planform, show_legend=True))
         self._add_artist (Planform_Box_Artist   (self, self.planform))
-        self._add_artist (Ref_Line_Artist       (self, self.planform, mode=mode.NORM_TO_PLANFORM, show_legend=True))
+        self._add_artist (Ref_Line_Artist       (self, self.planform, mode=mode.REF_TO_PLAN, show_legend=True))
         self._add_artist (WingSections_Artist   (self, self.planform, show=False, show_legend=True,
                                                        wingSection_fn=self._wingSection_fn))
         self._add_artist (Flaps_Artist          (self, self.planform, show=False ,show_legend=True))
@@ -943,7 +943,7 @@ class Diagram_Planform (Diagram_Abstract):
 
             l.setColumnStretch (0,2)
 
-            self._general_panel = Edit_Panel (title="Common", layout=l, height=(60,None),
+            self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
                                               switchable=False, switched_on=True)
         return self._general_panel 
 
@@ -1076,8 +1076,6 @@ class Diagram_Making_Of (Diagram_Abstract):
 
     def __init__(self, *args, **kwargs):
 
-
-        self._show_ref_line = True                              # show reference line 
         self._show_wingSections = False
         self._show_flaps = False
 
@@ -1105,15 +1103,6 @@ class Diagram_Making_Of (Diagram_Abstract):
     def set_show_wingSections (self, aBool : bool): 
         self._show_wingSections = aBool == True
         self._show_artist (WingSections_Artist, show=aBool)
-
-
-    @property
-    def show_ref_line (self) -> bool: 
-        return self._show_ref_line
-    
-    def set_show_ref_line (self, aBool : bool): 
-        self._show_ref_line = aBool == True
-        self._show_artist (Ref_Line_Artist, aBool)
 
 
     @property
@@ -1184,12 +1173,6 @@ class Diagram_Making_Of (Diagram_Abstract):
             r += 1
             Label    (l,r,c, get="Drag the little helper points\nto modifiy the geometry. ",
                       height=60, style=style.COMMENT).setAlignment(Qt.AlignmentFlag.AlignTop)
-            r += 1
-            CheckBox (l,r,c, text="Chord Reference Line", 
-                    get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
-            r += 1
-            Label    (l,r,c, get="Show the chord reference line",
-                      height=40, style=style.COMMENT).setAlignment(Qt.AlignmentFlag.AlignTop)
             r += 1
             CheckBox (l,r,c, text="Wing Sections", 
                       get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
@@ -1576,7 +1559,7 @@ class Item_Making_Of_Planform (Item_Making_Of_Abstract):
 
     def setup_artists (self):
         self._add_artist (Planform_Artist     (self, self.planform))
-        self._add_artist (Ref_Line_Artist     (self, self.planform, mode=mode.NORM_TO_PLANFORM))
+        self._add_artist (Ref_Line_Artist     (self, self.planform, mode=mode.REF_TO_PLAN))
         self._add_artist (Planform_Box_Artist (self, self.planform))
         self._add_artist (WingSections_Artist (self, self.planform, show=False))
         self._add_artist (Flaps_Artist        (self, self.planform, show=False))

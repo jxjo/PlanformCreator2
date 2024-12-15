@@ -835,7 +835,7 @@ class N_Reference_Line:
 
     def bezier_from_jpoints (self, jpoints : list[JPoint]): 
         """ 
-        set chord referenc eBezier control points from JPoints which  
+        set reference line Bezier control points from JPoints   
         """
 
         px, py = [], []
@@ -3093,7 +3093,8 @@ class Planform:
         if normed: 
             return xn,yn
         else:
-            return self.t_norm_to_plan (xn, yn)
+            # do not apply norm_to_plan as banana would be applied twice 
+            return self.t_ref_to_plan (xn, yn)
 
 
     def t_chord_to_norm (self, xcn : float|Array|list, 
@@ -3149,8 +3150,10 @@ class Planform:
     def t_norm_to_plan (self, xn : float|Array|list, yn : float|Array|list) -> ...:
         """
         Transforms normalized coordinates into planform(wing) coordinates 
-            - by scaling with chord and span 
-            - by shearing with sweep angle 
+            - move reference line so le_yn = 0 
+            - apply banana
+            - scale with chord and span 
+            - shear with sweep angle 
         Args:
             xn,yn: normalized, either float, list or Array to transform 
         Returns:
@@ -3179,6 +3182,35 @@ class Planform:
         y = y + x * shear_factor  
 
         return np.round(x,10), np.round(y,10) 
+
+
+
+    def t_ref_to_plan (self, xn : float|Array|list, yn : float|Array|list) -> ...:
+        """
+        Transforms normalized reference line coordinates into planform(wing) coordinates 
+            -> same as norm_to_plan *without* applying banana (it would be double banana)
+        """
+
+        # sanity - convert list to np.array
+        if isinstance (xn, float) or isinstance (xn, int):
+            _xn, _yn = float(xn), float(yn)
+        else: 
+            _xn, _yn = np.array (xn), np.array (yn)
+
+        # move reference line which is in norm at yn=0, so le_y at x=0 will be 0.0 
+        cr_0 = self.n_chord_ref.at (0)
+        _yn = _yn + cr_0
+
+        # scale 
+        x = _xn * self.span
+        y = _yn * self.chord_root
+
+        # do shear 
+        shear_factor =  1 / np.tan((90-self.sweep_angle) * np.pi / 180)    # = cotangens
+        y = y + x * shear_factor  
+
+        return np.round(x,10), np.round(y,10) 
+
 
 
 
@@ -3233,6 +3265,35 @@ class Planform:
 
         # undo banana of reference line 
         yn = yn - self.n_ref_line.at (xn, fast=False)
+
+        # undo move reference line
+        cr_0 = self.n_chord_ref.at (0)
+        yn = yn - cr_0
+
+        return xn, yn 
+
+
+
+
+    def t_plan_to_ref (self, x : float|Array|list, y : float|Array|list) -> ...:
+        """
+        Transforms planform(wing) coordinates into normalized reference line coordinates  
+            - reverse of 'transform_ref_to_plan' 
+        """
+
+        # sanity - convert list to np.array
+        if isinstance (x, float):
+            _x, _y = x, y
+        else: 
+            _x, _y = np.array (x), np.array (y)
+
+        # undo shear 
+        shear_factor =  1 / np.tan((90-self.sweep_angle) * np.pi / 180)    # = cotangens
+        _y = _y - _x * shear_factor
+
+        # undo scale 
+        xn = np.round(_x / self.span, 10)
+        yn = np.round(_y / self.chord_root, 10)
 
         # undo move reference line
         cr_0 = self.n_chord_ref.at (0)

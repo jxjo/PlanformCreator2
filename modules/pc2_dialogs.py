@@ -20,7 +20,7 @@ from base.panels            import Dialog, MessageBox
 from base.diagram           import Diagram, Diagram_Item
 
 from base.artist            import Artist
-from pc2_artists            import Image_Artist, Planform_Artist, Ref_Line_Artist, Flaps_Artist
+from pc2_artists            import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
 
 from wing                   import Wing, Planform, Image_Definition 
 from wing_exports           import Export_Airfoils, Export_Dxf
@@ -556,7 +556,7 @@ class Dialog_Select_Template (Dialog):
             """ create and setup the artists of self"""
             
             self._add_artist (Planform_Artist       (self, self.planform, as_contour=True, show_mouse_helper=False))
-            self._add_artist (Ref_Line_Artist       (self, self.planform, show_mouse_helper=False))
+            self._add_artist (Ref_Line_Artist       (self, self.planform, mode=mode.REF_TO_PLAN, show_mouse_helper=False))
     
 
         @override
@@ -622,7 +622,7 @@ class Dialog_Select_Template (Dialog):
     # --- The Dialog ----------------------------------------------------
 
     _width  = 600
-    _height = 600
+    _height = 650
 
     name = "Select a Template for a new Wing"
 

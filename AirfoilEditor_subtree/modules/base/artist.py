@@ -482,7 +482,7 @@ class Movable_Bezier (pg.PlotCurveItem):
 
     @property
     def bezier (self) -> Bezier:
-        """ the Bezier self is working with ad displayed on move  """
+        """ the Bezier self is working with - displayed on move  """
         # can be overloaded 
         # here - we use a helper bezier to show during move  
         if self._bezier is None: 
