@@ -210,40 +210,51 @@ An attempt was made to provide a simple, intuitive UI to be able to 'playfully' 
 
 ![PC2](images/PC2_app.png "Planform Creator 2")
 
-The upper tabs are used to switch between the different main display views. On the left (in the 'View' area) are the selection buttons to customize the selected view. A zoom and pan function allows to look at details.
+- The upper tabs are used to switch between the different main views. 
+- Within the panel on the left the settings for current diagram can be customized. 
 
-At the bottom left are the usual file functions. Here you also find the different export and import capabilities.
+- At the bottom left are the usual file and action functions. 
 
-In the lower main area the input or modification of the wing parameters takes place. The most important parameters can alternatively be changed directly in the diagram with the mouse ('Mouse helper' switch in the 'View' area). 
+- In the lower main panel the input or modification of the planform parameters takes place. The most important parameters can alternatively be changed directly in the diagram using the little mouse helper squares.
 
-Included in the installation are two example projects which give a good overview of the possibilities of PC2.
-- F3F wing 'VJX.glide' (this is a real life design) 
-- Flying wing "Amokka-JX" with straight trailing edge   
-(the examples can be accessed via 'Open' in the exmaples sub directory) 
+To get to know the app for the first time, take a look at the 'Welcome' panel. You'll find some further explanations and can start to modify the sample planform right away. The 'New' function shows a selection of predefined templates which can be a good starting point for your project.
 
+In the 'examples' folder, you'll find some full flavored PC2 projects. Just 'Open' the respective PC2 file. 
+
+
+
+## Software Aspects
+
+`PlanformCreator2` is developed in  [Python](https://www.python.org/) using [PyQt6](https://pypi.org/project/PyQt6/) which wraps and extends the [Qt UI framework](https://www.qt.io/product/framework) and [PyQtGraph](https://www.pyqtgraph.org/) which wraps the QT Graphics framework. 
+
+The main building blocks of the app are
+* Model - containing all geometry and math helper routines to create and modify a wing planform. The model is independent of the UI ([modules/wing.py](modules/wing.py)).
+
+* UI-Framework - base classes and a little framework to ease the implementation of forms based on `Widgets` and `Diagrams`.
+Plots in `Diagrams` are handled by `Artists` where each viszualizes certain data aspects of a planform. The base classes are imported from the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) project as a Git subtree
+
+* Application - `App_Main` and view `Panels` to handle presentation and user interaction 
 
 
 ##  Install
 
-A pre-build Windows-Exe is available in the releases section https://github.com/jxjo/PlanformCreator2/releases  
+A pre-build Windows-Exe of the app is available in the releases section https://github.com/jxjo/PlanformCreator2/releases  
 
 or 
 
-Download python sources from https://github.com/jxjo/PlanformCreator2/releases or Clone the repository 
+Download python sources from https://github.com/jxjoPlanformCreator2/releases or Clone the repository 
 
 and Install 
 
 ```
+pip3 install pyqt6
 pip3 install numpy
-pip3 install matplotlib
-pip3 install customtkinter
-
+pip3 install pyqtgraph 
 pip3 install termcolor
-pip3 install colorama
-pip3 install ezdxf
+
 ```
 
- 
+
 Have fun!
 
 jochen@jxjo.de

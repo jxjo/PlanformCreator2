@@ -553,7 +553,7 @@ class Planform_Artist (Abstract_Artist_Planform):
 
     @property 
     def as_contour (self):
-        """ show planform as one contour - and not le and te seperatly"""
+        """ show planform as one contour - and not le and te separatly"""
         return self._as_contour
 
 

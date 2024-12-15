@@ -251,9 +251,9 @@ class Dialog_Export_Dxf (Dialog):
         self.close()
 
         if self.export_dxf.export_airfoils:
-            msg = f"Planform '{self.export_dxf.filename}' and {self.export_dxf.n_airfoils} Airfoils \n\nexported to directory\n\n'{self.export_airfoils.export_dir}'"
+            msg = f"Planform '{self.export_dxf.filename}' and {self.export_dxf.n_airfoils} Airfoils \n\nexported to directory '{self.export_dxf.export_dir}'"
         else: 
-            msg = f"Planform '{self.export_dxf.filename}' \n\nexported to directory\n\n'{self.export_dxf.export_dir}'"
+            msg = f"Planform '{self.export_dxf.filename}' \n\nexported to directory '{self.export_dxf.export_dir}'"
 
         MessageBox.success (self,"Export dxf", msg, min_width=300)
 
