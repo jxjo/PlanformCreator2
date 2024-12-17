@@ -241,7 +241,9 @@ class Wing:
                 elif eitherPosOrChord == False:
                     defines_cn = True
                 toDict (new_sectionDict, "defines_cn", defines_cn)
-                toDict (new_sectionDict, "airfoil",             fromDict (sectionDict, "airfoil", None))
+
+                airfoilDict = fromDict (sectionDict, "airfoil", {})
+                toDict (new_sectionDict, "airfoil",             fromDict (airfoilDict, "file", None))
 
                 # flap hinge line 
                 if i == 0:

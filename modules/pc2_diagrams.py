@@ -1452,22 +1452,21 @@ class Diagram_Panels (Diagram_Abstract):
             r,c = 0, 1
             Button      (l,r,c, text="Export Xflr5", width=100, set=self.sig_export_xflr5.emit)
             r += 1
-            SpaceR      (l,r,6,0)
+            SpaceR      (l,r,2,0)
             r += 1
-            Button      (l,r,c, text="Export FLZ", width=100, set=self.sig_export_flz.emit,
-                                hide= not os.name == 'nt' )                                 # only Windows
+            Button      (l,r,c, text="Export FLZ", width=100, set=self.sig_export_flz.emit)
             r += 1
             SpaceR      (l,r,2,0)
             r += 1
             Button      (l,r,c, text="Launch FLZ", width=100, set=self.sig_launch_flz.emit,
                                 hide= not os.name == 'nt')                                  # only Windows
             r += 1
-            SpaceR      (l,r,10,3)
+            SpaceR      (l,r,10,1)
 
             l.setColumnMinimumWidth (0,10)
             l.setColumnStretch (2,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(140,None),
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(100,None),
                                               switchable=False, switched_on=True)
         return self._export_panel 
 

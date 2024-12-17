@@ -55,7 +55,7 @@ The second main definition is the 'Chord Reference' which defines how much of th
 
 <img src="images/chord_distribution_reference.png" width="800" />
 
-By combining these two functions, scaling the result to a halfwing span and optionally shearing ther result by a 'Sweep Angle' the final planform is created
+By combining these two functions, scaling the result to a halfwing span and optionally shearing the result by a 'Sweep Angle' the final planform is created
 
 <img src="images/planform_by_chord.png" width="800" />
 
@@ -71,9 +71,9 @@ The following diagram shows the impact of different chord references while keepi
 
 
 #### Everything banana?
-A little speciality is the so called "banana function". It allows to bent the wing in spanwise direction like a banana without changing chord distribution and reference. The result can be a planform like the populae 'bow-style' flying wings. 
+A little speciality is the so called "banana function". It allows to bent the wing in spanwise direction like a banana without changing chord distribution and reference. The result can be a planform like the popular 'bow-style' flying wings. 
 
-Another use case for applying the 'banana function' is to finetune the flap depth alogn the wing span. As the flap hinge line (see further below) is a straght line, benting the planform will directly influence the flap depth. 
+Another use case for applying the 'banana function' is to finetune the flap depth alogn the wing span. As the flap hinge line (see further below) is a straight line, benting the planform will directly influence the flap depth. 
 
 <img src="./images/planform_banana.png" width="800" />
 
@@ -96,7 +96,7 @@ Once the planform has been defined, another artifact comes into play: 'wing sect
 * Define the position of the flap hinge line and the start of a 'flap group'.
 
 A wing always has at least 2 wing sections - a root and a tip section. In between, any number of wing sections can be created. There are two modes how the location of a wing section can be defined: 
-- by span position: The wing section will always remains in this relative span position, even if the wing span or chord distribution is changed. Positioning by span position is helpful for example to define flaps.
+- by span position: The wing section always remains in this relative span position, even if the wing span or chord distribution is changed. Positioning by span position is helpful for example to define flaps.
 - chord length: The wing section is tied to a certain relative chord. When changing the chord distribution, the wing section will move around in order to always have the same chord length. This is especially useful to have an airfoil at a certain chord length (= Reynolds number) within the wing.
 
 <img src="images/wing_sections.png" width="800" />
