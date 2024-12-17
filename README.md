@@ -2,7 +2,7 @@
 
 
 > [!NOTE]
- The [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) moved to a repo of its own. You can downlaod the app from there.
+The completely revised version 2.0 of PlanformCreator2 is on the way.</br>See the `2.0_dev` branch or download the newest version in the [releases](https://github.com/jxjo/PlanformCreator2/releases) section.
 
 ##
 
