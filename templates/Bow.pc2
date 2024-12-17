@@ -1,7 +1,7 @@
 {
   "pc2_version":2,
   "wing_name":"Bow ",
-  "description":"Bow style palnform having a 'banana'\nreference line and a kink in the hinge line.",
+  "description":"Bow style planform having a 'banana'\nreference line and a kink in the hinge line.",
   "fuselage_width":40.0,
   "airfoil_nick_prefix":"JX-",
   "airfoil_nick_base":70,
