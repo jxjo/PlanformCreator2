@@ -108,7 +108,10 @@ class Icon (QIcon):
 
     cache = {}
 
-    subdirs = ["icons", "..\\icons", "..", "."]
+    subdirs = ["icons",             # py :  __file__: ...\modules\base    icons in: ...\base\icons      (toolbutton) 
+               "..",                # py :  __file__: ...\modules\base    icons in: ...\modules         (app icon) 
+               "..\\icons",         # exe:  __file__: ...\_internal\base\ icons in: ...\_internal\icons
+               "."]
 
     @staticmethod
     def _get_icon(icon_name : str, light_mode = None, icon_dir=None) -> QIcon:
@@ -128,38 +131,43 @@ class Icon (QIcon):
             ico =  Icon.cache.get (icon_filename)
 
         else: 
+
+            # try to find in one of the subdirs relativ to __file__ (widgets.py) which can be in a subtree 
+            root_dirs = [os.path.dirname(os.path.realpath(__file__))]
+
+            # add optional icon_dir to root_dirs 
             if icon_dir:
-                root_dir = icon_dir
-            else: 
-                # try to find in one of the subdirs relativ to __file__
-                root_dir = os.path.dirname(os.path.realpath(__file__))
+                root_dirs.append(icon_dir)
 
-            for subdir in Icon.subdirs:
-                icon_dir = os.path.join(root_dir, subdir)
-                icon_path = os.path.join(icon_dir, icon_filename)
+            wrong_dirs = []
 
-                # found icon file 
-                if os.path.isfile (icon_path):
-                    ico = QIcon (icon_path)
-                    Icon.cache [icon_filename] = ico 
-                    break 
+            for root_dir in root_dirs: 
+                for subdir in Icon.subdirs:
+                    icon_dir = os.path.join(root_dir, subdir)
+                    icon_pathFilename = os.path.join(icon_dir, icon_filename)
+
+                    # found icon file 
+                    if os.path.isfile (icon_pathFilename):
+                        ico = QIcon (icon_pathFilename)
+                        Icon.cache [icon_filename] = ico 
+                        break 
+                    else: 
+                        wrong_dirs.append(icon_dir)
 
         if ico is None:                 
-            # icon file doe not exist 
-            logger.error (f"Icon '{icon_filename} not found in {Icon.subdirs}")
+            logger.error (f"Icon '{icon_filename} not found in {wrong_dirs}")
 
         return ico 
 
 
     @override
     def __init__ (self, aName, light_mode=None, icon_dir=None):
-        """ A
-        llow an Icon name to create a QIcon
+        """ Allow an Icon name to create a QIcon
 
         Args:
             aName:  name of icon
             light_mode: retrieve icon for light or dark mode
-            icon_dir: optional new icon dir to look for icon file 
+            icon_dir: optional new icon dir to look additionally for icon file 
         """
 
         if isinstance (aName, str): 

@@ -14,7 +14,7 @@ Main features:
 * View airfoil at wing sections and edit its properties using the [Airfoil Editor](https://github.com/jxjo/AirfoilEditor)
 * Generate blended airfoils for intermediate wing sections ('strak')
 * Define flaps hinge line and flaps 
-* Import image of an existing wing as abackground image for design
+* Import image of an existing wing as a background image for design
 * Auto panelling of the planform as preparation for aerodynamic calculation 
 * Export wing definition and airfoils to
   * Xflr5 
@@ -27,13 +27,13 @@ The project was inspired by the 'Planform Creator' being part of [The Strak Mach
 
 The idea behind Planform Creator 2 is to have a tool to design a new wing with a more graphical, 'playful' approach. It tries to fill the gap between CAD based design and aerodynamic analysis tools like Xflr5.
 
-<img src="./images/PC2_usecase.png" width="500" />
+<img src="images/PC2_usage.png" width="800" />
 
 Within the early design process of a wing Planform Creator 2 is the master of 'truth'. It provides the data for the aerodynamic analysis. The findings in the analysis can be used to modify the planform. 
 
 When the results are satisfying the planform and the envolved airfoils are exported as dxf to a CAD program to continue with the final 3D design e.g. for a mold of the wing. 
 
-In contrast to a "paint program", the planform is defined by parameters such as 'span', 'root depth' or "sweep of hinge line". The chord distribution along the span is controlled by a mathematical function via parameters.
+In contrast to a "paint program", the planform is defined by parameters such as 'span', 'root depth' or "sweep angle". The chord distribution along the span is controlled by a mathematical function via parameters.
 The advantage is that the parameters can be changed independently of each other, allowing a quick approach to the desired wing planform.
 
 
@@ -46,8 +46,8 @@ The advantage is that the parameters can be changed independently of each other,
 Most important and usually defined first, is the chord distribution along the wing span. The geometric chord distribution directly and significantly determines the lift distribution along the span. The local lift coefficient depends on the local effective angle of attack (influenced by the wing shape) and on the local Reynolds number, which changes proportionally to the local chord.
 
 Two different "types" are available for defining the chord distribution:
-- Bezier curve: Using a start tangent at the root and a end tangent at the wing tip, the curve of the chord distribution is defined by dragging the control points with the mouse
-- Trapezoid: For the definition of a (multiple) trapezoid wing. The chord is defined by the chord length of the individual wing sections.
+- **Bezier curve**: Using a start tangent at the root and a end tangent at the wing tip, the curve of the chord distribution is defined by dragging the control points with the mouse
+- **Trapezoid**: For the definition of a (multiple) trapezoid wing. The chord is defined by the chord length of the individual wing sections.
 
 In PC2, the chord distribution is always displayed in normalized form. Both span and chord length range from 0 to 1. This allows chord distributions - even of different wing designs - to be compared with each other without distortion.
 
@@ -79,7 +79,7 @@ Another use case for applying the 'banana function' is to finetune the flap dept
 
 ### Background image
 
-If you want to recreate an wing based on an existing image, you made load this image as a background image into the app. Having a planform as contour line in the background, it is (most of the times) straight forward to define the chord distribution and the chord reference for a best fit.
+If you want to recreate an wing based on an existing image, you may load this image as a background image into the app. Having a planform as contour line in the background, it is - most of the times - straight forward to define the chord distribution and the chord reference for a best fit.
 
 There is a little image editor to scale the image and adapt the colors to a 'dark mode' of the image which is best suited as a background. 
 
@@ -91,13 +91,13 @@ Scaling of the image is done by moving the two scale markers to the leading edge
 
 ### Wing sections
 
-Once the planform has been defined, another artifact comes into play: 'wing sections'. A wing section has main tasks:
+Once the planform has been defined, another artifact comes into play: 'wing sections'. A wing section has two main tasks:
 * Define the position of an airfoil within a planform
 * Define the position of the flap hinge line and the start of a 'flap group'.
 
 A wing always has at least 2 wing sections - a root and a tip section. In between, any number of wing sections can be created. There are two modes how the location of a wing section can be defined: 
-- by span position: The wing section will always remains at this relative span position, even if the wing span or chord distribution is changed. Positioning by span position is helpful for example to define flaps.
-- chord length: The wing section is tied to a certain relative chord. When changing the chord distribution, the wing section will moves around in order to always have the same chord length. This is especially useful to have an airfoil at a certain chord length (= Reynolds number) within the wing.
+- by span position: The wing section will always remains in this relative span position, even if the wing span or chord distribution is changed. Positioning by span position is helpful for example to define flaps.
+- chord length: The wing section is tied to a certain relative chord. When changing the chord distribution, the wing section will move around in order to always have the same chord length. This is especially useful to have an airfoil at a certain chord length (= Reynolds number) within the wing.
 
 <img src="images/wing_sections.png" width="800" />
 
@@ -113,9 +113,9 @@ A special case arises with trapezoidal planforms. Here wing sections are also us
 
 ### Hinge Line and Flap Depth
 
-Flaps are defined by their 'hinge line' and their bounding wing sections to the left and to the right. A wing section can have a 'flap group' assigned. All subsequent wing sections with the same flap group will define a new flap.
+Flaps are defined by their 'hinge line' and their bounding wing sections to the left and to the right. A wing section can have a 'flap group' assigned. All subsequent wing sections with the same flap group will define a single flap.
 
-In many cases the hinge line equals the 'reference line' of the planform. This is also the default case when defining flpas. 
+In many cases the hinge line equals the 'reference line' of the planform. This is also the default case when defining flaps. 
 
 More flexibility is achieved through a separate definition of the hinge line with a hinge point at the root section and the tip section. 
 In certain cases, for example with a curved reference line, kinks in the hinge line can be defined at a wing section.
@@ -141,7 +141,7 @@ The airfoils can either be viewed in normal, normed scale or in their 'real' sca
 
 All airfoils, including the generated 'straked' airfoils, can be exported as a .dat file at the end. Very practical is the optional setting of a continuous trailing edge thickness ('Te gap') in mm, which eliminates the often necessary manual reworking of the airfoils in CAD. 
 
-Included in the Planform Creator 2 isthe  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) which allows the typical modifications of an airfoil during wing design. 
+Included in the Planform Creator 2 is the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) which allows the typical modifications of an airfoil during wing design. 
 
 ![PC2](images/AirfoilEditor_app.png "Screenshot of the AirfoilEditor ")
 <sup>The AirfoilEditor can also be used as a stand-alone program. Linked with the file extension ".dat" it acts as a smart display and edit app for airfoils.</sup>
@@ -171,12 +171,12 @@ In the case of a curved leading or trailing edge this can lead to considerable g
 #### Xflr5
 
 When using PC2 together with Xlfr5 the major faciliation beside the definition of wing segements, is the automatic generation of all intermediate airfoils needed in Xflr5 at all wing sections. No further geometric work has to be done for wing definition and airfoils. The steps to perform wing analysis in Xflr5 together with PC2:
-1. PC2: Export the xml wing definition and all airfoils involved to a subdirectory. 
-2. Xflr5: Open the airfoils in a single step.
-3. Xflr5 - Xfoil Direct Analysis: Batch Analysis of all the airfoils with a polarset covering the complete Reynolds range
-4. Xflr5 - Wing and Plane Design: Create a new plane
-4. Xflr5 - Wing and Plane Design - Edit Wing: There is a menu button 'Other' with the menu item 'Import Wing from xml file"
-5. Xflr5 - Wing and Plane Design: --> Ready for calculation. Don't forget to define a 'Plane Mass' for T2 analysis.  
+1. PC2: *Export the xml wing definition and all airfoils involved to a subdirectory.* 
+2. Xflr5: *Open the airfoils in a single step.*
+3. Xflr5 - Xfoil Direct Analysis: *Batch Analysis of all the airfoils with a polarset covering the complete Reynolds range*
+4. Xflr5 - Wing and Plane Design: *Create a new plane*
+4. Xflr5 - Wing and Plane Design - Edit Wing: *Press menu button 'Other' and select 'Import Wing from xml file'*
+5. Xflr5: *Ready for calculation. Don't forget to define a 'Plane Mass' for T2 analysis.*  
 
 
 <img src="images/panelling_xflr5_loaded.png" width="800" />
@@ -228,10 +228,10 @@ In the 'examples' folder, you'll find some full flavored PC2 projects. Just 'Ope
 `PlanformCreator2` is developed in  [Python](https://www.python.org/) using [PyQt6](https://pypi.org/project/PyQt6/) which wraps and extends the [Qt UI framework](https://www.qt.io/product/framework) and [PyQtGraph](https://www.pyqtgraph.org/) which wraps the QT Graphics framework. 
 
 The main building blocks of the app are
-* Model - containing all geometry and math helper routines to create and modify a wing planform. The model is independent of the UI ([modules/wing.py](modules/wing.py)).
+* Model - containing all geometry and math helper routines to create and modify a wing planform. The model is independent of the UI.
 
 * UI-Framework - base classes and a little framework to ease the implementation of forms based on `Widgets` and `Diagrams`.
-Plots in `Diagrams` are handled by `Artists` where each viszualizes certain data aspects of a planform. The base classes are imported from the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) project as a Git subtree
+Plots in `Diagrams` are handled by `Artists` where each of them viszualizes certain data aspects of a planform. The base classes are imported from the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) project as a Git subtree
 
 * Application - `App_Main` and view `Panels` to handle presentation and user interaction 
 

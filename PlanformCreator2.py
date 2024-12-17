@@ -46,7 +46,7 @@ logger.setLevel(logging.DEBUG)
 #------------------------------------------------
 
 APP_NAME     = "Planform Creator 2"
-APP_VERSION  = "2.0 beta.1"
+APP_VERSION  = "2.0 beta"
 
 TEMPLATE_DIR = "templates"
 
@@ -198,8 +198,9 @@ class App_Main (QMainWindow):
 
 
         # get icon either in modules or in icons 
-        
-        self.setWindowIcon (Icon  ('PC_ico.ico', icon_dir="modules"))
+
+        icon = Icon  ('PC2_ico.ico', icon_dir="modules")    # will look in .\modules for py, in .\_internal\icons for exe
+        self.setWindowIcon (icon)
 
         # get initial window size from settings
 
@@ -577,7 +578,7 @@ class App_Main (QMainWindow):
 if __name__ == "__main__":
 
 
-    dev_mode = os.path.isdir(os.path.dirname(os.path.realpath(__file__)) +"\\test_airfoils")
+    dev_mode = True
 
     # init logging  
 

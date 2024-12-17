@@ -6,7 +6,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "justMyCode": true,
+            "justMyCode": false,
             "cwd": "${fileDirname}"
         }
     ]
