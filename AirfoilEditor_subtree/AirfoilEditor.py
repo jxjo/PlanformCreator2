@@ -494,7 +494,6 @@ if __name__ == "__main__":
     else:                       
         init_logging (level= logging.WARNING)
 
-
     # command line arguments? 
     
     parser = argparse.ArgumentParser(prog=AppName, description='View and edit an airfoil')
@@ -517,9 +516,12 @@ if __name__ == "__main__":
 
     # Strange: Without setStyleSheet, reset Widget.setPalette doesn't work .. !?
     # Segoe UI is the font of 'fusion' style 
-    # font = QFont ()
-    # print (font.defaultFamily(), font.family(), font.families())
     app.setStyleSheet ("QWidget { font-family: 'Segoe UI' }")
+
+    # set dark / light mode for widgets depending on system mode 
+
+    scheme = QGuiApplication.styleHints().colorScheme()
+    Widget.light_mode = not (scheme == Qt.ColorScheme.Dark)
 
     Main = App_Main (airfoil_file)
     Main.show()

@@ -1244,13 +1244,14 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         """
 
         self._is_cn_tip_min_applied = False
+        cn_tip_min = self.cn_tip_min
 
         # retrieve xn, cn of sections from parent chord 
 
         xn, cn = [], []
         section : WingSection
         for section in self._parent_planform.wingSections:
-            if self.cn_tip_min is None or section.cn >= self.cn_tip_min :
+            if cn_tip_min is None or section.cn >= cn_tip_min :
                 xn.append(section.xn)
                 cn.append(section.cn)
             else:

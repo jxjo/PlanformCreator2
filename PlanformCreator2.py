@@ -89,48 +89,98 @@ class Tab_Panel (QTabWidget):
 
         # see https://doc.qt.io/qt-6/stylesheet-examples.html
 
-        self.setStyleSheet("""
-        QTabWidget::pane { /* The tab widget frame */
-            border-top:1px solid #ababab;
-        }
+        if Widget.light_mode:
+            tab_style = """
+            QTabWidget::pane { /* The tab widget frame */
+                border-top:1px solid #ababab;
+            }
 
-        QTabWidget::tab-bar {
-            left: 400px; /* move to the right by 5px */
-        }
+            QTabWidget::tab-bar {
+                left: 400px; /* move to the right by 5px */
+            }
 
-        /* Style the tab using the tab sub-control. Note that
-            it reads QTabBar _not_ QTabWidget */
-        QTabBar::tab {
-            /*background: green; */
-            border: 1px solid #C4C4C3;
-            border-bottom: 0px;                                     /*remove */
-            border-top-left-radius: 3px;
-            border-top-right-radius: 3px;
-            min-width: 40ex;
-            padding: 6px;
-        }
+            /* Style the tab using the tab sub-control. Note that
+                it reads QTabBar _not_ QTabWidget */
+            QTabBar::tab {
+                /*background: green; */
+                border: 1px solid #C4C4C3;
+                border-bottom: 0px;                                     /*remove */
+                border-top-left-radius: 3px;
+                border-top-right-radius: 3px;
+                min-width: 40ex;
+                padding: 6px;
+            }
 
-        QTabBar::tab:!selected {
-            margin-top: 2px; /* make non-selected tabs look smaller */
-            background: #e5e5e5
-        }
-                           
-        QTabBar::tab:hover {
-            background: rgba(255, 255, 255, 0.2) /* rgba(255, 20, 147, 0.1); */               /* deep pink */ 
-        }
+            QTabBar::tab:!selected {
+                margin-top: 2px; /* make non-selected tabs look smaller */
+                background: #e5e5e5
+            }
+                            
+            QTabBar::tab:hover {
+                background: rgba(255, 255, 255, 0.2) /* rgba(255, 20, 147, 0.1); */              
+            }
 
-        QTabBar::tab:selected {
-            background: rgba(255, 255, 255, 0.9) /* background: rgba(255, 20, 147, 0.2); */                   /* deep pink */ 
-        }
+            QTabBar::tab:selected {
+                background: rgba(255, 255, 255, 0.9) /* background: rgba(255, 20, 147, 0.2); */               
+            }
 
-        QTabBar::tab:selected {
-            /*color: white; */
-            color: #303030;
-            font-weight: 600;
-            border-color: #9B9B9B;
-            border-bottom-color: #C2C7CB; /* same as pane color */
-        }
-        """)
+            QTabBar::tab:selected {
+                /*color: white; */
+                color: #303030;
+                font-weight: 600;
+                border-color: #9B9B9B;
+                border-bottom-color: #C2C7CB; /* same as pane color */
+            }
+            """
+ 
+        else: 
+
+            tab_style = """
+            QTabWidget::pane { /* The tab widget frame */
+                border-top:1px solid #505050;
+            }
+
+            QTabWidget::tab-bar {
+                left: 400px; /* move to the right by 5px */
+            }
+
+            /* Style the tab using the tab sub-control. Note that
+                it reads QTabBar _not_ QTabWidget */
+            QTabBar::tab {
+                /*background: green; */
+                border: 1px solid #505050;  
+                border-bottom: 0px;                                     /*remove */
+                border-top-left-radius: 3px;
+                border-top-right-radius: 3px;
+                min-width: 40ex;
+                padding: 6px;
+            }
+
+            QTabBar::tab:!selected {
+                margin-top: 2px; /* make non-selected tabs look smaller */
+                color: #D0D0D0;
+                background: #353535
+            }
+                            
+            QTabBar::tab:hover {
+                background: rgba(255, 255, 255, 0.2) /* rgba(255, 20, 147, 0.1); */             
+            }
+
+            QTabBar::tab:selected {
+                background: rgba(77, 77, 77, 0.9) /* background: rgba(255, 20, 147, 0.2); */                   
+            }
+
+            QTabBar::tab:selected {
+                /*color: white; */
+                color: #E0E0E0;
+                font-weight: 600;
+                border-color: #909090;
+                border-bottom-color: #C2C7CB;   /* same as pane color */
+            }
+            """
+
+
+        self.setStyleSheet (tab_style) 
 
 
     def __repr__(self) -> str:
@@ -613,6 +663,13 @@ if __name__ == "__main__":
     # font = QFont ()
     # print (font.defaultFamily(), font.family(), font.families())
     app.setStyleSheet ("QWidget { font-family: 'Segoe UI' }")
+
+    # set dark / light mode for widgets depending on system mode 
+
+    scheme = QGuiApplication.styleHints().colorScheme()
+    Widget.light_mode = not (scheme == Qt.ColorScheme.Dark)
+
+    # start app 
 
     Main = App_Main (parmFile)
     Main.show()
