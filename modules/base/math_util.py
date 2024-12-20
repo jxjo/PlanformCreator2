@@ -20,8 +20,7 @@ logger.setLevel(logging.WARNING)
     # from timeit import default_timer as timer
     # start = timer()
     # ...
-    # end = timer()
-    # print("Time ", end - start)  
+    # print("Time ", timer() - start)  
 
 
 
@@ -37,7 +36,9 @@ class JPoint:
     """
 
     def __init__ (self, a, b = None, 
-                  x_limits : tuple|None = None, y_limits : tuple|None = None ):
+                  x_limits : tuple|None = None, 
+                  y_limits : tuple|None = None ,
+                  name : str|None = None):
         """ 
         Create new point. The arguments a,b can be 
             - x, y cordinates 
@@ -51,6 +52,7 @@ class JPoint:
         self._y = None
         self._y_limits = y_limits 
 
+        self._name = name 
         self._fixed = False
 
         self.set_xy (a, b)
@@ -73,7 +75,7 @@ class JPoint:
 
     @property
     def xy (self) -> tuple[float]:
-        return (self.x, self._y)
+        return (self.x, self.y)
 
     @property
     def x_limits (self) -> tuple:
@@ -83,6 +85,11 @@ class JPoint:
     def y_limits (self) -> tuple:
         return self._y_limits
 
+    @property
+    def name (self):
+        return self._name 
+    def set_name (self, aStr: str):
+        self._name = aStr
 
     def label_changed (self, xy_initial : tuple) -> str:
         """ returns a short label 7.4@30.6 for y,x changed values as percent""" 
@@ -167,9 +174,56 @@ class JPoint:
         return x_isNew, y_isNew
 
 
+    def as_transformed (self, transform_fn) -> 'JPoint':
+        """ 
+        Transform self with a transformation function transform_fn and
+        returns a new JPoint
+            The function must accept x,y and has to return xt, yt
+            as the new coordinate values.
+            If transform_fn is None, return self.
+        """
 
-    def _set_val (self, val, new_val, limits, is_fixed) -> tuple [float, bool]:
-        """  set new_val of val - return (new_val, has_changed)"""
+        # transform coordinate 
+
+        if transform_fn is None: 
+            return self
+        else: 
+            if not callable (transform_fn):
+                raise ValueError (f"transformation function is not callable{transform_fn}")
+            xt, yt = transform_fn (self.x, self.y)
+
+        # transform limits
+
+        if self.x_limits is not None:
+            x_min, x_max =  self.x_limits
+            xt_min,_ = transform_fn (x_min, self.y)
+            xt_max,_ = transform_fn (x_max, self.y)
+            if xt_min <= xt_max:                                    # transform may flip limits 
+                xt_limits = (xt_min, xt_max)
+            else: 
+                xt_limits = (xt_max, xt_min)
+        else: 
+            xt_limits = None
+
+        if self.y_limits is not None:
+            y_min, y_max =  self.y_limits
+            _, yt_min = transform_fn (self.x, y_min)
+            _, yt_max = transform_fn (self.x, y_max)
+            if yt_min <= yt_max:                                    # transform may flip limits 
+                yt_limits = (yt_min, yt_max)
+            else: 
+                yt_limits = (yt_max, yt_min)
+        else: 
+            yt_limits = None
+
+        jPoint =  JPoint (xt, yt, x_limits=xt_limits, y_limits=yt_limits, name=self.name)
+        jPoint.set_fixed (self.fixed)
+
+        return jPoint
+
+
+    def _set_val (self, val, new_val, limits, is_fixed) -> float:
+        """  set new_val of val - return new_val"""
 
         if is_fixed:
             new_val = val 
@@ -186,8 +240,15 @@ class JPoint:
 
         return new_val 
 
-    
+    @staticmethod
+    def transform (jpoints : list['JPoint'], transform_fn) -> list['JPoint']:
+        """ transforms a list of JPoints and returns them as a new list"""
 
+        jpoints_transformed = []
+        for jpoint in jpoints:
+            jpoints_transformed.append (jpoint.as_transformed (transform_fn))
+        return jpoints_transformed
+    
 
 #------------ linear interpolation -----------------------------------
 

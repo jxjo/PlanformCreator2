@@ -22,6 +22,8 @@ import numpy as np
 
 import pyqtgraph as pg
 from pyqtgraph.Qt       import QtCore
+from PyQt6.QtCore       import pyqtSignal
+
 from pyqtgraph.graphicsItems.ScatterPlotItem    import Symbols
 from pyqtgraph.graphicsItems.GraphicsObject     import GraphicsObject
 from pyqtgraph.GraphicsScene.mouseEvents        import MouseClickEvent
@@ -38,8 +40,6 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
-
 class qcolors (StrEnum):
 
     EDITABLE      = 'orange' 
@@ -50,17 +50,21 @@ class qcolors (StrEnum):
 
 
 
-def random_colors (nColors) -> list:
-    """ returns a list of random QColors"""
+def random_colors (nColors, h_start=0) -> list[QColor]:
+    """ 
+    returns a list of random QColors which fit together 
+    Args:
+        h_start: optional Hue start value: 0=red, 2/6=green, 4/6=blue
+    """
 
     # https://martin.ankerl.com/2009/12/09/how-to-create-random-colors-programmatically/
     golden_ratio = 0.618033988749895
     colors = []
 
     for i in range (nColors):
-        h = golden_ratio * i/nColors 
+        h = h_start + golden_ratio * (i+1)/(nColors+1) 
         h = h % 1.0
-        colors.append(QColor.fromHsvF (h, 0.5, 0.95, 1.0) )
+        colors.append(QColor.fromHsvF (h, 0.5, 0.95, 1.0) ) #0.5
     return colors
 
 
@@ -88,13 +92,13 @@ class Movable_Point (pg.TargetItem):
 
     """
 
-    name = 'Point'                          # name of self - shown in 'label'
+    name = 'Point'                                  # name of self - shown in 'label'
 
-    sigShiftClick = QtCore.Signal(object)   # signal when point is shift clicked
+    sigShiftClick = QtCore.Signal(object)           # signal when point is shift clicked
 
     def __init__ (self, 
                   xy_or_point : tuple | JPoint, 
-                  parent = None,                # to attach self to parent (polyline)
+                  parent = None,                    # to attach self to parent (polyline)
                   name : str = None, 
                   id = None, 
                   symbol = '+',
@@ -116,7 +120,13 @@ class Movable_Point (pg.TargetItem):
 
         movable = movable and (not self._jpoint.fixed)
 
-        self.name = name if name is not None else self.name
+        if self._jpoint.name is not None:
+            self.name = self._jpoint.name                               # jpooint has precedence 
+        elif name is not None:
+            self.name = name                                            # take argument
+        else:
+            pass                                                        # take class name 
+
         self._id = id
         self._callback_changed = on_changed if callable(on_changed) else None 
 
@@ -134,33 +144,37 @@ class Movable_Point (pg.TargetItem):
         if movable:
             symbol = self._symbol_movable
             size = size if size is not None else 9 
+
+            brush_color = QColor(color) if color else qcolors.EDITABLE
+            brush_color = QColor(brush_color.darker(200))
+
             color = movable_color if movable_color is not None else qcolors.EDITABLE
-            brush = QColor(color)
             hoverBrush = qcolors.HOVER
 
             pen = pg.mkPen (color, width=1) 
             hoverPen = pg.mkPen (qcolors.HOVER, width=1)
 
-            self._movingBrush =  QColor('black') 
+            self._movingBrush =  QColor('black')
+            self._movingBrush.setAlphaF (0.3) 
 
         else: 
             symbol = self._symbol_fixed
             size = size if size is not None else 9 
 
-            penColor = QColor (color).darker (150)
+            penColor = QColor (color).darker (120)
 
             pen = pg.mkPen (penColor, width=1)
-            brush = QColor (penColor) # QColor (color)
+            brush_color = QColor (penColor) # QColor (color)
 
             hoverPen = pg.mkPen (color, width=1) 
             hoverBrush = QColor(color)
 
         # init TargetItem  
 
-        super().__init__(pos=self._jpoint.xy, pen= pen, brush = brush, 
+        super().__init__(pos=self._jpoint.xy, pen= pen, brush = brush_color, 
                          hoverPen = hoverPen, hoverBrush = hoverBrush,
                          symbol=symbol, size=size, movable=movable,
-                         label = self._get_label_static, 
+                         label = self.label_static, 
                          labelOpts = self._label_opts(),
                          **kwargs)
 
@@ -210,26 +224,22 @@ class Movable_Point (pg.TargetItem):
         self.name = aName
         self._label.valueChanged()                  # force label callback
 
-    def _get_label_static (self,*_):   return self.label_static ()
-    def _get_label_moving (self,*_):   return self.label_moving ()
-    def _get_label_hover (self,*_):    return self.label_hover ()
 
-
-    def label_static (self) -> str:
+    def label_static (self, *_) -> str:
         """ the static label - can be overloaded """
         if self._show_label_static:
             return f"{self.name}" 
         else:
             return None
 
-    def label_moving (self):
+    def label_moving (self, *_):
         """ the label when moving - can be overloaded """
         return f"{self.name} {self.y:.4n}@{self.x:.4n}"
 
 
-    def label_hover (self):
+    def label_hover (self, *_):
         """ the label when hovered - can be overloaded """
-        return self.label_moving ()
+        return self.label_moving (*_)
         # return f"Point {self.y:.4n}@{self.x:.4n} hovered"
 
 
@@ -265,6 +275,20 @@ class Movable_Point (pg.TargetItem):
 
     # TargetItem overloaded ---------------------------
 
+    @override
+    def setPos (self,*args):
+        # overridden as change detection of TargetItem is too sensible for numerical issues
+        try:
+            newPos = pg.Point(*args)
+        except: 
+            raise TypeError(f"Could not make Point from arguments: {args!r}")
+
+        if (round(self._pos.x(), 6) !=  round(newPos.x(), 6) or
+            round(self._pos.y(), 6) !=  round(newPos.y(), 6)): 
+            # print ("not equal", self._pos, newPos, self._pos.x()+self._pos.y(), newPos.x()+newPos.y())
+            super().setPos(*args)
+
+
     def setPos_silent (self, *args): 
         """ same as superclass targetItem.setPos but doesn't signal sigPositionChanged """
 
@@ -274,7 +298,8 @@ class Movable_Point (pg.TargetItem):
 
         # used for high speed refresh 
         newPos = pg.Point(xy)
-        if self._pos != newPos:
+        if (round(self._pos.x(), 6) !=  round(newPos.x(), 6) or
+            round(self._pos.y(), 6) !=  round(newPos.y(), 6)): 
             self._pos = newPos
             GraphicsObject.setPos(self, self._pos)            # call grand pa to avoid signal 
 
@@ -284,6 +309,7 @@ class Movable_Point (pg.TargetItem):
         """ pg overloaded - ghandle shift_click """
         if self.movable :
             if ev.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier: 
+                ev.accept()
                 self.sigShiftClick.emit(self) 
         return super().mouseClickEvent(ev)
 
@@ -294,23 +320,24 @@ class Movable_Point (pg.TargetItem):
         super().mouseDragEvent (ev) 
 
         if ev.isStart() and self.moving:
-            self.setLabel (self._get_label_moving, self._label_opts(moving=True))
+            self.setLabel (self.label_moving, self._label_opts(moving=True))
             self.setMovingBrush ()
             self.setPath (Symbols[self._symbol_moving])
 
         if ev.isFinish() and not self.moving:
-            self.setLabel (self._get_label_static, self._label_opts(moving=False))
+            self.setLabel (self.label_static, self._label_opts(moving=False))
             self.setPath (Symbols[self._symbol_movable])
 
 
     @override
     def hoverEvent(self, ev):
-        # overridden to allow mouse hover also for points which are not mavalble
+        # overridden to allow mouse hover also for points which are not movable
         if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.MouseButton.LeftButton):
             self.setMouseHover(True)
         else:
             self.setMouseHover(False)
 
+ 
 
     @override
     def setMouseHover (self, hover: bool):
@@ -318,9 +345,9 @@ class Movable_Point (pg.TargetItem):
 
         if not self.mouseHovering is hover:
             if hover:
-                self.setLabel (self._get_label_hover, self._label_opts(hover=hover))
+                self.setLabel (self.label_hover, self._label_opts(hover=hover))
             else: 
-                self.setLabel (self._get_label_static, self._label_opts(hover=hover))        
+                self.setLabel (self.label_static, self._label_opts(hover=hover))        
                 
         super().setMouseHover(hover)
 
@@ -340,8 +367,29 @@ class Movable_Bezier_Point (Movable_Point):
     Represents one control point of a Side_Bezier,
     """
 
-    def label_moving (self):
-        return f"x {self.x:.3f}\ny {self.y:.3f}"
+    @override
+    def label_moving (self,*_):
+        """ label precision depending on value """
+
+        if self.x >= 1000:
+            precision_x = 0
+        elif self.x >= 100:
+            precision_x = 1
+        elif self.x >=10:
+            precision_x = 2
+        else:
+            precision_x = 3
+
+        if self.y >= 1000:
+            precision_y = 0
+        elif self.y >= 100:
+            precision_y = 1
+        elif self.y >=10:
+            precision_y = 2
+        else:
+            precision_y = 3
+
+        return f"x {self.x:.{precision_x}f}\ny {self.y:.{precision_y}f}"
 
 
 
@@ -350,8 +398,8 @@ class Movable_Bezier (pg.PlotCurveItem):
     pg.PlotCurveItem/UIGraphicsItem which represents 
     a Bezier curve which can be changed by the controlpoints
     
-    Points are implemented with Moveable_Points
-    A Moveable_Point can also be fixed ( movable=False).
+    Points are implemented with Movable_Points
+    A Movable_Point can also be fixed ( movable=False).
     See pg.TargetItem for all arguments 
 
     Callback 'on_changed' will return the (new) list of 'points'
@@ -363,7 +411,8 @@ class Movable_Bezier (pg.PlotCurveItem):
                   color = None, 
                   movable = False,
                   label_anchor = (0,1),
-                  show_static = False,                  # plot also when not in move 
+                  show_static = False,                              # plot also when not in move 
+                  movable_point_class = Movable_Bezier_Point,       # to choose an individual Movable_Point
                   on_changed = None, 
                   **kwargs):
 
@@ -398,9 +447,9 @@ class Movable_Bezier (pg.PlotCurveItem):
 
         for i, jpoint in enumerate (jpoints):
 
-            p = Movable_Bezier_Point (jpoint, parent=self, name=f"P{str(i)}", id = i, movable=movable, 
-                                color=color, symbol=symbol, size=7, label_anchor=label_anchor, 
-                                **kwargs) 
+            p = movable_point_class (jpoint, parent=self, name=f"P{str(i)}", id = i, movable=movable, 
+                                     color=color, symbol=symbol, size=7, label_anchor=label_anchor,  **kwargs) 
+            
             p.sigPositionChanged.connect        (self._moving_point)
             p.sigPositionChangeFinished.connect (self._finished_point)
             p.sigShiftClick.connect             (self._delete_point)
@@ -433,7 +482,7 @@ class Movable_Bezier (pg.PlotCurveItem):
 
     @property
     def bezier (self) -> Bezier:
-        """ the Bezier self is working with ad displayed on move  """
+        """ the Bezier self is working with - displayed on move  """
         # can be overloaded 
         # here - we use a helper bezier to show during move  
         if self._bezier is None: 
@@ -467,6 +516,23 @@ class Movable_Bezier (pg.PlotCurveItem):
         return x, y
 
 
+    @override
+    def mouseClickEvent(self, ev : MouseClickEvent):
+        """ pg overloaded - handle crtl_click """
+        if self.movable :
+            if ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier: 
+                x = round (ev.pos().x(),6)
+                y = round (ev.pos().y(),6)
+                added = self._add_point ((x,y))
+
+                if added: 
+                    ev.accept()
+                else: 
+                    ev.ignore()
+
+        return super().mouseClickEvent(ev)
+
+
     def _moving_point (self, aPoint : Movable_Point):
         """ slot - point is moved by mouse """
         i = aPoint.id
@@ -480,11 +546,25 @@ class Movable_Bezier (pg.PlotCurveItem):
             self._bezier_item.show()
 
 
+    def _add_point (self, xy : tuple) -> bool:
+        """ 
+        handle add point - will be called when ctrl_click on Bezier
+        
+        Returns: 
+            inserted: True if point was added 
+        """
+
+        # to be overridden
+        logger.debug (f"Bezier ctrl_click at x={xy[0]} y={xy[1]}")
+        return False
+
+
+
     def _delete_point (self, aPoint : Movable_Point):
         """ slot - point should be deleted """
 
-        # a minimum of 3 control points 
-        if len(self._jpoints) <= 3: return   
+        # a minimum of 2 control points 
+        if len(self._jpoints) <= 2: return   
 
         # remove from list
         i = aPoint.id
@@ -530,22 +610,30 @@ class Artist(QObject):
 
         All ViewBox settings are made 'outside' of an Artist
 
+        On init the artist doesn't plot data. It has to be 'plot' or 'refresh' 
+
     """
 
     name = "Abstract Artist" 
 
-    SIZE_HEADER         = 14                    # size in pt 
+    SIZE_HEADER         = 14                            # size in pt 
+    SIZE_HEADER_SMALL   = 11                            
     SIZE_NORMAL         = 10 
 
     COLOR_HEADER        = "whitesmoke"
     COLOR_NORMAL        = "silver"
     COLOR_LEGEND        = "darkgray"
+    COLOR_HELP          = QColor ('deepskyblue').darker(120)
+
+    show_mouse_helper_default   = True                  # global setting to show mouse helper points
+
+    sig_help_message     = pyqtSignal (object, str)     # new user help message of self 
 
 
     def __init__ (self, pi: pg.PlotItem , 
                   getter = None,       
                   show = True,
-                  show_points = False,
+                  show_mouse_helper = None,
                   show_legend = False):
         """
  
@@ -562,13 +650,17 @@ class Artist(QObject):
         self._getter = getter               # bounded method to the model e.g. Wing 
 
         self._show = show is True           # should self be plotted? 
-        self._show_points = show_points is True 
         self._show_legend = show_legend is True 
+        self._show_mouse_helper = show_mouse_helper 
 
         self._plots = []                    # plots (PlotDataItem) made up to now 
-        self._plot_symbols = []             # plot symbol for each plot 
 
-        self.plot ()
+        self._t_fn  = None                  # coordinate transformation function accepting x,y
+        self._tr_fn = None                  # reverse transformation function accepting xt,yt
+
+
+        # do not 'plot' on init
+        # self.plot() 
 
 
     @override
@@ -600,39 +692,31 @@ class Artist(QObject):
     @property
     def show (self): return self._show
 
-    def set_show (self, aBool):
-        """ user switch to disable ploting the data
+    def set_show (self, aBool, refresh=True):
+        """
+        switch to enable/disable ploting the data
+            - refresh=True will immediatly refresh 
         """
         self._show = aBool is True 
 
-        if self.show and not self._plots:
-            # first time, up to now no plots created ...
-            self.plot()
-        else: 
-            p : pg.PlotDataItem
-            if self.show: 
-                self.refresh()
-            else: 
-                for p in self._plots:
-                    p.hide()
-                if self.show_legend:
-                    self._remove_legend_items ()
-
-
-    @property
-    def show_points (self): return self._show_points
-    def set_show_points (self, aBool):
-        """ user switch to show point (marker )
-        """
-        self._show_points = aBool is True 
-
-        p : pg.PlotDataItem
-        for p in self._plots:
-            if isinstance (p, pg.PlotDataItem):
-                if self.show_points:
-                    p.setSymbol('o')
+        if self.show: 
+            if refresh:
+                if not self._plots:
+                    self.plot()                                 # first time, up to now no plots created ...
                 else: 
-                    p.setSymbol(None)
+                    self.refresh()                              # normal refresh 
+            else: 
+                pass                                            # will be shown with next refresh 
+        else:
+            p : pg.PlotDataItem
+            for p in self._plots:                               # always hide all plot 
+                p.hide()
+
+            if self.show_legend:                                # and remove legend 
+                self._remove_legend_items ()
+
+            self.set_help_message (None)                        # remove user help message
+
 
     @property
     def show_legend (self): return self._show_legend
@@ -645,6 +729,62 @@ class Artist(QObject):
             self.plot()
         else: 
             self._remove_legend_items ()
+
+    @property
+    def show_mouse_helper (self):
+        """ show mouse helpers of self"""
+        if self._show_mouse_helper is None:
+            return Artist.show_mouse_helper_default
+        else: 
+            return self._show_mouse_helper
+
+
+    def set_show_mouse_helper (self, aBool : bool):
+        """ on/off for mouse helper of self - for global setting use class variable"""
+        self._show_mouse_helper = aBool == True
+
+
+    @property
+    def t_fn (self):
+        """ current active transformation function to transform x,y in view coordinates"""
+        if self._t_fn is None: 
+            return lambda x,y : (x,y)                   # dummy 1:1 tra<nsformation
+        else: 
+            return self._t_fn
+    
+    def set_t_fn (self, transform_fn):
+        """ set transformation function to transform x,y in view coordinates"""
+        if transform_fn is not None:
+            if callable (transform_fn):
+                self._t_fn = transform_fn
+            else:
+                raise ValueError ("transformation function is not callable")
+        else:
+            self._t_fn = None 
+
+
+    @property
+    def tr_fn (self):
+        """ current active reverse transformation function to transform x,y from view coordinates"""
+        if self._tr_fn is None: 
+            return lambda x,y : (x,y)                   # dummy 1:1 transformation
+        else: 
+            return self._tr_fn
+    
+    def set_tr_fn (self, transform_fn):
+        """ set reverse transformation function to transform x,y from view coordinates"""
+        if transform_fn is not None:
+            if callable (transform_fn):
+                self._tr_fn = transform_fn
+            else:
+                raise ValueError ("transformation function is not callable")
+        else:
+            self._tr_fn = None 
+
+
+    def set_help_message (self, aMessage : str):
+        """ set user help message - signal it parent"""
+        self.sig_help_message.emit (self, aMessage)
 
 
     def plot (self):
@@ -660,13 +800,14 @@ class Artist(QObject):
                 self._pi.addLegend(offset=(-50,10),  verSpacing=0 )  
                 self._pi.legend.setLabelTextColor (self.COLOR_LEGEND)
 
-
             if len(self.data_list) > 0:
 
                 self._plot()                        # plot data list 
 
                 if self._plots:
-                    logger.debug  (f"{self} - plot {len(self._plots)} items")
+                    logger.debug  (f"{self} of {self._pi} - plot {len(self._plots)} items")
+        # else:
+        #     self.set_help_message (None)                              # remove help message of self 
 
 
     def refresh(self):
@@ -679,6 +820,9 @@ class Artist(QObject):
                 self._remove_legend_items ()
                 self._add_legend_items()
 
+        # else:
+
+        #     self.set_help_message (None)                              # remove help message of self 
             # logging.debug (f"{self} refresh")
 
 
@@ -690,13 +834,16 @@ class Artist(QObject):
         pass
 
 
-    def _plot_dataItem (self, *args, 
+    def _plot_dataItem (self, x, y,  
                         name=None, 
                         zValue=1,
                         **kwargs) -> pg.PlotDataItem:
         """ plot DataItem and add it to self._plots etc """
 
-        p = pg.PlotDataItem  (*args, **kwargs)
+        # (optional) transformation of coordinate 
+        xt, yt = self.t_fn (x,y)
+
+        p = pg.PlotDataItem  (xt, yt, **kwargs)
 
         p.setZValue (zValue)
 
@@ -720,6 +867,9 @@ class Artist(QObject):
             x = args[0]
             y = args[1] 
 
+        # (optional) transformation of coordinate 
+        xt, yt = self.t_fn (x,y)
+
         # pen style
         color = QColor(color) if color else QColor(self.COLOR_NORMAL)
         pen = pg.mkPen (color, style=style)   
@@ -728,8 +878,7 @@ class Artist(QObject):
         brushColor = QColor(brushColor) if brushColor else color 
         brushColor.setAlphaF (brushAlpha)
         brush = pg.mkBrush(brushColor) 
-
-        p = pg.ScatterPlotItem  ([x], [y], symbol=symbol, size=size, pxMode=pxMode, 
+        p = pg.ScatterPlotItem  ([xt], [yt], symbol=symbol, size=size, pxMode=pxMode, 
                                  pen=pen, brush=brush)
         p.setZValue(3)                                      # move to foreground 
 
@@ -741,7 +890,7 @@ class Artist(QObject):
             t = pg.TextItem(text, color, anchor=anchor)
             t.setZValue(3)                                      # move to foreground 
             # ? attach to parent doesn't work (because of PlotDataItem? )
-            textPos = textPos if textPos is not None else (x,y)
+            textPos = textPos if textPos is not None else (xt,yt)
             t.setPos (*textPos)
 
             self._add (t)
@@ -774,35 +923,6 @@ class Artist(QObject):
         self._plots.append(label)
 
 
-    def _plot_title (self, title : str, subTitle : str|None = None, 
-                     align='left', offset : tuple = (30,10)):
-        """ 
-        plot a title, optionally with a sub title, at fixed position 
-            - subTitle - optional text below title 
-            - align = 'left' | 'center' | 'right'
-            - offset - optional - tuple (x,y)
-            """
-
-        if align == 'left':
-            parentPos = (0.02 + 0.03,0)          # parent x starts at PlotItem (including axis)       
-            itemPos   = (0.0,0)
-        elif align =='right':
-            parentPos = (0.98,0)
-            itemPos   = (1,0)
-        else:
-            parentPos = (0.5 + 0.02,0)
-            itemPos   = (0.5,0)
-
-        self._plot_text (title, color=QColor(self.COLOR_HEADER), fontSize=self.SIZE_HEADER, 
-                         parentPos=parentPos, itemPos=itemPos, offset=offset)
-
-        if subTitle is not None: 
-            sub_offset = (offset[0], offset[1]+25)
-            self._plot_text (subTitle, color=QColor(self.COLOR_LEGEND), fontSize=self.SIZE_NORMAL, 
-                            parentPos=parentPos, itemPos=itemPos, offset=sub_offset)
-
-
-
     def _remove_plots (self):
         """ remove self plots from GraphicsView """
 
@@ -817,7 +937,6 @@ class Artist(QObject):
                 self._pi.removeItem (p)
 
         self._plots = []
-        self._plot_symbols = []
 
 
     def _add_legend_items (self):
@@ -859,12 +978,20 @@ class Artist(QObject):
 
         self._pi.addItem (aPlot)
         self._plots.append(aPlot)
-        if isinstance (aPlot, pg.PlotDataItem):
-            self._plot_symbols.append (aPlot.opts['symbol'])
 
         # 'manual' control if aPlot should appear in legend 
-        if self.show_legend and name and isinstance (aPlot, pg.PlotDataItem): 
-            self._pi.legend.addItem (aPlot, name)
-            aPlot.opts['name'] = name
+        if self.show_legend and name and isinstance (aPlot, pg.PlotDataItem) : 
+
+            # avoid dublicates in legend
+            label_exists = False
+            for legend_item in self._pi.legend.items:
+                label_item = legend_item [1]
+                if label_item.text == name:
+                    label_exists = True
+                    break
+
+            if not label_exists:                             
+                self._pi.legend.addItem (aPlot, name)
+                aPlot.opts['name'] = name
  
         return aPlot 

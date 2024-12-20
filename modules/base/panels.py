@@ -17,12 +17,12 @@ from typing             import override
 from PyQt6.QtCore       import Qt
 from PyQt6.QtCore       import QSize, QMargins, pyqtSignal 
 from PyQt6.QtWidgets    import QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, QGraphicsGridLayout
-from PyQt6.QtWidgets    import QMainWindow, QWidget, QDialog, QDialogButtonBox, QLabel
+from PyQt6.QtWidgets    import QMainWindow, QWidget, QDialog, QDialogButtonBox, QLabel, QMessageBox
 from PyQt6.QtGui        import QPalette, QColor, QShowEvent
 from PyQt6              import sip
 
 from base.widgets       import set_background
-from base.widgets       import Widget, Label, CheckBox, size, Button, FieldI, SpaceR
+from base.widgets       import Widget, Label, CheckBox, size, Button, FieldI, SpaceR, Icon
 
 
 
@@ -79,6 +79,17 @@ class Panel_Abstract (QWidget):
         else: 
             return self._getter
 
+    @property 
+    def _shouldBe_visible (self) -> bool:
+        """ True if self is visible - can be overloaded """
+        return True
+
+
+    @property 
+    def _isDisabled (self) -> bool:
+        """ True if the widgets of self are disabled  - can be overloaded """
+        return False
+
     def set_background_color (self, darker_factor : int | None = None,
                                     color : QColor | int | None  = None,
                                     alpha : float | None = None):
@@ -100,6 +111,8 @@ class Container_Panel (Panel_Abstract):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        
 
 
     def refresh (parent: QWidget):
@@ -192,18 +205,6 @@ class Edit_Panel (Panel_Abstract):
         """ returns text of title - default self.name"""
         # can be overwritten 
         return self.name 
-
-
-    @property 
-    def _shouldBe_visible (self) -> bool:
-        """ True if self is visible - can be overloaded """
-        return True
-
-
-    @property 
-    def _isDisabled (self) -> bool:
-        """ True if the widgets of self are disabled  - can be overloaded """
-        return False
 
 
     @property 
@@ -332,6 +333,98 @@ class Edit_Panel (Panel_Abstract):
         pass
 
 
+
+# ------------ MessageBox  -----------------------------------
+
+
+class MessageBox (QMessageBox):
+    """ 
+    Subclass of QMessagebox 
+        - new default icons 
+        - more width and height 
+    """
+
+    _min_width  = 250
+    _min_height = 80 
+
+    def __init__(self, parent: object, 
+                 title : str, 
+                 text : str, 
+                 icon: Icon, 
+                 min_width=None,                            # width of text widget 
+                 min_height=None):                          # height of text widget 
+        super().__init__(parent)
+
+        # set properties 
+
+        self.setWindowTitle (title)
+        self.setText (text)
+
+        # set icon 
+
+        if isinstance (icon, Icon):
+            pixmap = icon.pixmap((QSize(32, 32)))
+            self.setIconPixmap (pixmap)
+
+        # set width and height 
+        #   size of QMessageBox must be set via layout - which is a bit hacky 
+
+        layout : QGridLayout = self.layout()
+        if isinstance (layout, QGridLayout):
+
+            cols = layout.columnCount()
+            if cols > 1:
+                min_width = min_width if min_width is not None else self._min_width
+                # set minimum width of last column (which should be text) 
+                layout.setColumnMinimumWidth (cols-1,min_width)
+                # set minimum width of first column (which should be icon) 
+                layout.setColumnMinimumWidth (0,60)
+                item = layout.itemAtPosition (0,1)
+                item.setAlignment (Qt.AlignmentFlag.AlignVCenter )
+
+            rows = layout.columnCount()
+            if rows > 1:
+                min_height = min_height if min_height is not None else self._min_height
+                # set minimum widthof last column (which should be text) 
+                layout.setRowMinimumHeight (0,min_height)
+                # set center alignment of icon 
+                item = layout.itemAtPosition (0,0)
+                item.setAlignment (Qt.AlignmentFlag.AlignCenter )
+
+        self.setStyleSheet("background-color: white;")
+ 
+
+    @staticmethod
+    def success (parent: object, title : str, text : str, min_width=None, min_height=None):
+        """ success message with Ok button"""
+
+        msg = MessageBox (parent, title, text, Icon (Icon.SUCCESS), min_width=min_width, min_height= min_height)
+        msg.exec()
+
+
+    @staticmethod
+    def error (parent: object, title : str, text : str, min_width=None, min_height=None):
+        """ critical message with Ok button"""
+
+        msg = MessageBox (parent, title, text, Icon (Icon.ERROR), min_width=min_width, min_height= min_height)
+        msg.exec()
+
+
+    @staticmethod
+    def save (parent: object, title : str, text : str, min_width=None):
+        """ ask to save or discard - returns QMessageBox.StandardButton"""
+
+        msg = MessageBox (parent, title, text, Icon (Icon.INFO), min_width=min_width)
+
+        msg.setStandardButtons(QMessageBox.StandardButton.Save | 
+                               QMessageBox.StandardButton.Discard | 
+                               QMessageBox.StandardButton.Cancel)
+        msg.setDefaultButton  (QMessageBox.StandardButton.Save)
+
+        return msg.exec()
+    
+
+
 # ------------ Dialog  -----------------------------------
 
 class Dialog (QDialog):
@@ -343,7 +436,7 @@ class Dialog (QDialog):
 
 
     def __init__(self,  
-                 parent=None,
+                 parent : QWidget =None,
                  getter = None, 
                  width=None, 
                  height=None, 
@@ -377,8 +470,8 @@ class Dialog (QDialog):
         self._panel = QWidget () 
         self.set_background_color (darker_factor=105)
 
-        l_panel = self._init_layout()       # subclass will create layout 
-        l_panel.setContentsMargins (QMargins(15, 10, 15, 10))   # inset left 
+        l_panel = self._init_layout()                               # subclass will create layout 
+        l_panel.setContentsMargins (QMargins(15, 10, 15, 10))       # inset left 
         # l_panel.setSpacing(2)
         self._panel.setLayout (l_panel)
 

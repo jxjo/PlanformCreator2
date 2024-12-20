@@ -9,18 +9,20 @@ All abstract diagram items to build a complete diagram view
 
 import logging
 
-from typing             import override
+from typing             import override, Type
 
 from PyQt6.QtCore       import QSize, QMargins, pyqtSignal, QTimer
 from PyQt6.QtWidgets    import QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, QGraphicsGridLayout
-from PyQt6.QtWidgets    import QMainWindow, QWidget, QWidgetItem
-from PyQt6.QtGui        import QPalette, QIcon
+from PyQt6.QtWidgets    import QWidget
+from PyQt6.QtGui        import QPalette, QIcon, QColor
 
 import pyqtgraph as pg                          # import PyQtGraph after PyQt6
 from pyqtgraph          import icons
 
-from base.panels        import Edit_Panel
+from base.common_utils  import *
+from base.panels        import Edit_Panel, Container_Panel
 from base.widgets       import ToolButton, Icon
+from base.artist        import Artist
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -40,6 +42,9 @@ class Diagram (QWidget):
     width  = (800, None)                # (min,max) 
     height = (400, None)                # (min,max)
 
+    name   = "My Diagram"               # will be shown in Tabs 
+
+
     def __init__(self, parent, getter = None, **kwargs):
         super().__init__(parent, **kwargs)
 
@@ -50,7 +55,7 @@ class Diagram (QWidget):
         # create graphics widget 
 
         self._graph_widget = pg.GraphicsLayoutWidget (parent=self, show=True, size=None, title=None)
-        self._graph_layout.setContentsMargins (20,20,20,10)  # default margins
+        self.graph_layout.setContentsMargins (20,20,20,10)  # default margins
 
         # remove default context menu of scene
 
@@ -64,7 +69,8 @@ class Diagram (QWidget):
         #  add a message view box at bottom   
 
         self._message_vb = pg.ViewBox()
-        self._graph_layout.addItem (self._message_vb, 5, 0)
+        nrows = self.graph_layout.rowCount()
+        self.graph_layout.addItem (self._message_vb, nrows, 0)
         self._message_vb.hide()
     
 
@@ -99,8 +105,28 @@ class Diagram (QWidget):
             obj = self._getter()
         else: 
             obj = self._getter     
-
         return obj if isinstance (obj, list) else [obj]
+
+
+    def _get_artist (self, artists : Type[Artist] | list[type[Artist]]) -> list[Artist]:
+        """get artists of all my items having class name(s)
+
+        Args:
+            artists: class or list of class of Artists to retrieve
+        Returns:
+            List of artists with this classes
+        """
+        result = []
+        for item in self.diagram_items: 
+            result.extend (item._get_artist (artists))
+        return result 
+
+
+    def _show_artist (self, artist_class : Type[Artist], show : bool = True):
+        """show on/off of artist having artist_class name """
+
+        for item in self.diagram_items:
+            item._show_artist (artist_class, show)
 
 
     @property
@@ -111,23 +137,16 @@ class Diagram (QWidget):
     def diagram_items (self) -> list['Diagram_Item']:
         """ list of my diagram items """
         items = []
-        for i in range (self._graph_layout.count()):
-            item = self._graph_layout.itemAt(i)
+        for i in range (self.graph_layout.count()):
+            item = self.graph_layout.itemAt(i)
             if isinstance (item, Diagram_Item):
                 items.append (item)
         return items
 
     @property
-    def diagram_items_visible (self) -> list['Diagram_Item']:
-        """ list of my visible diagram items """
-        return [item for item in self.diagram_items if item.isVisible()]
-
-
-    @property 
-    def _graph_layout (self) -> QGraphicsGridLayout:
-        """ returns QLayout of self"""
+    def graph_layout (self) -> QGraphicsGridLayout:
+        """ the graphics grid layout of self"""
         return self._graph_widget.ci.layout
-
 
     @property
     def section_panel (self) -> Edit_Panel | None:
@@ -136,14 +155,44 @@ class Diagram (QWidget):
         return self._section_panel
     
 
-    def refresh(self): 
-        """ refresh all childs (Diagram_Items) of self"""
+    def refresh(self, also_viewRange=True): 
+        """ 
+        refresh all childs (Diagram_Items) of self
+        Args:
+           also_viewRange: also re-init viewRange     
+        """
+
+        if self.isVisible():
+
+            logger.debug (f"{str(self)} refresh")
+
+            item : Diagram_Item
+            for item in self.diagram_items:
+                if item.isVisible(): 
+                    item.refresh()
+                if also_viewRange:                                              # also setup view range if not visible
+                    item.setup_viewRange()  
+
+            if self._viewPanel:
+                self._viewPanel.refresh()
+
+    @override
+    def showEvent (self, ev):
+        """ QShowEvent - self becomes visible  - Tab switch or first time"""
+
+        # refresh plotItems - if it is first time they are intially plotted
+
         item : Diagram_Item
         for item in self.diagram_items:
             item.refresh() 
 
-        if self.section_panel:
-            self.section_panel.refresh()
+        # refresh all panels on viewPanel 
+
+        if self._viewPanel:
+            self._viewPanel.refresh()
+
+        super().showEvent (ev) 
+
 
 
     def create_diagram_items ():
@@ -155,10 +204,10 @@ class Diagram (QWidget):
         pass
 
 
-    def _add_item (self, anItem: 'Diagram_Item', row, col):
+    def _add_item (self, anItem: 'Diagram_Item', row, col, rowspan=1, colspan=1):
         """ adds a diagram item to self graphic layout """
 
-        self._graph_widget.addItem (anItem, row, col)
+        self._graph_widget.addItem (anItem, row, col, rowspan=rowspan, colspan=colspan)
 
         anItem.sig_visible.connect (self._on_item_visible)
 
@@ -183,7 +232,7 @@ class Diagram (QWidget):
         
         layout.addStretch (1)
 
-        self._viewPanel = QWidget()
+        self._viewPanel = Container_Panel()
         self._viewPanel.setMinimumWidth(180)
         self._viewPanel.setMaximumWidth(250)
         self._viewPanel.setLayout (layout)
@@ -192,7 +241,7 @@ class Diagram (QWidget):
     def _on_item_visible (self, aBool):
         """ slot to handle actions when switch on/off of diagram items"""
 
-        nItems = len(self.diagram_items_visible)
+        nItems = len([item for item in self.diagram_items if item.isVisible()])
 
         if nItems == 0: 
             self._message_show ("No diagram items selected ")
@@ -201,10 +250,6 @@ class Diagram (QWidget):
         if aBool: 
             if nItems > 0:
                 self._message_clear()
-
-                # also remove a welcome message
-                self.diagram_items[0].set_welcome (None) 
-
 
 
     def _message_show (self, aMessage):
@@ -231,26 +276,37 @@ class Diagram_Item (pg.PlotItem):
 
     """
 
-    name = "Abstract Diagram_Item"              # used for link and section header
+    name        = "Abstract Diagram_Item"               # used for link and section header
+    title       = "The Title"                           # title of diagram item
+    subtitle    = "my subtitle"                         # optional subtitle 
 
     # Signals 
-    sig_visible = pyqtSignal(bool)              # when self is set to show/hide 
+    sig_visible = pyqtSignal(bool)                      # when self is set to show/hide 
 
 
     def __init__(self, parent, 
                  getter = None, 
-                 show = True,                   # show initially 
+                 show = True,                           # show initially 
                  **kwargs):
 
-        super().__init__(name=self.name,        # to link view boxes 
+        super().__init__(name=self.name,                # to link view boxes 
                          **kwargs)
 
         self._parent : Diagram = parent
         self._getter = getter
         self._show   = show 
-        self._section_panel = None 
 
-        ## Set up additional control button to reset range 
+        self._section_panel = None                      # view section to the left 
+        self._artists : list [Artist] = []              # list of my artists
+
+        self._title_item = None                         # LabelItem of the diagram title
+        self._subtitle_item = None  
+
+        self._help_messages         = {}                # current help messages which are shown 
+        self._help_messages_shown   = {}                # all help messages shown up to now 
+        self._help_message_items    = {}
+
+        # setup additional control button to reset range 
 
         self._vb_state_changed = False 
         ico = Icon (Icon.RESETVIEW,light_mode = False)
@@ -260,15 +316,28 @@ class Diagram_Item (pg.PlotItem):
         timer = QTimer()                                
         timer.singleShot(50, self._reset_prepare)           # delayed when all initial drawing done 
 
+        # setup item to print coordinates 
+
+        self._coordItem = pg.LabelItem("huhu", color=QColor(Artist.COLOR_LEGEND), size=f"{Artist.SIZE_NORMAL}pt", justify="left")  
+        self._coordItem.setParentItem(self)  
+        self._coordItem.anchor(parentPos=(0,1), itemPos=(0.0,0.0), offset=(45, -20))                       
+
+        # set margins (inset) of self - ensure some space for coordinates
+
+        self.setContentsMargins ( 10,20,10,20)
+
         # setup artists - must be override
 
-        self.setup_artists (initial_show=show)
+        self.setup_artists ()
 
-        # setup view range - must be override
-        
-        self.setup_viewRange ()
+        for artist in self._artists:
+            artist.sig_help_message.connect (self._on_help_message)
 
-        # setup view range - must be override
+        # setup view range (must be override) is done in refresh() - 
+
+        self._viewRange_set = False
+
+        # setup axis - can be override
         
         self.setup_axis()
 
@@ -281,29 +350,104 @@ class Diagram_Item (pg.PlotItem):
         super().setVisible (show) 
 
 
-
+    @override
     def __repr__(self) -> str:
-        # overwritten to get a nice print string 
         text = '' 
         return f"<{type(self).__name__}{text}>"
+
+
+    def _add_artist (self, artist : Artist):
+        """ add a new artist to my list"""  
     
+        self._artists.append (artist)
+     
+    def _get_artist (self, artists : Type[Artist] | list[type[Artist]]) -> list[Artist]:
+        """get my artists having class name(s)
+
+        Args:
+            artists: class or list of class of Artists to retrieve
+        Returns:
+            List of artists with this classes
+        """
+        look_for = [artists] if not isinstance (artists,list) else artists
+        result = []
+        for artist in self._artists:
+            if artist.__class__ in look_for:
+                result.append(artist)
+        return result 
+
+
+    def _show_artist (self, artist_class : Type[Artist], show : bool = True):
+        """show on/off of artist having artist_class name """
+
+        # logger.debug (f"{self} show artists: {show} - is visible: {self.isVisible()}")
+        for artist in self._get_artist (artist_class):
+            artist.set_show (show, refresh=self.isVisible())            # refresh only if item is visible
+
+
+    def _on_help_message (self, aArtist :Artist | None, aMessage: str | None):
+        """ slot for help message signal of an artist. show it"""
+
+        # if aArtist: 
+        #     logger.warning (f"{self} on_help of {aArtist} of item: {aArtist._pi} with message: {aMessage}")
+        # else: 
+        #     logger.warning (f"{self} on_help  -> refresh ")
+
+        # remove all existing message item 
+        for item in self._help_message_items.values():
+            self.scene().removeItem (item)                             # was added directly to the scene via setParentItem
+        self._help_message_items = {}
+
+        # add / remove message of artist to my list 
+        if aArtist:                                                    # could be called without artist -> refresh only 
+            if not aMessage:
+                self._help_messages.pop (aArtist, None)                # remove existing message of this artist
+            else:
+                if aArtist in self._help_messages_shown:
+                    self._help_messages.pop (aArtist, None) 
+                else:   
+                    self._help_messages[aArtist] = aMessage            # add this message 
+                    self._help_messages_shown[aArtist] = aMessage      # add to the list already shown           
+
+
+        # plot all current messages 
+        i = 0 
+        for artist, message in self._help_messages.items():
+            parentPos = (0.3,0.03)                                      # parent x starts at PlotItem (including axis)       
+            itemPos   = (0.0,0.0)
+            y_offset  = i * 20
+
+            p1 = pg.LabelItem(f"- {message}", color=Artist.COLOR_HELP, size=f"{Artist.SIZE_NORMAL}pt")    
+
+            p1.setParentItem(self)                                      # add to self (Diagram Item) for absolute position 
+            p1.anchor(itemPos=itemPos, parentPos=parentPos, offset=(0,y_offset))
+            p1.setZValue(5)
+
+            self._help_message_items[artist] = p1
+            i +=1
+
 
     @override
     def setVisible (self, aBool):
         """ Qt overloaded to signal parent """
         super().setVisible (aBool)
 
+        logger.debug  (f"{self} - setVisible {aBool}")
+
         self.set_show (aBool)
 
         self.sig_visible.emit (aBool)
-
-        logger.debug  (f"{self} - setVisible {aBool}")
 
 
     def set_show (self, aBool):
         """ switch on/off artists of self"""
         # to override
         self._show = aBool
+
+        if aBool: 
+            self.refresh_artists ()
+            self.setup_viewRange()   
+            self._viewRange_set = True
 
 
     @override
@@ -313,15 +457,60 @@ class Diagram_Item (pg.PlotItem):
         self._resetBtn = None
         super().close()
 
+    @override
+    def hoverEvent(self, ev):
+        """ overridden to show coordinates of mouse cursor"""
+        super().hoverEvent (ev)
+
+        if self.mouseHovering and not self.buttonsHidden:
+            pos : pg.Point = self.viewBox.mapSceneToView(ev.scenePos())
+
+            if self.viewBox.viewRect().contains(pos):
+                self._coordItem.show()
+                self._coordItem.setText (self._coord_as_text (pos))
+            else:
+                self._coordItem.hide()
+
+
+    def _coord_as_text (self, pos : pg.Point) -> str:
+        """ current mouse coordinates as formatted text string """
+
+        viewRange = self.viewBox.viewRange()
+        x_range = viewRange [0]
+        y_range = viewRange [1]
+        x_size  = abs (x_range[1] - x_range[0])
+        y_size  = abs (y_range[1] - y_range[0])
+
+        return f"x {self._format_coord(pos.x(),x_size)}&nbsp;&nbsp;y {self._format_coord(pos.y(),y_size)}"
+
+    def _format_coord (self, coord: float, range : float) -> str:
+        """ format a coordinate number depending on view range size"""
+        if range < 0.01:
+            dec = 5
+        elif range < 0.1:
+            dec = 4
+        elif range < 10:
+            dec = 3
+        elif range < 100:
+            dec = 2
+        elif range < 10000:
+            dec = 1
+        else: 
+            dec = 0
+        return f"{coord:#.{dec}f}"
+
 
     @override
     def resizeEvent(self, ev):
         # PlotItem override to remove button
         if self._resetBtn is None:  ## already closed down
             return
+        
+        # position reset button 
         btnRect = self.mapRectFromItem(self._resetBtn, self._resetBtn.boundingRect())
         y = self.size().height() - btnRect.height()
         self._resetBtn.setPos(20, y+3)            # right aside autoBtn
+
         super().resizeEvent (ev)
 
 
@@ -332,8 +521,10 @@ class Diagram_Item (pg.PlotItem):
         try:
             if self.mouseHovering and not self.buttonsHidden and self._vb_state_changed: #  and not all(self.vb.autoRangeEnabled()):
                 self._resetBtn.show()
+                self._coordItem.show()
             else:
                 self._resetBtn.hide()
+                self._coordItem.hide()
         except RuntimeError:
             pass  # this can happen if the plot has been deleted.
 
@@ -379,18 +570,33 @@ class Diagram_Item (pg.PlotItem):
 
     def refresh(self): 
         """ refresh my artits and section panel """
+
+        refresh_done = False
+
         if self.section_panel is not None: 
             # refresh artists only if self section is switched on 
             if self.section_panel.switched_on:
                 self.refresh_artists()          # first artist and then panel 
+                refresh_done = True
 
             self.section_panel.refresh()
 
         else: 
             self.refresh_artists() 
+            refresh_done = True
+
+        # initial setup of viewRange if artists were shown by refresh
+
+        if not self._viewRange_set and refresh_done:
+            self.setup_viewRange()   
+            self._viewRange_set = True
+
+        # plot title and sub title with default values of class
+
+        self.plot_title () 
 
 
-    def setup_artists (self, initial_show=True):
+    def setup_artists (self):
         """ create and setup the artists of self"""
         # must be implemented by subclass
         
@@ -413,10 +619,68 @@ class Diagram_Item (pg.PlotItem):
         yaxis.setWidth (40)
 
 
-    def refresh_artists (self): 
-        """ refresh the artists of self"""
-        # must be implmented by subclass
-        pass
+    def refresh_artists (self):
+        """ refresh all artists of self - can be overridden"""
+        for artist in self._artists:
+            artist.refresh()
+
+
+    def plot_title (self, 
+                    title : str|None = None,
+                    title_size : int = None,
+                    subtitle : str|None = None, 
+                    align :str ='left', 
+                    offset : tuple = (50,5)):
+        """plot a title, optionally with a sub title, at fixed position
+
+        Args:
+            title: optional - default is class.title
+            title_size: optional - title font size in pt 
+            subtitle: optional - default is class.subtitle
+            align: aligned to the left or right of th item .
+            offset: from the upper left (right) corner in pixel  
+        """
+
+        if title is None:
+            if not self.title: return                       # show no title  
+            title = self.title
+
+        if title_size is None:
+            title_size = Artist.SIZE_HEADER  
+
+        if subtitle is None:
+            subtitle = self.subtitle
+
+        # remove existing title item 
+        if isinstance (self._title_item, pg.LabelItem):
+            if self._title_item:
+                self.scene().removeItem (self._title_item)      # was added directly to the scene via setParentItem
+            if self._subtitle_item:
+                self.scene().removeItem (self._subtitle_item)    
+       
+
+        if align == 'left':
+            parentPos = (0.0)                               # parent x starts at PlotItem (including axis)       
+            itemPos   = (0,0)
+        else:  
+            parentPos = (0.98,0)
+            itemPos   = (1,0)
+
+        p1 = pg.LabelItem(title, color=QColor(Artist.COLOR_HEADER), size=f"{title_size}pt")    
+
+        p1.setParentItem(self)                            # add to self (Diagram Item) for absolute position 
+        p1.anchor(itemPos=itemPos, parentPos=parentPos, offset=offset)
+        p1.setZValue(5)
+        self._title_item = p1
+
+        if subtitle is not None:
+            sub_offset = (offset[0], offset[1]+30)
+            p2 = pg.LabelItem(subtitle, color=QColor(Artist.COLOR_LEGEND), size=f"{Artist.SIZE_NORMAL}pt")    
+            p2.setParentItem(self)                            # add to self (Diagram Item) for absolute position 
+            p2.anchor(itemPos=itemPos, parentPos=parentPos, offset=sub_offset)
+            p2.setZValue(5)
+            self._subtitle_item = p2 
+
 
 
     @property
@@ -425,20 +689,3 @@ class Diagram_Item (pg.PlotItem):
         # overload for constructor 
         return  self._section_panel
     
-
-    def _create_section_panel (self) -> Edit_Panel:
-        """ 
-        Create small section panel representing self in view panel
-        
-        The existence of a section_panel controls that 
-        diagram will have a view panel 
-        """
-
-        self._section_panel = self.get_section_panel ()
-
-        # connect to show switch signal of section panel 
-        if self._section_panel:
-            self._section_panel.sig_switched.connect (self.setVisible )
-
-        return None 
-

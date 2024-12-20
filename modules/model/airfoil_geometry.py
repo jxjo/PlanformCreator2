@@ -1512,6 +1512,8 @@ class Geometry ():
 
         if callable(self._callback_changed):
             self._callback_changed ()
+        else:
+            logger.debug (f"{self} no change callback to airfoil defined")
 
     @property
     def modifications (self) -> list [tuple]:
@@ -1536,6 +1538,8 @@ class Geometry ():
                 if nmods > 4 and aMod == Geometry.Mod.NORMALIZE:    # skip norm if too long
                     continue
                 if aMod == Geometry.Mod.TE_GAP:
+                    val = round(val,2) 
+                elif aMod == Geometry.Mod.BLEND:
                     val = round(val,2) 
                 elif isinstance (val, float): 
                     val = round(val,1)
