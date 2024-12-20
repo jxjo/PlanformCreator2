@@ -154,12 +154,9 @@ class Edit_Panel (Panel_Abstract):
         self._hide_switched = hide_switched
         self._switched_on = switched_on
 
-        # set background color depending light/dark mode
+        # set background color  
 
-        if Widget.light_mode:
-            self.set_background_color (darker_factor = 105)                 # make it darker 
-        else: 
-            self.set_background_color (darker_factor = 80)                  # make it lighter 
+        self.set_background_color (darker_factor = 105)
 
         # title layout - with optional on/off switch 
 
@@ -394,6 +391,7 @@ class MessageBox (QMessageBox):
                 item = layout.itemAtPosition (0,0)
                 item.setAlignment (Qt.AlignmentFlag.AlignCenter )
 
+        self.setStyleSheet("background-color: white;")
  
 
     @staticmethod

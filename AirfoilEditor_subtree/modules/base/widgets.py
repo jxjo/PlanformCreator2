@@ -50,7 +50,7 @@ class style (Enum):
 
                   #  light dark
     NORMAL        = (None, None)
-    COMMENT       = ("dimgray","gray")  
+    COMMENT       = ("dimgray","lightGray")  
     ERROR         = ('red', 'red')
     HINT          = ("dodgerblue", "dodgerblue")
     WARNING       = ('orange','orange')
@@ -895,14 +895,6 @@ class Label (Widget, QLabel):
         """ set (color) style of QWidget based on self._style"""
 
         # overloaded QLabel uses QPalette.ColorRole.WindowText
-
-        if self._style == style.NORMAL and not self.light_mode:
-
-            # dark mode: make labels a little darker (not white)      
-            palette = QPalette (self.palette())
-            palette.setColor(QPalette.ColorRole.WindowText, QColor("#C0C0C0"))
-            self.setPalette (palette)
-
         self._set_Qwidget_style_color (self._style, QPalette.ColorRole.WindowText)  
 
 
@@ -1465,22 +1457,6 @@ class CheckBox (Widget, QCheckBox):
     def _set_Qwidget_static (self): 
         """ set static properties of self Qwidget like width"""
         super()._set_Qwidget_static ()
-
-
-    @override 
-    def _set_Qwidget_style (self): 
-        """ set (color) style of QWidget based on self._style"""
-
-        # overloaded QCheckBox uses QPalette.ColorRole.WindowText for label 
-
-        if self._style == style.NORMAL and not self.light_mode:
-
-            # dark mode: make labels a little darker (not white)      
-            palette = QPalette (self.palette())
-            palette.setColor(QPalette.ColorRole.WindowText, QColor("#C0C0C0"))
-            self.setPalette (palette)
-
-        self._set_Qwidget_style_color (self._style, QPalette.ColorRole.WindowText)  
 
 
     def _on_checked(self):
