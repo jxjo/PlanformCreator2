@@ -925,7 +925,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
                     # mouse helper for position 
 
                     movable = not (section.is_root_or_tip)
-                    pt = self.Movable_Section (self._pi, self.planform, section, 
+                    pt = self.Movable_Section_Point (self._pi, self.planform, section, 
                                                 mode = m, t_fn = self.t_fn, tr_fn = self.tr_fn,
                                                 move_by_pos=True, movable=movable,
                                                 on_changed=self.sig_wingSection_changed.emit)
@@ -939,7 +939,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
                         movable = True and not section.is_root_or_tip \
                                   or (section.defines_cn and section.is_tip)            # define tip chord
 
-                    pt = self.Movable_Section (self._pi, self.planform, section, 
+                    pt = self.Movable_Section_Point (self._pi, self.planform, section, 
                                                 mode = m, t_fn = self.t_fn, tr_fn = self.tr_fn,
                                                 move_by_pos=False, movable=movable,
                                                 on_changed=self.sig_wingSection_changed.emit)
@@ -956,8 +956,12 @@ class WingSections_Artist (Abstract_Artist_Planform):
             #   delayed as during init scene is not yet available
             QTimer().singleShot (10, self._connect_scene_mouseClick)
 
-            self.set_help_message ("Wing Sections: Click to select, move by position or by chord, shift-click to remove, " +
-                                   "ctrl-click to add a section")
+
+            msg = "Wing Sections: Click to select, move by position or by chord, shift-click to remove, " + \
+                                   "ctrl-click to add a section"
+            if self.planform.chord_defined_by_sections:
+                msg = msg + ", alt-click to toggle 'defines chord'"
+            self.set_help_message (msg)
             
 
 
@@ -1056,17 +1060,16 @@ class WingSections_Artist (Abstract_Artist_Planform):
             # get scene coordinates of click pos and map to view box 
 
             pos : pg.Point = viewbox.mapSceneToView(ev.scenePos())
-            xn, _ = self.tr_fn (pos.x(), pos.y())
 
             # create new section  and signal ...
-            section = self.wingSections.create_at (xn)
+            section = self.wingSections.create_at (pos.x())
 
             if section: 
                 QTimer().singleShot(10, lambda: self.sig_wingSection_new.emit (section))     
 
 
 
-    class Movable_Section (Movable_Point):
+    class Movable_Section_Point (Movable_Point):
         """ 
         Represents a point of the section line to move either by pos or by chord. 
         """
@@ -1220,8 +1223,13 @@ class WingSections_Artist (Abstract_Artist_Planform):
         @override
         def label_static (self, *_) -> str:
             """ the static label depending on fixed pos or chord"""
-            if self._section.is_root_or_tip:
+            if self._section.is_root:
                 return ""
+            elif self._section.is_tip:
+                if self._planform.chord_defined_by_sections and self._define_chord:
+                    return "Flex chord"
+                else:
+                    return "" 
             elif self._move_by_pos:               
                 return "Fixed pos"   if self._section.is_xn_fix else "Flex pos"
             else:
@@ -1231,8 +1239,16 @@ class WingSections_Artist (Abstract_Artist_Planform):
         @override
         def label_moving (self, *_):
             """ label text during move"""
-            if self._section.is_root_or_tip:
+            if self._section.is_root:
                 return ""
+            elif self._section.is_tip:
+                if self._planform.chord_defined_by_sections and self._define_chord:
+                    if self._mode == mode.NORM_NORM or self._mode == mode.NORM_TO_SPAN:
+                        lab = f"chord {self._section.cn:.1%}"
+                    else:
+                        lab = f"chord {self._section.c:.1f}mm"
+                else:
+                    return "" 
             elif self._move_by_pos:
                 lab = f"pos {self._section.x:.1f}mm"
             else:

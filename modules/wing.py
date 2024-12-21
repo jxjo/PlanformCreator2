@@ -1382,7 +1382,7 @@ class WingSection :
 
         # sanity root and tip  
 
-        if self._planform.n_distrib.chord_defined_by_sections:
+        if self._planform.chord_defined_by_sections:
 
             # ... trapezoid planform: section may have both which will define planform  
 
@@ -1620,7 +1620,7 @@ class WingSection :
 
         if not (self.is_root):
             # sanity - is it allowed in that planform
-            if self._planform.n_distrib.chord_defined_by_sections:
+            if self._planform.chord_defined_by_sections:
                 self._defines_cn = aBool
                 if aBool: 
                     self.set_cn (self.cn)
@@ -1642,7 +1642,7 @@ class WingSection :
         if self.is_root:
             return False                                                # chord at root always 1.0 
         elif self.is_tip:
-            return self._planform.n_distrib.chord_defined_by_sections     # for trapezoid yes 
+            return self._planform.chord_defined_by_sections             # for trapezoid yes 
         else: 
             return True
 
@@ -2039,7 +2039,11 @@ class WingSections (list):
             else:
                 right_xn = xn
                 right_cn = cn
-            return (left_xn + safety, right_xn - safety), (left_cn, right_cn)
+            if left_cn < right_cn:
+                lower_cn, upper_cn = left_cn, right_cn
+            else:  
+                lower_cn, upper_cn = right_cn, left_cn
+            return (left_xn + safety, right_xn - safety), (lower_cn, upper_cn)
 
 
 
@@ -2855,6 +2859,11 @@ class Planform:
             x, le_y, te_y = self.le_te_polyline ()
             self._planform_mac = self._calc_mac (x, le_y, te_y)
         return self._planform_mac
+
+    @property
+    def chord_defined_by_sections (self) -> bool:
+        """ True if planform is defined by sections e.g. trapezoid"""
+        return self.n_distrib.chord_defined_by_sections
 
 
     @property

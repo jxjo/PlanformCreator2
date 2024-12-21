@@ -310,8 +310,15 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         l = QGridLayout()
         r,c = 0, 0 
-        Label  (l,r,c, get=self._section_info, colSpan=5, style=style.COMMENT)        
-        # SpaceR (l,r, height=26)        
+
+        # toggle trapezoid or not 
+        Label  (l,r,c, get=self._section_info, colSpan=5, style=style.COMMENT,
+                hide = lambda: self.planform().chord_defined_by_sections) 
+        CheckBox (l,r,c, text="Section defines chord", colSpan=5,  
+                obj=self._wingSection, prop=WingSection.defines_cn,
+                disable=lambda: self._wingSection().is_root_or_tip,
+                hide=lambda:  not self.planform().chord_defined_by_sections)     
+               
         r += 1
         FieldF (l,r,c,   lab="Position", width=85, unit="mm", step=1, lim=(0, self.planform().span), dec=1,
                 obj=self._wingSection, prop=WingSection.x, disable=lambda: not self._wingSection().is_set_xn_allowed,
@@ -359,21 +366,14 @@ class Panel_WingSection (Panel_Planform_Abstract):
         FieldI (l,r,c,   lab="Flap Group", width=50, step=1, lim=(0, 20),  colSpan=2, specialText="-",
                 obj=self._wingSection, prop=WingSection.flap_group)
 
-        # c -= 1
-
         l.setColumnMinimumWidth (0,70)
         l.setColumnMinimumWidth (2,10)
         l.setColumnMinimumWidth (3,50)
         l.setColumnMinimumWidth (5,40)
-
-        # l.setColumnMinimumWidth (6,10)
         l.setColumnMinimumWidth (7,70)
-        # l.setColumnMinimumWidth (10,50)
-        #l.setColumnStretch (2,1)
-        l.setColumnStretch (8,4)
-        # l.setColumnStretch (13,1)
-        return l 
 
+        l.setColumnStretch (8,4)
+        return l 
 
 
     def _wingSections_list (self) -> list:
