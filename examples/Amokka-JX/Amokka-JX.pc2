@@ -1,85 +1,77 @@
 {
-  "wingName":"Amokka-JX",
-  "wingspan":2380.0,
-  "rootchord":235.0,
-  "tipchord":10.0,
-  "hingeLineAngle":-2.2,
-  "flapDepthRoot":22.0,
-  "flapDepthTip":28.0,
-  "rootRe":400000,
-  "airfoilNickPrefix":"RS",
-  "planformType":"Bezier TE straight",
-  "p1x":0.865751,
-  "p2x":0.352553,
-  "p1y":0.930364,
+  "pc2_version":2,
+  "wing_name":"Amokka-JX",
+  "description":"A variant of Peter Wicks\nfine flying wing design.\nHinge line is tricky ...",
+  "fuselage_width":50.0,
+  "airfoil_nick_prefix":"JX-",
+  "airfoil_nick_base":100,
+  "background_image":{},
+  "halfspan":1190.0,
+  "chord_root":235.0,
+  "sweep_angle":-2.2,
+  "chord_distribution":{
+    "chord_style":"Bezier",
+    "p1x":0.930364,
+    "p1y":0.865751,
+    "p2y":0.352553,
+    "p3y":0.042553
+  },
+  "chord_reference":{
+    "p0y":1.0,
+    "p1y":1.0
+  },
+  "reference_line":{},
   "wingSections":[
     {
-      "position":0.0,
-      "norm_chord":1.0,
-      "flapGroup":1,
-      "airfoil":{
-        "file":"JX-RS-Root.dat"
-      }
+      "xn":0.0,
+      "hinge_cn":0.78,
+      "flap_group":1,
+      "airfoil":"E:\\GitHub\\PlanformCreator2_2.0_dev\\examples\\Amokka-JX\\JX-RS-Root.dat"
     },
     {
-      "position":400,
-      "flapGroup":2,
-      "airfoil":{
-        "name":"<strak>"
-      }
+      "xn":0.336134,
+      "flap_group":2,
+      "airfoil":"E:\\GitHub\\PlanformCreator2_2.0_dev\\examples\\Amokka-JX\\JX-RS.dat"
     },
     {
-      "norm_chord":0.65,
-      "flapGroup":2,
-      "airfoil":{
-        "file":"JX-RS.dat"
-      }
+      "cn":0.787462,
+      "flap_group":2
     },
     {
-      "norm_chord":0.35,
-      "flapGroup":2,
-      "airfoil":{
-        "file":"JX-RS-Tip.dat"
-      }
+      "cn":0.65,
+      "flap_group":2,
+      "airfoil":"E:\\GitHub\\PlanformCreator2_2.0_dev\\examples\\Amokka-JX\\JX-RS.dat"
     },
     {
-      "position":1190.0,
-      "norm_chord":0.042553,
-      "flapGroup":2,
-      "airfoil":{
-        "file":"JX-RS-Tip.dat"
-      }
+      "cn":0.5,
+      "flap_group":2
+    },
+    {
+      "cn":0.35,
+      "hinge_cn":0.72,
+      "flap_group":2,
+      "airfoil":"E:\\GitHub\\PlanformCreator2_2.0_dev\\examples\\Amokka-JX\\JX-RS-Tip.dat"
+    },
+    {
+      "xn":0.993703,
+      "flap_group":2
+    },
+    {
+      "xn":1.0,
+      "flap_group":2,
+      "airfoil":"E:\\GitHub\\PlanformCreator2_2.0_dev\\examples\\Amokka-JX\\JX-RS-Tip.dat"
     }
   ],
-  "refPlanform_dxfPath":"Amokka-JX_wing_outline.dxf",
-  "xflr5":{
-    "exportDir":"xflr5",
-    "useNick":true,
-    "x-panels":10,
-    "x-distribution":"cosine",
-    "y-panels":10,
-    "y-minWidth":5
+  "flaps":{
+    "hinge_equal_ref_line":false
   },
-  "flz":{
-    "exportDir":"./Flz_vortex",
-    "useNick":true,
-    "x-panels":10,
-    "x-distribution":"cosine",
-    "y-panels":10,
-    "y-minWidth":5
-  },
-  "dxf":{
-    "exportDir":"dxf",
-    "useNick":true,
-    "setTeGap":false,
-    "teGap_mm":0.5,
-    "includeAirfoils":true,
-    "exportAirfoils":true
-  },
-  "airfoils":{
-    "exportDir":"airfoils",
-    "useNick":true,
-    "setTeGap":false,
-    "teGap_mm":0.5
+  "panels":{
+    "wy_panels":8,
+    "wy_distribution":"uniform",
+    "wx_panels":8,
+    "wx_distribution":"uniform",
+    "width_min":0.01,
+    "cn_tip_min":0.043,
+    "cn_diff_max":0.02
   }
 }

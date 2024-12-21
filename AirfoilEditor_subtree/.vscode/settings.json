@@ -1,0 +1,11 @@
+{
+    "python.analysis.extraPaths": ["./modules"],
+    "python.analysis.typeCheckingMode": "off",
+    "markdown.preview.fontSize": 20,
+    "python.testing.pytestArgs": [
+        "modules"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "debugpy.debugJustMyCode": false
+}
