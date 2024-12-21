@@ -320,13 +320,13 @@ class Panel_WingSection (Panel_Planform_Abstract):
                 hide=lambda:  not self.planform().chord_defined_by_sections)     
                
         r += 1
-        FieldF (l,r,c,   lab="Position", width=85, unit="mm", step=1, lim=(0, self.planform().span), dec=1,
+        FieldF (l,r,c,   lab="Position", width=85, unit="mm", step=1, lim=lambda: (0, self.planform().span), dec=1,
                 obj=self._wingSection, prop=WingSection.x, disable=lambda: not self._wingSection().is_set_xn_allowed,
                 style=lambda: self._style_for_fixed(self._wingSection().is_xn_fix) )
         FieldF (l,r,c+3, lab="of span", width=65, unit="%", step=1, lim=(0, 100), dec=1,
                 obj=self._wingSection, prop=WingSection.xn, disable=lambda: not self._wingSection().is_set_xn_allowed)
         r += 1
-        FieldF (l,r,c,   lab="Chord", width=85, unit="mm", step=1, lim=(1, self.planform().span), dec=1,
+        FieldF (l,r,c,   lab="Chord", width=85, unit="mm", step=1, lim=lambda:(1, self.planform().chord_root), dec=1,
                 obj=self._wingSection, prop=WingSection.c, disable=lambda: not self._wingSection().is_set_cn_allowed,
                 style=lambda: self._style_for_fixed(self._wingSection().is_cn_fix))
         FieldF (l,r,c+3, lab="of root", width=65, unit="%", step=1, lim=(1, 100), dec=1,
@@ -338,7 +338,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
                 obj=self._wingSection, prop=WingSection.defines_hinge,
                 hide=lambda: self.flaps().hinge_equal_ref_line)     
         r += 1
-        FieldF (l,r,c,   lab="Flap depth", width=85, unit="mm", step=1, lim=(0, self.planform().span), dec=1,
+        FieldF (l,r,c,   lab="Flap depth", width=85, unit="mm", step=1, lim=lambda: (0, self.planform().chord_root), dec=1,
                 obj=self._wingSection, prop=WingSection.flap_c, specialText='Auto',
                 disable=lambda: not self._wingSection().defines_hinge or self._wingSection().hinge_equal_ref_line)
         FieldF (l,r,c+3, lab="of chord", width=65, unit="%", step=1, lim=(-1, 100), dec=1,

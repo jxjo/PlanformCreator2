@@ -296,6 +296,7 @@ class App_Main (QMainWindow):
         diagram : Diagram_Abstract
         for diagram in self._diagrams:
             diagram.sig_wingSection_new.connect     (self.on_wingSection_selected)
+            diagram.sig_wingSection_changed.connect (self.refresh)
             diagram.sig_planform_changed.connect    (self.refresh)
             diagram.sig_export_airfoils.connect     (self.export_airfoils)
             diagram.sig_export_xflr5.connect        (self.export_xflr5)
