@@ -220,7 +220,8 @@ def set_background (aWidget : QWidget,
 class Widget:
     """
     Extends QtWidgets to get an "access path" usage of widgets
-    where a widget 'get' and 'set' its data by itself.
+        where a widget 'get' and 'set' its data by itself
+        or by property with 'obj' and 'prop'
 
     A widgets add itsself to a 'QLayout' 
 
