@@ -430,6 +430,16 @@ class MessageBox (QMessageBox):
 # ------------ Dialog  -----------------------------------
 
 class Dialog (QDialog):
+    """
+    Abstract super class for modal top windows with action buttons at bottom.
+    Extends QDialog with a dataObject (via 'getter') and common background
+
+    Args:
+        QDialog (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
 
     name = "Dialog"             # will be title 
 

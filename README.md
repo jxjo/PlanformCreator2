@@ -8,7 +8,7 @@ The AirfoilEditor is on one hand a fast airfoil viewer and on the other hand a p
 
 Main features:  
 
-* View an air foil and browse through the airfoils of its subdirectory
+* View an airfoil and browse through the airfoils of its subdirectory
 * View the curvature of the airfoil surface
 * Repanel and normalize the airfoil
 * Modify the geometry parameters thickness, camber, its high points, trailing edge gap  

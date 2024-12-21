@@ -60,7 +60,7 @@ logger.setLevel(logging.DEBUG)
 # ------ globals -----
 
 AppName    = "Airfoil Editor"
-AppVersion = "2.0.1"
+AppVersion = "2.0.2"
 
 
 class App_Main (QMainWindow):
