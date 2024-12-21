@@ -1816,6 +1816,9 @@ class Image_Artist (Abstract_Artist_Planform):
             tr.scale (1, -1)
             tr.translate (0,-self.imageItem.height())
 
+        if self.img_def.rotated:
+            tr.rotate (-90)
+
         self.imageItem.setTransform (tr)
         
 

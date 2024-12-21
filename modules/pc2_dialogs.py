@@ -414,6 +414,7 @@ class Dialog_Edit_Image (Dialog):
         Label    (l,r,c,   get="Orientation:")
         CheckBox (l,r,c+1, text= "Mirror horizontal", obj=self.img_def, prop=Image_Definition.mirrored_horizontal)
         CheckBox (l,r,c+3, text= "Mirror vertical",   obj=self.img_def, prop=Image_Definition.mirrored_vertical)
+        CheckBox (l,r,c+5, text= "Rotate by 90°",     obj=self.img_def, prop=Image_Definition.rotated)
         Label    (l,r,c+8, get="Leading edge should be at top, planform root should be on the right", style=style.COMMENT)
 
         r += 1 

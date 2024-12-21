@@ -3757,6 +3757,7 @@ class Image_Definition:
 
         self._mirrored_horizontal = fromDict (myDict, "mirrored_horizontal", False)
         self._mirrored_vertical   = fromDict (myDict, "mirrored_vertical", False)
+        self._rotated             = fromDict (myDict, "rotated", False)
         self._invert              = fromDict (myDict, "invert", False)
         self._remove_red          = fromDict (myDict, "remove_red", False)
 
@@ -3789,6 +3790,7 @@ class Image_Definition:
 
             toDict (d, "mirrored_horizontal",   self.mirrored_horizontal) 
             toDict (d, "mirrored_vertical",     self.mirrored_vertical) 
+            toDict (d, "rotated",               self.rotated) 
             toDict (d, "invert",                self.invert) 
             toDict (d, "remove_red",            self.remove_red) 
             toDict (d, "black_level",           self.black_level) 
@@ -3829,6 +3831,12 @@ class Image_Definition:
         return self._mirrored_vertical
     def set_mirrored_vertical (self, aBool : bool):
         self._mirrored_vertical = aBool
+
+    @property
+    def rotated (self) -> bool:
+        return self._rotated
+    def set_rotated (self, aBool : bool):
+        self._rotated = aBool
 
     @property
     def invert (self) -> bool:
