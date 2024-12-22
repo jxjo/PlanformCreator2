@@ -87,14 +87,19 @@ class Diagram_Abstract (Diagram):
         self.refresh()                                   
 
 
-    def on_cur_wingSection_changed (self):
+    def on_wingSection_selected (self):
         """ slot to handle new current wing section """
+        self.refresh(also_viewRange=False)
+
+
+    def on_wingSection_changed (self):
+        """ slot to handle changed wing section data"""
         self.refresh(also_viewRange=False)
 
 
     def on_planform_changed (self):
         """ slot to handle new current wing section """
-        self.refresh()
+        self.refresh(also_viewRange=False)
 
 
     # --- private slots ---------------------------------------------------

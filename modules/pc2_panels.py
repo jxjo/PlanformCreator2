@@ -73,64 +73,19 @@ class Panel_Planform_Abstract (Edit_Panel):
     def _set_panel_layout (self, layout = None ):
         """ Set layout of self._panel """
 
-        # overloaded to set ccordinate transformation fucntions
-        self.set_t_fn  (self.planform().t_norm_to_plan)       # bound method for coordinate transformation
-        self.set_tr_fn (self.planform().t_plan_to_norm)     
-
         super()._set_panel_layout (layout=layout)
 
         # overloaded to connect to widgets changed signal
         for w in self.widgets:
-            w.sig_changed.connect (self._on_planform_widget_changed)
+            w.sig_changed.connect (self._on_widget_changed)
         for w in self.header_widgets:
-            w.sig_changed.connect (self._on_planform_widget_changed)
+            w.sig_changed.connect (self._on_widget_changed)
 
 
-    def _on_planform_widget_changed (self, widget):
+    def _on_widget_changed (self, widget):
         """ user changed data in widget"""
         logger.debug (f"{self} {widget} widget changed slot")
         self.myApp.sig_planform_changed.emit()
-
-
-    # coordinate transformation ------------------------
-
-    @property
-    def t_fn (self):
-        """ current active transformation function to transform x,y in view coordinates"""
-        if self._t_fn is None: 
-            return lambda x,y : (x,y)                   # dummy 1:1 tra<nsformation
-        else: 
-            return self._t_fn
-    
-    def set_t_fn (self, transform_fn):
-        """ set transformation function to transform x,y in view coordinates"""
-        if transform_fn is not None:
-            if callable (transform_fn):
-                self._t_fn = transform_fn
-            else:
-                raise ValueError ("transformation function is not callable")
-        else:
-            self._t_fn = None 
-
-    @property
-    def tr_fn (self):
-        """ current active reverse transformation function to transform x,y from view coordinates"""
-        if self._tr_fn is None: 
-            return lambda x,y : (x,y)                   # dummy 1:1 transformation
-        else: 
-            return self._tr_fn
-    
-    def set_tr_fn (self, transform_fn):
-        """ set reverse transformation function to transform x,y from view coordinates"""
-        if transform_fn is not None:
-            if callable (transform_fn):
-                self._tr_fn = transform_fn
-            else:
-                raise ValueError ("transformation function is not callable")
-        else:
-            self._tr_fn = None 
-
-
 
 
 
@@ -219,7 +174,7 @@ class Panel_Wing (Panel_Planform_Abstract):
 
         if dialog.result() == QDialog.DialogCode.Accepted:
             self.wing().set_description (dialog.new_text)
-            self._on_planform_widget_changed (dialog)                   # manual refresh a dialog is not a 'Widget'
+            self._on_widget_changed (dialog)                   # manual refresh a dialog is not a 'Widget'
 
 
 
@@ -426,7 +381,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
     def _remove_airfoil (self):
         """ remove airfoil from section"""
         self._wingSection().set_airfoil (None) 
-        self._on_planform_widget_changed (None)
+        self._on_widget_changed (None)
 
 
     def _edit_airfoil (self):
@@ -443,4 +398,11 @@ class Panel_WingSection (Panel_Planform_Abstract):
         """ slot - AirfoilEditor finished with airfoil pathFilename"""
 
         self._wingSection().set_airfoil (pathFilename)
-        self._on_planform_widget_changed (None)
+        self._on_widget_changed (None)
+
+
+    @override
+    def _on_widget_changed (self, widget):
+        """ user changed data in widget"""
+        logger.debug (f"{self} {widget} wing section widget changed slot")
+        self.myApp.sig_wingSection_changed.emit()

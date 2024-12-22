@@ -235,7 +235,8 @@ class App_Main (QMainWindow):
 
     sig_wing_new                = pyqtSignal()              # new wing loaded 
     sig_planform_changed        = pyqtSignal()              # planform data changed via input fields 
-    sig_wingSection_selected    = pyqtSignal()              # current wing section changed
+    sig_wingSection_selected    = pyqtSignal()              # new current wing section 
+    sig_wingSection_changed     = pyqtSignal()              # current wing section changed
 
 
     def __init__(self, pc2_file):
@@ -299,12 +300,13 @@ class App_Main (QMainWindow):
         container.setLayout (l_main) 
         self.setCentralWidget(container)
 
-        # connect to signals of self
+        # connect signals of self to self
 
         self.sig_planform_changed.connect           (self.refresh)
         self.sig_wing_new.connect                   (self.refresh)
+        self.sig_wingSection_changed.connect        (self.refresh)
 
-        # connect to signals from diagram
+        # connect signals of diagram to self
 
         diagram : Diagram_Abstract
         for diagram in self._diagrams:
@@ -317,11 +319,12 @@ class App_Main (QMainWindow):
             diagram.sig_launch_flz.connect          (self.launch_flz)
             diagram.sig_export_dxf.connect          (self.export_dxf)
 
-        # connect signals to slots of diagram
+        # connect signals of self to slots of diagrams
 
         diagram : Diagram_Abstract
         for diagram in self._diagrams:
-            self.sig_wingSection_selected.connect   (diagram.on_cur_wingSection_changed)
+            self.sig_wingSection_selected.connect   (diagram.on_wingSection_selected)
+            self.sig_wingSection_changed.connect    (diagram.on_wingSection_changed)
             self.sig_wing_new.connect               (diagram.on_wing_new)
             self.sig_planform_changed.connect       (diagram.on_planform_changed)
 
