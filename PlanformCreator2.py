@@ -246,19 +246,32 @@ class App_Main (QMainWindow):
         self._pc2_file = ''                                 # paramter file with wing settings  
         self._myWing : Wing = None                          # actual wing model 
 
-
         # get icon either in modules or in icons 
 
         icon = Icon  ('PC2_ico.ico', icon_dir="modules")    # will look in .\modules for py, in .\_internal\icons for exe
         self.setWindowIcon (icon)
 
-        # get initial window size from settings
+        # set pc2 settings file 
 
         Settings.belongTo (__file__, nameExtension=None, fileExtension= '.settings')
+
+        # get initial window size from settings
+
         geometry = Settings().get('window_geometry', [])
         maximize = Settings().get('window_maximize', False)
         Win_Util.set_initialWindowSize (self, size_frac= (0.80, 0.70), pos_frac=(0.1, 0.1),
                                         geometry=geometry, maximize=maximize)
+
+        # if no initial pc2 file, try to get last openend pc2 file 
+
+        if not pc2_file: 
+            pc2_file = Settings().get('last_opened', default=None) 
+
+        if pc2_file and not os.path.isfile (pc2_file):
+                logger.error ("Parameter file '%s' doesn't exist" %pc2_file )
+                Settings().set('last_opened', None) 
+                pc2_file = None
+
 
         # create the 'wing' model  
 
@@ -533,7 +546,7 @@ class App_Main (QMainWindow):
             self._pc2_file = PathHandler.relPath (newPathFilename)
             self.save ()
             self.set_title ()
-            Settings().set('lastOpenend', self._pc2_file)
+            Settings().set('last_opened', newPathFilename)
 
 
     def edit_settings (self):
@@ -554,8 +567,14 @@ class App_Main (QMainWindow):
         self._cur_wingSection = None
 
         if pathFilename:
-            self._pc2_file = PathHandler.relPath (pathFilename)
-            Settings().set('lastOpenend', self._pc2_file)
+            rel_pathFilename = PathHandler.relPath (pathFilename)
+            if len(rel_pathFilename) < len(pathFilename):
+                # take the shorter one 
+                pathFilename = rel_pathFilename
+
+            self._pc2_file = pathFilename
+            Settings().set('last_opened', pathFilename)
+
         else:
             self._pc2_file = ""
         self.set_title ()
@@ -640,21 +659,17 @@ if __name__ == "__main__":
 
     # paramter file as argument?  
 
-    parmFile = ''
+    pc2_file = ''
     parser = argparse.ArgumentParser(prog=APP_NAME, description='Create a wing planform')
-    parser.add_argument("paramterfile", nargs='*', help="Paramter file .pc2")
+    parser.add_argument("paramterfile", nargs='*', help="Parameter file .pc2")
     args = parser.parse_args()
 
     if args.paramterfile: 
-        parmFile = args.paramterfile[0]
+        pc2_file = args.paramterfile[0]
     else: 
-        parmFile = Settings().get('lastOpenend', default=None) 
+        pc2_file = None 
 
-    if parmFile and not os.path.isfile (parmFile):
-            logger.error ("Parameter file '%s' doesn't exist" %parmFile )
-            Settings().set('lastOpenend', None) 
-            parmFile = None
-
+    # init QT Application 
 
     app = QApplication(sys.argv)
     app.setStyle('fusion')
@@ -672,6 +687,6 @@ if __name__ == "__main__":
 
     # start app 
 
-    Main = App_Main (parmFile)
+    Main = App_Main (pc2_file)
     Main.show()
     app.exec()

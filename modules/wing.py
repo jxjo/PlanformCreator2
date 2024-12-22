@@ -475,10 +475,13 @@ class Wing:
     def has_changed (self):
         """returns true if the parameters has been changed since last save() of parameters"""
 
-        return self._save() != self.dataDict
+        # compare json string as dict compare is too sensible 
+        new_json = json.dumps (self._save())
+        cur_json = json.dumps (self.dataDict)
+
+        return new_json != cur_json
   
         
-
     def t_plan_to_wing_right (self, x : float|Array|list, y : float|Array|list) -> ...:
         """
         Transforms planform coordinates into wing coordinates as right side wing 
@@ -3762,7 +3765,7 @@ class Image_Definition:
         self._remove_red          = fromDict (myDict, "remove_red", False)
 
         self._black_level         = fromDict (myDict, "black_level", 40)            # 0..255 - take start value 
-        self._white_level         = fromDict (myDict, "white_level", 255) 
+        # self._white_level         = fromDict (myDict, "white_level", 255) 
 
         self._point_le            = tuple(fromDict (myDict, "point_le", ( 20,-20))) 
         self._point_te            = tuple(fromDict (myDict, "point_te", (400,-20)))
@@ -3794,7 +3797,7 @@ class Image_Definition:
             toDict (d, "invert",                self.invert) 
             toDict (d, "remove_red",            self.remove_red) 
             toDict (d, "black_level",           self.black_level) 
-            toDict (d, "white_level",           self.white_level) 
+            # toDict (d, "white_level",           self.white_level) 
             toDict (d, "point_le",              self.point_le) 
             toDict (d, "point_te",              self.point_te) 
         return d
@@ -3860,10 +3863,10 @@ class Image_Definition:
     def white_level (self) -> int:
         """ white level - currently fixed to black level """
         return self.black_level + 128
-        # return self._white_level
 
     def set_white_level (self, aInt : int):
-        self._white_level = aInt
+        "inactive"
+        pass                        
 
     @property
     def point_le (self) -> tuple:
