@@ -311,7 +311,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
         ToolButton (l,r,c+3, icon=Icon.DELETE, set=self._remove_airfoil,
                     toolTip="Remove airfoil - airfoil will be blended", 
                     disable=lambda: self._wingSection().airfoil.isBlendAirfoil)
-        ToolButton (l,r,c+4, icon=Icon.EDIT,   set=self._edit_airfoil,   
+        ToolButton (l,r,c+4, icon=Icon.AE,   set=self._edit_airfoil,   
                     toolTip="Edit airfoil with the Airfoil Editor", 
                     disable=lambda: self._wingSection().airfoil.isBlendAirfoil)
         r += 1
