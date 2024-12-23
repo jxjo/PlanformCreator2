@@ -605,7 +605,7 @@ class Item_Wing_Airfoils (Diagram_Item):
     def refresh(self):
         """ override to set legend cols"""
         super().refresh()
-        self.legend.setColumnCount (2)
+        self.legend.setColumnCount (3)
 
 
     @override
