@@ -844,6 +844,30 @@ class Diagram_Planform (Diagram_Abstract):
 
 
     @property
+    def show_elliptical (self) -> bool: 
+        """ return show_elliptical state of first artist"""
+        artist : Ref_Planforms_Artist = self._get_artist (Ref_Planforms_Artist) [0]
+        return artist.show_elliptical
+
+    def set_show_elliptical (self, aBool : bool):
+        artist : Ref_Planforms_Artist
+        for artist in self._get_artist (Ref_Planforms_Artist): 
+            artist.set_show_elliptical (aBool) 
+
+
+    @property
+    def show_ref_pc2 (self) -> bool: 
+        """ return show_ref_pc2 state of first artist"""
+        artist : Ref_Planforms_Artist = self._get_artist (Ref_Planforms_Artist) [0]
+        return artist.show_ref_pc2
+
+    def set_show_ref_pc2 (self, aBool : bool):
+        artist : Ref_Planforms_Artist
+        for artist in self._get_artist (Ref_Planforms_Artist): 
+            artist.set_show_ref_pc2 (aBool) 
+
+
+    @property
     def show_flaps (self) -> bool: 
         return self._show_flaps
     
@@ -851,10 +875,6 @@ class Diagram_Planform (Diagram_Abstract):
         self._show_flaps = aBool == True
         self._show_artist (Flaps_Artist, aBool)
 
-
-    @property
-    def ref_planforms_artist (self) -> Ref_Planforms_Artist:
-        return self._get_artist (Ref_Planforms_Artist) [0]
 
     @property
     def background_image_artist (self) -> Image_Artist:
@@ -963,8 +983,7 @@ class Diagram_Planform (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             CheckBox   (l,r,c, text="Elliptical", 
-                        get=lambda: self.ref_planforms_artist.show_elliptical, 
-                        set=self.ref_planforms_artist.set_show_elliptical) 
+                        get=lambda: self.show_elliptical, set=self.set_show_elliptical) 
 
             # toggle fields for pc2 reference planform 
             r += 1
@@ -975,8 +994,7 @@ class Diagram_Planform (Diagram_Abstract):
                         hide = lambda: bool(self.wing().reference_pc2_file))
 
             CheckBox   (l,r,c, text=lambda: self.wing().planform_ref_pc2_name, 
-                        get=lambda: self.ref_planforms_artist.show_ref_pc2, 
-                        set=self.ref_planforms_artist.set_show_ref_pc2, 
+                        get=lambda: self.show_ref_pc2, set=self.set_show_ref_pc2, 
                         hide = lambda: not bool(self.wing().reference_pc2_file)) 
             ToolButton (l,r,c+2, icon=Icon.OPEN, 
                         set=self._open_planform_ref_pc2, toolTip="Open new Planform",
@@ -1346,6 +1364,11 @@ class Diagram_Panels (Diagram_Abstract):
         self.sig_planform_changed.emit()            # new sections could have been created
 
 
+    def _on_field_changed (self, *_):
+        """ slot for widget changes"""
+        self.refresh (also_viewRange=False)         # have 'soft' refresh when settings are changed
+
+
     @property
     def section_panel (self) -> Edit_Panel:
         """ return section panel within view panel"""
@@ -1416,7 +1439,7 @@ class Diagram_Panels (Diagram_Abstract):
             
             w : Widget
             for w in self._section_panel.widgets:
-                w.sig_changed.connect (self.refresh)
+                w.sig_changed.connect (self._on_field_changed)
 
         return self._section_panel 
 

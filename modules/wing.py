@@ -356,6 +356,7 @@ class Wing:
 
     def set_reference_pc2_file (self, pathFilename : str) -> str:
         self._reference_pc2_file = pathFilename
+        self._planform_ref_pc2   = None                         # reset current ref planform 
 
 
     @property
@@ -1701,7 +1702,10 @@ class WingSection :
         if self.defines_hinge:
             return self._hinge_cn
         else: 
-            return self._planform.flaps.hinge_cn_at (self.xn) 
+            # calculate hinge position from flap depth 
+            _, rel_depth = self._planform.flaps.flap_depth_at (self.x)
+            hinge_cn = 1.0 - rel_depth 
+            return hinge_cn
 
 
     def set_hinge_cn (self, aVal : float):
@@ -2455,17 +2459,6 @@ class Flaps:
         return cn
     
 
-    def hinge_yn_at (self, xn : float) -> float:
-        """n of hinge line at xn """  
-
-        #todo
-        raise NotImplementedError
-        xn_arr, yn_arr = self.hinge_polyline ()
-        yn = np.interp(xn, xn_arr, yn_arr)                                  # linear interpolation 
-
-        return yn
-
-
     def hinge_y_at (self, x : float) -> float:
         """y of hinge line at x """  
 
@@ -2548,16 +2541,22 @@ class Flaps:
 
 
 
-    def rel_depth_at (self, xn : float, hinge_yn : float = None) -> float:
-        """ relative flap e.g. 0.25 at position xn """
+    def flap_depth_at (self, x : float, hinge_y : float = None) -> float:
+        """ 
+        flap depth absolut e.g. 35mm and relative e.g. 0.27 at position x 
+            if hinge_y is omitted it is calculated from current hinge line 
+        
+        """
 
-        if hinge_yn is None: 
-            hinge_yn = self.hinge_yn_at (xn)
-        le_yn, te_yn = self._planform.le_te_at (xn)
+        if hinge_y is None: 
+            hinge_y  = self.hinge_y_at (x) 
 
-        depth = (te_yn - hinge_yn) / (te_yn - le_yn)
-        depth = np.clip (depth, 0.0, 1.0)                                   # sanity    
-        return depth
+        le_y, te_y = self._planform.le_te_at (x)                    # calc real flap depth 
+        depth      = te_y - hinge_y
+        rel_depth  = depth / (te_y - le_y)  
+        rel_depth  = np.clip (rel_depth, 0.0, 1.0)                  # sanity    
+
+        return depth, rel_depth 
 
 
 
@@ -3458,6 +3457,17 @@ class Planform_Paneled (Planform):
     @property
     def sweep_angle (self) -> float:
         return self._parent_planform.sweep_angle
+
+
+    def wingSections_reduced (self) -> list[WingSection]:
+        """ returns list of wing sections if applicable reduced when cn_tip_min """
+        
+        if self.is_cn_tip_min_applied:
+            nsec = len(self.n_distrib.polyline () [0])      # get effective no of sections fro polyline
+            sections = self._wingSections [:nsec]           # reduce 
+        else: 
+            sections = self._wingSections
+        return sections
 
 
     @property

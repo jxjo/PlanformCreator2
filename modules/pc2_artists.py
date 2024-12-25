@@ -1334,7 +1334,7 @@ class Flaps_Artist (Abstract_Artist_Planform):
 
             if self.show_mouse_helper and not flaps.hinge_equal_ref_line:
 
-                p = self.Movable_Hinge  (self._pi, self.planform, color=color, mode=self._mode, 
+                p = self.Movable_Hinge  (self._pi, self.planform, color=color,
                                         t_fn = self.t_fn, tr_fn = self.tr_fn, 
                                         movable=True, on_changed=self.sig_flaps_changed.emit)
                 self._add(p) 
@@ -1410,17 +1410,11 @@ class Flaps_Artist (Abstract_Artist_Planform):
             def label_moving (self, *_):
                 """ label text during move"""
 
-                
-                if self._mode == mode.REF_TO_SPAN :
-                    xn, hinge_yn = self.x, self.y
-                    return f"{self.name} {self._flaps.rel_depth_at(xn, hinge_yn=hinge_yn):.1%}"
+                x, y = self._tr_fn (self.x, self.y)
 
-                elif self._mode == mode.DEFAULT:
-                    x, y = self._tr_fn (self.x, self.y)
-                    le_y, te_y = self._planform.le_te_at (x)                # calc real flap depth 
-                    depth      = te_y - y
-                    rel_depth  = depth / (te_y - le_y)  
-                    return f"{self.name} {depth:.1f}mm {rel_depth:.1%}"
+                depth, rel_depth = self._flaps.flap_depth_at (x, hinge_y = y)  
+
+                return f"{self.name} {depth:.1f}mm {rel_depth:.1%}"
 
 
 

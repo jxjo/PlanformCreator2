@@ -175,8 +175,8 @@ class Export_Xflr5:
         return self._wing.planform
 
     @property
-    def _wingSections (self) -> WingSections:
-        return self._planform_paneled.wingSections
+    def _wingSections (self) -> list[WingSection]:
+        return self._planform_paneled.wingSections_reduced()
     
     @property
     def export_dir(self):
@@ -429,8 +429,8 @@ class Export_FLZ:
         return self._wing.planform
 
     @property
-    def _wingSections (self) -> WingSections:
-        return self._planform_paneled.wingSections
+    def _wingSections (self) -> list[WingSection]:
+        return self._planform_paneled.wingSections_reduced()
 
     @property
     def export_dir(self):
@@ -471,7 +471,7 @@ class Export_FLZ:
 
         # ensure all airfoils are up to date and splined (quality) 
 
-        self._wingSections.do_strak (geometry_class=GEO_SPLINE)          
+        self._planform.wingSections.do_strak (geometry_class=GEO_SPLINE)          
 
         # if necessary create directory 
 
@@ -531,8 +531,8 @@ class Export_FLZ:
             self._index = index
 
         @property
-        def _wingSections (self) -> WingSections:
-            return self._planform_paneled.wingSections
+        def _wingSections (self) -> list[WingSection]:
+            return self._planform_paneled.wingSections_reduced()
 
         @property
         def start_tag(self): 
