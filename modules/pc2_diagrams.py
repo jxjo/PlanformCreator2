@@ -1626,7 +1626,7 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
     @property 
     def polar_defs (self) -> list [Polar_Definition]:
         """ actual polar definitions"""
-        return self._polar_defs_fn() if self._polar_defs_fn else []
+        return self.wing().polar_definitions
 
 
     def airfoils (self) -> list[Airfoil]: 
@@ -1789,19 +1789,6 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
     # --- public slots ---------------------------------------------------
 
 
-    def on_airfoil_changed (self):
-        """ slot to handle airfoil changed signal """
-
-        logger.debug (f"{str(self)} on airfoil changed")
-        self.refresh(also_viewRange=False)
-
-
-    def on_new_design (self):
-        """ slot to handle new airfoil design signal """
-
-        logger.debug (f"{str(self)} on new design")
-        self.refresh(also_viewRange=False)
-
 
     def on_new_polars (self):
         """ slot to handle new polars loaded which were generated async by Worker """
@@ -1829,15 +1816,6 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
     # --- private slots ---------------------------------------------------
 
 
-    def _on_geometry_changed (self):
-        """ slot to handle geometry change made in diagram """
-
-        logger.debug (f"{str(self)} on geometry changed in diagram")
-    
-        # self.refresh()                          # refresh other diagram items 
-        self.sig_airfoil_changed.emit()         # refresh app
-
-
 
     def _on_polars_switched (self, aBool):
         """ slot to handle polars switched on/off """
@@ -1848,23 +1826,6 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
             item.setVisible (aBool)
 
 
-    def _on_airfoils_ref_switched (self, aBool):
-        """ slot to handle airfoil reference switched on/off """
-
-        logger.debug (f"{str(self)} on airfoils switched")
-    
-        for item in self.diagram_items:
-            if item.isVisible(): 
-                item.refresh()
-
-    def _on_show_airfoil_changed (self):
-        """ slot to handle show airfoil switched on/off """
-
-        logger.debug (f"{str(self)} on show airfoil switched")
-    
-        for item in self.diagram_items:
-            if item.isVisible(): 
-                item.refresh()
 
 
 

@@ -35,6 +35,7 @@ from base.common_utils      import *
 from base.math_util         import * 
 from base.spline            import Bezier
 from model.airfoil          import Airfoil, GEO_BASIC, GEO_SPLINE
+from model.polar_set        import Polar_Definition, Polar_Set
 from model.airfoil_examples import Root_Example, Tip_Example
 
 import logging
@@ -81,6 +82,10 @@ class Wing:
         self._name                  = fromDict (dataDict, "wing_name", "My new Wing")
         self._description           = fromDict (dataDict, "description", "This is just an example planform.\nUse 'New' to select another template.")
         self._fuselage_width        = fromDict (dataDict, "fuselage_width", 80.0)
+
+        # polar definitions
+
+        self._polar_definitions     = None
 
         # attach the Planform 
 
@@ -400,6 +405,15 @@ class Wing:
             self._airfoil_nick_base = int(aNumber) 
         except: 
             self._airfoil_nick_base = 100 
+
+
+    @property
+    def polar_definitions (self) -> list [Polar_Definition]:
+        """ list of actual polar definitions """
+
+        if self._polar_definitions is None: 
+            self._polar_definitions = [Polar_Definition()]
+        return self._polar_definitions
 
 
     @property
@@ -1473,6 +1487,12 @@ class WingSection :
             else:
                 airfoil = Airfoil(name="<strak>", geometry=GEO_BASIC)
                 airfoil.set_isBlendAirfoil (True)
+
+        # init polar set of airfoil 
+
+        polar_defs = self._planform.wing.polar_definitions
+
+        airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=self.cn))
 
         return airfoil
 

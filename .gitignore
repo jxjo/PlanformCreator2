@@ -3,6 +3,8 @@ PlanformCreator2.settings
 PlanformCreator2.code-workspace
 README.pdf
 releases
+T*.txt
+tmp*.inp
 
 
 # Byte-compiled / optimized / DLL files
