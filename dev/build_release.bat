@@ -1,6 +1,6 @@
 @echo off
 
-set APP_VERSION=2.0_beta_3
+set APP_VERSION=2.0
 set WIN_RELEASE=PlanformCreator2_%APP_VERSION%_win
 
 echo.
