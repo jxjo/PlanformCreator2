@@ -226,7 +226,7 @@ class Test_Airfoil:
         new_airfoil.normalize()
 
         assert new_airfoil.geo.te_gap == te_gap
-        assert new_airfoil.name  == destName + "_te1.0"
+        assert new_airfoil.name  == destName + '_te_gap1.0'
 
         # after set_teGap x-values should be equal - y-values different
         assert np.sum(np.round(airfoil.x,7)) == np.sum(new_airfoil.x)

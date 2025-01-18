@@ -15,43 +15,72 @@ import os
 import fnmatch             
 
 from PyQt6.QtCore           import QMargins
-from PyQt6.QtWidgets        import QHBoxLayout, QLayout
+from PyQt6.QtWidgets        import QHBoxLayout
 from PyQt6.QtWidgets        import QFileDialog, QWidget
 
 from base.widgets           import * 
+from base.panels            import MessageBox
 
 from model.airfoil          import Airfoil, Airfoil_Bezier, Airfoil_Hicks_Henne
-from model.airfoil          import GEO_BASIC, usedAs
+from model.airfoil          import GEO_BASIC
+from model.airfoil_examples import Example
 
 
 # ----- common methods -----------
 
-def create_airfoil_from_path (pathFilename) -> Airfoil:
+def create_airfoil_from_path (parent, pathFilename, example_if_none=False, silent=True) -> Airfoil:
     """
     Create and return a new airfoil based on pathFilename.
-        Return None if the Airfoil couldn't be loaded  
+        Return None if the Airfoil couldn't be loaded 
+        or 'Example' airfoil if example_if_none == True  
     """
 
-    extension = os.path.splitext(pathFilename)[1]
-    if extension == ".bez":
-        airfoil = Airfoil_Bezier (pathFileName=pathFilename)
-    elif extension == ".hicks":
-        airfoil = Airfoil_Hicks_Henne (pathFileName=pathFilename)
-    else: 
-        airfoil = Airfoil(pathFileName=pathFilename, geometry=GEO_BASIC)
+    file_found = True
+    try: 
+        extension = os.path.splitext(pathFilename)[1]
+        if extension == ".bez":
+            airfoil = Airfoil_Bezier (pathFileName=pathFilename)
+        elif extension == ".hicks":
+            airfoil = Airfoil_Hicks_Henne (pathFileName=pathFilename)
+        else: 
+            airfoil = Airfoil(pathFileName=pathFilename, geometry=GEO_BASIC)
+    except:
+        file_found = False
 
-    airfoil.load()
+    if file_found:
+        airfoil.load()
 
-    if airfoil.isLoaded:                      # could have been error in loading
-        return airfoil
-    else:
-        logger.error (f"Could not load '{pathFilename}'")
-        return None 
+        if airfoil.isLoaded:                      
+            airfoil_loaded = True 
+        else: 
+            airfoil_loaded = False
+
+    if not file_found or not airfoil_loaded:
+        if example_if_none:
+            airfoil = Example()
+        else: 
+            airfoil = None 
+
+        if silent: 
+            logger.error (f"Could not load '{pathFilename}'")
+        elif pathFilename: 
+            fileName = os.path.basename (pathFilename)
+            if not file_found:
+                msg = f"{fileName} does not exist."
+            else: 
+                msg = f"{fileName} couldn't be loaded."
+            if example_if_none:
+                example = "\nUsing example airfoil."
+            else:
+                example= ""
+            MessageBox.error   (parent,'Load Airfoil', f"{msg}{example}", min_height= 60)
+
+    return airfoil  
 
 
 def get_airfoil_files_sameDir (initialDir : Airfoil | str | None): 
     """ 
-    Returns list of airfoil file path in the same directory as airfoil
+    Returns list of airfoil file path in the same directory as airf
     All .dat, .bez and .hicks files are collected 
     """
 
@@ -130,7 +159,7 @@ class Airfoil_Open_Widget (Widget, QWidget):
         newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters)
 
         if newPathFilename:                         # user pressed open
-            airfoil = create_airfoil_from_path (newPathFilename)
+            airfoil = create_airfoil_from_path (self, newPathFilename, silent=False)
             if airfoil is not None: 
 
                 #leave button callback and refresh in a few ms 
@@ -171,6 +200,7 @@ class Airfoil_Select_Open_Widget (Widget, QWidget):
         self._no_files_here = None
         self._initial_dir = initialDir
         self._addEmpty = addEmpty is True 
+        self
 
         # get initial properties  (cur airfoil) 
         self._get_properties ()
@@ -183,12 +213,16 @@ class Airfoil_Select_Open_Widget (Widget, QWidget):
             self._combo_widget = ComboSpinBox (l, get=self.airfoil_fileName, 
                                                 set=self.set_airfoil_by_fileName, 
                                                 options=self.airfoil_fileNames_sameDir,
-                                                hide=self.no_files_here, signal=False)
+                                                hide=self.no_files_here,
+                                                toolTip=self._toolTip,
+                                                signal=False)
         else:             
             self._combo_widget = ComboBox      (l, get=self.airfoil_fileName, 
                                                 set=self.set_airfoil_by_fileName, 
                                                 options=self.airfoil_fileNames_sameDir,
-                                                hide=self.no_files_here, signal=False)
+                                                hide=self.no_files_here, 
+                                                toolTip=self._toolTip,
+                                                signal=False)
         if withOpen:
             # either text button if nothing is there
             Airfoil_Open_Widget (l, text=textOpen, set=self.set_airfoil, signal=False,
@@ -217,7 +251,10 @@ class Airfoil_Select_Open_Widget (Widget, QWidget):
         self._get_properties ()
         self._set_Qwidget_static ()
         self._set_Qwidget ()
-        self._combo_widget.setToolTip (self.airfoil_fileName())  
+
+        name = self.airfoil_fileName() if self.airfoil_fileName() is not None else ""
+        tip = f"{self._toolTip}: {name}" if self._toolTip else f"{name}"
+        self._combo_widget.setToolTip (tip)  
 
         # assign self to parent layout 
 
@@ -304,7 +341,7 @@ class Airfoil_Select_Open_Widget (Widget, QWidget):
 
                 if os.path.isfile (aPathFileName):   # maybe it was deleted in meantime 
                      
-                    airfoil = create_airfoil_from_path (aPathFileName)
+                    airfoil = create_airfoil_from_path (self, aPathFileName, silent=False)
                     if airfoil is not None: 
                         self.set_airfoil (airfoil)
                 break

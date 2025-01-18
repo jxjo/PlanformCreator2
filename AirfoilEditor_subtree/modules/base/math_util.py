@@ -91,18 +91,10 @@ class JPoint:
     def set_name (self, aStr: str):
         self._name = aStr
 
-    def label_changed (self, xy_initial : tuple) -> str:
-        """ returns a short label 7.4@30.6 for y,x changed values as percent""" 
+    def label_percent (self) -> str:
+        """ returns a short label 7.4@30.6 for y,x values as percent""" 
 
-        x_isChanged = round(xy_initial[0] ,4) != round (self.x, 4)
-        y_isChanged = round(xy_initial[1] ,4) != round (self.y, 4)
-
-        if y_isChanged:
-            lab = f"{self._y*100:.1f}"
-        else: 
-            lab = ""
-        if x_isChanged: 
-            lab = f"{lab}@{self._x*100:.1f}"
+        lab = f"{self._y*100:.1f}@{self._x*100:.1f}"
         return lab 
 
     def set_x_limits (self, lim : tuple): 

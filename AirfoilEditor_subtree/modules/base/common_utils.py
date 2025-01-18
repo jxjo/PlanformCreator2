@@ -6,18 +6,17 @@ Common Utility functions for convinience
 """
 
 import os
-from pathlib import Path
 import json
-from termcolor import colored
-
-import logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+from pathlib            import Path
+from termcolor          import colored
 
 from PyQt6.QtWidgets    import QWidget
 from PyQt6.QtCore       import QSize 
 from PyQt6.QtGui        import QGuiApplication, QScreen
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 #------------------------------------------------------------------------------
 # logging 
@@ -141,7 +140,7 @@ class Parameters ():
                     paramFile.close()
                     dataDict = {}
             except:
-                logger.info (f"Paramter file {self._paramFilePath} not found")
+                logger.debug (f"Paramter file {self._paramFilePath} not found")
 
         return dataDict
 
@@ -236,8 +235,13 @@ class Settings (Parameters):
         dataDict = self.get_dataDict ()
 
         toDict(dataDict, key, value)
-        self.write_dataDict (dataDict, dataName='Settings')
+        self.write_dataDict (dataDict)
 
+
+    def write_dataDict (self, aDict, dataName='Settings'):
+        """ writes data dict to file """
+ 
+        super().write_dataDict (aDict, dataName=dataName)
 
 
 #------------------------------------------------------------------------------

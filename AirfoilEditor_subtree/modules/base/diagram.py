@@ -25,7 +25,7 @@ from base.widgets       import ToolButton, Icon
 from base.artist        import Artist
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 
 
 
@@ -184,7 +184,8 @@ class Diagram (QWidget):
 
         item : Diagram_Item
         for item in self.diagram_items:
-            item.refresh() 
+            if item.isVisible(): 
+                item.refresh() 
 
         # refresh all panels on viewPanel 
 
@@ -292,7 +293,7 @@ class Diagram_Item (pg.PlotItem):
         super().__init__(name=self.name,                # to link view boxes 
                          **kwargs)
 
-        self._parent : Diagram = parent
+        self._parent : Diagram = parent 
         self._getter = getter
         self._show   = show 
 
@@ -318,7 +319,7 @@ class Diagram_Item (pg.PlotItem):
 
         # setup item to print coordinates 
 
-        self._coordItem = pg.LabelItem("huhu", color=QColor(Artist.COLOR_LEGEND), size=f"{Artist.SIZE_NORMAL}pt", justify="left")  
+        self._coordItem = pg.LabelItem("", color=QColor(Artist.COLOR_LEGEND), size=f"{Artist.SIZE_NORMAL}pt", justify="left")  
         self._coordItem.setParentItem(self)  
         self._coordItem.anchor(parentPos=(0,1), itemPos=(0.0,0.0), offset=(45, -20))                       
 
@@ -341,9 +342,9 @@ class Diagram_Item (pg.PlotItem):
         
         self.setup_axis()
 
-        # allow only view box context menu  (not plot item) 
+        # no pyqtgraph context menu  - no view box context menu , no plot item 
 
-        self.setMenuEnabled(enableMenu=False, enableViewBoxMenu=True)
+        self.setMenuEnabled(enableMenu=False, enableViewBoxMenu=False)
 
         # initial show or hide - use super() - avoid refresh
  
