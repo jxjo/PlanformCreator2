@@ -38,13 +38,13 @@ from base.spline        import Bezier
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 class qcolors (StrEnum):
 
     EDITABLE      = 'orange' 
     HOVER         = 'deepskyblue'
-
+    ERROR         = 'firebrick'
 
 # -------- common methodes ------------------------
 
@@ -66,6 +66,26 @@ def random_colors (nColors, h_start=0) -> list[QColor]:
         h = h % 1.0
         colors.append(QColor.fromHsvF (h, 0.5, 0.95, 1.0) ) #0.5
     return colors
+
+
+def color_in_series (color : QColor | str, i, n, delta_hue=0.1):
+    """ 
+    returns the i-th of n colors in a color hsv starting with color upto color + delta_hue
+    """
+
+    # sanity 
+    if n < 2:
+        n = 2
+        i = 0  
+
+    if isinstance (color, str): 
+        color = QColor (color) 
+
+    start_hue, sat, value, alpha = color.getHsvF ()
+    hue = start_hue + i * delta_hue / (n-1) 
+    hue = hue % 1.0
+
+    return QColor.fromHsvF (hue, sat, value, alpha)
 
 
 # -------- pg defaults ------------------------
@@ -795,9 +815,9 @@ class Artist(QObject):
             self._remove_legend_items ()
             self._remove_plots ()
 
-            if self.show_legend:
+            if self.show_legend and self._pi.legend is None:
                 # must be before .plot 
-                self._pi.addLegend(offset=(-50,10),  verSpacing=0 )  
+                self._pi.addLegend(offset=(-10,10),  verSpacing=0 )  
                 self._pi.legend.setLabelTextColor (self.COLOR_LEGEND)
 
             if len(self.data_list) > 0:
