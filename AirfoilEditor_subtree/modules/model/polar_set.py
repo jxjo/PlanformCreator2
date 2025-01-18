@@ -259,7 +259,7 @@ class Polar_Definition:
         """ Reynolds number base 1000"""
         return int (self.re/1000) if self.re is not None else 0 
     def set_re_asK (self, aVal): 
-        self.set_re (aVal * 1000)
+        self.set_re (int(aVal) * 1000)
 
 
     @property
@@ -268,7 +268,7 @@ class Polar_Definition:
         return self._ma
     def set_ma (self, aMach):
         mach = aMach if aMach is not None else 0.0 
-        self._ma = np.clip (mach, 0.0, 1.0)   
+        self._ma = np.clip (round(mach,2), 0.0, 1.0)   
 
 
     @property
@@ -566,12 +566,16 @@ class Polar (Polar_Definition):
 
         if polar_def: 
             self.set_type       (polar_def.type)
-            self.set_re         (polar_def.re * re_scale)      # scale reynolds if requested
-            self.set_ma         (polar_def.ma * re_scale)
+            self.set_re         (polar_def.re)     
+            self.set_ma         (polar_def.ma)
             self.set_ncrit      (polar_def.ncrit)
             self.set_autoRange  (polar_def.autoRange)
             self.set_specVar    (polar_def.specVar)
             self.set_valRange   (polar_def.valRange)
+
+            if re_scale != 1.0:                              # scale reynolds if requested
+                self.set_re_asK (self.re_asK * re_scale)
+                self.set_ma     (self.ma     * re_scale)
 
 
     def __repr__(self) -> str:
