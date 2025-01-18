@@ -86,7 +86,7 @@ class X_Program:
     """
     name        = 'my_program'
     version     = ''                                       # version of self - will be set in isReady
-    exe_path    = None                                     # where to find .exe 
+    exe_dir     = None                                     # where to find .exe 
     ready       = False                                    # is Worker ready to work 
     ready_msg   = ''                                       # ready or error message 
 
@@ -131,16 +131,16 @@ class X_Program:
         ready_msg  = None 
         cls = self.__class__
 
-        if self.exe_path is None: 
+        if self.exe_dir is None: 
 
-            exe_path, ready_msg = self._get_exePath (parent_file)
+            exe_dir, ready_msg = self._get_exe_dir (parent_file)
 
-            if exe_path is None:                                        # self not found anywhere
+            if exe_dir is None:                                        # self not found anywhere
                 cls.ready_msg = ready_msg
                 logger.warning (ready_msg)
                 return 
             else:     
-                cls.exe_path = exe_path
+                cls.exe_dir = exe_dir
                 logger.debug (ready_msg)
 
         # try to execute with -h help argument to get version 
@@ -308,7 +308,7 @@ class X_Program:
             curDir = os.getcwd()
             os.chdir (self.workingDir)
 
-        exe = os.path.join (self.exe_path, self.name)
+        exe = os.path.join (self.exe_dir, self.name)
 
         # build list of args needed by popen 
 
@@ -421,7 +421,7 @@ class X_Program:
         return dict(startupinfo=None) 
 
 
-    def _get_exePath (self, parent_file : str): 
+    def _get_exe_dir (self, parent_file : str): 
         """
         trys to find path to call programName
         
@@ -430,27 +430,28 @@ class X_Program:
 
         parent_dir = os.path.dirname(os.path.realpath(parent_file))
 
-        exe_path  = None
+        exe_dir  = None
         ready_msg = None 
 
         if os.name == 'nt':
             assets_dir = EXE_DIR_WIN
         else: 
-            assets_dir = EXE_DIR_UNIX     
+            assets_dir = EXE_DIR_UNIX  
+
         assets_dir = os.path.normpath (assets_dir)  
+        check_dir  = os.path.join (parent_dir , assets_dir)
 
-        check_path = os.path.join (parent_dir , assets_dir)
-
-        if os.path.isfile(os.path.join(check_path, self.name +'.exe')) : 
-            exe_path  = os.path.abspath(check_path) 
-            ready_msg = f"{self.name} found in: {exe_path}"
+        if os.path.isfile(os.path.join(check_dir, self.name +'.exe')) : 
+            exe_dir  = os.path.abspath(check_dir) 
+            ready_msg = f"{self.name} found in: {exe_dir}"
         else: 
             exe_path = shutil.which (self.name)  
-            if exe_path:   
-                ready_msg = f"{self.name} using OS search path to execute: {exe_path}"
+            if exe_path: 
+                exe_dir = os.path.dirname (exe_path)
+                ready_msg = f"{self.name} using OS search path to execute: {exe_dir}"
             else: 
-                ready_msg = f"{self.name} not found either in '{check_path}' nor via OS search path" 
-        return exe_path, ready_msg
+                ready_msg = f"{self.name} not found either in '{check_dir}' nor via OS search path" 
+        return exe_dir, ready_msg
 
 
 
