@@ -31,6 +31,7 @@ from wing                   import Wing
 from base.common_utils      import * 
 from base.panels            import Container_Panel, MessageBox
 from base.widgets           import *
+from model.xo2_driver       import Worker
 
 # from AirfoilEditor_subtree  import AirfoilEditor
 
@@ -231,6 +232,8 @@ class App_Main (QMainWindow):
 
     name = APP_NAME  
 
+    WORKER_MIN_VERSION          = '1.0.3'
+
    # Signals 
 
     sig_wing_new                = pyqtSignal()              # new wing loaded 
@@ -263,6 +266,13 @@ class App_Main (QMainWindow):
         Win_Util.set_initialWindowSize (self, size_frac= (0.80, 0.70), pos_frac=(0.1, 0.1),
                                         geometry=geometry, maximize=maximize)
 
+
+        # Worker for polar generation ready? 
+
+        Worker().isReady (__file__, min_version=self.WORKER_MIN_VERSION)
+        # if Worker.ready:
+        #     Worker().clean_workingDir (self.airfoil().pathName)
+
         # if no initial pc2 file, try to get last openend pc2 file 
 
         if not pc2_file: 
@@ -290,6 +300,7 @@ class App_Main (QMainWindow):
         self._add_diagram (Diagram_Wing     (self, self.wing))
         self._add_diagram (Diagram_Planform (self, self.wing, self.wingSection))
         self._add_diagram (Diagram_Airfoils (self, self.wing))
+        self._add_diagram (Diagram_Airfoil_Polar (self, self.wing))
         self._add_diagram (Diagram_Panels   (self, self.wing, self.wingSection))
 
         self._tab_panel.set_tab (Settings().get('current_diagram', Diagram_Making_Of.__name__))

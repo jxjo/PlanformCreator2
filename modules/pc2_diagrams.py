@@ -16,6 +16,14 @@ from PyQt6.QtWidgets        import QFileDialog, QGraphicsLayoutItem
 
 # from model.airfoil          import Airfoil
 
+from model.airfoil          import Airfoil
+from model.polar_set        import Polar_Definition, var
+from model.xo2_driver       import Worker
+
+from airfoil_ui_panels      import Panel_Airfoils, Panel_Polar_Defs
+from airfoil_artists        import Polar_Artist
+from airfoil_diagrams       import Diagram_Item_Polars
+
 from pc2_artists            import *
 from pc2_dialogs            import Dialog_Edit_Image
 from wing                   import Wing, Planform, Planform_Paneled
@@ -1549,6 +1557,314 @@ class Diagram_Airfoils (Diagram_Abstract):
             self._export_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
                                               switchable=False, switched_on=True)
         return self._export_panel 
+
+
+
+
+
+class Diagram_Airfoil_Polar (Diagram_Abstract):
+    """    
+    Diagram view to show/plot airfoil diagrams - Container for diagram items 
+    """
+
+
+    name   = "Airfoils & Polars"                        # will be shown in Tabs 
+
+    sig_polar_def_changed       = pyqtSignal()          # polar definition changed  
+
+
+    def __init__(self, *args, polar_defs_fn= None, diagram_settings=[], **kwargs):
+
+        self._polar_panel   = None 
+        self._polar_defs_fn = polar_defs_fn 
+        self._diagram_settings = diagram_settings
+
+        self._show_operating_points = False             # show polars operating points 
+
+        super().__init__(*args, **kwargs)
+
+        self._viewPanel.setMinimumWidth(240)
+        self._viewPanel.setMaximumWidth(240)
+ 
+         # set spacing between the two items
+        self.graph_layout.setVerticalSpacing (0)
+
+    # --- save --------------------- 
+
+    def _as_dict_list (self) -> list:
+        """ returns a list with data dict of the parameters of diagram items """
+
+        l = []
+        item : Diagram_Item_Polars
+        for item in self._get_items (Diagram_Item_Polars):
+            item_dict = {}
+            toDict (item_dict, "xyVars", (item.xVar, item.yVar))
+
+            l.append (item_dict)
+        return l
+
+
+    def _get_items (self, item_classes : Type[Diagram_Item] | list[type[Diagram_Item]]) -> list[Diagram_Item]:
+        """get Diagram Items of self having class name(s)
+
+        Args:
+            items: class or list of class of Diagram Items to retrieve
+        Returns:
+            List of Item with this classes
+        """
+        look_for = [item_classes] if not isinstance (item_classes,list) else item_classes
+        result = []
+        for item in self.diagram_items:
+            if item.__class__ in look_for:
+                result.append(item)
+        return result 
+
+
+    # -------------
+
+
+    @property 
+    def polar_defs (self) -> list [Polar_Definition]:
+        """ actual polar definitions"""
+        return self._polar_defs_fn() if self._polar_defs_fn else []
+
+
+    def airfoils (self) -> list[Airfoil]: 
+        """ the airfoil(s) off all wing sections"""
+
+        airfoils = []
+        section : WingSection
+
+        for section in self.planform().wingSections:
+
+            airfoil = section.airfoil
+            if airfoil.isLoaded and not airfoil.isBlendAirfoil:
+                airfoils.append (airfoil)
+        
+        return airfoils
+
+
+    def create_diagram_items (self):
+        """ create all plot Items and add them to the layout """
+
+        r = 0 
+
+        self._add_item (Item_Airfoils (self, getter=self.wing), r, 0, colspan=2)
+
+        if Worker.ready:
+            r += 1
+
+            # create Polar items with init values from settings 
+
+            dataDict = self._diagram_settings[0] if len(self._diagram_settings) > 0 else {"xyVars" : (var.CD,var.CL)}
+            xyVars = dataDict ["xyVars"]
+
+            item = Diagram_Item_Polars (self, iItem=1, getter=self.airfoils, xyVars=xyVars, show=False)
+            self._add_item (item, r, 0)
+
+            dataDict = self._diagram_settings[1] if len(self._diagram_settings) > 1 else {"xyVars" : (var.CL,var.GLIDE)}
+            xyVars = dataDict ["xyVars"]
+
+            item = Diagram_Item_Polars (self, iItem=2, getter=self.airfoils, xyVars=xyVars, show=False)
+            self._add_item (item, r, 1)
+ 
+
+    @override
+    def create_view_panel (self):
+        """ 
+        creates a view panel to the left of at least one diagram item 
+        has a section_panel
+        """
+ 
+        # build side view panel with the section panels 
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins (QMargins(0, 0, 0, 0)) 
+
+        # airfoils panel 
+
+        if self.section_panel is not None: 
+            layout.addWidget (self.section_panel,stretch=0)
+
+        # diagram items panel
+
+        for item in self.diagram_items:
+            if item.section_panel is not None: 
+                layout.addWidget (item.section_panel,stretch=0)
+
+        # polar panel
+
+        layout.addWidget (self.polar_panel)
+        
+        # stretch add end 
+
+        layout.addStretch (1)
+
+        self._viewPanel = Container_Panel()
+        self._viewPanel.setMinimumWidth(180)
+        self._viewPanel.setMaximumWidth(250)
+        self._viewPanel.setLayout (layout)
+
+
+    @property 
+    def show_operating_points (self) -> bool:
+        """ show polar operatins points """
+        return self._show_operating_points
+
+    def set_show_operating_points (self, aBool : bool):
+        self._show_operating_points = aBool
+
+        artist : Polar_Artist
+        for artist in self._get_artist (Polar_Artist):
+            artist.set_show_points (aBool) 
+
+
+    @property
+    def polar_panel (self) -> Edit_Panel:
+        """ return polar extra panel to admin polar definitions and define polar diagrams"""
+
+        if self._polar_panel is None:
+        
+            l = QGridLayout()
+            r,c = 0, 0
+
+            Label (l,r,c, colSpan=4, get="Polar definitions", style=style.COMMENT) 
+            r += 1
+
+            # helper panel for polar definitions 
+
+            p = Panel_Polar_Defs (self, self.polar_defs, height=(None,None),)
+
+            p.sig_polar_def_changed.connect (self.sig_polar_def_changed.emit)
+
+            l.addWidget (p, r, c, 1, 6)
+            l.setRowStretch (r,1)
+
+            # polar diagrams variables setting 
+
+            r += 1
+            if Worker.ready:
+                SpaceR (l,r, height=5, stretch=0) 
+                r += 1
+                Label (l,r,c, colSpan=4, get="Diagram variables", style=style.COMMENT) 
+                r += 1
+                for item in self._get_items (Diagram_Item_Polars):
+
+                    Label       (l,r,c,   width=20, get="y")
+                    ComboBox    (l,r,c+1, width=60, obj=item, prop=Diagram_Item_Polars.yVar, options=var.list)
+                    SpaceC      (l,c+2,   width=15, stretch=0)
+                    Label       (l,r,c+3, width=20, get="x")
+                    ComboBox    (l,r,c+4, width=60, obj=item, prop=Diagram_Item_Polars.xVar, options=var.list)
+                    SpaceC      (l,c+5)
+                    r += 1
+
+                SpaceR (l,r, height=10, stretch=0) 
+                r += 1
+                CheckBox (l,r,c, text="Operating points", colSpan=4,
+                                get=lambda: self.show_operating_points, set=self.set_show_operating_points) 
+                r += 1
+                SpaceR (l,r, height=10, stretch=1)
+                r += 1
+                Label  (l,r,c, colSpan=6, get=f"Powered by Worker {Worker.version} using Xfoil", style=style.COMMENT, fontSize=size.SMALL)
+
+            else: 
+                SpaceR (l,r, height=10) 
+                r += 1
+                Label (l,r,c, colSpan=4, get="No polars available", style=style.ERROR, fontSize=size.HEADER_SMALL) 
+                r += 1
+                Label (l,r,c, colSpan=4, get="Worker not ready", style=style.ERROR) 
+                r += 1
+                SpaceR (l,r, height=5, stretch=0) 
+                r += 1
+                lab = Label (l,r,c, colSpan=6, get=Worker.ready_msg, style=style.COMMENT, height=(None,100)) 
+                lab.setWordWrap(True)
+                r += 1
+                SpaceR (l,r, height=10, stretch=3) 
+
+            self._polar_panel = Edit_Panel (title="View Polars", layout=l, height=(150,None),
+                                              switchable=True, switched_on=False, on_switched=self._on_polars_switched)
+        return self._polar_panel 
+
+
+    # --- public slots ---------------------------------------------------
+
+
+    def on_airfoil_changed (self):
+        """ slot to handle airfoil changed signal """
+
+        logger.debug (f"{str(self)} on airfoil changed")
+        self.refresh(also_viewRange=False)
+
+
+    def on_new_design (self):
+        """ slot to handle new airfoil design signal """
+
+        logger.debug (f"{str(self)} on new design")
+        self.refresh(also_viewRange=False)
+
+
+    def on_new_polars (self):
+        """ slot to handle new polars loaded which were generated async by Worker """
+
+        logger.debug (f"{str(self)} on new polars")
+
+        for item in self._get_items (Diagram_Item_Polars):
+            item.refresh ()
+
+
+    def on_polar_set_changed (self):
+        """ slot to handle changed polar set signal """
+
+        logger.debug (f"{str(self)} on polar set changed")
+        self.refresh(also_viewRange=False)
+
+
+    def on_airfoils_ref_changed (self):
+        """ slot to handle new list of reference airfoils"""
+
+        logger.debug (f"{str(self)} on airfoils ref changed")
+        self.refresh(also_viewRange=False)
+
+
+    # --- private slots ---------------------------------------------------
+
+
+    def _on_geometry_changed (self):
+        """ slot to handle geometry change made in diagram """
+
+        logger.debug (f"{str(self)} on geometry changed in diagram")
+    
+        # self.refresh()                          # refresh other diagram items 
+        self.sig_airfoil_changed.emit()         # refresh app
+
+
+
+    def _on_polars_switched (self, aBool):
+        """ slot to handle polars switched on/off """
+
+        logger.debug (f"{str(self)} on polars switched")
+
+        for item in self._get_items (Diagram_Item_Polars):
+            item.setVisible (aBool)
+
+
+    def _on_airfoils_ref_switched (self, aBool):
+        """ slot to handle airfoil reference switched on/off """
+
+        logger.debug (f"{str(self)} on airfoils switched")
+    
+        for item in self.diagram_items:
+            if item.isVisible(): 
+                item.refresh()
+
+    def _on_show_airfoil_changed (self):
+        """ slot to handle show airfoil switched on/off """
+
+        logger.debug (f"{str(self)} on show airfoil switched")
+    
+        for item in self.diagram_items:
+            if item.isVisible(): 
+                item.refresh()
 
 
 
