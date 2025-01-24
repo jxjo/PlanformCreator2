@@ -146,7 +146,7 @@ class App_Main (QMainWindow):
 
         # Worker for polar generation ready? 
 
-        Worker().isReady (__file__, min_version=self.WORKER_MIN_VERSION)
+        Worker().isReady (os.path.dirname(os.path.abspath(__file__)), min_version=self.WORKER_MIN_VERSION)
         if Worker.ready:
             Worker().clean_workingDir (self.airfoil().pathName)
 
@@ -659,9 +659,9 @@ class Polar_Watchdog (QThread):
             # check for new polars 
 
             n_new_polars = 0 
-            tasks = Polar_Task.refresh_get_instances () 
+            polar_tasks = Polar_Task.get_instances () 
 
-            for task in tasks: 
+            for task in polar_tasks: 
 
                 n_new_polars += task.load_polars()
                 if task.isCompleted():

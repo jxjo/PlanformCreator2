@@ -477,7 +477,7 @@ class Polar_Set:
             for polar in self.polars_not_loaded: 
                 taken_over = False
                 for task in polar_tasks:
-                    taken_over =  task.take_over_polar (polar)
+                    taken_over =  task.add_polar (polar)
                     if taken_over: break
                 if not taken_over:
                     # create polar task 
@@ -486,7 +486,7 @@ class Polar_Set:
             # run all worker tasks - class Polar_Task and WatchDog will take care 
 
             for task in polar_tasks:
-                task.start_polar_generation ()
+                task.run ()
 
             self._polar_tasks_created = True
 
@@ -891,9 +891,9 @@ class Polar_Task (Polar_Definition):
         self._airfoil_pathFileName = None               # airfoil file 
 
         if polar:
-            self.take_over_polar (polar) 
+            self.add_polar (polar) 
 
-        Polar_Task.add_to_instances (self) 
+        Polar_Task._add_to_instances (self) 
 
 
     def __repr__(self) -> str:
@@ -903,14 +903,14 @@ class Polar_Task (Polar_Definition):
     #---------------------------------------------------------------
 
     @classmethod
-    def add_to_instances (cls , aTask : 'Polar_Task'):
+    def _add_to_instances (cls , aTask : 'Polar_Task'):
         """ add aTask to instances"""
 
         cls.instances.append (aTask)
 
 
     @classmethod
-    def refresh_get_instances (cls) -> list ['Polar_Task']:
+    def get_instances (cls) -> list ['Polar_Task']:
         """ removes finalized instances and returns list of active instances"""
 
         n_running   = 0 
@@ -933,7 +933,7 @@ class Polar_Task (Polar_Definition):
     def terminate_instances_except_for (cls, airfoils):
         """ terminate all polar tasks except for 'airfoil' and Designs"""
 
-        tasks = cls.refresh_get_instances () 
+        tasks = cls.get_instances () 
 
         for task in tasks: 
 
@@ -946,9 +946,9 @@ class Polar_Task (Polar_Definition):
     #---------------------------------------------------------------
 
 
-    def take_over_polar (self, polar : Polar) -> bool:
+    def add_polar (self, polar : Polar) -> bool:
         """
-        Checks and accepts a polar for polar generation
+        add (another) polar which fits for self (polar type, ncrit, ... are the same)
         Returns True if polar is taken over by self
         """    
 
@@ -987,7 +987,7 @@ class Polar_Task (Polar_Definition):
         return taken_over 
 
 
-    def start_polar_generation (self):
+    def run (self):
         """ run worker to generate self polars"""
 
         self._myWorker = Worker ()
@@ -1038,9 +1038,9 @@ class Polar_Task (Polar_Definition):
 
 
 
-    def load_polars (self):
+    def load_polars (self) -> int:
         """ 
-        Tries to load new generated polars of Worker
+        Tries to load new generated of self polars of Worker
             Returns number of newly loaded polars
         """
 

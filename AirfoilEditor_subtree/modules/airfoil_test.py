@@ -19,6 +19,7 @@ from model.airfoil          import Airfoil, Airfoil_Bezier, GEO_BASIC, GEO_SPLIN
 from model.airfoil_examples import Root_Example, Tip_Example
 from model.airfoil_geometry import Geometry, Geometry_Splined, Geometry_Bezier
 from model.airfoil_geometry import Curvature_of_xy, Curvature_of_Spline, Curvature_of_Bezier
+from model.xo2_driver       import Worker
 
 
 class Test_Airfoil:
@@ -320,6 +321,88 @@ class Test_Airfoil_Bezier:
     
 
 
+class Test_Worker:
+
+    WORKER_MIN_VERSION          = '1.0.3'
+
+    def test_worker_ready (self):
+
+        # handle different current dir 
+
+        Worker().isReady (".", min_version=self.WORKER_MIN_VERSION)
+
+        if not Worker.ready:
+            # check .\assets\...
+
+            Worker.exe_dir = None               # reset exe_dir
+            Worker().isReady ("..", min_version=self.WORKER_MIN_VERSION)
+
+        assert Worker.ready
+
+
+
+    def test_worker_generate_polar (self):
+
+        from pathlib import Path
+        import shutil
+        import time
+
+        worker = Worker()
+        airfoil = Root_Example(geometry = GEO_SPLINE)
+        p_tmp = Path.cwd() / 'tmp'
+
+        # saveAs 
+
+        airfoil = Root_Example(geometry = GEO_SPLINE)
+
+        destName = 'haha'
+        airfoil_path = airfoil.saveAs (dir=str(p_tmp), destName=destName)
+
+        # ------- sync test ---------------------------------------------
+
+        print (f"\n{Worker.name} running sync polar generation ...")
+
+        worker.generate_polar (airfoil_path, 'T1', 700000, 0.0, 8.0, run_async=False)
+
+        polar_file = worker.get_existingPolarFile (airfoil_path, 'T1', 700000, 0.0, 8.0)
+
+        if polar_file:
+            print  (f"polar file found: {polar_file}")
+        else: 
+            print (f"polar file not found")
+
+        assert polar_file
+
+        # ------- async test ---------------------------------------------
+
+        print (f"\n{Worker.name} running async polar generation ...")
+
+        worker.generate_polar (airfoil_path, 'T1', 700000, 0.0, 8.0, run_async=True)
+
+        secs = 0 
+        while worker.isRunning ():
+            time.sleep (0.5)
+            secs += 0.5
+            print (f"{worker} waiting: {secs}s")
+
+        if worker.finished_returncode == 0:
+            print ("\n".join (worker._pipe_out_lines))
+
+            polar_file = worker.get_existingPolarFile (airfoil_path, 'T1', 700000, 0.0, 8.0)
+
+            if polar_file:
+                print  (f"polar file found: {polar_file}")
+            else: 
+                print (f"polar file not found")
+        else: 
+            print (f"{worker}: {worker.finished_errortext}")
+
+        assert polar_file
+
+        shutil.rmtree(str(p_tmp))
+
+
+
 # Main program for testing 
 if __name__ == "__main__":
 
@@ -331,4 +414,8 @@ if __name__ == "__main__":
 
     test = Test_Airfoil_Bezier()
     test.test_geo_bezier ()
+
+    test = Test_Worker()
+    test.test_worker_ready()
+    test.test_worker_generate_polar()
 
