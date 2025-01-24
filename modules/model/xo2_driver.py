@@ -13,9 +13,8 @@ the path to program location location must be set
 import os
 from tempfile       import NamedTemporaryFile
 from glob           import glob
-from io             import StringIO
+from pathlib        import Path
 
-import re
 import time 
 import shutil
 import logging
@@ -25,14 +24,12 @@ from subprocess     import Popen, run, PIPE
 if os.name == 'nt':                                 # startupinfo only available in windows environment  
     from subprocess import STARTUPINFO, CREATE_NEW_CONSOLE, STARTF_USESHOWWINDOW, CREATE_NO_WINDOW
 
-from base.common_utils          import *
+# from base.common_utils          import *
 
 import logging
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.WARNING)
 
-# Windows - popen - startupinfo codes
-# https://learn.microsoft.com/de-de/windows/win32/api/winuser/nf-winuser-showwindow
 
 SW_NORMAL = 1 
 SW_MINIMIZE = 6 
@@ -103,7 +100,7 @@ class X_Program:
         self._pipe_error_lines  = None                      # errortext lines from stderr when finished
         self._pipe_out_lines    = []                        # output lines from stdout when finished
 
-        self._tmpInpFile        = None                      # tmpfile of this instance, to be deleted 
+        self._tmp_inpFile       = None                      # tmpfile of this instance, to be deleted 
 
 
     def __repr__(self) -> str:
@@ -111,12 +108,12 @@ class X_Program:
         return f"<{type(self).__name__}"
 
    
-    def isReady (self, parent_file : str, min_version : str = '') -> bool:
+    def isReady (self, project_dir : str, min_version : str = '') -> bool:
         """ 
         checks if self is available with min_version.
 
         Args: 
-            parent_file: pathFilename of the parent (app) which will use self
+            project_dir: directory where there should be ./assets/... 
             min_version: check fpr min version number 
         """
 
@@ -133,7 +130,7 @@ class X_Program:
 
         if self.exe_dir is None: 
 
-            exe_dir, ready_msg = self._get_exe_dir (parent_file)
+            exe_dir, ready_msg = self._get_exe_dir (project_dir)
 
             if exe_dir is None:                                        # self not found anywhere
                 cls.ready_msg = ready_msg
@@ -146,14 +143,13 @@ class X_Program:
         # try to execute with -h help argument to get version 
 
         try: 
-            returncode, pipe_output, _ = self._execute ('-h', run_async=False, capture_output=True)
+            returncode = self._execute ('-h', capture_output=True)
         except: 
             returncode = 1
 
         # extract version and check version
-        if returncode == 0 and pipe_output:
-            outLines = pipe_output.split('\n')
-            for line in outLines: 
+        if returncode == 0 :
+            for line in self._pipe_out_lines: 
                 words = line.split()
 
                 # first word is program name 
@@ -202,13 +198,18 @@ class X_Program:
             if self._popen.returncode is None: 
 
                 isRunning = True
-                # logger.debug (f"==> {self.name} running" )
 
             else: 
 
                 self._returncode       = self._popen.returncode
-                self._pipe_error_lines = self._popen.stderr.readlines() if self._returncode else []
-                self._pipe_out_lines.extend(self._popen.stdout.readlines() if self._popen.stdout else [])
+
+                new_lines = self._popen.stderr.readlines() if self._popen.stderr else []
+                new_lines = [x.rstrip() for x in new_lines]                 # remove \r
+                self._pipe_error_lines.extend(new_lines)
+                
+                new_lines = self._popen.stdout.readlines() if self._popen.stdout else []
+                new_lines = [x.rstrip() for x in new_lines]
+                self._pipe_out_lines.extend(new_lines)
 
                 if self._returncode:
                     logger.error (f"==> {self.name} returncode: {self._returncode} - {''.join (self._pipe_error_lines)}")
@@ -219,21 +220,21 @@ class X_Program:
         return isRunning
 
 
-    def remove_tmp_inp_file (self, iretry = 0):
+    def remove_tmp_file (self, iretry = 0):
         """ os remove of temporary input file"""
 
-        if self._tmpInpFile:            # remove tmpfile of worker 
+        if self._tmp_inpFile:            # remove tmpfile of worker 
             try: 
-                os.remove(self._tmpInpFile) 
+                os.remove(self._tmp_inpFile) 
             except OSError as exc: 
                 if iretry < 5: 
                     iretry +=1
-                    logger.debug (f"{self} Could not delete tmp input file '{self._tmpInpFile}' - Retry {iretry}")
+                    logger.debug (f"{self} Could not delete tmp input file '{self._tmp_inpFile}' - Retry {iretry}")
                     time.sleep (0.1)
-                    self.remove_tmp_inp_file (iretry=iretry)
+                    self.remove_tmp_file (iretry=iretry)
                 else: 
-                    logger.error (f"Could not delete tmp input file '{self._tmpInpFile}' - {exc}")
-            self._tmpInpFile = None 
+                    logger.error (f"Could not delete tmp input file '{self._tmp_inpFile}' - {exc}")
+            self._tmp_inpFile = None 
 
 
     @property
@@ -261,16 +262,10 @@ class X_Program:
         return text
 
 
-    def reset_error (self): 
-        """ reset an eventual error code and text """
-        self._returncode = 0 
-        self._pipe_error_lines = None 
-
-
     def finalize (self):
         """ do cleanup actions """
 
-        self.remove_tmp_inp_file ()
+        self.remove_tmp_file ()
 
 
     def terminate (self):
@@ -283,47 +278,114 @@ class X_Program:
 
     # ---------- Private --------------------------------------
 
-    def _execute (self, args = None, run_async : bool  = True, 
-                  capture_output : bool =False):
-        """execute self in workingDir either sync or async
+    def _execute (self, args = [], workingDir = None, capture_output : bool =False):
+        """sync execute self in workingDir 
 
         Args:
-            args: arguments of subprocess
-            run_async: run async subprocess. Defaults to True.
+            args: arguments of subprocess as list of strings
             capture_output: capture output in pipe. Defaults to False.
-             > doesn't work  > input_stream: optional textstream piped into stdin 
         Returns:
             returncode: = 0 if no error
-            pipe_output: piped stdout textstream 
-            pipe_error: piped stderr textstream 
         """
 
-        popen       = None                                  # subprocess Popen instance
-        pipe_result = None                                  # captured stdout result text stream
-        pipe_error  = None                                  # captured stderr error text stream
         returncode  = 0 
-        input_stream = None
+        self._pipe_out_lines    = []                        # errortext lines from stderr when finished
+        self._pipe_error_lines  = []                        # output lines from stdout when finished
 
-        if self.workingDir:
-            curDir = os.getcwd()
-            os.chdir (self.workingDir)
+        # build list of args needed by subprocess.run 
 
-        exe = os.path.join (self.exe_dir, self.name)
-
-        # build list of args needed by popen 
+        exe = os.path.join (self.exe_dir, self.name) 
 
         if isinstance (args, list):
             arg_list = [exe] + args
         elif isinstance (args, str):
-            arg_list = [exe, args]
+            arg_list = [exe] + [args]
         else: 
             arg_list = [exe]
 
+        try:
+
+            # uses subproocess run which returns a completed process instance 
+
+            if workingDir:
+                curDir = os.getcwd()
+                os.chdir (workingDir)
+
+            if capture_output:
+                # needed when running as pyinstaller .exe 
+                # https://stackoverflow.com/questions/7006238/how-do-i-hide-the-console-when-i-use-os-system-or-subprocess-call/7006424#7006424
+                if os.name == 'nt':
+                    flags = CREATE_NO_WINDOW    
+                else: 
+                    flags  = 0                      # posix must be 0       
+
+            logger.debug (f"==> {self.name} run sync: '{args}'")
+
+            process = run (arg_list, text=True, 
+                                    capture_output=capture_output, creationflags=flags)
+
+            returncode  = process.returncode
+
+            if returncode:
+                logger.error (f"==> {self.name} ended: '{process}'")
+
+            # finished - nice output strings 
+
+            if process.stderr:  
+                self._pipe_error_lines = process.stderr.split ("\n")
+                logger.error (f"==> {self.name} stderr: {"\n".join (self._pipe_error_lines)}")
+
+            if capture_output and process.stdout: 
+                self._pipe_out_lines = process.stdout.split ("\n")
+                # logger.debug (f"==> {self.name} stdout: {"\n".join (self._pipe_out_lines)}")
+
+        except FileNotFoundError as exc:
+
+            returncode = 1
+            self._pipe_error_lines = str(exc)
+
+            logger.error (f"==> exception {self.name}: {exc}")
+
+        finally: 
+
+            if workingDir: os.chdir (curDir)
+
+        return  returncode
+
+
+    def _execute_async (self, args = [], workingDir = None, capture_output : bool =False):
+        """async execute self in workingDir 
+
+        Args:
+            args: arguments of subprocess as list of strings
+            capture_output: capture output in pipe. Defaults to False.
+        Returns:
+            returncode: = 0 if no error
+        """
+
+        returncode  = 0 
+        self._pipe_out_lines    = []                        # errortext lines from stderr when finished
+        self._pipe_error_lines  = []                        # output lines from stdout when finished
+
+        # build list of args needed by subprocess.run 
+
+        exe = os.path.join (self.exe_dir, self.name) 
+
+        if isinstance (args, list):
+            arg_list = [exe] + args
+        elif isinstance (args, str):
+            arg_list = [exe] + [args]
+        else: 
+            arg_list = [exe]
         # run either sync or async 
 
-        if run_async:
+        try:
 
             # uses subproccess Popen instance to start a subprocess
+
+            if workingDir:
+                curDir = os.getcwd()
+                os.chdir (workingDir)
 
             if capture_output:
                 stdout = PIPE                               # output is piped to suppress window 
@@ -343,70 +405,38 @@ class X_Program:
                 else: 
                     flags  = 0                              # posix must be 0 
                 startupinfo = self._get_popen_startupinfo (SW_MINIMIZE)  
-            if input_stream:
-                raise ValueError ("Input stream for subprocess not implemented")
-            
-                # ... the problem is, that Fortran doesn't make a rewind on input streams
-                #     only on redirected input files ...
-                # stdin = PIPE
-                # intext = input_stream.getvalue()
-            else: 
-                stdin = None 
+
+            logger.debug (f"==> {self.name} run async: '{args}'")
 
             popen = Popen (arg_list, creationflags=flags, text=True, **startupinfo, 
-                             stdin=stdin, stdout=stdout, stderr=stderr)  
+                                stdout=stdout, stderr=stderr)  
 
-            logger.debug (f"==> run {self.name}: '{args}'")
+            popen.poll()                            # update returncode
 
-            popen.poll()                            # update returncode 
-
-            if popen.returncode is None:            # seems up and running
-                returncode = 0          
-            else: 
-                returncode = popen.returncode 
-                pipe_result = popen.stdout
-                pipe_error  = popen.stderr 
-                popen = None                        # remove process instance 
-
-        else: 
-
-            # uses subproocess run which returns a CompletedProcess instance 
-
-            if capture_output:
-                # needed when running as pyinstaller .exe 
-                # https://stackoverflow.com/questions/7006238/how-do-i-hide-the-console-when-i-use-os-system-or-subprocess-call/7006424#7006424
-                if os.name == 'nt':
-                    flags = CREATE_NO_WINDOW    
-                else: 
-                    flags  = 0                      # posix must be 0       
-
-            completed_process = run (arg_list, text=True, 
-                                      input=input_stream, capture_output=capture_output, creationflags=flags)
-
-            returncode  = completed_process.returncode
-            pipe_result = completed_process.stdout
-            pipe_error  = completed_process.stderr
+            returncode  = popen.returncode
 
             if returncode:
-                logger.error (f"==> run sync {self.name}: '{completed_process}'")
-            else: 
-                logger.debug (f"==> run sync {self.name}: '{args}'")
+                logger.error (f"==> {self.name} ended: '{popen}'")
 
-        if self.workingDir: 
-            os.chdir (curDir)
+                self._pipe_error_lines = popen.stderr.readlines()
+                logger.error (f"==> {self.name} stderr: {"\n".join (self._pipe_error_lines)}")
 
-        # keep for later poll 
-        self._popen = popen 
-        self._returncode = returncode
-        if pipe_error:
-            if isinstance (pipe_error, str):                # 'run' returns string 
-                pipe_error = StringIO(pipe_error) 
-            self._pipe_error_lines = pipe_error.readlines()
-            pipe_error.seek(0)                              # rewind to the start
-        else: 
-            self._pipe_error_lines = None
+            # keep for later poll 
+            self._popen = popen 
 
-        return  returncode, pipe_result, pipe_error
+        except FileNotFoundError as exc:
+
+            returncode = 1
+            self._pipe_error_lines = str(exc)
+
+            logger.error (f"==> exception {self.name}: {exc}")
+
+        finally: 
+
+            if workingDir: os.chdir (curDir)
+
+        return  returncode
+
 
 
     def _get_popen_startupinfo (self, show : int):
@@ -421,14 +451,12 @@ class X_Program:
         return dict(startupinfo=None) 
 
 
-    def _get_exe_dir (self, parent_file : str): 
+    def _get_exe_dir (self, project_dir : str): 
         """
         trys to find path to call programName
         
         If found, returns exePath and ready_msg
         If not, return None and ready_msg (error)"""
-
-        parent_dir = os.path.dirname(os.path.realpath(parent_file))
 
         exe_dir  = None
         ready_msg = None 
@@ -439,7 +467,7 @@ class X_Program:
             assets_dir = EXE_DIR_UNIX  
 
         assets_dir = os.path.normpath (assets_dir)  
-        check_dir  = os.path.join (parent_dir , assets_dir)
+        check_dir  = os.path.join (project_dir , assets_dir)
 
         if os.path.isfile(os.path.join(check_dir, self.name +'.exe')) : 
             exe_dir  = os.path.abspath(check_dir) 
@@ -561,7 +589,6 @@ class Xoptfoil2 (X_Program):
             self must run in 'workingDir'
         """
 
-
         with open(self.run_control_filePath, 'w+') as file:
             file.write("stop")
             file.close()
@@ -609,7 +636,7 @@ class Worker (X_Program):
 
     @staticmethod
     def get_existingPolarFile (airfoil_pathFileName, 
-                               polarType : str, re :float, ma : float, ncrit : float):
+                               polarType : str, re :float, ma : float, ncrit : float) -> str:
         """ 
         Get pathFileName of polar file if it exists 
         """ 
@@ -638,13 +665,8 @@ class Worker (X_Program):
     #---------------------------------------------------------------
 
 
-    def showHelp(self):
-        
-        return (self._execute_Worker ("help"))
-
-
     def check_inputFile (self, inputFile=None):
-        """ checks if self is available with version ..."""
+        """ uses Worker to check an Xoptfoil2"""
 
         ready, _ = self.isReady()
         if not ready: return 1, self.name + " not ready"
@@ -652,9 +674,9 @@ class Worker (X_Program):
         error_text = ""
         args = ['-w', 'check-input', '-i', inputFile]
 
-        returncode, pipe_output, pipe_error = self._execute (args, run_async=False, capture_output=True)
+        returncode = self._execute (args, capture_output=True)
 
-        if returncode != 0 and pipe_error:
+        if returncode != 0:
 
             # worker output should something like ...
             #  Worker   -check-input jx-gt-10v3.inp
@@ -663,8 +685,7 @@ class Worker (X_Program):
             #    - Output prefix jx-gt-10v3
             #  Error: max_speed should be between 0.001 and 0.5
 
-            out_lines = pipe_output.split('\n')
-            for line in out_lines:
+            for line in self._pipe_out_lines:
                 error_text = line.partition("Error:")[2].strip()
                 if error_text != '': break 
             if error_text == '':
@@ -673,17 +694,20 @@ class Worker (X_Program):
         return returncode, error_text 
 
 
-    def generate_polar (self, airfoilPathFileName, 
+    def generate_polar (self, airfoil_pathFileName, 
                         polarType : str, 
                         re : float | list, 
                         ma : float | list, 
                         ncrit : float,
                         autoRange = True, spec = 'alpha', valRange= [-3, 12, 0.25], 
-                        nPoints=None, run_async = True):
+                        nPoints=None, run_async = True) -> int:
         """ 
         Generate polar for airfoilPathFileName in directory of airfoil.
-        Returns of polar pathFile. If async returns None!
+        Returncode = 0 if successfully started (async) or finish (sync)
         """ 
+
+        if not os.path.isfile(airfoil_pathFileName): 
+            raise ValueError (f"{self}:  {airfoil_pathFileName} does not exist")
 
         if (polarType == 'T2'):
             polarTypeNo = 2
@@ -695,51 +719,42 @@ class Worker (X_Program):
         else: 
             spec_al = False
 
-        if not isinstance (re, list):
-            re = [re]
-        if not isinstance (ma, list):
-            ma = [ma]
+        if not isinstance (re, list): re = [re]
+        if not isinstance (ma, list): ma = [ma]
 
-        if os.path.isfile(airfoilPathFileName): 
+        # a temporary input file for polar generation is created
+        self._tmp_inpFile = self._generate_polar_inputFile (airfoil_pathFileName, 
+                                    re, ma, polarTypeNo, ncrit, autoRange, spec_al, valRange,
+                                    nPoints=nPoints) 
+        if not self._tmp_inpFile:
+            raise RuntimeError (f"{self.name} polar generation failed: Couldn't create input file")
 
-            # a temporary input file for polar generation is created
-            # when async a text stream is created which will be piped ...
-            self._tmpInpFile = self._generate_polarInputFile (airfoilPathFileName, 
-                                        re, ma,
-                                        polarTypeNo, ncrit,
-                                        autoRange, spec_al, valRange,
-                                        nPoints=nPoints) 
+        # build args for worker 
 
-            # ... so Worker has some input to work on ...
+        args, workingDir = self._build_worker_args ('polar',airfoil1=airfoil_pathFileName, 
+                                                    inputfile=self._tmp_inpFile)
 
-            returncode = self._execute_Worker ("polar", airfoil1=airfoilPathFileName, 
-                                                     inputfile=self._tmpInpFile, 
-                                                     run_async=run_async)
+        # .execute either sync or async
+
+        if run_async: 
+
+            returncode = self._execute_async (args, capture_output=True, workingDir=workingDir)
+
+        else:
+
+            returncode = self._execute       (args, capture_output=True, workingDir=workingDir)
+
+            self.remove_tmp_file (self._tmp_inpFile)         
+        
+        if returncode: 
+            raise RuntimeError (f"Worker polar generation failed for {airfoil_pathFileName}")
             
-            if returncode: 
-                raise RuntimeError (f"Worker polar generation failed for {airfoilPathFileName}")
-
-            if run_async:
-                # it will take some seconds until files are available 
-                polar_pathFileName = None
-                # tmpfile will be removed when finsiehd
-            else:
-                # get the polar files in polar subdirectory 
-                polar_pathFileName = self.get_existingPolarFile (airfoilPathFileName, 
-                                                    polarType, re, ma , ncrit)
-                
-                self.remove_tmp_inp_file ()                 #  remove tmpfile of worker
-
-                return polar_pathFileName
-            
-        else: 
-            raise Exception ("generatePolar - airfoil file %s doesn't exist" % airfoilPathFileName )
 
 
 
     def clean_workingDir (self, workingDir):
         """ 
-        deletes temporary (older) files Worker creates 
+        deletes temporary (older) files Worker creates in workingDir
         """ 
         if os.path.isdir(workingDir):
 
@@ -752,27 +767,28 @@ class Worker (X_Program):
 
 # ---------- Private --------------------------------------
 
-    def _execute_Worker (self, action, actionArg='', airfoil1='', airfoil2='', 
-                         outname='', inputfile='', run_async=False):
 
-        # change to dir of airfoil1 for execution
-        airfoil1Path, airfoil1FileName = os.path.split(airfoil1)
-        airfoil2FileName = airfoil2
 
-        if (airfoil1Path != ''):
-            self.workingDir = airfoil1Path
+    def _build_worker_args (self, action, actionArg='', airfoil1='', airfoil2='', outname='', inputfile=''):
+        """ return worker args as list of strings and working dir extracted from airfoil1"""
+
+        airfoil1_dir, airfoil1_fileName = os.path.split(airfoil1)
+        _,            airfoil2_fileName = os.path.split(airfoil2)
+
+
+        if (airfoil1_dir != ''):
+            self.workingDir = airfoil1_dir
             # in this case also strip airfoil2 
             if (airfoil2 != ''):
-                airfoil2Path, airfoil2FileName = os.path.split(airfoil2)
+                _, airfoil2_fileName = os.path.split(airfoil2)
         else:
             self.workingDir = None
 
-
         # info inputfile is in a dir - strip dir from path - local execution 
         if (inputfile != ''):
-            inpufilePath, localInputfile = os.path.split(inputfile)
+            _, local_inputfile = os.path.split(inputfile)
         else: 
-            localInputfile = '' 
+            local_inputfile = '' 
 
         args = []
 
@@ -785,24 +801,16 @@ class Worker (X_Program):
         else: 
             raise ValueError ('action for worker is mandatory')
 
-        if (airfoil1 ): args.extend(['-a',  airfoil1FileName])
-        if (airfoil2 ): args.extend(['-a2', airfoil2FileName])
+        if (airfoil1 ): args.extend(['-a',  airfoil1_fileName])
+        if (airfoil2 ): args.extend(['-a2', airfoil2_fileName])
         if (outname  ): args.extend(['-o',  outname]) 
-        if (inputfile): args.extend(['-i',  localInputfile])
+        if (inputfile): args.extend(['-i',  local_inputfile])
 
-        # if async - capture output to pipe - so its in background
-        if run_async:
-            capture = True
-        else:
-            capture = False
-
-        returncode, _, _ = self._execute (args, run_async=run_async, capture_output=capture)
-
-        return  returncode
+        return  args, airfoil1_dir
 
 
 
-    def _generate_polarInputFile (self, airfoilPathFileName, 
+    def _generate_polar_inputFile (self, airfoilPathFileName, 
                                   reNumbers : list[float], maNumbers : list[float],
                                   polarType : int, ncrit : float,  
                                   autoRange : bool, spec_al: bool, valRange: list[float], 
@@ -863,7 +871,88 @@ class Worker (X_Program):
 # -------------- End --------------------------------------
 
 
+
+
 # Main program for testing 
 if __name__ == "__main__":
 
-    pass 
+    # init logging 
+
+    logging.basicConfig(format='%(levelname)-8s- %(message)s', 
+                        level=logging.DEBUG)  # DEBUG or WARNING
+
+
+    Worker().isReady (project_dir="..\\..", min_version='1.0.3')
+
+    if Worker.ready:
+
+        worker = Worker()
+
+        if os.path.isfile ('..\\..\\test_airfoils\\MH 30.dat'):
+            airfoil = '..\\..\\test_airfoils\\MH 30.dat'
+        elif os.path.isfile ('MH 30.dat'):
+            airfoil = 'MH 30.dat'
+        else: 
+            logger.error (f"Airfoil file 'MH 30.dat' not found")
+            exit()
+
+        # build name of polar dir from airfoil file 
+        polarDir = str(Path(airfoil).with_suffix('')) + '_polars'
+
+        # ------- sync test ---------------------------------------------
+
+        try: 
+            worker.generate_polar (airfoil, 'T1', 700000, 0.0, 8.0, run_async=False)
+            logger.info ("\n".join (worker._pipe_out_lines))
+
+            polar_file = worker.get_existingPolarFile (airfoil, 'T1', 700000, 0.0, 8.0)
+
+            if polar_file:
+                logger.info  (f"polar file found: {polar_file}")
+            else: 
+                logger.error (f"polar file not found")
+
+            worker.finalize ()
+            worker.remove_polarDir (airfoil, polarDir)
+
+        except ValueError as exc:
+            logger.error (f"{exc}")
+        except RuntimeError as exc:
+            # logger.error (f"Polar failed: {exc}")
+            logger.error (f"{worker}: {worker.finished_errortext}")
+
+        
+
+        # ------- async test ---------------------------------------------
+
+        worker = Worker()
+
+        try: 
+            worker.generate_polar (airfoil, 'T1', 700000, 0.0, 8.0, run_async=True)
+
+            secs = 0 
+            while worker.isRunning ():
+                time.sleep (0.5)
+                secs += 0.5
+                logger.debug (f"{worker} waiting: {secs}s")
+
+            if worker.finished_returncode == 0:
+                logger.info ("\n".join (worker._pipe_out_lines))
+
+                polar_file = worker.get_existingPolarFile (airfoil, 'T1', 700000, 0.0, 8.0)
+
+                if polar_file:
+                    logger.info  (f"polar file found: {polar_file}")
+                else: 
+                    logger.error (f"polar file not found")
+            else: 
+                logger.error (f"{worker}: {worker.finished_errortext}")
+
+            worker.finalize ()
+            worker.remove_polarDir (airfoil, polarDir)
+
+        except ValueError as exc:
+            logger.error (f"{exc}")
+        except RuntimeError as exc:
+            # logger.error (f"Polar failed: {exc}")
+            logger.error (f"{worker}: {worker.finished_errortext}")

@@ -6,6 +6,7 @@
 The "Artists" to plot a airfoil object on a pg.PlotItem 
 
 """
+import html 
 
 from base.math_util             import derivative1
 from base.artist                import *
