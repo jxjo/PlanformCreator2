@@ -2128,6 +2128,16 @@ class WingSections (list):
         return None
 
 
+    def refresh_polar_sets (self):
+        """ refresh polar set of wingSections airfoil"""
+
+        polar_defs = self._planform.wing.polar_definitions
+
+        section : WingSection
+        for section in self:
+            airfoil = section.airfoil
+            airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
+
 
 
 #-------------------------------------------------------------------------------

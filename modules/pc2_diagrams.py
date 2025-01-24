@@ -17,7 +17,7 @@ from PyQt6.QtWidgets        import QFileDialog, QGraphicsLayoutItem
 # from model.airfoil          import Airfoil
 
 from model.airfoil          import Airfoil
-from model.polar_set        import Polar_Definition, var
+from model.polar_set        import *
 from model.xo2_driver       import Worker
 
 from airfoil_ui_panels      import Panel_Airfoils, Panel_Polar_Defs
@@ -802,6 +802,174 @@ class Item_Airfoils (Diagram_Item):
                                               on_switched=self.setVisible)
         return self._section_panel 
 
+
+
+
+class Item_Polars (Diagram_Item):
+    """ 
+    Diagram (Plot) Item for polars 
+    """
+
+    name        = "Polar"                               # used for link and section header 
+    title       = None 
+    subtitle    = None                                  # optional subtitle 
+
+
+    def __init__(self, *args, iItem= 1, xyVars=None, **kwargs):
+
+        self._iItem  = iItem
+        self.set_xyVars (xyVars)                        # polar vars for x,y axis 
+
+        self._title_item2 = None                        # a second 'title' for x-axis 
+        self._autoRange_not_set = True                  # to handle initial no polars to autoRange 
+
+        self.name = f"{self.name} {iItem}"
+
+        super().__init__(*args, **kwargs)
+
+        # set margins (inset) of self 
+        self.setContentsMargins ( 0,10,10,20)
+
+
+    @override
+    def plot_title (self):
+        """ override to have 'title' at x,y axis"""
+
+        # remove existing title item 
+        if isinstance (self._title_item, pg.LabelItem):
+            self.scene().removeItem (self._title_item)          # was added directly to the scene via setParentItem
+        if isinstance (self._title_item2, pg.LabelItem):
+            self.scene().removeItem (self._title_item2)         # was added directly to the scene via setParentItem
+       
+        # y-axis
+        p = pg.LabelItem(self.yVar, color=QColor(Artist.COLOR_HEADER), size=f"{Artist.SIZE_HEADER}pt")    
+
+        p.setParentItem(self)                              # add to self (Diagram Item) for absolute position 
+        p.anchor(itemPos=(0,0), parentPos=(0,0), offset=(50,5))
+        p.setZValue(5)
+        self._title_item = p
+
+        # x-axis
+        p = pg.LabelItem(self.xVar, color=QColor(Artist.COLOR_HEADER), size=f"{Artist.SIZE_HEADER}pt")    
+
+        p.setParentItem(self)                              # add to self (Diagram Item) for absolute position 
+        p.anchor(itemPos=(1.0,1), parentPos=(0.98,1.0), offset=(0,-40))
+        p.setZValue(5)
+        self._title_item2 = p
+
+    def wing (self) -> Wing: 
+        return self._getter()
+
+    def planform (self) -> Wing: 
+        return self.wing()._planform
+
+   
+
+    @property
+    def xVar (self) -> var:
+        return self._xyVars[0]
+
+    def set_xVar (self, varType : var):
+        self._xyVars = (varType, self._xyVars[1])
+
+        artist : Polar_Artist = self._artists [0]
+        artist.set_xyVars (self._xyVars)
+
+        self.setup_viewRange ()
+
+        self.plot_title()
+
+
+    @property
+    def yVar (self) -> var:
+        return self._xyVars[1]
+    def set_yVar (self, varType: var):
+        self._xyVars = (self._xyVars[0], varType)
+
+        artist : Polar_Artist = self._artists [0]
+        artist.set_xyVars (self._xyVars)
+
+        self.setup_viewRange ()
+
+        self.plot_title ()
+
+
+    def set_xyVars (self, xyVars : list[str]):
+        """ set xyVars from a list of var strings or enum var"""
+
+        if isinstance (xyVars[0], str):
+            xVar = var(xyVars[0])
+        else: 
+            xVar = xVar 
+        if isinstance (xyVars[1], str):
+            yVar = var(xyVars[1])
+        else: 
+            yVar = xVar 
+        self._xyVars = (xVar, yVar)
+
+
+    @override
+    def refresh(self): 
+        """ refresh my artits and section panel """
+
+        if self._autoRange_not_set:
+            self._viewRange_set = False                     # ensure refresh will setup_viewRange (autoRange)
+
+        super().refresh()
+
+        return
+
+
+    @override
+    def setup_artists (self):
+        """ create and setup the artists of self"""
+
+        a = Polar_Artist     (self, self.planform, xyVars=self._xyVars, show_legend=True)
+        self._add_artist (a)
+
+
+    @override
+    def setup_viewRange (self):
+        """ define view range of this plotItem"""
+
+        self.viewBox.setDefaultPadding(0.05)
+
+        self.viewBox.autoRange ()                           # ensure best range x,y 
+
+        # it could be that there are initially no polars, so autoRange wouldn't set a range, retry at next refresh
+        if  self.viewBox.childrenBounds() != [None,None] and self._autoRange_not_set:
+            self._autoRange_not_set = False 
+
+        self.viewBox.enableAutoRange(enable=False)
+
+        self.showGrid(x=True, y=True)
+
+        self._set_legend_position ()                         # find nice legend position 
+
+
+    def _set_legend_position (self):
+        """ try to have a good position for legend depending on xyVars"""
+
+        if self.legend is None:
+            # normally Artist adds legend  - here to set legend during init 
+            self.addLegend(offset=(-10,10),  verSpacing=0 )  
+            self.legend.setLabelTextColor (Artist.COLOR_LEGEND)
+
+        if (self.yVar == CL or self.yVar == ALPHA) and self.xVar == CD:
+            self.legend.anchor (itemPos=(1,0.5), parentPos=(1,0.5), offset=(-10,0))     # right, middle 
+
+        elif (self.yVar == GLIDE or self.yVar == SINK) and (self.xVar == ALPHA or self.xVar == CL):
+            self.legend.anchor (itemPos=(0.2,1), parentPos=(0.5,1), offset=(0,-20))     # middle, bottom
+
+        elif (self.yVar == CL) and (self.xVar == ALPHA):
+            self.legend.anchor (itemPos=(0,0), parentPos=(0,0), offset=(40,10))         # left, top
+
+        else:  
+            self.legend.anchor (itemPos=(1,0), parentPos=(1,0), offset=(-10,10))        # right, top 
+
+        # reduce vertical spacing 
+        l : QGraphicsGridLayout = self.legend.layout
+        l.setVerticalSpacing(-5)
 
 
 
