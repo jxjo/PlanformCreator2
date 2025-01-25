@@ -48,7 +48,7 @@ class Airfoil_Example_Abstract (Airfoil):
 
         # class name to identify example airfoil from code  
         if self.pathFileName is None: 
-            self.set_pathFileName (self.name + '.dat') 
+            self.set_pathFileName (self.name + '.dat', noCheck=True) 
 
 
 
