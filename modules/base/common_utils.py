@@ -349,7 +349,7 @@ class PathHandler():
                 if os.path.isabs (newPath):
                     return aRelPath                 # we surrender - it's absolute
                 else: 
-                    aRelPath = newPath              # now we have a real real path 
+                    aRelPath = newPath              # now we have a real rel path 
             return os.path.normpath(os.path.join (self.workingDir, aRelPath))
 
 

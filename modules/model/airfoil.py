@@ -76,7 +76,7 @@ class Airfoil:
             workingDir: optional   - base directoty where pathFileName is relative 
         """
 
-        self.pathFileName = None
+        self._pathFileName = None
         if workingDir is not None:
             self.workingDir = os.path.normpath (workingDir)
         else: 
@@ -122,11 +122,11 @@ class Airfoil:
                 self._name = "-- Error --"
                 raise ValueError ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
             else:
-                self.pathFileName = pathFileName
-                self._name = os.path.splitext(os.path.basename(self.pathFileName))[0]  # load will get the real name
+                self._pathFileName = pathFileName
+                self._name = os.path.splitext(os.path.basename(self._pathFileName))[0]  # load will get the real name
 
         elif (pathFileName is not None) : 
-                self.pathFileName = pathFileName
+                self._pathFileName = pathFileName
 
         elif (not name):
             self._name = "-- ? --"
@@ -408,16 +408,25 @@ class Airfoil:
 
     #-----------------------------------------------------------
 
+    @property
+    def pathFileName (self) -> str:
+        """ path and filename of airfoil like '.\examples\JX-GT-15.dat' """
+        return self._pathFileName
 
-    def set_pathFileName (self,fullPath, noCheck=False):
+
+    def set_pathFileName (self, pathfileName : str, noCheck=False):
         """
-        Set fullpaths of airfoils location and file \n
+        Set fullpaths of airfoils location and file  
         ! This will not move or copy the airfoil physically - use copyAs instead
         """
-        if noCheck or (os.path.isfile(fullPath)):
-            self.pathFileName = fullPath
+        if noCheck:
+            self._pathFileName = pathfileName
+        elif os.path.isfile(pathfileName):
+            self._pathFileName = pathfileName
+        elif self.workingDir and os.path.isfile(os.path.join(self.workingDir, pathfileName)):
+            self._pathFileName = pathfileName
         else:
-            raise ValueError ("Airfoil \'%s\' does not exist. Couldn\'t be set" % fullPath)
+            raise ValueError (f"Airfoil {pathfileName} does not exist. Couldn\'t be set")
 
 
     def set_pathName (self, aDir : str, noCheck=False):
@@ -426,7 +435,7 @@ class Airfoil:
             ! This will not move or copy the airfoil physically
         """
         if noCheck or (os.path.isdir(aDir)) or aDir == '':
-            self.pathFileName = os.path.join (aDir, self.fileName)
+            self._pathFileName = os.path.join (aDir, self.fileName)
         else:
             raise ValueError ("Directory \'%s\' does not exist. Couldn\'t be set" % aDir)
 
@@ -440,7 +449,7 @@ class Airfoil:
         """ set new fileName """
         if not aFileName: return 
 
-        self.pathFileName = os.path.join (self.pathName, aFileName)
+        self._pathFileName = os.path.join (self.pathName, aFileName)
 
     def set_name_from_fileName (self):
         """ set current fileName as name of airfoil """
@@ -537,8 +546,8 @@ class Airfoil:
 
     def saveAs (self, dir = None, destName = None):
         """
-        save self to to destPath and destName and set new values to self
-        if both destPath and name are not set, it's just a save to current directory
+        save self to dir and destName and set new values to self
+        if both dir and name are not set, it's just a save to current directory
 
         Returns: 
             newPathFileName from dir and destName 
