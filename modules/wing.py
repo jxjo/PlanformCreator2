@@ -420,7 +420,7 @@ class Wing:
     def polar_definitions (self) -> list [Polar_Definition]:
         """ list of actual polar definitions """
 
-        if self._polar_definitions is None: 
+        if not self._polar_definitions: 
             self._polar_definitions = [Polar_Definition()]
         return self._polar_definitions
 
@@ -1518,7 +1518,13 @@ class WingSection :
             - None - current airfoil will by a strak airfoil
         """
         if isinstance (airfoil, Airfoil):
+            # ensure airfoils path is relative to workingDir - if possible 
+            rel_pathFileName = PathHandler(workingDir=self.workingDir).relFilePath (airfoil.pathFileName)
+            airfoil.workingDir = self.workingDir
+            airfoil.set_pathFileName (rel_pathFileName)
+
             self._airfoil = airfoil
+
         elif airfoil is None:
             # remove existing (set as strak airfoil) 
             self._airfoil = self._get_airfoil (pathFileName=None) 
