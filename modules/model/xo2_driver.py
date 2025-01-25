@@ -212,8 +212,8 @@ class X_Program:
                 self._pipe_out_lines.extend(new_lines)
 
                 if self._returncode:
-                    logger.error (f"==> {self.name} returncode: {self._returncode} - {''.join (self._pipe_error_lines)}")
-                logger.debug (f"==> {self.name} finished {''.join (self._pipe_out_lines)}")
+                    logger.error (f"==> {self.name} returncode: {self._returncode} - {'\n'.join (self._pipe_error_lines)}")
+                logger.debug (f"==> {self.name} finished {'\n'.join (self._pipe_out_lines)}")
                  
                 self._popen = None              # close down process instance 
 

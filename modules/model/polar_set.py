@@ -53,17 +53,6 @@ logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 
 
-#  Constants for polar types 
-
-CL      = "cl"               
-CD      = "cd"               
-ALPHA   = "alpha"               
-GLIDE   = "cl/cd" 
-SINK    = "sink"        # "cl^1.5/cd"              
-CM      = "cm"               
-XTRT    = "xtrt"               
-XTRB    = "xtrb"    
-
 
 #-------------------------------------------------------------------------------
 # enums   
@@ -72,8 +61,8 @@ XTRB    = "xtrb"
 class StrEnum_Extended (StrEnum):
     """ enum extension to get a list of all enum values"""
     @classmethod
-    def list(cls):
-        return list(map(lambda c: c.value, cls))
+    def values (cls):
+        return [c.value for c in cls]
 
 
 class var (StrEnum_Extended):
@@ -94,7 +83,7 @@ class polarType (StrEnum_Extended):
     T2      = "T2"
 
 
-SPEC_ALLOWED = [ALPHA,CL]
+SPEC_ALLOWED = [var.ALPHA, var.CL]
 
 
 #------------------------------------------------------------------------------
@@ -118,9 +107,9 @@ class Polar_Definition:
         
         self._ncrit     = fromDict (dataDict, "ncrit",    7.0)
         self._autoRange = fromDict (dataDict, "autoRange",True)
-        self._specVar   = fromDict (dataDict, "specVar",  ALPHA)
         self._valRange  = fromDict (dataDict, "valRange", self.VAL_RANGE_ALPHA)
-        self._type      = fromDict (dataDict, "type",     polarType.T1)
+        self.set_specVar (fromDict (dataDict, "specVar",  var.ALPHA))       # it is a enum
+        self.set_type    (fromDict (dataDict, "type",     polarType.T1))    # it is a enum
        
         self._re        = fromDict (dataDict, "re",       400000)             
         self._ma        = fromDict (dataDict, "mach",     0.0)
@@ -138,11 +127,11 @@ class Polar_Definition:
         """ returns a data dict with the parameters of self """
 
         d = {}
-        toDict (d, "type",           self.type) 
+        toDict (d, "type",           str(self.type))                    # type is enum
         toDict (d, "re",             self.re) 
         toDict (d, "ma",             self.ma) 
         toDict (d, "ncrit",          self.ncrit) 
-        toDict (d, "specVar",        self.specVar) 
+        toDict (d, "specVar",        str(self.specVar))                 # specVar is enum
         toDict (d, "autoRange",      self.autoRange) 
         toDict (d, "valRange",       self.valRange) 
         toDict (d, "active",         self.active) 
@@ -172,10 +161,18 @@ class Polar_Definition:
         """ ALPHA or CL defining value range"""
         return self._specVar
     
-    def set_specVar (self, aVal): 
-        if aVal == ALPHA or aVal == CL: 
-            self._specVar = aVal 
-            if self._specVar == ALPHA:                                       # reset value range 
+    def set_specVar (self, aVar : var): 
+        """ set specVar by string or polarType"""
+
+        if not isinstance (aVar, var):
+            try:
+                aVar = var(aVar)
+            except ValueError:
+                raise ValueError(f"{aVar} is not a valid specVar")
+            
+        if aVar == var.ALPHA or aVar == var.CL: 
+            self._specVar = aVar 
+            if self._specVar == var.ALPHA:                                       # reset value range 
                 self._valRange = self.VAL_RANGE_ALPHA
             else: 
                 self._valRange = self.VAL_RANGE_CL
@@ -184,14 +181,23 @@ class Polar_Definition:
     def type (self) -> polarType: 
         """ polarType.T1 or T2"""
         return self._type
-    def set_type (self, aVal): 
-        if aVal in polarType.list(): 
-            self._type = aVal 
+    
+    def set_type (self, aType : polarType | str):
+        """ set polar type by string or polarType"""
+
+        if not isinstance (aType, polarType):
+            try:
+                aType = polarType(aType)
+            except ValueError:
+                raise ValueError(f"{aType} is not a valid polar type")
+            
+        if isinstance (aType, polarType): 
+            self._type = aType 
             # set specification variable depending on polar type 
             if self.type == polarType.T1:
-                self.set_specVar (ALPHA)
+                self.set_specVar (var.ALPHA)
             else: 
-                self.set_specVar (CL)
+                self.set_specVar (var.CL)
 
     @property
     def valRange (self) -> list[float]:
@@ -240,10 +246,10 @@ class Polar_Definition:
         return self._valRange[2]
     
     def set_valRange_step (self, aVal : float):
-        if self.specVar == ALPHA:
-            aVal = np.clip (aVal, 0.1, 1.0)
+        if self.specVar == var.ALPHA:
+            aVal = clip (aVal, 0.1, 1.0)
         else: 
-            aVal = np.clip (aVal, 0.01, 0.1)
+            aVal = clip (aVal, 0.01, 0.1)
         self._valRange[2] = aVal
 
 
@@ -252,7 +258,7 @@ class Polar_Definition:
         """ Reynolds number"""
         return self._re
     def set_re (self, re): 
-        self._re = np.clip (re, 1000, 10000000)
+        self._re = clip (re, 1000, 10000000)
 
     @property
     def re_asK (self) -> int: 
@@ -268,7 +274,7 @@ class Polar_Definition:
         return self._ma
     def set_ma (self, aMach):
         mach = aMach if aMach is not None else 0.0 
-        self._ma = np.clip (round(mach,2), 0.0, 1.0)   
+        self._ma = clip (round(mach,2), 0.0, 1.0)   
 
 
     @property
@@ -314,7 +320,7 @@ class Polar_Set:
 
         self._airfoil = myAirfoil 
         self._polars = []                                   # list of Polars of self is holding
-        self._re_scale = np.clip (re_scale, 0.02,10)
+        self._re_scale = clip (re_scale, 0.02, 10)
 
         self._polar_worker_tasks = []                       # polar generation tasks for worker 
         self._polar_tasks_created = False
@@ -524,8 +530,6 @@ class Polar (Polar_Definition):
                 |--- Polar    <-- Polar_Definition
     """
 
-    polarVarList = [CL, CD, ALPHA, GLIDE, SINK, CM, XTRT, XTRB]
-
     @classmethod
     def get_label (cls, polarType, re, ma, ncrit): 
         """ return a label of these polar variables"""
@@ -621,45 +625,45 @@ class Polar (Polar_Definition):
 
     @property
     def alpha (self) -> list:
-        if self._alpha == []: self._alpha = self._get_values_forVar (ALPHA)
+        if self._alpha == []: self._alpha = self._get_values_forVar (var.ALPHA)
         return self._alpha
     
     @property
     def cl (self) -> list:
-        if self._cl == []: self._cl = self._get_values_forVar (CL)
+        if self._cl == []: self._cl = self._get_values_forVar (var.CL)
         return self._cl
     
     @property
     def cd (self) -> list:
-        if self._cd == []: self._cd = self._get_values_forVar (CD)
+        if self._cd == []: self._cd = self._get_values_forVar (var.CD)
         return self._cd
     
     @property
     def glide (self) -> list:
-        if self._glide == []: self._glide = self._get_values_forVar (GLIDE)
+        if self._glide == []: self._glide = self._get_values_forVar (var.GLIDE)
         return self._glide
     
     @property
     def sink (self) -> list:
-        if self._sink == []: self._sink = self._get_values_forVar (SINK)
+        if self._sink == []: self._sink = self._get_values_forVar (var.SINK)
         return self._sink
     
     @property
     def cm (self) -> list:
-        if self._cm == []: self._cm = self._get_values_forVar (CM)
+        if self._cm == []: self._cm = self._get_values_forVar (var.CM)
         return self._cm
     
     @property
     def xtrt (self) -> list:
-        if self._xtrt == []: self._xtrt = self._get_values_forVar (XTRT)
+        if self._xtrt == []: self._xtrt = self._get_values_forVar (var.XTRT)
         return self._xtrt
     
     @property
     def xtrb (self) -> list:
-        if self._xtrb == []: self._xtrb = self._get_values_forVar (XTRB)
+        if self._xtrb == []: self._xtrb = self._get_values_forVar (var.XTRB)
         return self._xtrb
     
-    def ofVars (self, xyVars: Tuple[str, str]):
+    def ofVars (self, xyVars: Tuple[var, var]):
         """ returns x,y polar of the tuple xyVars"""
 
         x, y = [], []
@@ -669,9 +673,9 @@ class Polar (Polar_Definition):
             y = self._ofVar (xyVars[1])
 
             # sink polar - cut values <= 0 
-            if SINK in xyVars: 
+            if var.SINK in xyVars: 
                 i = 0 
-                if SINK == xyVars[0]:
+                if var.SINK == xyVars[0]:
                     for i, val in enumerate(x):
                         if val > 0.0: break
                 else: 
@@ -682,27 +686,27 @@ class Polar (Polar_Definition):
         return x,y 
 
 
-    def _ofVar (self, var: str):
+    def _ofVar (self, polar_var: var):
 
         vals = []
-        if   var == CL:
+        if   polar_var == var.CL:
             vals = self.cl
-        elif var == CD:
+        elif polar_var == var.CD:
             vals = self.cd
-        elif var == ALPHA:
+        elif polar_var == var.ALPHA:
             vals = self.alpha
-        elif var == GLIDE:
+        elif polar_var == var.GLIDE:
             vals = self.glide
-        elif var == SINK:
+        elif polar_var == var.SINK:
             vals = self.sink
-        elif var == CM:
+        elif polar_var == var.CM:
             vals = self.cm
-        elif var == XTRT:
+        elif polar_var == var.XTRT:
             vals = self.xtrt
-        elif var == XTRB:
+        elif polar_var == var.XTRB:
             vals = self.xtrb
         else:
-            raise ValueError ("Unkown polar variable: %s" % var)
+            raise ValueError ("Unkown polar variable: %s" % polar_var)
         return vals
 
     def _get_values_forVar (self, var) -> list:
@@ -739,7 +743,7 @@ class Polar (Polar_Definition):
         else: 
             y = optVals[-1]
 
-        if optVar == CD:
+        if optVar == var.CD:
             y = round (y,5)
         else:
             y = round(y,2) 
@@ -1084,7 +1088,7 @@ class OpPoint:
         Main constructor for new opPoint 
 
         """
-        self.spec   = ALPHA                     # self based on ALPHA or CL
+        self.spec   = var.ALPHA                 # self based on ALPHA or CL
         self.valid  = True                      # has it converged during xfoil calculation
         self.alpha  = None
         self.cl     = None
@@ -1107,27 +1111,27 @@ class OpPoint:
         else: 
             return 0.0 
 
-    def get_value (self, id ) -> float:
+    def get_value (self, op_var : var ) -> float:
         """ get the value of the opPoint variable with id"""
 
-        if id == CD:
+        if op_var == var.CD:
             val = self.cd
-        elif id == CL:
+        elif op_var == var.CL:
             val = self.cl
-        elif id == ALPHA:
+        elif op_var == var.ALPHA:
             val = self.alpha
-        elif id == CM:
+        elif op_var == var.CM:
             val = self.cm
-        elif id == XTRT:
+        elif op_var == var.XTRT:
             val = self.xtrt
-        elif id == XTRB:
+        elif op_var == var.XTRB:
             val = self.xtrb
-        elif id == GLIDE:
+        elif op_var == var.GLIDE:
             val = self.glide
-        elif id == SINK:
+        elif op_var == var.SINK:
             val = self.sink
         else:
-            raise ValueError ("Op point variable id '%s' not known" %id)
+            raise ValueError ("Op point variable id '%s' not known" %op_var)
         return val 
 
 
@@ -1141,8 +1145,6 @@ class Polar_Splined (Polar_Definition):
         --> Polar_Set 
             --> Polar   
     """
-
-    polarVarList = [CL, CD, GLIDE]
 
     @classmethod
     def get_label (cls, polarType, re, ma, ncrit): 
@@ -1307,7 +1309,7 @@ class Polar_Splined (Polar_Definition):
     def xtrb (self) -> list:
         return self._xtrb
     
-    def ofVars (self, xyVars: Tuple[str, str]):
+    def ofVars (self, xyVars: Tuple[var, var]):
         """ returns x,y polar of the tuple xyVars"""
 
         x, y = [], []
@@ -1317,9 +1319,9 @@ class Polar_Splined (Polar_Definition):
             y = self._ofVar (xyVars[1])
 
             # sink polar - cut vlaues <= 0 
-            if SINK in xyVars: 
+            if var.SINK in xyVars: 
                 i = 0 
-                if SINK == xyVars[0]:
+                if var.SINK == xyVars[0]:
                     for i, val in enumerate(x):
                         if val > 0.0: break
                 else: 
@@ -1328,76 +1330,6 @@ class Polar_Splined (Polar_Definition):
                 x = x[i:]
                 y = y[i:]
         return x,y 
-
-
-    def _ofVar (self, var: str):
-
-        vals = []
-        if   var == CL:
-            vals = self.cl
-        elif var == CD:
-            vals = self.cd
-        elif var == ALPHA:
-            vals = self.alpha
-        elif var == GLIDE:
-            vals = self.glide
-        elif var == SINK:
-            vals = self.sink
-        elif var == CM:
-            vals = self.cm
-        elif var == XTRT:
-            vals = self.xtrt
-        elif var == XTRB:
-            vals = self.xtrb
-        else:
-            raise ValueError ("Unkown polar variable: %s" % var)
-        return vals
-
-    def _set_var (self, var: str, vals: list):
-        """ set vals in var (eg CL)"""
-        if   var == CL:
-            self._cl = vals 
-        elif var == CD:
-            self._cd = vals
-        elif var == ALPHA:
-            self._alpha = vals
-        elif var == GLIDE:
-            self._glide = vals
-        elif var == SINK:
-            self._sink = vals
-        elif var == CM:
-            self._cm = vals
-        elif var == XTRT:
-            self._xtrt = vals
-        elif var == XTRB:
-            self._xtrb = vals
-        else:
-            raise ValueError ("Unkown polar variable: %s" % var)
-        return vals
-
-   
-    def ofVars (self, xyVars: Tuple[str, str]):
-        """ returns x,y polar of the tuple xyVars"""
-
-        x, y = [], []
-        
-        if isinstance(xyVars, tuple):
-            x = self._ofVar (xyVars[0])
-            y = self._ofVar (xyVars[1])
-
-            # sink polar - cut values <= 0 
-            if SINK in xyVars: 
-                i = 0 
-                if SINK == xyVars[0]:
-                    for i, val in enumerate(x):
-                        if val > 0.0: break
-                else: 
-                    for i, val in enumerate(y):
-                        if val > 0.0: break
-                x = x[i:]
-                y = y[i:]
-        return x,y 
-
 
 
     def _get_values_forVar (self, var) -> list:
@@ -1434,7 +1366,7 @@ class Polar_Splined (Polar_Definition):
         else: 
             y = optVals[-1]
 
-        if optVar == CD:
+        if optVar == var.CD:
             y = round (y,5)
         else:
             y = round(y,2) 

@@ -896,7 +896,7 @@ class Polar_Artist (Artist):
 
 
     def __init__ (self, axes, modelFn, 
-                  xyVars = (CD, CL), 
+                  xyVars = (var.CD, var.CL), 
                   **kwargs):
         super().__init__ (axes, modelFn, **kwargs)
 
