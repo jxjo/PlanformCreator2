@@ -85,7 +85,9 @@ class Wing:
 
         # polar definitions
 
-        self._polar_definitions     = None
+        self._polar_definitions     = []
+        for def_dict in fromDict (dataDict, 'polar_definitions', []):
+            self._polar_definitions.append(Polar_Definition(dataDict=def_dict))
 
         # attach the Planform 
 
@@ -136,6 +138,13 @@ class Wing:
         toDict (dataDict, "airfoil_nick_base",  self._airfoil_nick_base) 
         toDict (dataDict, "reference_pc2_file", self._reference_pc2_file)
         toDict (dataDict, "background_image",   self.background_image._as_dict())
+
+        def_list = []
+        for polar_def in self.polar_definitions:
+            def_list.append (polar_def._as_dict())
+        toDict (dataDict,'polar_definitions', def_list)
+
+        # save planform with all sub objects  
 
         self._planform._save_to (dataDict)
 

@@ -20,9 +20,7 @@ from model.airfoil          import Airfoil
 from model.polar_set        import *
 from model.xo2_driver       import Worker
 
-from airfoil_ui_panels      import Panel_Airfoils, Panel_Polar_Defs
-from airfoil_artists        import Polar_Artist
-from airfoil_diagrams       import Diagram_Item_Polars
+from airfoil_ui_panels      import Panel_Polar_Defs
 
 from pc2_artists            import *
 from pc2_dialogs            import Dialog_Edit_Image
@@ -51,6 +49,7 @@ class Diagram_Abstract (Diagram):
     sig_wingSection_new         = pyqtSignal(WingSection)   # new current wing section selected in diagram 
     sig_wingSection_changed     = pyqtSignal()              # current wing section changed in diagram 
     sig_flaps_changed           = pyqtSignal()              # flaps changed in diagram 
+    sig_polar_def_changed       = pyqtSignal()              # polar definition changed  
 
     sig_export_airfoils         = pyqtSignal()              # export airfoils button pressed  
     sig_export_xflr5            = pyqtSignal()              # export xflr5 button pressed  
@@ -110,6 +109,13 @@ class Diagram_Abstract (Diagram):
         self.refresh(also_viewRange=False)
 
 
+    def on_polar_set_changed (self):
+        """ slot to handle changed polar definitions """
+
+        # will behandled in subclass which has polars 
+        pass
+
+
     # --- private slots ---------------------------------------------------
 
     def _on_planform_changed (self):
@@ -138,6 +144,21 @@ class Diagram_Abstract (Diagram):
         self.refresh (also_viewRange=False)         # refresh other diagram items - keep current viewRange
         self.sig_flaps_changed.emit()               # refresh app
 
+
+    def _get_items (self, item_classes : Type[Diagram_Item] | list[type[Diagram_Item]]) -> list[Diagram_Item]:
+        """get Diagram Items of self having class name(s)
+
+        Args:
+            items: class or list of class of Diagram Items to retrieve
+        Returns:
+            List of Item with this classes
+        """
+        look_for = [item_classes] if not isinstance (item_classes,list) else item_classes
+        result = []
+        for item in self.diagram_items:
+            if item.__class__ in look_for:
+                result.append(item)
+        return result 
 
 
 #-------------------------------------------------------------------------------
@@ -1735,11 +1756,7 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
     Diagram view to show/plot airfoil diagrams - Container for diagram items 
     """
 
-
     name   = "Airfoils & Polars"                        # will be shown in Tabs 
-
-    sig_polar_def_changed       = pyqtSignal()          # polar definition changed  
-
 
     def __init__(self, *args, polar_defs_fn= None, diagram_settings=[], **kwargs):
 
@@ -1763,8 +1780,8 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
         """ returns a list with data dict of the parameters of diagram items """
 
         l = []
-        item : Diagram_Item_Polars
-        for item in self._get_items (Diagram_Item_Polars):
+        item : Item_Polars
+        for item in self._get_items (Item_Polars):
             item_dict = {}
             toDict (item_dict, "xyVars", (item.xVar, item.yVar))
 
@@ -1827,13 +1844,13 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
             dataDict = self._diagram_settings[0] if len(self._diagram_settings) > 0 else {"xyVars" : (var.CD,var.CL)}
             xyVars = dataDict ["xyVars"]
 
-            item = Diagram_Item_Polars (self, iItem=1, getter=self.airfoils, xyVars=xyVars, show=False)
+            item = Item_Polars (self, iItem=1, getter=self.wing, xyVars=xyVars, show=False)
             self._add_item (item, r, 0)
 
             dataDict = self._diagram_settings[1] if len(self._diagram_settings) > 1 else {"xyVars" : (var.CL,var.GLIDE)}
             xyVars = dataDict ["xyVars"]
 
-            item = Diagram_Item_Polars (self, iItem=2, getter=self.airfoils, xyVars=xyVars, show=False)
+            item = Item_Polars (self, iItem=2, getter=self.wing, xyVars=xyVars, show=False)
             self._add_item (item, r, 1)
  
 
@@ -1916,13 +1933,13 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
                 r += 1
                 Label (l,r,c, colSpan=4, get="Diagram variables", style=style.COMMENT) 
                 r += 1
-                for item in self._get_items (Diagram_Item_Polars):
+                for item in self._get_items (Item_Polars):
 
                     Label       (l,r,c,   width=20, get="y")
-                    ComboBox    (l,r,c+1, width=60, obj=item, prop=Diagram_Item_Polars.yVar, options=var.list)
+                    ComboBox    (l,r,c+1, width=60, obj=item, prop=Item_Polars.yVar, options=var.list)
                     SpaceC      (l,c+2,   width=15, stretch=0)
                     Label       (l,r,c+3, width=20, get="x")
-                    ComboBox    (l,r,c+4, width=60, obj=item, prop=Diagram_Item_Polars.xVar, options=var.list)
+                    ComboBox    (l,r,c+4, width=60, obj=item, prop=Item_Polars.xVar, options=var.list)
                     SpaceC      (l,c+5)
                     r += 1
 
@@ -1957,16 +1974,16 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
     # --- public slots ---------------------------------------------------
 
 
-
     def on_new_polars (self):
         """ slot to handle new polars loaded which were generated async by Worker """
 
         logger.debug (f"{str(self)} on new polars")
 
-        for item in self._get_items (Diagram_Item_Polars):
+        for item in self._get_items (Item_Polars):
             item.refresh ()
 
 
+    @override
     def on_polar_set_changed (self):
         """ slot to handle changed polar set signal """
 
@@ -1974,23 +1991,14 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
         self.refresh(also_viewRange=False)
 
 
-    def on_airfoils_ref_changed (self):
-        """ slot to handle new list of reference airfoils"""
-
-        logger.debug (f"{str(self)} on airfoils ref changed")
-        self.refresh(also_viewRange=False)
-
-
     # --- private slots ---------------------------------------------------
-
-
 
     def _on_polars_switched (self, aBool):
         """ slot to handle polars switched on/off """
 
         logger.debug (f"{str(self)} on polars switched")
 
-        for item in self._get_items (Diagram_Item_Polars):
+        for item in self._get_items (Item_Polars):
             item.setVisible (aBool)
 
 

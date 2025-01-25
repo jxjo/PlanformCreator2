@@ -17,6 +17,7 @@ from wing                       import Planform, N_Distrib_Bezier
 from wing                       import WingSection, WingSections 
 from wing                       import Flaps, Flap, Image_Definition
 from model.airfoil              import Airfoil, GEO_BASIC
+from model.polar_set            import *
 
 from PyQt6.QtGui                import QColor, QImage, QBrush, QPen, QTransform
 from PyQt6.QtCore               import pyqtSignal
@@ -1989,3 +1990,124 @@ class Wing_Data_Artist (Abstract_Artist_Planform):
         self._plot_text ("MAC",  parentPos=p0, offset=(0, y))
         self._plot_text (f"{self.planform.planform_mac:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
         self._plot_text ("mm", parentPos=p0, offset=(x1, y))
+
+
+
+class Polar_Artist (Abstract_Artist_Planform):
+    """Plot the polars of airfoils of wingSections"""
+
+    def __init__ (self, *args, 
+                  xyVars = (CD, CL), 
+                  show_strak=False, 
+                  **kwargs):
+        super().__init__ (*args, **kwargs)
+
+        self._show_strak  = show_strak                  # show also straked airfoils 
+        self._show_points = False                       # show point marker 
+        self._xyVars = xyVars                           # definition of x,y axis
+
+    @property
+    def show_strak (self) -> bool:
+        """ true - show also straked airfoils """
+        return self._show_strak
+    def set_show_strak (self, aBool : bool):
+        self._show_strak = aBool == True
+        self.refresh()
+
+
+    @property
+    def xyVars(self): return self._xyVars
+    def set_xyVars (self, xyVars: Tuple[var, var]): 
+        """ set new x, y variables for polar """
+        self._xyVars = xyVars 
+        self.refresh()
+
+
+    def _plot (self): 
+        """ do plot of airfoil polars in the prepared axes  """
+
+        # get airfoil colors - same as Airfoil_Artist
+
+        colors = random_colors (len(self.wingSections), h_start=0.4)
+
+        # plot polars of airfoils
+
+        nPolar_plotted      = 0 
+        nPolar_generating = 0                     # is there a polar in calculation 
+        error_msg           = []  
+
+        section : WingSection
+
+        for i, section in enumerate (self.wingSections):
+
+            airfoil = section.airfoil
+            if (airfoil.isLoaded) and not (not self.show_strak and airfoil.isBlendAirfoil):
+
+                color_airfoil : QColor = colors[i]
+
+                # get / prepare polars 
+                 
+                polarSet = airfoil.polarSet
+                polarSet.load_or_generate_polars ()
+
+                polarSet : Polar_Set = airfoil.polarSet
+                polars_to_plot = polarSet.polars
+
+                polar : Polar 
+                for iPolar, polar in enumerate(reversed(polars_to_plot)): 
+
+                    # generate increasing color hue value for the polars of an airfoil 
+                    color = color_in_series (color_airfoil, iPolar, len(polars_to_plot), delta_hue=0.1)
+
+                    label_airfoil =  f"{airfoil.name} @ {section.name_short}"  
+
+                    self._plot_polar (label_airfoil, polar, color)
+
+                    if not polar.isLoaded: 
+                        nPolar_generating += 1
+                    elif polar.error_occurred:
+                        # in error_msg could be e.g. '<' 
+                        error_msg.append (f"'{airfoil.name_to_show} - {polar.name}': {html.escape(polar.error_reason)}")
+                    else: 
+                        nPolar_plotted += 1
+
+        # show error messages 
+
+        if error_msg:
+            text = '<br>'.join (error_msg)          
+            self._plot_text (text, color=qcolors.ERROR, itemPos=(0.5,0.5))
+
+        # show generating message 
+
+        if nPolar_generating > 0: 
+            if nPolar_generating == 1:
+                text = f"Generating polar"
+            else: 
+                text = f"Generating {nPolar_generating} polars"
+            self._plot_text (text, color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
+
+
+
+
+    def _plot_polar (self, label_airfoil : str, polar: Polar, color): 
+        """ plot a single polar"""
+
+
+        # build nice label 
+
+        label = f"{label_airfoil} {polar.re_asK}k" 
+
+        if not polar.isLoaded:
+            label = label + ' generating'                       # async polar generation  
+
+        # finally plot 
+
+        antialias = True
+        linewidth = 1.0
+        zValue    = 1
+        pen       = pg.mkPen(color, width=linewidth)
+
+        x,y = polar.ofVars (self.xyVars)
+
+        self._plot_dataItem  (x, y, name=label, pen = pen, 
+                                symbol=None, antialias = antialias, zValue=zValue)
