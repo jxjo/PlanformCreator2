@@ -410,7 +410,7 @@ class Airfoil:
 
     @property
     def pathFileName (self) -> str:
-        """ path and filename of airfoil like '.\examples\JX-GT-15.dat' """
+        """ path and filename of airfoil like './examples/JX-GT-15.dat' """
         return self._pathFileName
 
 
