@@ -397,7 +397,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
     def _on_edit_finished (self, pathFilename : str):
         """ slot - AirfoilEditor finished with airfoil pathFilename"""
 
-        self._wingSection().set_airfoil (pathFilename)
+        self._wingSection().set_airfoil_by_path (pathFilename)
         self._on_widget_changed (None)
 
 

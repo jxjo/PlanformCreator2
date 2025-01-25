@@ -1151,7 +1151,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
             # check if mouse point is between neighbour sections
             x = self.x
             left_x, right_x = self._section.x_limits()
-            x = np.clip (x, left_x, right_x)
+            x = clip (x, left_x, right_x)
             y = self.y
 
             if   self._move_by_pos:
@@ -1166,12 +1166,12 @@ class WingSections_Artist (Abstract_Artist_Planform):
                     _, te_y = self._section.le_te ()
                     c  = te_y - y                                   # calculate new c from trailing edge
                     lower_c, upper_c = self._section.c_limits()     # c shouldn't be more than left neighbour
-                    c = np.clip (c, lower_c, upper_c)
+                    c = clip (c, lower_c, upper_c)
                     self._section.set_c (c)                         # update section chord
                 else: 
                     cn = yn                                         # yn is chord 
                     lower_cn, upper_cn = self._section.cn_limits()  # cn shouldn't be more than left neighbour
-                    cn = np.clip (cn, lower_cn, upper_cn)
+                    cn = clip (cn, lower_cn, upper_cn)
                     self._section.set_cn (cn)                       # update section chord
 
 
@@ -1997,7 +1997,7 @@ class Polar_Artist (Abstract_Artist_Planform):
     """Plot the polars of airfoils of wingSections"""
 
     def __init__ (self, *args, 
-                  xyVars = (CD, CL), 
+                  xyVars = (var.CD, var.CL), 
                   show_strak=False, 
                   **kwargs):
         super().__init__ (*args, **kwargs)

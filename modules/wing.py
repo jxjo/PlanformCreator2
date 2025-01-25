@@ -314,7 +314,7 @@ class Wing:
         return self.planform.span * 2 + self.fuselage_width
 
     def set_wingspan (self, aVal : float):
-        aVal = np.clip (aVal, 1, 50000)
+        aVal = clip (aVal, 1, 50000)
         self.planform.set_span ((aVal - self.fuselage_width) / 2.0)
 
 
@@ -324,7 +324,7 @@ class Wing:
         return self._fuselage_width
     
     def set_fuselage_width (self, aVal:float):
-        aVal = np.clip (aVal, 0, self.wingspan/2)
+        aVal = clip (aVal, 0, self.wingspan/2)
         self._fuselage_width = aVal 
 
     @property
@@ -606,7 +606,7 @@ class N_Chord_Reference:
     
     def set_cr_root (self, aVal : float):
         px, _ = self._cr_bezier.points[0]
-        py    = np.clip (aVal, 0.0, 1.0)
+        py    = clip (aVal, 0.0, 1.0)
         self._cr_bezier.set_point (0, px, py)
 
     @property 
@@ -616,7 +616,7 @@ class N_Chord_Reference:
     
     def set_cr_tip (self, aVal : float):
         px, _ = self._cr_bezier.points[-1]
-        py    = np.clip (aVal, 0.0, 1.0)
+        py    = clip (aVal, 0.0, 1.0)
         self._cr_bezier.set_point (-1, px, py)
 
 
@@ -1243,7 +1243,7 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         # wing sections can change during lifetime - so dynamic check 
         cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
         cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
-        self._cn_tip_min =  np.clip (self._cn_tip_min, cn_min, cn_max)
+        self._cn_tip_min = clip (self._cn_tip_min, cn_min, cn_max)
 
         return round (self._cn_tip_min,3)                                  # calc of cn may have numerical issues 
     
@@ -1252,7 +1252,7 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
 
         cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
         cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
-        self._cn_tip_min =  np.clip (aVal, cn_min, cn_max)
+        self._cn_tip_min = clip (aVal, cn_min, cn_max)
 
     @property
     def is_cn_tip_min_applied (self) -> bool:
@@ -1401,10 +1401,10 @@ class WingSection :
             raise ValueError (f"{self} init - either xn or cn is missing")
 
         if self._xn is not None: 
-            self._xn = np.clip (self._xn, 0.0, 1.0)
+            self._xn = clip (self._xn, 0.0, 1.0)
             self._xn = round (self._xn, 10)
         if self._cn is not None: 
-            self._cn = np.clip (self._cn, 0.0, 1.0)
+            self._cn = clip (self._cn, 0.0, 1.0)
             self._cn = round (self._cn, 10)
 
         # sanity root and tip  
@@ -1515,14 +1515,28 @@ class WingSection :
         """ 
         set new airfoil - 'airfoil' can be 
             - an Airfoil object 
-            - an airfoils pathFilename
             - None - current airfoil will by a strak airfoil
         """
         if isinstance (airfoil, Airfoil):
             self._airfoil = airfoil
-        elif isinstance (airfoil, str) or airfoil is None:
-            # load new or remove existing (set as strak airfoil) 
-            self._airfoil = self._get_airfoil (pathFileName=airfoil) 
+        elif airfoil is None:
+            # remove existing (set as strak airfoil) 
+            self._airfoil = self._get_airfoil (pathFileName=None) 
+
+
+    def set_airfoil_by_path (self, pathFileName : str | None):
+        """ 
+        set new airfoil by an airfoils pathFileName 
+            - if None - current airfoil will by a strak airfoil
+        """
+        if os.path.isfile (pathFileName):
+            # ensure relative path to working dir
+            rel_pathFileName = PathHandler(workingDir=self.workingDir).relFilePath (pathFileName)
+            self._airfoil = self._get_airfoil (workingDir = self.workingDir, 
+                                               pathFileName =rel_pathFileName) 
+        elif  pathFileName is None:
+            # remove airfoil - set as strak 
+            self._airfoil = self._get_airfoil (pathFileName=None) 
 
 
     @property
@@ -1566,7 +1580,7 @@ class WingSection :
         if aVal is None:
             self._xn = None
         else:  
-            aVal = np.clip (aVal, 0.0, 1.0)
+            aVal = clip (aVal, 0.0, 1.0)
             self._xn = round(aVal,10)
 
         if not self.defines_cn and self.is_xn_fix:                  # reset cn 
@@ -1605,7 +1619,7 @@ class WingSection :
         if aVal is None:
             self._cn = None
         else:  
-            aVal = np.clip (aVal, 0.0, 1.0)
+            aVal = clip (aVal, 0.0, 1.0)
             self._cn = round(aVal,10)
 
         if not self.defines_cn: 
@@ -1740,7 +1754,7 @@ class WingSection :
     def set_hinge_cn (self, aVal : float):
         """ set relative hinge chord position cn of self """
         if not self.hinge_equal_ref_line:
-            aVal = np.clip (aVal, 0.0, 1.0)
+            aVal = clip (aVal, 0.0, 1.0)
             self._hinge_cn = round (aVal,10) 
 
 
@@ -1767,7 +1781,7 @@ class WingSection :
         """ set hinge chord position cn by y value within planform"""
         le_y, _ = self.le_te () 
         hinge_c = y - le_y
-        hinge_c = np.clip (hinge_c, 0, self.c)
+        hinge_c = clip (hinge_c, 0, self.c)
 
         self.set_hinge_cn(0) 
         self.set_hinge_cn (hinge_c / self.c) 
@@ -1953,7 +1967,7 @@ class WingSections (list):
         else: 
             xn = x
 
-        xn = np.clip (xn, 0.0, 1.0)
+        xn = clip (xn, 0.0, 1.0)
 
         # is there already a section? Return this one 
 
@@ -2593,10 +2607,9 @@ class Flaps:
         le_y, te_y = self._planform.le_te_at (x)                    # calc real flap depth 
         depth      = te_y - hinge_y
         rel_depth  = depth / (te_y - le_y)  
-        rel_depth  = np.clip (rel_depth, 0.0, 1.0)                  # sanity    
+        rel_depth  = clip (rel_depth, 0.0, 1.0)                     # sanity    
 
         return depth, rel_depth 
-
 
 
     def flap_cn_polyline  (self) -> tuple [Array, Array]:

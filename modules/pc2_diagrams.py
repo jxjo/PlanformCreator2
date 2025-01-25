@@ -918,14 +918,17 @@ class Item_Polars (Diagram_Item):
     def set_xyVars (self, xyVars : list[str]):
         """ set xyVars from a list of var strings or enum var"""
 
-        if isinstance (xyVars[0], str):
-            xVar = var(xyVars[0])
+        xVar = xyVars[0]
+        if not isinstance (xVar, var):
+            xVar = var(xVar)
         else: 
             xVar = xVar 
-        if isinstance (xyVars[1], str):
-            yVar = var(xyVars[1])
+
+        yVar = xyVars[1]
+        if not isinstance (yVar, var):
+            yVar = var(yVar)
         else: 
-            yVar = xVar 
+            yVar = yVar 
         self._xyVars = (xVar, yVar)
 
 
@@ -976,13 +979,14 @@ class Item_Polars (Diagram_Item):
             self.addLegend(offset=(-10,10),  verSpacing=0 )  
             self.legend.setLabelTextColor (Artist.COLOR_LEGEND)
 
-        if (self.yVar == CL or self.yVar == ALPHA) and self.xVar == CD:
+        if (self.yVar == var.CL or self.yVar == var.ALPHA) and self.xVar == var.CD:
             self.legend.anchor (itemPos=(1,0.5), parentPos=(1,0.5), offset=(-10,0))     # right, middle 
 
-        elif (self.yVar == GLIDE or self.yVar == SINK) and (self.xVar == ALPHA or self.xVar == CL):
-            self.legend.anchor (itemPos=(0.2,1), parentPos=(0.5,1), offset=(0,-20))     # middle, bottom
+        elif (self.yVar == var.GLIDE or self.yVar == var.SINK) and (self.xVar == var.ALPHA or self.xVar == var.CL):
+            self.legend.anchor (itemPos=(0,0), parentPos=(0,0), offset=(40,10))         # left, top
+            # self.legend.anchor (itemPos=(0.2,1), parentPos=(0.5,1), offset=(0,-20))     # middle, bottom
 
-        elif (self.yVar == CL) and (self.xVar == ALPHA):
+        elif (self.yVar == var.CL) and (self.xVar == var.ALPHA):
             self.legend.anchor (itemPos=(0,0), parentPos=(0,0), offset=(40,10))         # left, top
 
         else:  
@@ -990,7 +994,7 @@ class Item_Polars (Diagram_Item):
 
         # reduce vertical spacing 
         l : QGraphicsGridLayout = self.legend.layout
-        l.setVerticalSpacing(-5)
+        l.setVerticalSpacing(0)
 
 
 
@@ -1697,66 +1701,13 @@ class Diagram_Panels (Diagram_Abstract):
 
 
 
-class Diagram_Airfoils (Diagram_Abstract):
-    """    
-    Diagram view to show/plot airfoils - Container for diagram items 
-    """
-
-    name   = "Airfoils"                                         # will be shown in Tabs 
-
-    def __init__(self, *args, **kwargs):
-
-        self._export_panel       = None 
-        super().__init__(*args, **kwargs)
-
-
-    @override
-    def create_diagram_items (self):
-        """ create all plot Items and add them to the layout """
-        self._add_item (Item_Airfoils (self, getter=self.wing), 0, 0)
-
-
-    @override
-    def create_view_panel (self):
-        """ 
-        creates a view panel to the left of at least one diagram item 
-        has a section_panel
-        """
-        super().create_view_panel ()
-
-        self._viewPanel.layout().addWidget (self.export_panel, stretch=0)
-
-
-    @property 
-    def export_panel (self) -> Edit_Panel | None:
-        """ additional section panel with export buttons"""
-
-        if self._export_panel is None:
-
-            l = QGridLayout()
-            r,c = 0, 1
-            Button      (l,r,c, text="Export Airfoils", width=100,
-                         set=self.sig_export_airfoils.emit)
-            r += 1
-            SpaceR      (l,r,10,3)
-
-            l.setColumnMinimumWidth (0,10)
-            l.setColumnStretch (2,2)
-
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
-                                              switchable=False, switched_on=True)
-        return self._export_panel 
-
-
-
-
 
 class Diagram_Airfoil_Polar (Diagram_Abstract):
     """    
     Diagram view to show/plot airfoil diagrams - Container for diagram items 
     """
 
-    name   = "Airfoils & Polars"                        # will be shown in Tabs 
+    name   = "Airfoils && Polars"                        # will be shown in Tabs 
 
     def __init__(self, *args, polar_defs_fn= None, diagram_settings=[], **kwargs):
 
@@ -1783,7 +1734,7 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
         item : Item_Polars
         for item in self._get_items (Item_Polars):
             item_dict = {}
-            toDict (item_dict, "xyVars", (item.xVar, item.yVar))
+            toDict (item_dict, "xyVars", (str(item.xVar), str(item.yVar)))
 
             l.append (item_dict)
         return l
@@ -1913,7 +1864,7 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
 
-            Label (l,r,c, colSpan=4, get="Polar definitions", style=style.COMMENT) 
+            Label (l,r,c, colSpan=6, get="Polar definitions for Root", style=style.COMMENT) 
             r += 1
 
             # helper panel for polar definitions 
@@ -1936,17 +1887,13 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
                 for item in self._get_items (Item_Polars):
 
                     Label       (l,r,c,   width=20, get="y")
-                    ComboBox    (l,r,c+1, width=60, obj=item, prop=Item_Polars.yVar, options=var.list)
+                    ComboBox    (l,r,c+1, width=60, obj=item, prop=Item_Polars.yVar, options=var.values)
                     SpaceC      (l,c+2,   width=15, stretch=0)
                     Label       (l,r,c+3, width=20, get="x")
-                    ComboBox    (l,r,c+4, width=60, obj=item, prop=Item_Polars.xVar, options=var.list)
+                    ComboBox    (l,r,c+4, width=60, obj=item, prop=Item_Polars.xVar, options=var.values)
                     SpaceC      (l,c+5)
                     r += 1
 
-                SpaceR (l,r, height=10, stretch=0) 
-                r += 1
-                CheckBox (l,r,c, text="Operating points", colSpan=4,
-                                get=lambda: self.show_operating_points, set=self.set_show_operating_points) 
                 r += 1
                 SpaceR (l,r, height=10, stretch=1)
                 r += 1
