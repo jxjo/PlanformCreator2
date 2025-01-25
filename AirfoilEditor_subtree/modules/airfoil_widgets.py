@@ -87,7 +87,8 @@ def get_airfoil_files_sameDir (initialDir : Airfoil | str | None):
     if initialDir is None: return []
 
     if isinstance(initialDir, Airfoil):
-        if initialDir.pathFileName is not None: 
+        airfoil : Airfoil = initialDir
+        if airfoil.pathFileName is not None: 
             airfoil_dir = os.path.dirname(initialDir.pathFileName) 
         else:
             airfoil_dir = None 

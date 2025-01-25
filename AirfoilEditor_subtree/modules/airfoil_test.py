@@ -20,6 +20,7 @@ from model.airfoil_examples import Root_Example, Tip_Example
 from model.airfoil_geometry import Geometry, Geometry_Splined, Geometry_Bezier
 from model.airfoil_geometry import Curvature_of_xy, Curvature_of_Spline, Curvature_of_Bezier
 from model.xo2_driver       import Worker
+from base.common_utils      import PathHandler
 
 
 class Test_Airfoil:
@@ -242,6 +243,16 @@ class Test_Airfoil:
         new_airfoil = Airfoil (pathFileName=newPathFileName)
         new_airfoil.load()
 
+        # test abs and rel path 
+
+        absPathFileName = os.path.abspath(newPathFileName)
+        new_airfoil = Airfoil (pathFileName=absPathFileName)
+        new_airfoil.load()
+
+        workingDir = Path.cwd()
+        relPath    = PathHandler(workingDir=workingDir).relFilePath (absPathFileName)
+        new_airfoil = Airfoil (workingDir=workingDir, pathFileName=relPath)
+        new_airfoil.load()
 
         shutil.rmtree(str(p_tmp))
 
