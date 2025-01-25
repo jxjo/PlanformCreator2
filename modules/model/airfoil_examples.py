@@ -26,7 +26,7 @@ class Airfoil_Example_Abstract (Airfoil):
         """Abstract superclass for example airfoils
         """
 
-        self.pathFileName = None
+        self._pathFileName = None
         self.load ()
 
     @property
@@ -48,7 +48,7 @@ class Airfoil_Example_Abstract (Airfoil):
 
         # class name to identify example airfoil from code  
         if self.pathFileName is None: 
-            self.pathFileName = self.name + '.dat' # self.__class__.__name__
+            self.set_pathFileName (self.name + '.dat') 
 
 
 
