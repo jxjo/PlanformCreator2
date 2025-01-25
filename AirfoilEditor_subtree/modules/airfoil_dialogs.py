@@ -27,7 +27,7 @@ from base.spline            import Bezier
 from model.airfoil          import Airfoil
 from model.airfoil_geometry import Side_Airfoil_Bezier, Line
 from model.airfoil_geometry import Geometry_Splined, Panelling_Spline
-from model.polar_set        import Polar_Definition, polarType, ALPHA, CL
+from model.polar_set        import Polar_Definition, polarType, var
 
 from airfoil_widgets        import Airfoil_Select_Open_Widget
 
@@ -1191,7 +1191,7 @@ class Edit_Polar_Definition (Dialog):
         c = 0 
         r += 1
         Label  (l,r,c, get="Polar type")
-        ComboBox (l,r,c+1,  width=60, options=polarType.list(),
+        ComboBox (l,r,c+1,  width=60, options=polarType.values(),
                         obj=self.polar_def, prop=Polar_Definition.type)
         r += 1
         SpaceR (l, r, stretch=0, height=20) 
@@ -1199,12 +1199,12 @@ class Edit_Polar_Definition (Dialog):
         CheckBox (l,r,c, text=lambda: f"Auto Range of polar {self.polar_def.specVar} values for a complete polar", colSpan=7,
                         get=self.polar_def.autoRange)
         r += 1
-        FieldF (l,r,c, lab=f"Step {ALPHA}", width=60, step=0.1, lim=(0.1, 1.0), dec=2,
+        FieldF (l,r,c, lab=f"Step {var.ALPHA}", width=60, step=0.1, lim=(0.1, 1.0), dec=2,
                         obj=self.polar_def, prop=Polar_Definition.valRange_step,
-                        hide = lambda: self.polar_def.specVar != ALPHA)
-        FieldF (l,r,c, lab=f"Step {CL}", width=60, step=0.01, lim=(0.01, 0.1), dec=2,
+                        hide = lambda: self.polar_def.specVar != var.ALPHA)
+        FieldF (l,r,c, lab=f"Step {var.CL}", width=60, step=0.01, lim=(0.01, 0.1), dec=2,
                         obj=self.polar_def, prop=Polar_Definition.valRange_step,
-                        hide = lambda: self.polar_def.specVar != CL)
+                        hide = lambda: self.polar_def.specVar != var.CL)
         Label  (l,r,c+3, style=style.COMMENT, colSpan=6, 
                         get="The smaller the value, the more time is needed")
 

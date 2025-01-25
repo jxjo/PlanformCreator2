@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Common Utility functions for convinience
+Common Utility functions for convinience - no dependencies from other moduls  
 """
 
 import os
@@ -10,13 +10,22 @@ import json
 from pathlib            import Path
 from termcolor          import colored
 
-from PyQt6.QtWidgets    import QWidget
-from PyQt6.QtCore       import QSize 
-from PyQt6.QtGui        import QGuiApplication, QScreen
-
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+
+#------------------------------------------------------------------------------
+# base type utils  
+#------------------------------------------------------------------------------
+
+
+def clip(val, min_, max_):
+    """ clip aVal to be between min and max"""
+    return min_ if val < min_ else max_ if val > max_ else val
+
+
 
 #------------------------------------------------------------------------------
 # logging 
@@ -166,6 +175,11 @@ class Parameters ():
 
         except ValueError as e:
             logger.error (f"Invalid json expression '{e}'. Failed to save data to '{self._paramFilePath}'")
+            paramFile.close()
+            return False
+
+        except TypeError as e:
+            logger.error (f"{e}. Failed to save data to '{self._paramFilePath}'")
             paramFile.close()
             return False
 
@@ -338,79 +352,4 @@ class PathHandler():
                     aRelPath = newPath              # now we have a real real path 
             return os.path.normpath(os.path.join (self.workingDir, aRelPath))
 
-
-
-#------------------------------------------------------------------------------
-# Utils for QMainWindow and QDialog  
-#------------------------------------------------------------------------------
-
-class Win_Util: 
-    """ 
-    Utility functions for window handling 
-    """
-
-    @staticmethod
-    def set_initialWindowSize (qwindow : QWidget,
-                               size : tuple | None = None,
-                               size_frac : tuple | None = None,
-                               pos : tuple | None = None,
-                               pos_frac: tuple | None = None,
-                               geometry : tuple | None = None,
-                               maximize : bool = False):
-        """
-        Set size and position of Qt window in fraction of screensize or absolute
-        """
-
-        # geometry argument has priority 
-
-        if geometry: 
-            qwindow.setGeometry (*geometry)
-            if maximize:
-                qwindow.showMaximized()
-            return
-        else:  
-            x, y, width, height = None, None, None, None
- 
-        # set size 
-
-        if size_frac: 
-
-            screen : QScreen = QGuiApplication.primaryScreen()
-            screenGeometry = screen.geometry()
- 
-            width_frac, height_frac  = size_frac
-
-            if width_frac:   width  = screenGeometry.width()  * width_frac
-            if height_frac:  height = screenGeometry.height() * height_frac
-
-        if size:
-            width, height = size
-
-        width  = int (width)  if width  is not None else 1000
-        height = int (height) if height is not None else  700
-        
-        qwindow.resize (QSize(width, height))
-
-        if maximize: 
-            qwindow.showMaximized()
-
-        # set position 
-
-        if pos: 
-            x, y = pos
-
-        if pos_frac: 
-
-            screen : QScreen = QGuiApplication.primaryScreen()
-            screenGeometry = screen.geometry()
- 
-            x_frac = pos_frac[0]
-            y_frac = pos_frac[1]
-            if x_frac: x = screenGeometry.width()  * x_frac
-            if y_frac: y = screenGeometry.height() * y_frac
-
-        x = int (x) if x  is not None else 200
-        y = int (y) if y is not None else  200
-        
-        qwindow.move (x, y)
 

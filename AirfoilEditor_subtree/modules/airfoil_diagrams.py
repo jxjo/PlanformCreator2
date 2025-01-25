@@ -367,7 +367,7 @@ class Diagram_Item_Polars (Diagram_Item):
     sig_geometry_changed         = pyqtSignal()          # airfoil data changed in a diagram 
 
 
-    def __init__(self, *args, iItem= 1, xyVars=None, **kwargs):
+    def __init__(self, *args, iItem= 1, xyVars=None | tuple, **kwargs):
 
         self._iItem  = iItem
         self.set_xyVars (xyVars)                        # polar vars for x,y axis 
@@ -446,14 +446,17 @@ class Diagram_Item_Polars (Diagram_Item):
     def set_xyVars (self, xyVars : list[str]):
         """ set xyVars from a list of var strings or enum var"""
 
-        if isinstance (xyVars[0], str):
-            xVar = var(xyVars[0])
+        xVar = xyVars[0]
+        if not isinstance (xVar, var):
+            xVar = var(xVar)
         else: 
             xVar = xVar 
-        if isinstance (xyVars[1], str):
-            yVar = var(xyVars[1])
+
+        yVar = xyVars[1]
+        if not isinstance (yVar, var):
+            yVar = var(yVar)
         else: 
-            yVar = xVar 
+            yVar = yVar 
         self._xyVars = (xVar, yVar)
 
 
@@ -504,13 +507,13 @@ class Diagram_Item_Polars (Diagram_Item):
             self.addLegend(offset=(-10,10),  verSpacing=0 )  
             self.legend.setLabelTextColor (Artist.COLOR_LEGEND)
 
-        if (self.yVar == CL or self.yVar == ALPHA) and self.xVar == CD:
+        if (self.yVar == var.CL or self.yVar == var.ALPHA) and self.xVar == var.CD:
             self.legend.anchor (itemPos=(1,0.5), parentPos=(1,0.5), offset=(-10,0))     # right, middle 
 
-        elif (self.yVar == GLIDE or self.yVar == SINK) and (self.xVar == ALPHA or self.xVar == CL):
+        elif (self.yVar == var.GLIDE or self.yVar == var.SINK) and (self.xVar == var.ALPHA or self.xVar == var.CL):
             self.legend.anchor (itemPos=(0.2,1), parentPos=(0.5,1), offset=(0,-20))     # middle, bottom
 
-        elif (self.yVar == CL) and (self.xVar == ALPHA):
+        elif (self.yVar == var.CL) and (self.xVar == var.ALPHA):
             self.legend.anchor (itemPos=(0,0), parentPos=(0,0), offset=(40,10))         # left, top
 
         else:  
@@ -565,7 +568,7 @@ class Diagram_Airfoil_Polar (Diagram):
         item : Diagram_Item_Polars
         for item in self._get_items (Diagram_Item_Polars):
             item_dict = {}
-            toDict (item_dict, "xyVars", (item.xVar, item.yVar))
+            toDict (item_dict, "xyVars", (str(item.xVar), str(item.yVar)))
 
             l.append (item_dict)
         return l
@@ -769,10 +772,10 @@ class Diagram_Airfoil_Polar (Diagram):
                 for item in self._get_items (Diagram_Item_Polars):
 
                     Label       (l,r,c,   width=20, get="y")
-                    ComboBox    (l,r,c+1, width=60, obj=item, prop=Diagram_Item_Polars.yVar, options=var.list)
+                    ComboBox    (l,r,c+1, width=60, obj=item, prop=Diagram_Item_Polars.yVar, options=var.values)
                     SpaceC      (l,c+2,   width=15, stretch=0)
                     Label       (l,r,c+3, width=20, get="x")
-                    ComboBox    (l,r,c+4, width=60, obj=item, prop=Diagram_Item_Polars.xVar, options=var.list)
+                    ComboBox    (l,r,c+4, width=60, obj=item, prop=Diagram_Item_Polars.xVar, options=var.values)
                     SpaceC      (l,c+5)
                     r += 1
 
