@@ -1444,7 +1444,7 @@ class Geometry ():
     MOD_BEZIER_UPPER    = "Bezier upper"
     MOD_TE_GAP          = "te_gap"
     MOD_LE_RADIUS       = "le_radius"
-    MOD_BLEND           = "blended"
+    MOD_BLEND           = "blend"
 
 
     EPSILON_LE_CLOSE =  1e-6                    # max norm2 distance of le_real 
@@ -1530,8 +1530,6 @@ class Geometry ():
         # build list of relevant modifications (use short name) 
         for aMod, val in self._modification_dict.items():
                 if aMod == Geometry.MOD_TE_GAP:
-                    val = round(val,2) 
-                elif aMod == Geometry.MOD_BLEND:
                     val = round(val,2) 
                 elif isinstance (val, float): 
                     val = round(val,1)
