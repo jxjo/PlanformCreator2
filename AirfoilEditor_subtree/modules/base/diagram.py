@@ -383,7 +383,7 @@ class Diagram_Item (pg.PlotItem):
 
         # logger.debug (f"{self} show artists: {show} - is visible: {self.isVisible()}")
         for artist in self._get_artist (artist_class):
-            artist.set_show (show, refresh=self.isVisible())            # refresh only if item is visible
+            artist.set_show (show)            
 
 
     def _on_help_message (self, aArtist :Artist | None, aMessage: str | None):

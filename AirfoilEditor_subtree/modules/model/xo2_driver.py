@@ -707,7 +707,7 @@ class Worker (X_Program):
         """ 
 
         if not os.path.isfile(airfoil_pathFileName): 
-            raise ValueError (f"{self}:  {airfoil_pathFileName} does not exist")
+            raise ValueError (f"{self}: Airfoil '{airfoil_pathFileName}' does not exist")
 
         if (polarType == 'T2'):
             polarTypeNo = 2

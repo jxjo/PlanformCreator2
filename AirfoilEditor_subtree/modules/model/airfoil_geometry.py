@@ -2208,7 +2208,7 @@ class Geometry ():
             self._blend (geo1, geo2, blendBy, ensure_fast=False)        
             self._reset()
             
-            self._changed (Geometry.MOD_BLEND, blendBy)
+            self._changed (Geometry.MOD_BLEND, f"{blendBy*100:.0f}")
 
 
     # ------------------ private ---------------------------
