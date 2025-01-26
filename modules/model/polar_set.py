@@ -1004,9 +1004,11 @@ class Polar_Task (Polar_Definition):
             logger.debug (f"{self} started")
 
 
-        except (RuntimeError) as exc:
+        except Exception as exc:
 
             logger.warning (f"{self} - polar generation failed - error: {exc}")
+            for polar in self._polars:
+                polar.set_error_reason (str(exc))
             self.finalize ()
 
 
