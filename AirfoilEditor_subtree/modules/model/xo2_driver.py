@@ -105,7 +105,7 @@ class X_Program:
 
     def __repr__(self) -> str:
         """ nice representation of self """
-        return f"<{type(self).__name__}"
+        return f"<{type(self).__name__}>"
 
    
     def isReady (self, project_dir : str, min_version : str = '') -> bool:
@@ -707,7 +707,8 @@ class Worker (X_Program):
         """ 
 
         if not os.path.isfile(airfoil_pathFileName): 
-            raise ValueError (f"{self}: Airfoil '{airfoil_pathFileName}' does not exist")
+            name = airfoil_pathFileName if len(airfoil_pathFileName) <= 40 else "..." + airfoil_pathFileName[-35:]
+            raise ValueError (f"Airfoil '{name}' does not exist")
 
         if (polarType == 'T2'):
             polarTypeNo = 2
