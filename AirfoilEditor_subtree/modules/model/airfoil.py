@@ -123,7 +123,7 @@ class Airfoil:
                 raise ValueError ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
             else:
                 self._pathFileName = pathFileName
-                self._name = os.path.splitext(os.path.basename(self._pathFileName))[0]  # load will get the real name
+                self._name = self.fileName_stem                     # load will get the real name
 
         elif (pathFileName is not None) : 
                 self._pathFileName = pathFileName
@@ -215,14 +215,16 @@ class Airfoil:
         if self._name_org is None: 
             self._name_org = self.name
 
-        self.set_name (f"{self._name_org} _mods:{str(modifications)}")
+        self.set_name (f"{self._name_org}_mods:{str(modifications)}")
 
-        # set new filename 
-        if self._fileName_org is None: self._fileName_org = self.fileName
-        fileName_without = os.path.splitext(self._fileName_org)[0]
-        fileName_ext     = os.path.splitext(self._fileName_org)[1]
-        mod_string       = "_mod" if modifications else ""
-        self.set_fileName (fileName_without + mod_string + fileName_ext)
+        # set new filename - take original filename if possible (without ...mod...)
+        if self._fileName_org is None: 
+            self._fileName_org = self.fileName
+
+        fileName_stem = os.path.splitext(self._fileName_org)[0]
+        fileName_ext  = os.path.splitext(self._fileName_org)[1]
+        mod_string    = "_mod" if modifications else ""
+        self.set_fileName (fileName_stem + mod_string + fileName_ext)
 
         self.set_isModified (True)
         logging.debug (f"{self} - geometry changed: {modifications} ")
@@ -442,22 +444,31 @@ class Airfoil:
     @property
     def fileName (self):
         """ filename of airfoil like 'JX-GT-15.dat' """
-        if self.pathFileName is None: return '' 
-        return os.path.basename(self.pathFileName) 
+        return os.path.basename(self.pathFileName) if self.pathFileName else ''
+    
+    @property
+    def fileName_stem (self):
+        """ stem of fileName like 'JX-GT-15' """
+        return Path(self.fileName).stem if self.fileName else ''
+
+    @property
+    def fileName_ext (self):
+        """ extension of fileName like '.dat'"""
+        return os.path.splitext(self.fileName)[1] if self.fileName else ''
+
 
     def set_fileName (self, aFileName : str):
         """ set new fileName """
         if not aFileName: return 
-
         self._pathFileName = os.path.join (self.pathName, aFileName)
 
     def set_name_from_fileName (self):
         """ set current fileName as name of airfoil """
-        self.set_name (os.path.splitext(self.fileName)[0])
+        self.set_name (self.fileName_stem)
 
     def set_fileName_from_name (self):
         """ set current fileName as name of airfoil """
-        self.set_fileName (self.name + os.path.splitext(self.fileName)[1]) 
+        self.set_fileName (self.name + self.fileName_ext) 
 
 
     @property
@@ -690,23 +701,21 @@ class Airfoil:
         return self.geo.normalize(just_basic=just_basic)  
 
 
-    def do_blend (self, airfoil1 : 'Airfoil', airfoil2 : 'Airfoil', blendBy : float,
+    def do_blend (self, 
+                  airfoil1 : 'Airfoil', airfoil2 : 'Airfoil', 
+                  blendBy : float,
                   geometry_class = None ):
-        """ blends self out of two airfoils to the left and right
-        depending on the blendBy factor
+        """ 
+        Blends self out of two airfoils to the left and right
+            depending on the blendBy factor
         
         Args: 
+            airfoil1, airfoil2: Airfoils to the left and right 
+            blendBy: 0.0 equals to the left, 1.0 equals to the right airfoil  
             geometry_class: optional - geo strategy for blend - either GEO_BASIC or GEO_SPLINE
         """
     
-        # sanity - both airfoils must be loaded 
-        if not airfoil1.isLoaded:
-            raise ValueError ("Airfoil '" + airfoil1.name + "' isn't loaded. Cannot blend.")
-        if not airfoil2.isLoaded:
-            raise ValueError ("Airfoil '" + airfoil2.name + "' isn't loaded. Cannot blend.")
-
-        if blendBy < 0.0: raise ValueError ("blendyBy must be >= 0.0")
-        if blendBy > 1.0: raise ValueError ("blendyBy must be <= 1.0")
+        blendBy = clip (blendBy, 0.0, 1.0)
 
         # other geo strategy? 
         if not geometry_class is None and geometry_class != self._geometry_class:
@@ -778,9 +787,9 @@ class Airfoil_Bezier(Airfoil):
         airfoil_new =  Airfoil_Bezier (name=name, cp_upper=cp_upper, cp_lower=cp_lower)
 
         # new pathFileName
-        fileName_without = os.path.splitext(anAirfoil.fileName)[0]
-        fileName_ext     = os.path.splitext(anAirfoil.fileName)[1] 
-        pathFileName = os.path.join (anAirfoil.pathName, fileName_without + '_bezier' + fileName_ext)
+        fileName_stem = anAirfoil.fileName_stem
+        fileName_ext  = anAirfoil.fileName_ext
+        pathFileName  = os.path.join (anAirfoil.pathName, fileName_stem + '_bezier' + fileName_ext)
         airfoil_new.set_pathFileName (pathFileName, noCheck=True)
 
         airfoil_new.set_isLoaded (True)
