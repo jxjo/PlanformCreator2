@@ -2023,19 +2023,21 @@ class WingSections (list):
                 # get the neighbour wing sections  with real airfoils 
 
                 left_sec, right_sec = self.neighbours_having_airfoil(section) 
+                left, right = left_sec.airfoil, right_sec.airfoil
 
                 # blend value is defined by chord leation to left and right 
                  
                 blendBy  = (section.cn - left_sec.cn) / (right_sec.cn - left_sec.cn)
 
-                # strak - set new geometry to achieve higher quality with splined airfoils 
+                airfoil.do_blend (left, right, blendBy, geometry_class)
 
-                airfoil.set_name (left_sec.airfoil.name, reset_original=True)     # name will be <left_name>_blend0.6
-                airfoil.set_fileName ("dummy.dat")
+                # build long but hopefully unique name  
 
-                airfoil.do_blend (left_sec.airfoil,  right_sec.airfoil, blendBy, geometry_class)
-
-                airfoil.set_fileName_from_name ()
+                name = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}"
+                airfoil.set_name     (name, reset_original=True)  
+                
+                fileName = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}_{right.fileName_stem}.dat"    
+                airfoil.set_fileName (fileName)
 
                 self._strak_done = True 
 
