@@ -1497,12 +1497,6 @@ class WingSection :
                 airfoil = Airfoil(name="<strak>", geometry=GEO_BASIC)
                 airfoil.set_isBlendAirfoil (True)
 
-        # init polar set of airfoil 
-
-        polar_defs = self._planform.wing.polar_definitions
-
-        airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=self.cn))
-
         return airfoil
 
 
@@ -1518,10 +1512,16 @@ class WingSection :
             - None - current airfoil will by a strak airfoil
         """
         if isinstance (airfoil, Airfoil):
+
             # ensure airfoils path is relative to workingDir - if possible 
             rel_pathFileName = PathHandler(workingDir=self.workingDir).relFilePath (airfoil.pathFileName)
             airfoil.workingDir = self.workingDir
             airfoil.set_pathFileName (rel_pathFileName)
+
+            # init polar set of airfoil 
+
+            polar_defs = self._planform.wing.polar_definitions
+            airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=self.cn))
 
             self._airfoil = airfoil
 
@@ -1913,6 +1913,7 @@ class WingSections (list):
         logger.info (" %d Wing sections added" % len(sections))
 
         self.extend (sections)
+
 
 
     @property
@@ -2780,6 +2781,8 @@ class Planform:
         self._planform_area = None                                        # will be calculated
         self._planform_mac  = None                                        # mean aerodynamic chord - will be calculated
 
+        self._wingSections  = None                                        # early to have property
+
         # create Norm_Chord distribution depending on style e.g. 'Bezier'
 
         chord_dict = fromDict(dataDict, "chord_distribution", {})
@@ -2825,6 +2828,10 @@ class Planform:
 
         self._flaps           = Flaps (self, dataDict=fromDict(dataDict, "flaps", {}))
          
+        # late setting of polar sets as chord is needed for reynolds factor 
+        
+        self._wingSections.refresh_polar_sets ()
+
 
 
     def _save_to (self, dataDict : dict) :

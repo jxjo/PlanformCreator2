@@ -807,10 +807,6 @@ class Item_Airfoils (Diagram_Item):
                         get=lambda: self.airfoil_artist.real_size,
                         set=self.airfoil_artist.set_real_size) 
             r += 1
-            CheckBox (l,r,c, text="Show straked airfoils", 
-                        get=lambda: self.airfoil_artist.show_strak,
-                        set=self.airfoil_artist.set_show_strak) 
-            r += 1
             CheckBox (l,r,c, text="Show maximum thickness", 
                         get=lambda: self.airfoil_artist.show_thick,
                         set=self.airfoil_artist.set_show_thick) 
@@ -818,7 +814,7 @@ class Item_Airfoils (Diagram_Item):
             l.setColumnStretch (3,2)
             l.setRowStretch    (r,2)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=140, 
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height=100, 
                                               switchable=False, hide_switched=False, 
                                               on_switched=self.setVisible)
         return self._section_panel 
@@ -1707,15 +1703,18 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
     Diagram view to show/plot airfoil diagrams - Container for diagram items 
     """
 
-    name   = "Airfoils && Polars"                        # will be shown in Tabs 
+    name   = "Airfoils && Polars"                           # will be shown in Tabs 
 
     def __init__(self, *args, polar_defs_fn= None, diagram_settings=[], **kwargs):
 
         self._polar_panel   = None 
+        self._general_panel = None                          # panel with general settings  
+
         self._polar_defs_fn = polar_defs_fn 
         self._diagram_settings = diagram_settings
 
-        self._show_operating_points = False             # show polars operating points 
+        self._show_operating_points = False                 # show polars operating points 
+        self._show_strak = False                            # show straked airfoils
 
         super().__init__(*args, **kwargs)
 
@@ -1817,12 +1816,11 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
         layout = QVBoxLayout()
         layout.setContentsMargins (QMargins(0, 0, 0, 0)) 
 
-        # airfoils panel 
+        # general panel 
 
-        if self.section_panel is not None: 
-            layout.addWidget (self.section_panel,stretch=0)
+        layout.addWidget (self.general_panel,stretch=0)
 
-        # diagram items panel
+        # airfoils panel
 
         for item in self.diagram_items:
             if item.section_panel is not None: 
@@ -1853,6 +1851,38 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
         artist : Polar_Artist
         for artist in self._get_artist (Polar_Artist):
             artist.set_show_points (aBool) 
+
+
+    @property 
+    def show_strak (self) -> bool:
+        """ show straked airfoils """
+        return self._show_strak
+
+    def set_show_strak (self, aBool : bool):
+        self._show_strak = aBool
+
+        artist : Polar_Artist
+        for artist in self._get_artist ([Polar_Artist, Airfoil_Artist]):
+            artist.set_show_strak (aBool) 
+
+
+    @property 
+    def general_panel (self) -> Edit_Panel | None:
+        """ additional section panel with commmon settings"""
+
+        if self._general_panel is None:
+
+            l = QGridLayout()
+            r,c = 0, 0
+            CheckBox (l,r,c, text="Show straked airfoils", 
+                      get=lambda: self.show_strak, set=self.set_show_strak) 
+            r += 1
+            l.setColumnStretch (3,2)
+            l.setRowStretch    (r,2)
+
+            self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
+                                              switchable=False, switched_on=True)
+        return self._general_panel 
 
 
     @property
