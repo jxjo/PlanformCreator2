@@ -765,7 +765,9 @@ class Panel_Polar_Defs (Edit_Panel):
     _panel_margins = (0, 0, 0, 0)                       # no inset of panel data 
     _main_margins  = (0, 0, 0, 0)                       # margins of Edit_Panel
 
-    sig_polar_def_changed = pyqtSignal()                # polar definition changed r 
+    sig_polar_def_changed = pyqtSignal()                # polar definition changed 
+
+    MAX_POLAR_DEFS = 5
 
     # ---------------------------------------------
 
@@ -790,7 +792,7 @@ class Panel_Polar_Defs (Edit_Panel):
                         hide=lambda: len(self.polar_defs) <= 1)
             r += 1
 
-        if len (self.polar_defs) < 5:
+        if len (self.polar_defs) < self.MAX_POLAR_DEFS:
             ToolButton (l,r,c+1, icon=Icon.ADD,   set=self.add_polar_def)
 
         l.setColumnStretch (c+1,2)
@@ -842,10 +844,20 @@ class Panel_Polar_Defs (Edit_Panel):
     def _on_polar_def_changed (self):
         """ handle changed polar def - inform parent"""
 
-        # rebuild layout with new item 
-        self._set_panel_layout ()
+        # ensure if only 1 polardef, this has to be active 
+        if len(self.polar_defs) == 1 and not self.polar_defs[0].active:
+            self.polar_defs[0].set_active(True)
 
+        # signal parent - which has to refresh self to apply changed items 
         self.sig_polar_def_changed.emit()
+
+
+    @override
+    def refresh(self, **_):
+        """ refreshes all Widgets on self """
+
+        # refresh has to reinit layout for new/deleted items 
+        super().refresh (reinit_layout=True)
 
 
 
