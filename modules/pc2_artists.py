@@ -860,12 +860,12 @@ class WingSections_Artist (Abstract_Artist_Planform):
             return None
 
     @override
-    def set_show (self, aBool : bool, refresh=True):
+    def set_show (self, aBool : bool):
         """ overridden to disconnect scene click when not shown"""
 
         if not aBool:
             self._disconnect_scene_mouseClick ()
-        super().set_show (aBool, refresh=refresh) 
+        super().set_show (aBool) 
 
 
     def _plot (self): 
