@@ -2005,6 +2005,7 @@ class Polar_Artist (Abstract_Artist_Planform):
         self._show_strak  = show_strak                  # show also straked airfoils 
         self._show_points = False                       # show point marker 
         self._xyVars = xyVars                           # definition of x,y axis
+        self._min_re_asK = 0                            # minimum re number to be plotted
 
     @property
     def show_strak (self) -> bool:
@@ -2023,6 +2024,15 @@ class Polar_Artist (Abstract_Artist_Planform):
         self.refresh()
 
 
+    @property
+    def min_re_asK (self) -> int: 
+        return self._min_re_asK 
+    def set_min_re_asK (self, aVal: int ): 
+        """ set minimum re rumber to be plotted for polar """
+        self._min_re_asK = aVal 
+        self.refresh()
+
+
     def _plot (self): 
         """ do plot of airfoil polars in the prepared axes  """
 
@@ -2033,7 +2043,7 @@ class Polar_Artist (Abstract_Artist_Planform):
         # plot polars of airfoils
 
         nPolar_plotted      = 0 
-        nPolar_generating = 0                     # is there a polar in calculation 
+        nPolar_generating   = 0                     # is there a polar in calculation 
         error_msg           = []  
 
         section : WingSection
@@ -2045,13 +2055,12 @@ class Polar_Artist (Abstract_Artist_Planform):
 
                 color_airfoil : QColor = colors[i]
 
-                # get / prepare polars 
+                # get / prepare polars - filter for minimum re nimber 
                  
-                polarSet = airfoil.polarSet
+                polarSet : Polar_Set = airfoil.polarSet
                 polarSet.load_or_generate_polars ()
 
-                polarSet : Polar_Set = airfoil.polarSet
-                polars_to_plot = polarSet.polars
+                polars_to_plot = list(filter(lambda polar: polar.re_asK >= self.min_re_asK, polarSet.polars)) 
 
                 polar : Polar 
                 for iPolar, polar in enumerate(reversed(polars_to_plot)): 

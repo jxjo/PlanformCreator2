@@ -1135,7 +1135,7 @@ class Diagram_Planform (Diagram_Abstract):
         has a section_panel
         """
 
-        # override to add additional gneral settings panel on top 
+        # override to add additional general settings panel on top 
 
         super().create_view_panel ()
 
@@ -1705,16 +1705,18 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
 
     name   = "Airfoils && Polars"                           # will be shown in Tabs 
 
-    def __init__(self, *args, polar_defs_fn= None, diagram_settings=[], **kwargs):
+    def __init__(self, *args, diagram_settings=[], **kwargs):
 
         self._polar_panel   = None 
         self._general_panel = None                          # panel with general settings  
+        self._export_panel  = None
 
-        self._polar_defs_fn = polar_defs_fn 
         self._diagram_settings = diagram_settings
 
         self._show_operating_points = False                 # show polars operating points 
-        self._show_strak = False                            # show straked airfoils
+        self._show_strak    = False                         # show straked airfoils
+        self._min_re_asK    = 10                            # minimum re number / 1000 to plot 
+        self._apply_min_re  = False                         # activate min re rumber 
 
         super().__init__(*args, **kwargs)
 
@@ -1758,7 +1760,6 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
     # -------------
 
 
-    @property 
     def polar_defs (self) -> list [Polar_Definition]:
         """ actual polar definitions"""
         return self.wing().polar_definitions
@@ -1810,34 +1811,17 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
         creates a view panel to the left of at least one diagram item 
         has a section_panel
         """
- 
-        # build side view panel with the section panels 
+        # override to add additional general settings panel on top 
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins (QMargins(0, 0, 0, 0)) 
+        super().create_view_panel ()
 
-        # general panel 
+        layout = self._viewPanel.layout()
+        layout.insertWidget (0, self.general_panel, stretch=0)
+        layout.insertWidget (2, self.polar_panel, stretch=0)
 
-        layout.addWidget (self.general_panel,stretch=0)
+        # export panel at bottom 
 
-        # airfoils panel
-
-        for item in self.diagram_items:
-            if item.section_panel is not None: 
-                layout.addWidget (item.section_panel,stretch=0)
-
-        # polar panel
-
-        layout.addWidget (self.polar_panel)
-        
-        # stretch add end 
-
-        layout.addStretch (1)
-
-        self._viewPanel = Container_Panel()
-        self._viewPanel.setMinimumWidth(180)
-        self._viewPanel.setMaximumWidth(250)
-        self._viewPanel.setLayout (layout)
+        layout.addWidget    (self.export_panel, stretch=0)
 
 
     @property 
@@ -1864,6 +1848,35 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
         artist : Polar_Artist
         for artist in self._get_artist ([Polar_Artist, Airfoil_Artist]):
             artist.set_show_strak (aBool) 
+
+    @property 
+    def min_re_asK (self) -> int:
+        """ minimum re rumber / 1000 to plot  """
+        return self._min_re_asK
+
+    def set_min_re_asK (self, aVal : int):
+        self._min_re_asK = clip (aVal,1,1000) 
+        self._apply_min_re_to_artists ()
+
+    @property 
+    def apply_min_re (self) -> bool:
+        """ should min_re be applied  """
+        return self._apply_min_re
+
+    def set_apply_min_re (self, aBool : bool):
+        self._apply_min_re = aBool == True 
+        self.polar_panel.refresh()
+        self._apply_min_re_to_artists ()
+
+
+    def _apply_min_re_to_artists (self):
+        """ tell artists to apply min_re - update view range """
+        artist : Polar_Artist
+        for artist in self._get_artist (Polar_Artist):
+            artist.set_min_re_asK (self._min_re_asK if self.apply_min_re else 0) 
+
+        for item in self._get_items (Item_Polars):
+            item.setup_viewRange ()
 
 
     @property 
@@ -1894,7 +1907,7 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
 
-            Label (l,r,c, colSpan=6, get="Polar definitions for Root", style=style.COMMENT) 
+            Label (l,r,c, colSpan=6, get="Polar definitions for Root") 
             r += 1
 
             # helper panel for polar definitions 
@@ -1906,13 +1919,22 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
             l.addWidget (p, r, c, 1, 6)
             l.setRowStretch (r,1)
 
+            # minimum re rumber to plot 
+            r += 1
+            CheckBox    (l,r,c, text="Minimum Re", colSpan=4,
+                            obj=self, prop=Diagram_Airfoil_Polar.apply_min_re,
+                            toolTip="Apply a minimum Re number for polars in the diagrams")
+            FieldF      (l,r,c+4, width=60, step=1, lim=(1, 1000), unit="k", dec=0,
+                            obj=self, prop=Diagram_Airfoil_Polar.min_re_asK,
+                            hide=lambda: not self.apply_min_re)
+
             # polar diagrams variables setting 
 
             r += 1
             if Worker.ready:
-                SpaceR (l,r, height=5, stretch=0) 
+                SpaceR (l,r, height=10, stretch=0) 
                 r += 1
-                Label (l,r,c, colSpan=4, get="Diagram variables", style=style.COMMENT) 
+                Label (l,r,c, colSpan=4, get="Diagram variables") 
                 r += 1
                 for item in self._get_items (Item_Polars):
 
@@ -1946,6 +1968,28 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
             self._polar_panel = Edit_Panel (title="View Polars", layout=l, height=(150,None),
                                               switchable=True, switched_on=False, on_switched=self._on_polars_switched)
         return self._polar_panel 
+
+
+    @property 
+    def export_panel (self) -> Edit_Panel | None:
+        """ additional section panel with export buttons"""
+
+        if self._export_panel is None:
+
+            l = QGridLayout()
+            r,c = 0, 1
+            Button      (l,r,c, text="Export Airfoils", width=100, set=self.sig_export_airfoils.emit)
+            r += 1
+            SpaceR      (l,r,10,1)
+
+            l.setColumnMinimumWidth (0,10)
+            l.setColumnStretch (2,2)
+
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
+                                              switchable=False, switched_on=True)
+        return self._export_panel 
+
+
 
 
     # --- public slots ---------------------------------------------------
