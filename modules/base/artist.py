@@ -658,15 +658,15 @@ class Artist(QObject):
         """
  
         Args:
-            gv: GraphicsView where PlotDataItes will be added 
-            get: getter for data_objects (either bound method or objects)  
-            show: True: items will be show immidiatly show_points
+            pi: PlotItem where PlotDataItems will be added 
+            getter: getter for data_objects (either bound method or objects)  
+            show: True: self is active and will be shown on next refresh
             show_points: show data points as markers  
         """
 
         super().__init__()
 
-        self._pi = pi                       # (parent) plotItem)
+        self._pi = pi                       # (parent) plotItem
         self._getter = getter               # bounded method to the model e.g. Wing 
 
         self._show = show is True           # should self be plotted? 
@@ -678,16 +678,13 @@ class Artist(QObject):
         self._t_fn  = None                  # coordinate transformation function accepting x,y
         self._tr_fn = None                  # reverse transformation function accepting xt,yt
 
-
-        # do not 'plot' on init
-        # self.plot() 
+        # ! do not 'plot' on init 
 
 
     @override
     def __repr__(self) -> str:
         # get a nice print string 
-        text = '' 
-        return f"<{type(self).__name__}{text}>"
+        return f"<{type(self).__name__}>"
 
 
     # ------- public ----------------------
@@ -702,7 +699,7 @@ class Artist(QObject):
         
     @property
     def data_list (self): 
-        # to be ooverloaded - or implemented with semantic name        
+        # to be overloaded - or implemented with semantic name        
         if isinstance (self.data_object, list):
             return self.data_object
         else: 
@@ -710,23 +707,23 @@ class Artist(QObject):
 
 
     @property
-    def show (self): return self._show
+    def show (self):
+        """ is self active """ 
+        return self._show
 
-    def set_show (self, aBool, refresh=True):
+    def set_show (self, aBool):
         """
-        switch to enable/disable ploting the data
-            - refresh=True will immediatly refresh 
+        switch to enable/disable self
+            - will immediatly refresh (if PlotItem is visible) 
         """
         self._show = aBool is True 
 
         if self.show: 
-            if refresh:
-                if not self._plots:
-                    self.plot()                                 # first time, up to now no plots created ...
-                else: 
-                    self.refresh()                              # normal refresh 
+            if not self._plots:
+                self.plot()                                 # first time, up to now no plots created ...
             else: 
-                pass                                            # will be shown with next refresh 
+                self.refresh()                              # normal refresh 
+
         else:
             p : pg.PlotDataItem
             for p in self._plots:                               # always hide all plot 
@@ -741,7 +738,7 @@ class Artist(QObject):
     @property
     def show_legend (self): return self._show_legend
     def set_show_legend (self, aBool):
-        """ user switch to show legend for self plots
+        """ user switch to show legend for plots
         """
         self._show_legend = aBool is True 
 
@@ -808,9 +805,10 @@ class Artist(QObject):
 
 
     def plot (self):
-        """the artist will (re)plot - existing plots will be deleted 
         """
-        if self.show:
+        (re)plot - existing plots will be deleted - only if PlotItem of self is visible
+        """
+        if self.show and self._pi.isVisible():
 
             self._remove_legend_items ()
             self._remove_plots ()
@@ -826,24 +824,19 @@ class Artist(QObject):
 
                 if self._plots:
                     logger.debug  (f"{self} of {self._pi} - plot {len(self._plots)} items")
-        # else:
-        #     self.set_help_message (None)                              # remove help message of self 
 
 
     def refresh(self):
-        """ refresh self plots by setting new x,y data """
+        """
+        refresh current plots - only if PlotItem of self is visible 
+        """
 
-        if self.show:
+        if self.show and self._pi.isVisible():
             self._refresh_plots ()
 
             if self.show_legend:
                 self._remove_legend_items ()
                 self._add_legend_items()
-
-        # else:
-
-        #     self.set_help_message (None)                              # remove help message of self 
-            # logging.debug (f"{self} refresh")
 
 
     # --------------  private -------------

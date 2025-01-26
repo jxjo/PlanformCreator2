@@ -749,7 +749,7 @@ class Airfoil_Bezier(Airfoil):
         """
         super().__init__( name = name, pathFileName=None, workingDir=workingDir)
 
-        self.pathFileName    = pathFileName         # after super() as checks would hit 
+        self._pathFileName   = pathFileName         # after super() as checks would hit 
         self._geometry_class = Geometry_Bezier      # geometry startegy 
         self._isLoaded       = False                # bezier definition loaded? 
 

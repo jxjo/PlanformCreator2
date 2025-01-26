@@ -36,6 +36,9 @@ def create_airfoil_from_path (parent, pathFilename, example_if_none=False, silen
     """
 
     file_found = True
+    airfoil_loaded = False
+    airfoil = None
+
     try: 
         extension = os.path.splitext(pathFilename)[1]
         if extension == ".bez":
