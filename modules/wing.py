@@ -2017,19 +2017,25 @@ class WingSections (list):
         section: WingSection
 
         for section in self:
-            if section.airfoil.isBlendAirfoil: 
+            airfoil = section.airfoil
+            if airfoil.isBlendAirfoil: 
 
                 # get the neighbour wing sections  with real airfoils 
 
                 left_sec, right_sec = self.neighbours_having_airfoil(section) 
-                cn = left_sec.cn
+
+                # blend value is defined by chord leation to left and right 
+                 
                 blendBy  = (section.cn - left_sec.cn) / (right_sec.cn - left_sec.cn)
 
                 # strak - set new geometry to achieve higher quality with splined airfoils 
 
-                section.airfoil.set_name (left_sec.airfoil.name, reset_original=True)     # name will be <left_name>_blend0.6
+                airfoil.set_name (left_sec.airfoil.name, reset_original=True)     # name will be <left_name>_blend0.6
+                airfoil.set_fileName ("dummy.dat")
 
-                section.airfoil.do_blend (left_sec.airfoil,  right_sec.airfoil, blendBy, geometry_class)
+                airfoil.do_blend (left_sec.airfoil,  right_sec.airfoil, blendBy, geometry_class)
+
+                airfoil.set_fileName_from_name ()
 
                 self._strak_done = True 
 

@@ -1589,14 +1589,14 @@ class Airfoil_Artist (Abstract_Artist_Planform):
 
     def _plot (self): 
 
-
-        # plot airfoil of wing Sections 
+        # create a nice color row depending on n wing sections  
 
         colors = random_colors (len(self.wingSections), h_start=0.4)
 
         # strak airfoils if needed
+
         if self.show_strak:
-            self.wingSections.do_strak (geometry_class=GEO_BASIC)
+            self.wingSections.do_strak (geometry_class=GEO_BASIC)           # BASIC for high speed 
 
         section : WingSection
 
