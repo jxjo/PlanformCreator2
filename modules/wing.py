@@ -139,9 +139,12 @@ class Wing:
         toDict (dataDict, "reference_pc2_file", self._reference_pc2_file)
         toDict (dataDict, "background_image",   self.background_image._as_dict())
 
+        # polar definitions - do not save if there is only a default definition 
         def_list = []
         for polar_def in self.polar_definitions:
-            def_list.append (polar_def._as_dict())
+            def_dict = polar_def._as_dict()
+            if not (len (self.polar_definitions) == 1 and def_dict == Polar_Definition()._as_dict()):
+                def_list.append (polar_def._as_dict())
         toDict (dataDict,'polar_definitions', def_list)
 
         # save planform with all sub objects  
@@ -471,8 +474,15 @@ class Wing:
 
     @property
     def workingDir(self): 
-        """returns the current working directory which is the dir of the paramter file"""
+        """directory of the paramter file"""
         return self.pathHandler.workingDir
+
+
+    @property
+    def wing_tmp_dir (self): 
+        """directory within working dir for tmp files like straked airfoils and polars """
+
+        return os.path.join (self.workingDir, Path(self.parm_filePath).stem + "_tmp" )
 
 
     # ---Methods --------------------- 
@@ -1918,8 +1928,8 @@ class WingSections (list):
 
     @property
     def workingDir (self) -> str:
-       """ current working directory""" 
-       self._planform.workingDir 
+        """ current working directory""" 
+        return self._planform.workingDir 
    
 
     def _as_list_of_dict (self) -> list[dict]:
@@ -2014,9 +2024,15 @@ class WingSections (list):
             geometry: optional - the desired geometry of the new straked airfoils 
                                  either GEO_BASIC or GEO_SPLINE
         """
-        section: WingSection
 
+        strak_dir = self._planform._wing.wing_tmp_dir
+
+        if not os.path.isdir (strak_dir):
+            os.mkdir(strak_dir)
+
+        section: WingSection
         for section in self:
+
             airfoil = section.airfoil
             if airfoil.isBlendAirfoil: 
 
@@ -2035,9 +2051,11 @@ class WingSections (list):
 
                 name = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}"
                 airfoil.set_name     (name, reset_original=True)  
-                
+
                 fileName = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}_{right.fileName_stem}.dat"    
                 airfoil.set_fileName (fileName)
+                airfoil.set_pathName (strak_dir, noCheck=True) 
+                airfoil.set_isModified (False)       # avoid save and polar generation if file alreday exists
 
                 self._strak_done = True 
 

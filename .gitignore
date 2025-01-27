@@ -2,9 +2,12 @@
 PlanformCreator2.settings
 PlanformCreator2.code-workspace
 README.pdf
+Root_Example.dat
+Tip_Example.dat
 releases
 T*.txt
 tmp*.inp
+test/*
 
 
 # Byte-compiled / optimized / DLL files

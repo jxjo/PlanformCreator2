@@ -2036,6 +2036,11 @@ class Polar_Artist (Abstract_Artist_Planform):
     def _plot (self): 
         """ do plot of airfoil polars in the prepared axes  """
 
+        # strak airfoils if needed to get the generated airfoil names
+
+        if self.show_strak and not self.wingSections.strak_done:
+            self.wingSections.do_strak (geometry_class=GEO_BASIC)
+
         # get airfoil colors - same as Airfoil_Artist
 
         colors = random_colors (len(self.wingSections), h_start=0.4)
@@ -2068,7 +2073,11 @@ class Polar_Artist (Abstract_Artist_Planform):
                     # generate increasing color hue value for the polars of an airfoil 
                     color = color_in_series (color_airfoil, iPolar, len(polars_to_plot), delta_hue=0.1)
 
-                    label_airfoil =  f"{airfoil.name} @ {section.name_short}"  
+                    # legend entry only for first polar of an airfoil 
+                    if iPolar == 0:
+                        label_airfoil =  f"{airfoil.name} @ {section.name_short}" 
+                    else: 
+                        label_airfoil = None 
 
                     self._plot_polar (label_airfoil, polar, color)
 
@@ -2101,13 +2110,14 @@ class Polar_Artist (Abstract_Artist_Planform):
     def _plot_polar (self, label_airfoil : str, polar: Polar, color): 
         """ plot a single polar"""
 
+        # build nice label (for first polar)
 
-        # build nice label 
-
-        label = f"{label_airfoil} {polar.re_asK}k" 
-
-        if not polar.isLoaded:
-            label = label + ' generating'                       # async polar generation  
+        if label_airfoil:
+            label = f"{label_airfoil} {polar.re_asK}k"  
+            if not polar.isLoaded:
+                label = label + ' generating'                       # async polar generation  
+        else: 
+            label = None 
 
         # finally plot 
 

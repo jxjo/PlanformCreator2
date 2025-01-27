@@ -815,7 +815,7 @@ class Item_Airfoils (Diagram_Item):
             l.setRowStretch    (r,2)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, height=100, 
-                                              switchable=False, hide_switched=False, 
+                                              switchable=True, hide_switched=True, 
                                               on_switched=self.setVisible)
         return self._section_panel 
 
@@ -1920,6 +1920,9 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
             l.setRowStretch (r,1)
 
             # minimum re rumber to plot 
+
+            r += 1
+            SpaceR      (l,r, height=5, stretch=0) 
             r += 1
             CheckBox    (l,r,c, text="Minimum Re", colSpan=4,
                             obj=self, prop=Diagram_Airfoil_Polar.apply_min_re,
@@ -1932,7 +1935,7 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
 
             r += 1
             if Worker.ready:
-                SpaceR (l,r, height=10, stretch=0) 
+                SpaceR (l,r, height=5, stretch=0) 
                 r += 1
                 Label (l,r,c, colSpan=4, get="Diagram variables") 
                 r += 1
@@ -2009,7 +2012,12 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
         """ slot to handle changed polar set signal """
 
         logger.debug (f"{str(self)} on polar set changed")
-        self.refresh(also_viewRange=False)
+
+        for item in self._get_items (Item_Polars):
+            item.refresh ()
+
+        if self._viewPanel:
+            self._viewPanel.refresh()
 
 
     # --- private slots ---------------------------------------------------
