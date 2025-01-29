@@ -27,6 +27,7 @@ pyinstaller --noconfirm --log-level=INFO  --onedir --noconsole   ^
     --add-data="./AirfoilEditor_subtree/modules/base/icons;./icons" ^
     --add-data="./templates;./templates" ^
 	--runtime-tmpdir="mySuperTemp" ^
+	--exclude-module matplotlib ^
     PlanformCreator2.py 
 
 echo.
