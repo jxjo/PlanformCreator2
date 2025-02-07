@@ -642,15 +642,6 @@ class Item_VLM_Result (Diagram_Item):
 
 
     @override
-    def refresh(self): 
-        """ refresh my artits and section panel """
-
-        # hack - EditPanel has problems with refresh if item/section panel is hidden
-        if self.isVisible (): 
-            super().refresh()
-
-
-    @override
     def setup_artists (self):
         """ create and setup the artists of self"""
         
@@ -1284,7 +1275,7 @@ class Diagram_Planform (Diagram_Abstract):
 
         # set spacing between the two items
         self.graph_layout.setContentsMargins (20,10,20,10)  # default margins
-        self.graph_layout.setVerticalSpacing (20)
+        self.graph_layout.setVerticalSpacing (10)
 
 
     @property
@@ -2238,10 +2229,9 @@ class Diagram_Wing_Aero (Diagram_Abstract):
     def on_paneling_changed (self):
         """ slot to handle changed polar definitions """
 
-        logger.debug (f"{str(self)} on paneling changed")
+        logger.debug (f"{str(self)} on paneling changed - visible: {self.isVisible()}")
 
-        for item in self._get_items ([Item_VLM_Panels, Item_VLM_Result]):
-            item.refresh ()
+        self.refresh()
 
 
     @override
@@ -2322,7 +2312,7 @@ class Diagram_Wing_Aero (Diagram_Abstract):
         """ slot - user switched VLM analysis"""
 
         item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
-        item.section_panel.setVisible (aBool)
+        item.section_panel.set_visibilty (aBool)
 
         if aBool:
             if item.section_panel.switched_on:

@@ -712,8 +712,15 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
                 color.setAlphaF (0.6)
                 self._plot_dataItem  (x, y, pen=pg.mkPen(color, width=6), name="Chord difference", antialias=False, zValue=1)        
 
-
         # ! VLM wing coordinates are in [m] - and wing coordinates  
+
+        self._plot_panels ()
+
+        self.set_help_message ("Adapt paneling of the wing with 'Paneling Options'")
+
+
+    def _plot_panels (self):
+        """ plot all panels using PColorMeshItem """
 
         panels = self.wing.vlm_wing.panels_right
         nx = self.wing.vlm_wing.nx_panels
@@ -791,26 +798,20 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         else: 
             self._remove_colorBar ()
 
-
         # P13_x = []
         # P13_y = []
-
         # ljk_x = []
         # ljk_y = []
 
         # pen = pg.mkPen (COLOR_BOX.darker(150), width=1)
 
         # for panel in panels: 
-
         #     y, x = panel.polygon_2D () 
-
         #     self._plot_dataItem  (x, y, pen=pen, antialias=False, zValue=1)   
-
         #     P13_x.append(panel.offset_P1[1]) 
         #     P13_x.append(panel.offset_P3[1]) 
         #     P13_y.append(panel.offset_P1[0]) 
         #     P13_y.append(panel.offset_P3[0]) 
-
         #     ljk_x.append(panel.offset_l[1]) 
         #     ljk_x.append(panel.offset_j[1]) 
         #     ljk_x.append(panel.offset_k[1]) 
@@ -821,9 +822,9 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         # pen = pg.mkPen  (color = "red", style=Qt.PenStyle.NoPen)
         # spen = pg.mkPen (color = "red")
         # self._plot_dataItem  (P13_x, P13_y, pen=pen, symbol="o", symbolPen=spen, symbolSize=3, zValue=2)   
-
         # spen = pg.mkPen (color = "yellow")
         # self._plot_dataItem  (ljk_x, ljk_y, pen=pen, symbol="o", symbolPen=spen, symbolSize=3, zValue=2)   
+
 
     def _add_colorBar (self, colorMeshItem):
         """ add color bar to show colored panels fo Cp"""
@@ -2406,3 +2407,6 @@ class Polar_Artist (Abstract_Artist_Planform):
 
         self._plot_dataItem  (x, y, name=label, pen = pen, 
                                 symbol=None, antialias = antialias, zValue=zValue)
+
+        print (f"{polar}  cl_max {polar.cl_max}  cd_min={polar.cd_min}  glide_max={polar.glide_max} \
+                          alpha_0={polar.alpha_cl0} alpha_0_inv={polar.alpha_cl0_inviscid}")
