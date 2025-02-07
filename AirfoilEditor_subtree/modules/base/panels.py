@@ -174,8 +174,8 @@ class Panel_Abstract (QWidget):
               to control hide/show
         """
 
-        if self.shouldBe_visible != aBool:
-            self.shouldBe_visible = aBool        
+        if self._shouldBe_visible != aBool:
+            self._shouldBe_visible = aBool        
             self.setVisible (aBool)     
 
 
