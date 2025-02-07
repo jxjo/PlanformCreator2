@@ -450,6 +450,8 @@ class Diagram_Item (pg.PlotItem):
             self.setup_viewRange()   
             self._viewRange_set = True
 
+            self.plot_title ()
+
 
     @override
     def close (self):
