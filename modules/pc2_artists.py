@@ -18,9 +18,12 @@ from wing                       import WingSection, WingSections
 from wing                       import Flaps, Flap, Image_Definition
 from model.airfoil              import Airfoil, GEO_BASIC
 from model.polar_set            import *
+from modules.model.VLM_wing     import VLM_OpPoint, OpPoint_Var
 
 from PyQt6.QtGui                import QColor, QImage, QBrush, QPen, QTransform
 from PyQt6.QtCore               import pyqtSignal
+
+from pyqtgraph.graphicsItems    import PColorMeshItem
 
 import logging
 logger = logging.getLogger(__name__)
@@ -643,6 +646,279 @@ class Panelling_Artist (Abstract_Artist_Planform):
 
 
 
+class VLM_Panels_Artist (Abstract_Artist_Planform):
+    """
+    Plot the vlm panels of a VLM_Wing
+        - mode DEFAULT
+    """    
+
+    def __init__ (self, *args, 
+                  opPoint_fn = None, 
+                  show_strak=False, 
+                  **kwargs):
+        
+        self._opPointFn     = opPoint_fn                                    # bound method to get current opPoint
+
+        self._colorBar        = None 
+        self._show_colorBar   = False 
+        self._show_chord_diff = False 
+
+        super().__init__ (*args, **kwargs)
+
+
+    @property
+    def opPoint (self) -> VLM_OpPoint:
+        """ current opPoint to show (e.g. cp value of panel)"""
+        return self._opPointFn()
+
+    @property 
+    def show_colorBar (self) -> bool:
+        """ show color bar for Cp"""
+        return self._show_colorBar
+    
+    def set_show_colorBar (self, aBool: bool):
+        self._show_colorBar = aBool == True 
+        self.refresh()
+
+    @property 
+    def show_chord_diff (self) -> bool:
+        """ show difference between planform and paneled planform """
+        return self._show_chord_diff
+    
+    def set_show_chord_diff (self, aBool: bool):
+        self._show_chord_diff = aBool == True 
+        self.refresh()
+
+
+
+    def _plot (self): 
+        """ plot all panels as a colored mesh"""
+
+        # plot outline of parent with le and te dashed   
+
+        x, le_y, te_y = self.wing.planform.le_te_polyline () 
+
+        pen = pg.mkPen (COLOR_PLANFORM.darker(150), width=1, style=Qt.PenStyle.DashLine)
+        self._plot_dataItem  (x, le_y, pen=pen, antialias=False, zValue=1, name=f"Planform")        
+        self._plot_dataItem  (x, te_y, pen=pen, antialias=False, zValue=1)
+
+        # plot vertical lines indicating to much delta between paneled chord and parent chord 
+
+        if self.show_chord_diff and not self.planform._n_distrib.isTrapezoidal:      # only non-trapezoid make sense 
+            for line in self.wing.planform_paneled.c_diff_lines ():
+
+                x, y = line[0], line[1]
+                color = COLOR_WARNING # .darker(50)
+                color.setAlphaF (0.6)
+                self._plot_dataItem  (x, y, pen=pg.mkPen(color, width=6), name="Chord difference", antialias=False, zValue=1)        
+
+
+        # ! VLM wing coordinates are in [m] - and wing coordinates  
+
+        panels = self.wing.vlm_wing.panels_right
+        nx = self.wing.vlm_wing.nx_panels
+        ny = self.wing.vlm_wing.ny_panels
+
+        if self.show_colorBar:
+            z_panel = self.opPoint.Cp_panels
+            colorMap   = pg.colormap.get ('viridis')
+            edgecolors = pg.mkPen(COLOR_BOX.darker(130))
+        else: 
+            z_panel = np.zeros (len(panels))
+            colorMap   = pg.colormap.get ('CET-C5s')
+            edgecolors = pg.mkPen (COLOR_BOX)
+
+
+        # build 2d mesh array for PColorMeshItem
+        # 
+        #   x,y  (nx+1, ny+1)       Mesh coordinates 
+        #   z    (nx, ny)           Color value
+        #
+        #   (x[i+1, j], y[i+1, j])      (x[i+1, j+1], y[i+1, j+1])
+        #                 +---------+
+        #                 | z[i, j] |
+        #                 +---------+
+        #   (x[i, j], y[i, j])           (x[i, j+1], y[i, j+1])
+
+        x = []
+        y = []
+        z = []
+
+        i = 0
+        for iy in range (ny):
+            y_vals = [panels[i].p0[1]] * (nx+1) 
+            x_vals = []
+            z_vals = [] # np.linspace (0,1, nx)          # testing 
+
+            for ix in range (nx): 
+                x_vals.append (panels[i].p0[0])
+                z_vals.append (z_panel[i])
+                i += 1
+            x_vals.append (panels[i-1].p1[0])
+
+            x.append (x_vals)
+            y.append (y_vals)
+            z.append (z_vals)
+
+        # last station at tip ny + 1
+
+        i = (ny - 1) * nx  
+        y_vals = [panels[i].p3[1]] * (nx+1) 
+        x_vals = []
+        for ix in range (nx): 
+            x_vals.append (panels[i].p3[0])
+            i += 1
+        x_vals.append (panels[i-1].p2[0])
+
+        x.append(x_vals)
+        y.append(y_vals)
+
+        # plot it - change coordinate system 
+
+        y_mm = np.array(x) * 1000
+        x_mm = np.array(y) * 1000
+        z    = np.array(z) 
+
+        p = pg.PColorMeshItem (x_mm,y_mm,z, edgecolors=edgecolors, enableAutoLevels=True, width=1)
+
+        # p.setLevels ((0,3))
+        p.setColorMap (colorMap)
+
+        self._add (p)
+
+        if self.show_colorBar:
+            self._add_colorBar (p)
+        else: 
+            self._remove_colorBar ()
+
+
+        # P13_x = []
+        # P13_y = []
+
+        # ljk_x = []
+        # ljk_y = []
+
+        # pen = pg.mkPen (COLOR_BOX.darker(150), width=1)
+
+        # for panel in panels: 
+
+        #     y, x = panel.polygon_2D () 
+
+        #     self._plot_dataItem  (x, y, pen=pen, antialias=False, zValue=1)   
+
+        #     P13_x.append(panel.offset_P1[1]) 
+        #     P13_x.append(panel.offset_P3[1]) 
+        #     P13_y.append(panel.offset_P1[0]) 
+        #     P13_y.append(panel.offset_P3[0]) 
+
+        #     ljk_x.append(panel.offset_l[1]) 
+        #     ljk_x.append(panel.offset_j[1]) 
+        #     ljk_x.append(panel.offset_k[1]) 
+        #     ljk_y.append(panel.offset_l[0]) 
+        #     ljk_y.append(panel.offset_j[0]) 
+        #     ljk_y.append(panel.offset_k[0]) 
+
+        # pen = pg.mkPen  (color = "red", style=Qt.PenStyle.NoPen)
+        # spen = pg.mkPen (color = "red")
+        # self._plot_dataItem  (P13_x, P13_y, pen=pen, symbol="o", symbolPen=spen, symbolSize=3, zValue=2)   
+
+        # spen = pg.mkPen (color = "yellow")
+        # self._plot_dataItem  (ljk_x, ljk_y, pen=pen, symbol="o", symbolPen=spen, symbolSize=3, zValue=2)   
+
+    def _add_colorBar (self, colorMeshItem):
+        """ add color bar to show colored panels fo Cp"""
+
+        if self._colorBar is None: 
+            self._colorBar = pg.ColorBarItem (width=15, interactive=False, )
+            self._colorBar.setImageItem (colorMeshItem) 
+
+            self._colorBar.getAxis('top').setHeight(50)
+            self._colorBar.getAxis('bottom').setHeight(20)
+            self._colorBar.getAxis('right').setWidth(20)
+            self._colorBar.getAxis('left').setWidth(5)
+
+            self._pi.layout.addItem(self._colorBar, 2, 3)
+            self._pi.layout.setColumnMinimumWidth ( 3, 50)              # ensure width for color keeps reserved
+        else:
+            self._colorBar.setImageItem (colorMeshItem)                 # update colorBar
+
+
+
+    def _remove_colorBar (self):
+
+        if self._colorBar is not None: 
+            self._pi.layout.removeItem(self._colorBar)
+            self._pi.layout.setColumnMinimumWidth ( 3, 50)              # ensure width for color keeps reserved
+            self._colorBar = None           
+
+
+
+class VLM_Result_Artist (Abstract_Artist_Planform):
+    """
+    Plot the vlm panels of a VLM_Wing
+        - mode DEFAULT
+    """    
+
+    def __init__ (self, *args, 
+                  opPoint_fn = None, 
+                  opPoint_var = OpPoint_Var.CL, 
+                  show_strak=False, 
+                  **kwargs):
+        
+        self._opPointFn     = opPoint_fn                                    # bound method to get current opPoint
+        self._opPoint_var   = opPoint_var
+        super().__init__ (*args, **kwargs)
+
+    @property
+    def opPoint (self) -> VLM_OpPoint:
+        """ current opPoint to show (e.g. cp value of panel)"""
+        return self._opPointFn()
+
+
+    @property
+    def opPoint_var (self) -> OpPoint_Var:
+        """ variable to show in diagram"""
+        return self._opPoint_var
+
+    def set_opPoint_var (self, aVal : OpPoint_Var):
+        self._opPoint_var = aVal
+        self.refresh()
+
+
+    def _plot (self): 
+    
+        
+        # get dict with results of aero calculation - values per y position
+
+        y, vars_values  = self.opPoint.aero_results()
+        x_mm  = y * 1000                            # change coordinate system to local [mm]
+
+        # in case of ALPHA we'll plot the three angles 
+
+        if self.opPoint_var in [OpPoint_Var.ALPHA_EFF, OpPoint_Var.ALPHA_IND, OpPoint_Var.ALPHA]:
+            opPoint_vars = [OpPoint_Var.ALPHA_EFF, OpPoint_Var.ALPHA_IND, OpPoint_Var.ALPHA]
+        else: 
+            opPoint_vars = [self.opPoint_var]
+
+        # plot all opPoint variables 
+
+        for opPoint_var in opPoint_vars:
+            var_values = vars_values [opPoint_var]
+
+            if opPoint_var == OpPoint_Var.ALPHA:
+                pen   = pg.mkPen (color="red", width=1,style=Qt.PenStyle.DashLine)
+            elif opPoint_var == OpPoint_Var.ALPHA_IND:
+                pen   = pg.mkPen (color="red", width=1,style=Qt.PenStyle.DotLine)
+            elif opPoint_var == OpPoint_Var.ALPHA:
+                pen   = pg.mkPen (color="red", width=1)
+            else:
+                pen   = pg.mkPen (color="limegreen", width=1)
+
+            label = str(opPoint_var)
+            self._plot_dataItem  (x_mm, var_values, pen=pen, name=label, antialias=False, zValue=1)   
+
+
+
 
 class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
     """
@@ -994,11 +1270,11 @@ class WingSections_Artist (Abstract_Artist_Planform):
             
             new_current = self.wingSections.delete (section) 
             if new_current: 
-                QTimer().singleShot(10, lambda: self.sig_wingSection_selected.emit (section))
+                QTimer().singleShot(10, lambda: self.sig_wingSection_new.emit (new_current))
 
         # alt-click - toggle defines chord  
 
-        if (ev.modifiers() & QtCore.Qt.KeyboardModifier.AltModifier): 
+        elif (ev.modifiers() & QtCore.Qt.KeyboardModifier.AltModifier): 
             
             toggled = section.set_defines_cn (not section.defines_cn) 
             if toggled: 
@@ -1768,8 +2044,8 @@ class Image_Artist (Abstract_Artist_Planform):
         self._imageItem = None
         self._inverted  = False
 
-        self._point_le : self.Movable_Image_Point = None
-        self._point_te : self.Movable_Image_Point = None
+        self._point_le  = None
+        self._point_te  = None
 
         super().__init__ (*args, **kwargs)
 

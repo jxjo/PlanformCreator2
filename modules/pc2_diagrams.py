@@ -23,8 +23,10 @@ from model.xo2_driver       import Worker
 from airfoil_ui_panels      import Panel_Polar_Defs
 
 from pc2_artists            import *
-from pc2_dialogs            import Dialog_Edit_Image
+from pc2_dialogs            import Dialog_Edit_Image, Dialog_Edit_Paneling
 from wing                   import Wing, Planform, Planform_Paneled
+
+from modules.model.VLM_wing import VLM_OpPoint, OpPoint_Var
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -46,10 +48,13 @@ class Diagram_Abstract (Diagram):
     name   = "Abstract"                                     # will be shown in Tabs 
 
     sig_planform_changed        = pyqtSignal()              # airfoil data changed in a diagram 
-    sig_wingSection_new         = pyqtSignal(WingSection)   # new current wing section selected in diagram 
+    sig_wingSection_new         = pyqtSignal(WingSection)   # new wing section inserted in diagram 
     sig_wingSection_changed     = pyqtSignal()              # current wing section changed in diagram 
+    sig_wingSection_selected    = pyqtSignal(WingSection)   # another wing section selected in diagram 
+
     sig_flaps_changed           = pyqtSignal()              # flaps changed in diagram 
     sig_polar_def_changed       = pyqtSignal()              # polar definition changed  
+    sig_panel_def_changed       = pyqtSignal()              # paneling definition changed
 
     sig_export_airfoils         = pyqtSignal()              # export airfoils button pressed  
     sig_export_xflr5            = pyqtSignal()              # export xflr5 button pressed  
@@ -111,7 +116,11 @@ class Diagram_Abstract (Diagram):
 
     def on_polar_set_changed (self):
         """ slot to handle changed polar definitions """
+        # will behandled in subclass which has polars 
+        pass
 
+    def on_paneling_changed (self):
+        """ slot to handle changed polar definitions """
         # will behandled in subclass which has polars 
         pass
 
@@ -423,7 +432,7 @@ class Item_Panelling (Diagram_Item):
     Diagram (Plot) Item to show the panelled planform 
     """
 
-    name        = "Panelling"                               # used for link and section header 
+    name        = "View Panelling"                               # used for link and section header 
     title       = "Paneled Planform"                 
     subtitle    = ""                                 
 
@@ -433,7 +442,6 @@ class Item_Panelling (Diagram_Item):
         self._wingSection_fn = wingSection_fn               # bound method to get currrent wing section
         super().__init__(*args, **kwargs)
 
-        # set margins (inset) of self 
         self.setContentsMargins ( 0,50,0,20)
 
 
@@ -442,6 +450,9 @@ class Item_Panelling (Diagram_Item):
 
     def planform (self) -> Planform:
         return self.wing()._planform
+
+    def planform_paneled (self) -> Planform_Paneled:
+        return self.wing().planform_paneled
 
 
     @override
@@ -462,9 +473,263 @@ class Item_Panelling (Diagram_Item):
         self.viewBox.setAspectLocked()
         self.viewBox.invertY(True)
 
-        self.showGrid(x=False, y=False)
+        self.showGrid(x=True, y=True)
         self.showAxis('left', show=False)
         self.showAxis('bottom', show=True)
+
+
+    @property
+    def section_panel (self) -> Edit_Panel:
+        """ return section panel within view panel"""
+
+        if self._section_panel is None:   
+
+            l = QGridLayout()   
+            r,c = 0, 0 
+            Button     (l,r,c, text="Paneling Options", width=100, colSpan=3,
+                        set=self._edit_paneling, toolTip="Define / Edit paneling options")
+
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height =80,  
+                                              switchable=True, on_switched=self.setVisible)
+            
+        return self._section_panel 
+
+
+    def _edit_paneling (self):
+        """ dialog to edit paneling paramters  """
+
+        # do an initial calculation of panels to get the chord difference value 
+        self.planform_paneled().c_diff_lines()
+
+        dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled)  
+
+        myParent : Diagram_Abstract = self._parent
+        dialog.sig_paneling_changed.connect (self.refresh)
+        dialog.sig_paneling_changed.connect (myParent.sig_panel_def_changed.emit)
+
+        dialog.exec()   
+
+
+
+
+class Item_VLM_Panels (Diagram_Item):
+    """ 
+    Diagram (Plot) Item to show the VLM panels of the planform  
+    """
+
+    name        = "View Panels"                               # used for link and section header 
+    title       = "Panels"                 
+    subtitle    = ""                                 
+
+
+    def __init__(self, *args, wingSection_fn = None, opPoint_fn = None, **kwargs):
+
+        self._wingSection_fn = wingSection_fn               # bound method to get currrent wing section
+        self._opPoint_fn = opPoint_fn                       # bound method to get currrent opPoint
+
+        super().__init__(*args, **kwargs)
+
+        # set margins (inset) of self - there is an extra colum for color bar!
+        self.setContentsMargins ( 0,20,10,20)
+
+
+
+    def wing (self) -> Wing: 
+        return self._getter()
+
+    def planform (self) -> Planform:
+        return self.wing()._planform
+    
+    def opPoint (self) -> VLM_OpPoint:
+        return self._opPoint_fn()
+
+
+    @override
+    def setup_artists (self):
+        """ create and setup the artists of self"""
+        
+        # self._add_artist (Airfoil_Name_Artist   (self, self.planform, show_legend=False))
+        self._add_artist (VLM_Panels_Artist     (self, self.planform, opPoint_fn=self.opPoint, show_legend=False))
+        self._add_artist (WingSections_Artist   (self, self.planform, show=False, show_legend=False,
+                                                        show_mouse_helper=False, wingSection_fn=self._wingSection_fn))  
+
+    @override
+    def setup_viewRange (self):
+        """ define view range of this plotItem"""
+
+        self.layout.setColumnMinimumWidth ( 3, 50)              # ensure width for color keeps reserved
+
+        self.viewBox.autoRange (padding=0.05)                   # first ensure best range x,y 
+        self.viewBox.setAspectLocked()
+        self.viewBox.invertY(True)
+
+        self.showGrid(x=True, y=True)
+        self.showAxis('left', show=True)
+        self.showAxis('bottom', show=True)
+
+
+
+
+    @property
+    def section_panel (self) -> Edit_Panel:
+        """ return section panel within view panel"""
+
+        if self._section_panel is None:   
+
+            l = QGridLayout()   
+            r,c = 0, 0 
+            Button     (l,r,c, text="Paneling Options", width=130, colSpan=3,
+                        set=self._edit_paneling, toolTip="Define / Edit paneling options")
+
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height =80,
+                                              switched_on=self._show,  
+                                              switchable=True, on_switched=self.setVisible)
+            
+        return self._section_panel 
+
+
+    def _edit_paneling (self):
+        """ dialog to edit paneling paramters  """
+
+        # do an initial calculation of panels to get the chord difference value 
+        self.wing().planform_paneled.c_diff_lines()
+
+        # show difference between original and paneled planform before dialog
+        panels_artist : VLM_Panels_Artist = self._get_artist(VLM_Panels_Artist)[0]
+        panels_artist.set_show_chord_diff (True)
+
+        dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled)  
+
+        myParent : Diagram_Abstract = self._parent
+        dialog.sig_paneling_changed.connect (myParent.sig_panel_def_changed.emit)
+
+        # refresh will be done via signal from app
+
+        dialog.exec()   
+
+        panels_artist.set_show_chord_diff (False)
+
+
+
+class Item_VLM_Result (Diagram_Item):
+    """ 
+    Diagram (Plot) Item to show result of aero calculation
+    """
+
+    name        = "View VLM Results"                               # used for link and section header 
+    title       = "VLM Results"                 
+    subtitle    = ""                                 
+
+    def __init__(self, *args, wingSection_fn = None, opPoint_fn = None, **kwargs):
+
+        self._wingSection_fn = wingSection_fn               # bound method to get currrent wing section
+        self._opPoint_fn = opPoint_fn                       # bound method to get currrent opPoint
+        self._opPoint_var = OpPoint_Var.CL
+
+        super().__init__(*args, **kwargs)
+
+        self.setContentsMargins ( 0,50,50,20)
+
+
+    def wing (self) -> Wing: 
+        return self._getter()
+
+    def planform (self) -> Planform:
+        return self.wing()._planform
+
+    def opPoint (self) -> VLM_OpPoint:
+        return self._opPoint_fn()
+
+
+    @override
+    def refresh(self): 
+        """ refresh my artits and section panel """
+
+        # hack - EditPanel has problems with refresh if item/section panel is hidden
+        if self.isVisible (): 
+            super().refresh()
+
+
+    @override
+    def setup_artists (self):
+        """ create and setup the artists of self"""
+        
+        self._add_artist (VLM_Result_Artist     (self, self.planform, opPoint_fn=self.opPoint, show_legend=True))
+                
+
+    @override
+    def setup_viewRange (self):
+        """ define view range of this plotItem"""
+
+        self._set_yRange ()
+
+        self.showGrid(x=True, y=True)
+        self.showAxis('left', show=True)
+        self.showAxis('bottom', show=True)
+
+
+    def _set_yRange (self): 
+        """ set y range depending on var """
+
+        # get y data range and adjust new  
+        rect = self.viewBox.childrenBoundingRect()
+        max_val, min_val = rect.top(), rect.bottom() 
+        max_val, min_val = (max_val, min_val) if max_val > min_val else (min_val, max_val)
+
+        if self.opPoint_var == OpPoint_Var.ALPHA:
+            range_max = 10 if max_val < 10 else (int (max_val/5) + 1) * 5
+            range_min = 0  if min_val >= 0 else (int (min_val/5) - 1) * 5
+        if self.opPoint_var == OpPoint_Var.CL:
+            range_max = 1  if max_val < 1  else (int (max_val/0.5) + 1) * 0.5
+            range_min = 0  if min_val >= 0 else (int (min_val/0.5) - 1) * 0.5
+        else:
+            range_min = 0.0 if min_val > 0 else min_val
+            range_max = max_val * 1.2 if max_val > 0 else 0
+
+        self.viewBox.setYRange (range_min, range_max)
+
+
+    @property
+    def opPoint_var (self) -> OpPoint_Var:
+        """ variable to show in diagram"""
+        return self._opPoint_var
+
+    def set_opPoint_var (self, aVal : OpPoint_Var):
+        self._opPoint_var = aVal
+
+        artist : VLM_Result_Artist = self._get_artist (VLM_Result_Artist)[0]
+        artist.set_opPoint_var (aVal)
+
+        self._set_yRange ()
+
+    @property
+    def opPoint_var_list (self) -> OpPoint_Var:
+        """ variable to show in diagram"""
+        return [OpPoint_Var.LIFT, OpPoint_Var.CL, OpPoint_Var.ALPHA]
+
+
+    @property
+    def section_panel (self) -> Edit_Panel:
+        """ return section panel within view panel"""
+
+        if self._section_panel is None:   
+
+            l = QGridLayout()   
+            r, c = 0, 0  
+            Label       (l,r,c,   width=60, get="Variable")
+
+            ComboBox    (l,r,c+1, width=60, obj=self, prop=Item_VLM_Result.opPoint_var, 
+                         options=OpPoint_Var.values)
+
+            SpaceR      (l,r)
+            l.setColumnMinimumWidth (0,60)
+            l.setColumnStretch (2,2)
+
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height =80,
+                                              switched_on=self._show,  
+                                              switchable=True, on_switched=self.setVisible)
+            
+        return self._section_panel 
 
 
 
@@ -1120,10 +1385,10 @@ class Diagram_Planform (Diagram_Abstract):
             artist : Abstract_Artist_Planform
             for artist in item._artists:
                 artist.sig_planform_changed.connect     (self._on_planform_changed) 
-                artist.sig_wingSection_changed.connect  (self._on_wingSection_changed) 
                 artist.sig_flaps_changed.connect        (self._on_flaps_changed) 
+                artist.sig_wingSection_changed.connect  (self._on_wingSection_changed) 
                 artist.sig_wingSection_new.connect      (self.sig_wingSection_new.emit) 
-                artist.sig_wingSection_selected.connect (self.sig_wingSection_new.emit) 
+                artist.sig_wingSection_selected.connect (self.sig_wingSection_selected.emit) 
 
 
     # --- view section panels ---------------------------------------------------
@@ -1376,7 +1641,7 @@ class Diagram_Making_Of (Diagram_Abstract):
                 artist.sig_wingSection_changed.connect  (self._on_wingSection_changed) 
                 artist.sig_flaps_changed.connect        (self._on_flaps_changed) 
                 artist.sig_wingSection_new.connect      (self.sig_wingSection_new.emit) 
-                artist.sig_wingSection_selected.connect (self.sig_wingSection_new.emit) 
+                artist.sig_wingSection_selected.connect (self.sig_wingSection_selected.emit) 
 
 
     # --- view section panels ---------------------------------------------------
@@ -1487,7 +1752,7 @@ class Diagram_Panels (Diagram_Abstract):
             for artist in item._artists:
                 artist.sig_wingSection_changed.connect  (self._on_wingSection_changed) 
                 artist.sig_wingSection_new.connect      (self.sig_wingSection_new.emit) 
-                artist.sig_wingSection_selected.connect (self.sig_wingSection_new.emit) 
+                artist.sig_wingSection_selected.connect (self.sig_wingSection_selected.emit) 
 
 
     # --- view section panels ---------------------------------------------------
@@ -1510,9 +1775,6 @@ class Diagram_Panels (Diagram_Abstract):
         layout.addWidget (self.export_panel)
 
 
-    def planform_paneled (self) -> Planform_Paneled:
-        return self.wing().planform_paneled
-
     @property
     def airfoil_name_artist (self) -> Airfoil_Name_Artist:
         return self._get_artist (Airfoil_Name_Artist) [0]
@@ -1528,117 +1790,6 @@ class Diagram_Panels (Diagram_Abstract):
     def set_use_nick_name (self, aBool : bool):
         self.wing().planform_paneled.set_use_nick_name(aBool == True)
         self.airfoil_name_artist.set_use_nick_name (aBool)
-
-
-    def _style_width_min (self):
-        """ widget style of with_min dependant of with_min was applied"""
-        if self.planform_paneled().is_width_min_applied:
-            return style.HINT
-        else: 
-            return style.NORMAL
-
-    def _style_cn_tip_min (self):
-        """ widget style of cn_tip_min dependant of cn_tip_min was applied"""
-        if self.planform_paneled().is_cn_tip_min_applied:
-            return style.HINT
-        else: 
-            return style.NORMAL
-
-
-    def _style_cn_diff_max (self):
-        """ widget style of cn_diff_max dependant if actual chord difference exceeds value """
-        if self.planform_paneled().is_cn_diff_exceeded:
-            return style.WARNING
-        else: 
-            return style.NORMAL
-
-    def _optimize_cn_diff (self):
-        """ optimize sections until cn_diff_max is reached"""
-
-        self.planform_paneled().optimize_cn_diff()
-        self.refresh()
-
-        self.sig_planform_changed.emit()            # new sections could have been created
-
-
-    def _on_field_changed (self, *_):
-        """ slot for widget changes"""
-        self.refresh (also_viewRange=False)         # have 'soft' refresh when settings are changed
-
-
-    @property
-    def section_panel (self) -> Edit_Panel:
-        """ return section panel within view panel"""
-
-        if self._section_panel is None:   
-
-            # do an initial calculation of panels to get the chord difference value 
-            self.planform_paneled().c_diff_lines()
-
-            l = QGridLayout()   
-            r,c = 0, 0 
-            FieldI      (l,r,c, width=70, lab="No of X-Panels", step=1, lim=(4, 50),
-                            obj=self.planform_paneled, prop=Planform_Paneled.wx_panels)
-            r += 1
-            Label       (l,r,c, get="X-Distribution")
-            ComboBox    (l,r,c+1, width=70,
-                            obj=self.planform_paneled, prop=Planform_Paneled.wx_dist,
-                            options=self.planform_paneled().wx_distribution_fns_names)
-            r += 1
-            SpaceR      (l,r,stretch=0)
-            r += 1
-            FieldI      (l,r,c, width=70, lab="No of Y-Panels", step=1, lim=(2, 20),
-                            obj=self.planform_paneled, prop=Planform_Paneled.wy_panels)
-            r += 1
-            Label       (l,r,c, get="Y-Distribution")
-            ComboBox    (l,r,c+1, width=70,
-                            obj=self.planform_paneled, prop=Planform_Paneled.wy_dist,
-                            options=self.planform_paneled().wy_distribution_fns_names)
-
-            # optimization settings 
-
-            r += 1
-            Label       (l,r,c, height=50, colSpan=3, get="Optimize Panelling", fontSize=size.HEADER_SMALL)            
-            r += 1
-            FieldF      (l,r,c, width=70, lab="Min Panel width", step=0.5, lim=(0.5, 10), dec=1, unit="%", 
-                            obj=self.planform_paneled, prop=Planform_Paneled.width_min,
-                            style=self._style_width_min)
-            r += 1
-            Label       (l,r,c+1, get="X-Panels are reduced", height=20,
-                            style=style.COMMENT, hide=lambda: not self.planform_paneled().is_width_min_applied)
-            r += 1
-            FieldF      (l,r,c, width=70, lab="Min Tip chord", step=1, lim=(1, 50), dec=1, unit="%", 
-                            obj=self.planform_paneled, prop=Planform_Paneled.cn_tip_min,
-                            style=self._style_cn_tip_min)
-            r += 1
-            Label       (l,r,c+1, get="Sections are reduced", height=20,
-                            style=style.COMMENT, hide=lambda: not self.planform_paneled().is_cn_tip_min_applied)
-            r += 1
-            FieldF      (l,r,c, width=70, lab="Max Chord diff", step=1, lim=(0.5, 50), dec=0.5, unit="%", 
-                            obj=self.planform_paneled, prop=Planform_Paneled.cn_diff_max, 
-                            style=self._style_cn_diff_max)
-            r += 1
-            Label       (l,r,c+1, get="Currently exceeded", height=20,
-                            style=style.COMMENT, hide=lambda: not self.planform_paneled().is_cn_diff_exceeded)
-            Label       (l,r,c+1, get=lambda: f"Currently {self.planform_paneled().cn_diff:.1%}", height=20,
-                            style=style.COMMENT, hide=lambda: self.planform_paneled().is_cn_diff_exceeded)
-            r += 1
-            Button      (l,r,c+1, text="Optimize", set= self._optimize_cn_diff,
-                            hide=lambda: not self.planform_paneled().is_cn_diff_exceeded,
-                            toolTip="Optimize panelling by inserting new sections")
-            r += 1
-            SpaceR      (l,r)
-            l.setColumnMinimumWidth (0,80)
-            l.setColumnStretch (2,2)
-
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height =(360,None),  
-                                              switchable=False)
-            
-            w : Widget
-            for w in self._section_panel.widgets:
-                w.sig_changed.connect (self._on_field_changed)
-
-        return self._section_panel 
 
 
     @property
@@ -1665,6 +1816,7 @@ class Diagram_Panels (Diagram_Abstract):
                                               on_switched=self.set_show_airfoil_names)
 
         return self._airfoil_panel 
+
 
 
     @property 
@@ -2032,6 +2184,301 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
 
 
 
+class Diagram_Wing_Aero (Diagram_Abstract):
+    """    
+    Diagram show/plot VLM aero results 
+    """
+
+    name   = "Wing Aero"                                    # will be shown in Tabs 
+
+    def __init__(self, *args, **kwargs):
+
+        self._airfoil_panel      = None         
+        self._export_panel       = None                     # export to xflr5 ...
+        self._general_panel      = None                     # panel with general settings  
+        self._show_wingSections  = False
+
+        self._vtas               = 20.0                     # true air speed
+        self._alpha              = 2.0
+
+        super().__init__(*args, **kwargs)
+
+        # set spacing between the two items
+        self.graph_layout.setContentsMargins (20,10,20,10)  # default margins
+        self.graph_layout.setVerticalSpacing (10)
+
+
+    def create_diagram_items (self):
+        """ create all plot Items and add them to the layout """
+
+        i = Item_VLM_Panels (self, getter=self.wing, show=True, 
+                             wingSection_fn = self._wingSection_fn, opPoint_fn=self.opPoint)
+        self._add_item (i, 0, 0)
+
+        i = Item_Chord (self, getter=self.wing, wingSection_fn = self._wingSection_fn, show=False)
+        self._add_item (i, 1, 0)
+        i.viewBox.setXLink (Item_VLM_Panels.name)
+
+        i = Item_VLM_Result (self, getter=self.wing, show=False,
+                             wingSection_fn = self._wingSection_fn, opPoint_fn=self.opPoint)
+        self._add_item (i, 2, 0)
+        i.viewBox.setXLink (Item_VLM_Panels.name)
+
+        # generic connect to artist changed signals 
+
+        for item in self.diagram_items:
+            artist : Abstract_Artist_Planform
+            for artist in item._artists:
+                artist.sig_planform_changed.connect     (self._on_planform_changed) 
+                artist.sig_wingSection_changed.connect  (self._on_wingSection_changed) 
+                artist.sig_wingSection_new.connect      (self.sig_wingSection_new.emit) 
+                artist.sig_wingSection_selected.connect (self.sig_wingSection_selected.emit) 
+
+
+    def on_paneling_changed (self):
+        """ slot to handle changed polar definitions """
+
+        logger.debug (f"{str(self)} on paneling changed")
+
+        for item in self._get_items ([Item_VLM_Panels, Item_VLM_Result]):
+            item.refresh ()
+
+
+    @override
+    def on_wingSection_selected (self):
+        """ slot to handle new selected wing section """
+        # overridden to refresh only wingSection artist 
+        for artist in self._get_artist (WingSections_Artist):
+            artist.refresh ()
+
+
+    # --- view section panels ---------------------------------------------------
+
+    @override
+    def create_view_panel (self):
+        """ 
+        creates a view panel to the left of at least one diagram item 
+        has a section_panel
+        """
+        # override to extra position vlm panel 
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins (QMargins(0, 0, 0, 0)) 
+
+        for item in self.diagram_items:                                 # paneling panel, chord distribution
+            if item.section_panel is not None: 
+                layout.addWidget (item.section_panel,stretch=1)
+
+        layout.insertWidget (0, self.general_panel, stretch=0)          # common settings
+        layout.insertWidget (layout.count()-1, self.section_panel)      # vlm aero panel         
+        layout.addStretch (1)
+        layout.addWidget (self.export_panel)                            # export xflr5 panel 
+
+        self._viewPanel = Container_Panel()
+        self._viewPanel.setMinimumWidth(180)
+        self._viewPanel.setMaximumWidth(250)
+        self._viewPanel.setLayout (layout)
+
+
+    def planform_paneled (self) -> Planform_Paneled:
+        return self.wing().planform_paneled
+
+    @property
+    def show_wingSections (self) -> bool: 
+        return self._show_wingSections
+    
+    def set_show_wingSections (self, aBool : bool): 
+        self._show_wingSections = aBool == True
+        self._show_artist (WingSections_Artist, show=aBool)
+
+    @property
+    def show_mouse_helper (self) -> bool:
+        artist = self._get_artist (WingSections_Artist)[0]
+        return artist.show_mouse_helper
+    
+    def set_show_mouse_helper (self, aBool : bool):
+        artist = self._get_artist (WingSections_Artist)[0]
+        artist.set_show_mouse_helper(aBool)
+        artist.refresh ()
+
+
+    @property
+    def airfoil_name_artist (self) -> Airfoil_Name_Artist:
+        return self._get_artist (Airfoil_Name_Artist) [0]
+
+    def set_show_airfoil_names (self, aBool : bool):
+        self.airfoil_name_artist.set_show (aBool)
+ 
+
+    @property
+    def use_nick_name (self) -> bool:
+        """ use nick name in diagram and export"""
+        return self.wing().planform_paneled.use_nick_name
+    def set_use_nick_name (self, aBool : bool):
+        self.wing().planform_paneled.set_use_nick_name(aBool == True)
+        self.airfoil_name_artist.set_use_nick_name (aBool)
+
+    def _on_show_vlm (self, aBool):
+        """ slot - user switched VLM analysis"""
+
+        item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
+        item.section_panel.setVisible (aBool)
+
+        if aBool:
+            if item.section_panel.switched_on:
+                item.show()
+        else:  
+            item.hide()
+        
+        # item.section_panel.set_switched_on (aBool)
+
+
+    @property
+    def vtas (self) -> float:
+        """ true air speed"""
+        return self._vtas
+
+    def set_vtas (self, aVal : float):
+        self._vtas = clip (aVal, 1, 500)
+        self.refresh()
+
+
+    @property
+    def alpha (self) -> float:
+        """ true air speed"""
+        return self._alpha
+
+    def set_alpha (self, aVal : float):
+        self._alpha = clip (aVal, -20, 20)
+        self.refresh ()
+
+    def opPoint (self) -> VLM_OpPoint:
+        """ current selected opPoint based on vta and aplha"""
+
+        return self.wing().vlm_wing.polar_at (self.vtas).opPoint_at (self.alpha)
+
+    @property 
+    def show_colorBar (self) -> bool:
+        """ show color bar for Cp"""
+        artist : VLM_Panels_Artist = self._get_artist (VLM_Panels_Artist)[0]
+        return artist.show_colorBar
+    
+    def set_show_colorBar (self, aBool: bool):
+        artist : VLM_Panels_Artist = self._get_artist (VLM_Panels_Artist)[0]
+        return artist.set_show_colorBar (aBool)
+
+
+    @property 
+    def general_panel (self) -> Edit_Panel | None:
+        """ additional section panel with commmon settings"""
+
+        if self._general_panel is None:
+
+            l = QGridLayout()
+            r,c = 0, 0
+            CheckBox (l,r,c, text="Show mouse helper", 
+                      get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
+            r += 1
+            CheckBox (l,r,c, text="Wing Sections", 
+                      get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
+            l.setColumnStretch (0,2)
+
+            self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
+                                              switchable=False, switched_on=True)
+        return self._general_panel 
+
+
+    @property
+    def section_panel (self) -> Edit_Panel:
+        """ return section panel within view panel"""
+
+        if self._section_panel is None:   
+
+            l = QGridLayout()
+            r,c = 0, 0
+            FieldF   (l,r,c, lab="Speed", lim=(1,500), step=0.5, width=80, unit="m/s",
+                        obj=self, prop=Diagram_Wing_Aero.vtas) 
+            r +=1
+            FieldF   (l,r,c, lab="Alpha", lim=(-20,20), step=0.5, width=80, unit="°",
+                        obj=self, prop=Diagram_Wing_Aero.alpha) 
+            r +=1
+            Slider   (l,r,c+1, lim=(-10,20), step=0.5, width=80, dec=0, 
+                        obj=self, prop=Diagram_Wing_Aero.alpha) 
+            r +=1
+            SpaceR (l,r)
+            r += 1
+            CheckBox   (l,r,c, text="Show Cp in panels", colSpan=2,
+                            obj=self, prop=Diagram_Wing_Aero.show_colorBar)
+            r +=1
+            SpaceR (l,r)
+            l.setColumnStretch (2,2)
+            l.setColumnMinimumWidth (0,60)
+
+            self._section_panel = Edit_Panel (title="Aero Analysis", layout=l, height=160,
+                                              switchable=True, hide_switched=True, switched_on=True, 
+                                              on_switched=self._on_show_vlm)
+
+        return self._section_panel 
+
+
+    @property
+    def airfoil_panel (self) -> Edit_Panel:
+        """ return section panel within view panel"""
+
+        if self._airfoil_panel is None:
+        
+            l = QGridLayout()
+            r,c = 0, 0
+            CheckBox   (l,r,c, colSpan=2, text="Use airfoil nick name", 
+                        get=self.use_nick_name,
+                        set=self.set_use_nick_name) 
+            r +=1
+            CheckBox   (l,r,c, colSpan=2, text="Show straked airfoils", 
+                        get=self.airfoil_name_artist.show_strak,
+                        set=self.airfoil_name_artist.set_show_strak,) 
+            r +=1
+            SpaceR (l,r)
+            l.setColumnStretch (2,2)
+
+            self._airfoil_panel = Edit_Panel (title="Airfoils", layout=l, height=100,
+                                              switchable=True, hide_switched=True, switched_on=True, 
+                                              on_switched=self.set_show_airfoil_names)
+
+        return self._airfoil_panel 
+
+
+
+    @property 
+    def export_panel (self) -> Edit_Panel | None:
+        """ additional section panel with export buttons"""
+
+        if self._export_panel is None:
+
+            l = QGridLayout()
+            r,c = 0, 1
+            Button      (l,r,c, text="Export Xflr5", width=100, set=self.sig_export_xflr5.emit)
+            r += 1
+            SpaceR      (l,r,2,0)
+            r += 1
+            Button      (l,r,c, text="Export FLZ", width=100, set=self.sig_export_flz.emit)
+            r += 1
+            SpaceR      (l,r,2,0)
+            r += 1
+            Button      (l,r,c, text="Launch FLZ", width=100, set=self.sig_launch_flz.emit,
+                                hide= not os.name == 'nt')                                  # only Windows
+            r += 1
+            SpaceR      (l,r,10,1)
+
+            l.setColumnMinimumWidth (0,10)
+            l.setColumnStretch (2,2)
+
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(100,None),
+                                              switchable=False, switched_on=True)
+        return self._export_panel 
+
+
+
+# -------- Diagram Items -------------------------------------------------
 
 
 class Item_Making_Of_Abstract (Diagram_Item):

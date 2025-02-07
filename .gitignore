@@ -8,6 +8,7 @@ releases
 T*.txt
 tmp*.inp
 test/*
+*.xlsx
 
 
 # Byte-compiled / optimized / DLL files

@@ -38,6 +38,8 @@ from model.airfoil          import Airfoil, GEO_BASIC, GEO_SPLINE
 from model.polar_set        import Polar_Definition, Polar_Set
 from model.airfoil_examples import Root_Example, Tip_Example
 
+from modules.model.VLM_wing         import VLM_Wing
+
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -110,6 +112,10 @@ class Wing:
         self._export_xflr5          = None 
         self._export_flz            = None 
         self._export_dxf            = None 
+
+        # wing for VLM aero calculation    
+
+        self._vlm_wing              = None
 
         # miscellaneous parms
 
@@ -196,6 +202,9 @@ class Wing:
         chord_style = fromDict (dataDict, "planformType", N_Distrib_Bezier.name)
 
         chord_dict = {}
+
+        if chord_style == "trapezoidal":
+            chord_style = N_Distrib_Trapezoid.name
 
         toDict (chord_dict, "chord_style",   chord_style)
 
@@ -390,7 +399,17 @@ class Wing:
             self._planform_ref_pc2 = Wing (self._reference_pc2_file).planform 
 
         return self._planform_ref_pc2
-    
+
+
+    @property
+    def vlm_wing (self) -> VLM_Wing:
+        """ wing for VLM aero calculation """
+
+        if self._vlm_wing is None: 
+            self._vlm_wing = VLM_Wing (self.planform_paneled)
+        return self._vlm_wing
+
+
     @property
     def background_image (self) -> 'Image_Definition':
         """ returns the image definition of the background image"""
@@ -1134,7 +1153,6 @@ class N_Distrib_Trapezoid (N_Distrib_Abstract):
 
     name            = "Trapezoid"
     isTrapezoidal   = True
-    style           = "trapezoidal"
 
     description     = "Chord defined by its wing sections,\n" + \
                       "which have the attribut 'Defines planform'" 
@@ -1241,33 +1259,43 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         self._parent_planform    = parent_planform
         self._cn_tip_min  = cn_tip_min
 
-        self._is_cn_tip_min_applied = False                                     # flag for user info 
-
         super().__init__ ()
 
 
     @property
-    def cn_tip_min (self) -> float: 
+    def cn_tip_min (self) -> float | None: 
         """ the minimum normed chord at tip (will cut the tip)""" 
 
-        # wing sections can change during lifetime - so dynamic check 
-        cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
-        cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
-        self._cn_tip_min = clip (self._cn_tip_min, cn_min, cn_max)
-
-        return round (self._cn_tip_min,3)                                  # calc of cn may have numerical issues 
+        if self._cn_tip_min is not None: 
+            # wing sections can change during lifetime - so dynamic check 
+            cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
+            cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
+            self._cn_tip_min = clip (self._cn_tip_min, cn_min, cn_max)
+            return round (self._cn_tip_min,3)                                  # calc of cn may have numerical issues 
+        else: 
+            return None 
     
-    def set_cn_tip_min (self, aVal):
+    def set_cn_tip_min (self, aVal : float | bool | None):
         """ set minimum - it can't be smaller than parent tip section cn"""
 
-        cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
-        cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
-        self._cn_tip_min = clip (aVal, cn_min, cn_max)
+        if isinstance (aVal, bool):                                            # switch on/off
+            aVal = 0 if aVal else None
+
+        if aVal is not None:
+            cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
+            cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
+            self._cn_tip_min = clip (aVal, cn_min, cn_max)
+        else: 
+            self._cn_tip_min = None
 
     @property
     def is_cn_tip_min_applied (self) -> bool:
         """ True if sections were reduced due to tip_min"""
-        return self._is_cn_tip_min_applied
+        section : WingSection
+        for section in self._parent_planform.wingSections:
+            if self.cn_tip_min and section.cn < self.cn_tip_min :
+                return True
+        return False
 
 
     def polyline (self) -> Polyline:
@@ -1280,19 +1308,14 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
             cn: normalized chord
         """
 
-        self._is_cn_tip_min_applied = False
-        cn_tip_min = self.cn_tip_min
-
         # retrieve xn, cn of sections from parent chord 
 
         xn, cn = [], []
         section : WingSection
         for section in self._parent_planform.wingSections:
-            if cn_tip_min is None or section.cn >= cn_tip_min :
+            if self.cn_tip_min is None or section.cn >= self.cn_tip_min :
                 xn.append(section.xn)
                 cn.append(section.cn)
-            else:
-                self._is_cn_tip_min_applied = True 
 
         return np.round(xn,10), np.round(cn,10) 
 
@@ -1712,7 +1735,11 @@ class WingSection :
 
     def index (self) -> int:
         """ index of self with wingSections"""
-        return self._planform.wingSections.index (self)  
+        try: 
+            index = self._planform.wingSections.index (self)
+        except: 
+            index = 1
+        return index  
 
 
     def xn_limits (self) -> tuple:
@@ -1758,7 +1785,7 @@ class WingSection :
         relative hinge chord position cn of self
             - if no hinge positionen is defined, the calculated value from hingle line is taken
         """
-        if self.defines_hinge:
+        if self.defines_hinge and not self.hinge_equal_ref_line:
             return self._hinge_cn
         else: 
             # calculate hinge position from flap depth 
@@ -2026,6 +2053,7 @@ class WingSections (list):
         """
 
         strak_dir = self._planform._wing.wing_tmp_dir
+        polar_defs = self._planform.wing.polar_definitions
 
         if not os.path.isdir (strak_dir):
             os.mkdir(strak_dir)
@@ -2056,6 +2084,8 @@ class WingSections (list):
                 airfoil.set_fileName (fileName)
                 airfoil.set_pathName (strak_dir, noCheck=True) 
                 airfoil.set_isModified (False)       # avoid save and polar generation if file alreday exists
+
+                airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
 
                 self._strak_done = True 
 
@@ -3497,9 +3527,9 @@ class Planform_Paneled (Planform):
         self._wx_panels      = fromDict (dataDict, "wx_panels", 8)
         self._wx_dist        = fromDict (dataDict, "wx_distribution", "uniform")
 
-        self._width_min      = fromDict (dataDict, "width_min", 0.02)                # min panel width 1%
-        self.set_cn_tip_min   (fromDict (dataDict, "cn_tip_min", 0.05))              # min tip chord 10%
-        self._cn_diff_max    = fromDict (dataDict, "cn_diff_max", 0.02)              # max cn difference 5%
+        self._width_min      = fromDict (dataDict, "width_min", None)                # min panel width 1%
+        self.set_cn_tip_min   (fromDict (dataDict, "cn_tip_min",None))              # min tip chord 10%
+        self._cn_diff_max    = fromDict (dataDict, "cn_diff_max", None)              # max cn difference 5%
 
         self._use_nick_name  = fromDict (dataDict, "use_nick_name", False)           # use airfoil nick name for export%
 
@@ -3526,9 +3556,10 @@ class Planform_Paneled (Planform):
         toDict (d, "wy_distribution",   self._wy_dist)
         toDict (d, "wx_panels",         self._wx_panels)
         toDict (d, "wx_distribution",   self._wx_dist)
-        toDict (d, "width_min",         self._width_min)
-        toDict (d, "cn_tip_min",        self.cn_tip_min)
-        toDict (d, "cn_diff_max",       self.cn_diff_max)
+
+        toDict (d, "width_min",         self._width_min)                    # use instance variables to allow NOne      
+        toDict (d, "cn_tip_min",        self._n_distrib.cn_tip_min)
+        toDict (d, "cn_diff_max",       self._cn_diff_max)
         return d
     
 
@@ -3582,20 +3613,43 @@ class Planform_Paneled (Planform):
             self._wy_dist = val
 
     @property
-    def width_min (self):              return self._width_min
-    def set_width_min (self, val):     self._width_min = val
+    def width_min (self):  
+        """ minimum panel width - None or e.g. 0.01"""            
+        return self._width_min if self._width_min is not None else 0.0
+    
+    def set_width_min (self, val : float | bool | None):   
+        if isinstance (val, bool):
+            val = 0.01 if val else None
+        if val is not None: 
+            val = clip (val, 0.001, 0.2)
+        else: 
+            val = None
+        self._width_min = val
 
-    @property
+
     def is_width_min_applied (self) -> bool:
         """ True if x_panels were reduced due to width_min"""
+        # ensure a recalc spanwise panels to ensure value
+        self._get_x_stations ()
         return self._is_width_min_applied
 
     @property
     def cn_diff (self):                 return self._cn_diff
 
     @property
-    def cn_diff_max (self):             return self._cn_diff_max
-    def set_cn_diff_max (self, val):    self._cn_diff_max = val
+    def cn_diff_max (self):
+        """ max deviation of chord of paneled ot original planform""" 
+        return self._cn_diff_max if self._cn_diff_max is not None else 0.0
+
+    def set_cn_diff_max (self, val: float | bool | None):    
+        if isinstance (val, bool):
+            val = 0.01 if val else None
+        if val is not None: 
+            val = clip (val, 0.0, 0.2)
+        else: 
+            val = None
+        self._cn_diff_max = val
+
 
     @property
     def is_cn_diff_exceeded (self) -> bool:
@@ -3604,7 +3658,7 @@ class Planform_Paneled (Planform):
 
 
     @property
-    def cn_tip_min (self) -> float:             
+    def cn_tip_min (self) -> float | None:             
         """ minimum chord at tip when generating panels"""
         return self._n_distrib.cn_tip_min
     
@@ -3678,7 +3732,7 @@ class Planform_Paneled (Planform):
 
             # check and correct for min panel width 
             wy_panels = self.wy_panels
-            while np.min (np.diff (xn_sec_stations)) < self._width_min and wy_panels > 2:
+            while np.min (np.diff (xn_sec_stations)) < self.width_min and wy_panels > 2:
                 wy_panels -= 1
                 xn_rel_stations_tmp = self._xn_rel_stations(wy_panels)
                 xn_sec_stations     =  xn_rel_stations_tmp [1:] * section_width 
