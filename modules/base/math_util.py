@@ -244,7 +244,7 @@ class JPoint:
 
 #------------ linear interpolation -----------------------------------
 
-def interpolate(x1, x2, y1, y2, x):
+def interpolate(x1:float, x2:float, y1:float, y2:float, x:float) -> float:
 
     if (x1 -x) == 0.0: return y1
     

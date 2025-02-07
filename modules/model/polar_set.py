@@ -558,15 +558,15 @@ class Polar (Polar_Definition):
         self._error_reason = None               # if error occurred during polar generation 
 
         self._opPoints = []                     # the single opPoins of self
-        self._alpha = []
-        self._cl = []
-        self._cd = []
-        self._cm = [] 
-        self._cd = [] 
-        self._xtrt = []
-        self._xtrb = []
-        self._glide = []
-        self._sink = []
+        self._alpha = None
+        self._cl = None
+        self._cd = None
+        self._cm = None 
+        self._cd = None 
+        self._xtrt = None
+        self._xtrb = None
+        self._glide = None
+        self._sink = None
 
         if polar_def: 
             self.set_type       (polar_def.type)
@@ -624,45 +624,89 @@ class Polar (Polar_Definition):
 
 
     @property
-    def alpha (self) -> list:
-        if self._alpha == []: self._alpha = self._get_values_forVar (var.ALPHA)
+    def alpha (self) -> np.ndarray:
+        if not np.any(self._alpha): self._alpha = self._get_values_forVar (var.ALPHA)
         return self._alpha
     
     @property
-    def cl (self) -> list:
-        if self._cl == []: self._cl = self._get_values_forVar (var.CL)
+    def cl (self) -> np.ndarray:
+        if not np.any(self._cl): self._cl = self._get_values_forVar (var.CL)
         return self._cl
     
     @property
-    def cd (self) -> list:
-        if self._cd == []: self._cd = self._get_values_forVar (var.CD)
+    def cd (self) -> np.ndarray:
+        if not np.any(self._cd): self._cd = self._get_values_forVar (var.CD)
         return self._cd
     
     @property
-    def glide (self) -> list:
-        if self._glide == []: self._glide = self._get_values_forVar (var.GLIDE)
+    def glide (self) -> np.ndarray:
+        if not np.any(self._glide): self._glide = self._get_values_forVar (var.GLIDE)
         return self._glide
     
     @property
-    def sink (self) -> list:
-        if self._sink == []: self._sink = self._get_values_forVar (var.SINK)
+    def sink (self) -> np.ndarray:
+        if not np.any(self._sink): self._sink = self._get_values_forVar (var.SINK)
         return self._sink
     
     @property
-    def cm (self) -> list:
-        if self._cm == []: self._cm = self._get_values_forVar (var.CM)
+    def cm (self) -> np.ndarray:
+        if not np.any(self._cm): self._cm = self._get_values_forVar (var.CM)
         return self._cm
     
     @property
-    def xtrt (self) -> list:
-        if self._xtrt == []: self._xtrt = self._get_values_forVar (var.XTRT)
+    def xtrt (self) -> np.ndarray:
+        if not np.any(self._xtrt): self._xtrt = self._get_values_forVar (var.XTRT)
         return self._xtrt
     
     @property
-    def xtrb (self) -> list:
-        if self._xtrb == []: self._xtrb = self._get_values_forVar (var.XTRB)
+    def xtrb (self) -> np.ndarray:
+        if not np.any(self._xtrb): self._xtrb = self._get_values_forVar (var.XTRB)
         return self._xtrb
-    
+
+    @property
+    def cl_max (self) -> float:
+        if np.any(self.cl):
+            return np.max(self.cl)
+        else: 
+            return None
+
+    @property
+    def cd_min (self) -> float:
+        if np.any(self.cd):
+            return np.min(self.cd)
+        else: 
+            return None
+
+    @property
+    def alpha_cl0_inviscid (self) -> float:
+        """ inviscid alpha_cl0 extrapolated from linear part of polar"""
+        if not np.any(self.cl) or not np.any(self.alpha): return None
+
+        cl_alpha2 = self.get_interpolated (var.ALPHA, 2.0, var.CL)
+        cl_alpha4 = self.get_interpolated (var.ALPHA, 4.0, var.CL)
+
+        alpha_cl0 = interpolate (cl_alpha2, cl_alpha4, 2.0, 4.0, 0.0)
+
+        return round(alpha_cl0,2)
+
+
+    @property
+    def alpha_cl0 (self) -> float:
+        if np.any(self.cl) and np.any(self.alpha):
+            return self.get_interpolated (var.CL, 0.0, var.ALPHA)
+        else: 
+            return None
+
+
+
+    @property
+    def glide_max (self) -> float:
+        if np.any(self.glide):
+            return np.max(self.glide)
+        else: 
+            return None
+
+
     def ofVars (self, xyVars: Tuple[var, var]):
         """ returns x,y polar of the tuple xyVars"""
 
@@ -709,41 +753,41 @@ class Polar (Polar_Definition):
             raise ValueError ("Unkown polar variable: %s" % polar_var)
         return vals
 
-    def _get_values_forVar (self, var) -> list:
-        """ copy values of var from op points to list"""
+    def _get_values_forVar (self, var) -> np.ndarray:
+        """ copy values of var from op points to array"""
 
         nPoints = len(self.opPoints)
-        if nPoints == 0: return [] 
+        if nPoints == 0: return np.array([]) 
 
-        values  = [0] * nPoints
+        values = np.zeros (nPoints)
         op : OpPoint
         for i, op in enumerate(self.opPoints):
             values[i] = op.get_value (var)
         return values 
 
 
-    def get_optValue (self, specVar, specVal, optVar):
-        """ interpolates optvar in polar (specVar, optVar)"""
+    def get_interpolated (self, xVar : var, xVal : float, yVar : var) -> float:
+        """ interpolates yVar in polar (xVar, yVar)"""
 
         if not self.isLoaded: return None
 
-        specVals = self._ofVar (specVar)
-        optVals  = self._ofVar (optVar)
+        xVals = self._ofVar (xVar)
+        yVals  = self._ofVar (yVar)
 
         # find the index in self.x which is right before x
-        jl = bisection (specVals, specVal)
+        jl = bisection (xVals, xVal)
         
         # now interpolate the y-value on lower side 
-        if jl < (len(specVals) - 1):
-            x1 = specVals[jl]
-            x2 = specVals[jl+1]
-            y1 = optVals[jl]
-            y2 = optVals[jl+1]
-            y = interpolate (x1, x2, y1, y2, specVal)
+        if jl < (len(xVals) - 1):
+            x1 = xVals[jl]
+            x2 = xVals[jl+1]
+            y1 = yVals[jl]
+            y2 = yVals[jl+1]
+            y = interpolate (x1, x2, y1, y2, xVal)
         else: 
-            y = optVals[-1]
+            y = yVals[-1]
 
-        if optVar == var.CD:
+        if yVar == var.CD:
             y = round (y,5)
         else:
             y = round(y,2) 
@@ -1100,16 +1144,16 @@ class OpPoint:
         self.xtrb   = None                      # transition bot side
 
     @property
-    def glide (self): 
+    def glide (self) -> float: 
         if self.cd and self.cl:                 # cd != 0.0  
-            return self.cl/self.cd  
+            return round(self.cl/self.cd,2)  
         else: 
             return 0.0 
 
     @property
-    def sink (self): 
+    def sink (self) -> float: 
         if self.cd > 0.0 and self.cl >= 0.0:                 # cd != 0.0  
-            return self.cl**1.5 / self.cd
+            return round(self.cl**1.5 / self.cd,2)
         else: 
             return 0.0 
 
@@ -1347,7 +1391,7 @@ class Polar_Splined (Polar_Definition):
         return values 
 
 
-    def get_optValue (self, specVar, specVal, optVar):
+    def get_interpolated_val (self, specVar, specVal, optVar):
         """ interpolates optvar in polar (specVar, optVar)"""
 
         if not self.isLoaded: return None
