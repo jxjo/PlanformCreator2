@@ -28,7 +28,7 @@ from model.airfoil_examples import Example
 
 # ----- common methods -----------
 
-def create_airfoil_from_path (parent, pathFilename, example_if_none=False, silent=True) -> Airfoil:
+def create_airfoil_from_path (parent, pathFilename, example_if_none=False, message_delayed=False) -> Airfoil:
     """
     Create and return a new airfoil based on pathFilename.
         Return None if the Airfoil couldn't be loaded 
@@ -64,9 +64,7 @@ def create_airfoil_from_path (parent, pathFilename, example_if_none=False, silen
         else: 
             airfoil = None 
 
-        if silent: 
-            logger.error (f"Could not load '{pathFilename}'")
-        elif pathFilename: 
+        if pathFilename: 
             fileName = os.path.basename (pathFilename)
             if not file_found:
                 msg = f"{fileName} does not exist."
@@ -76,7 +74,10 @@ def create_airfoil_from_path (parent, pathFilename, example_if_none=False, silen
                 example = "\nUsing example airfoil."
             else:
                 example= ""
-            MessageBox.error   (parent,'Load Airfoil', f"{msg}{example}", min_height= 60)
+            if message_delayed:
+                QTimer.singleShot (100, lambda: MessageBox.error   (parent,'Load Airfoil', f"{msg}{example}", min_height= 60))
+            else:
+                MessageBox.error   (parent,'Load Airfoil', f"{msg}{example}", min_height= 60)
 
     return airfoil  
 
@@ -163,7 +164,7 @@ class Airfoil_Open_Widget (Widget, QWidget):
         newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters)
 
         if newPathFilename:                         # user pressed open
-            airfoil = create_airfoil_from_path (self, newPathFilename, silent=False)
+            airfoil = create_airfoil_from_path (self, newPathFilename)
             if airfoil is not None: 
 
                 #leave button callback and refresh in a few ms 
@@ -345,7 +346,7 @@ class Airfoil_Select_Open_Widget (Widget, QWidget):
 
                 if os.path.isfile (aPathFileName):   # maybe it was deleted in meantime 
                      
-                    airfoil = create_airfoil_from_path (self, aPathFileName, silent=False)
+                    airfoil = create_airfoil_from_path (self, aPathFileName)
                     if airfoil is not None: 
                         self.set_airfoil (airfoil)
                 break

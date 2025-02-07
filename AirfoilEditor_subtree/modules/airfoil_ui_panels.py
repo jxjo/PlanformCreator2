@@ -90,9 +90,10 @@ class Panel_File_View (Panel_Airfoil_Abstract):
     name = 'File'
 
 
+    @override
     @property
-    def _shouldBe_visible (self) -> bool:
-        """ overloaded: only visible if edit_moder """
+    def shouldBe_visible (self) -> bool:
+        """ overloaded: only visible if edit_mode """
         return not self.edit_mode
 
     @property
@@ -146,8 +147,9 @@ class Panel_File_Edit (Panel_Airfoil_Abstract):
 
     name = 'Edit Mode'
 
+    @override
     @property
-    def _shouldBe_visible (self) -> bool:
+    def shouldBe_visible (self) -> bool:
         """ overloaded: only visible if edit_moder """
         return self.edit_mode
 
@@ -382,8 +384,9 @@ class Panel_LE_TE  (Panel_Airfoil_Abstract):
 
     _width  = 320
 
+    @override
     @property
-    def _shouldBe_visible (self) -> bool:
+    def shouldBe_visible (self) -> bool:
         """ overloaded: only visible if geo is not Bezier """
         return not (self.geo().isBezier and self.edit_mode)
 
@@ -483,10 +486,9 @@ class Panel_Bezier (Panel_Airfoil_Abstract):
     _width  = (180, None)
 
 
-    # ---- overloaded 
-
+    @override
     @property
-    def _shouldBe_visible (self) -> bool:
+    def shouldBe_visible (self) -> bool:
         """ overloaded: only visible if geo is Bezier """
         return self.geo().isBezier
     
@@ -536,10 +538,9 @@ class Panel_Bezier_Match (Panel_Airfoil_Abstract):
     _width  = (370, None)
 
 
-
     @override
     @property
-    def _shouldBe_visible (self) -> bool:
+    def shouldBe_visible (self) -> bool:
         """ overloaded: only visible if geo is Bezier """
         return self.geo().isBezier and self.edit_mode
 

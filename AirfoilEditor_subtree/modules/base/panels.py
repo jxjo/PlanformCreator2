@@ -136,6 +136,8 @@ class Panel_Abstract (QWidget):
         if height is not None: 
             self._height = height
 
+        self._shouldBe_visible = True                                   # defaulit visibilty of self 
+
         # set width and height 
         Widget._set_width  (self, self._width)
         Widget._set_height (self, self._height)
@@ -159,9 +161,22 @@ class Panel_Abstract (QWidget):
             return self._getter
 
     @property 
-    def _shouldBe_visible (self) -> bool:
-        """ True if self is visible - can be overloaded """
-        return True
+    def shouldBe_visible (self) -> bool:
+        """ True if self is visible 
+            - can be overridden to control visibility in sibclass """
+        return self._shouldBe_visible
+
+
+    def set_visibilty (self, aBool : bool):
+        """ 
+        set the visibility of self 
+            - use this, when instances of Edit_Panel are used (not subclassing)
+              to control hide/show
+        """
+
+        if self.shouldBe_visible != aBool:
+            self.shouldBe_visible = aBool        
+            self.setVisible (aBool)     
 
 
     @property 
@@ -200,11 +215,11 @@ class Container_Panel (Panel_Abstract):
 
         # first hide the now not visible panels so layout won't be stretched
         for p in parent.findChildren (Panel_Abstract):
-            if not p._shouldBe_visible: p.refresh() 
+            if not p.shouldBe_visible: p.refresh() 
 
         # now show the now visible panels
         for p in parent.findChildren (Panel_Abstract):
-            if p._shouldBe_visible: p.refresh() 
+            if p.shouldBe_visible: p.refresh() 
 
 
 
@@ -281,7 +296,7 @@ class Edit_Panel (Panel_Abstract):
             self.refresh_widgets (self._isDisabled) 
 
         # initial visibility 
-        if not self._shouldBe_visible:         
+        if not self.shouldBe_visible:         
             self.setVisible (False)             # setVisible(True) results in a dummy window on startup 
 
 
@@ -335,8 +350,8 @@ class Edit_Panel (Panel_Abstract):
     def refresh(self, reinit_layout=False):
         """ refreshes all Widgets on self """
 
-        hide = not self._shouldBe_visible and (self._shouldBe_visible != self.isVisible())
-        show =     self._shouldBe_visible and (self._shouldBe_visible != self.isVisible())
+        hide = not self.shouldBe_visible and (self.shouldBe_visible != self.isVisible())
+        show =     self.shouldBe_visible and (self.shouldBe_visible != self.isVisible())
 
         # reinit layout 
         if (hide or show) or reinit_layout:
@@ -345,8 +360,8 @@ class Edit_Panel (Panel_Abstract):
 
         # hide / show self 
         if (hide or show) or reinit_layout: 
-            self.setVisible (self._shouldBe_visible)
-            logger.debug (f"{self} - setVisible ({self._shouldBe_visible})")
+            self.setVisible (self.shouldBe_visible)
+            logger.debug (f"{self} - setVisible ({self.shouldBe_visible})")
 
         # refresh widgets of self only if visible 
         if self.isVisible():
@@ -377,7 +392,7 @@ class Edit_Panel (Panel_Abstract):
             self._clear_existing_panel_layout ()
 
         if layout is None:
-            if self._shouldBe_visible:
+            if self.shouldBe_visible:
                 layout = self._init_layout()        # subclass will create layout 
             else: 
                 # if the panel shouldn't be visible repalce the normal panel layout

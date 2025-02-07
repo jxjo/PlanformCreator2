@@ -141,7 +141,7 @@ class App_Main (QMainWindow):
         if not airfoil_file: 
             airfoil_file = Settings().get('last_opened', default=None) 
 
-        airfoil = create_airfoil_from_path(self, airfoil_file, example_if_none=True, silent=False)
+        airfoil = create_airfoil_from_path(self, airfoil_file, example_if_none=True, message_delayed=True)
 
         self.set_airfoil (airfoil, silent=True)
 
