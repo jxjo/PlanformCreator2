@@ -23,8 +23,11 @@ Wing build with VLM_Panels based on Planform_Paneled
 import numpy as np
 from enum                       import StrEnum
 from typing                     import NamedTuple
+from math                       import isclose, radians, cos
+from copy                       import deepcopy
 
-from modules.model.VLM         import calc_Qjj, calc_Gamma
+
+from modules.model.VLM          import calc_Qjj, calc_Gamma
 
 import logging
 logger = logging.getLogger(__name__)
@@ -32,7 +35,7 @@ logger.setLevel(logging.DEBUG)
 
 
 #-------------------------------------------------------------------------------
-# enums   
+# helper classes  and functions 
 #-------------------------------------------------------------------------------
 
 class StrEnum_Extended (StrEnum):
@@ -44,13 +47,19 @@ class StrEnum_Extended (StrEnum):
 
 class OpPoint_Var (StrEnum_Extended):
     """ polar variables """
-    CL          = "Cl"               
-    ALPHA       = "Alpha"               
-    ALPHA_EFF   = "Alpha effective"               
-    ALPHA_IND   = "Alpha induced"               
-    LIFT        = "Lift"
-
-#------------------------------------------------------------------------------
+    Y               = "y position"               
+    CL              = "Cl"               
+    CL_VLM          = "Cl VLM"               
+    CL_MAX          = "Airfoil cl max "               
+    MAX_MASK        = "Cl VLM close MAX"                    # numpy mask where Cl_VLM reaches, exceeds CL_MAX              
+    ALPHA_MAX       = "Airfoil alpha max "               
+    ALPHA           = "Alpha"               
+    ALPHA_EFF       = "Alpha effective"               
+    ALPHA_EFF_VLM   = "Alpha effective VLM"               
+    ALPHA_IND       = "Alpha induced"  
+    ALPHA0          = "VLM Alpha0"             
+    LIFT            = "Lift"
+    LIFT_STRIPE     = "Lift of stripe"
 
 
 class Point_3D (NamedTuple):
@@ -59,6 +68,37 @@ class Point_3D (NamedTuple):
     x : float 
     y : float
     z : float 
+
+AIR_RHO     = 1.225             # density air 
+AIR_NY      = 0.0000182         # kinematic viscosity
+
+
+def re_from_v (v : float, chord : float, round_to = 1000) -> float:
+    """ calc Re number from v (velocity)"""
+
+    re = round (v * chord * AIR_RHO / AIR_NY,0)
+
+    if isinstance (round_to, int) and round_to:
+        re = round (re / round_to, 0)
+        re = re * round_to
+
+    return re
+
+
+def v_from_re (re : float, chord : float, round_dec = 1) -> float:
+    """ calc v (velocity) from Renumber"""
+
+    v = re * AIR_NY / (chord * AIR_RHO)
+
+    if isinstance (round_dec, int):
+        v = round (v, round_dec)
+
+    return v
+
+
+#-------------------------------------------------------------------------------
+# Model   
+#-------------------------------------------------------------------------------
 
 
 class VLM_Panel:
@@ -163,12 +203,22 @@ class VLM_Wing:
         self._Gamma         = None                  # circulation
         self._Q_ind         = None 
         self._A_ges         = None                  # total panel area in m²
+        self._y_stripes     = None
 
-        self._polars        = {}                    # dict of polars 
+        self._polars        = {}                    # dict of polars
+
+        # strak airfoils if needed to get the generated airfoil names
+
+        from wing               import WingSections
+        from model.airfoil      import GEO_BASIC
+
+        wingSections : WingSections = self._planform.wingSections
+        if not wingSections.strak_done:
+            wingSections.do_strak (geometry_class=GEO_BASIC)
 
 
     def __repr__(self) -> str:
-        # overwrite to get a nice print string 
+        # overwrite to get a nice print string
         return f"<{type(self).__name__}>"
 
 
@@ -176,7 +226,7 @@ class VLM_Wing:
     def panels_right (self) -> list [VLM_Panel]:
         """ panels of right half wing"""
 
-        if self._panels_right is None: 
+        if self._panels_right is None:
             self._panels_right = self._generate_panels_right ()
         return self._panels_right
 
@@ -189,7 +239,7 @@ class VLM_Wing:
     @property
     def nx_panels (self) -> int:
         """ number of panels in x direction"""
-        return self._planform.wx_panels 
+        return self._planform.wx_panels
 
     @property
     def ny_panels (self) -> int:
@@ -208,7 +258,7 @@ class VLM_Wing:
         """ total panel area of half wing in m²""" 
         if self._A_ges is None: 
             A : np.ndarray  = self.aerogrid['A']
-            self._A_ges = A.sum() / 1000 ** 2
+            self._A_ges = A.sum() 
         return self._A_ges
 
     @property
@@ -236,46 +286,17 @@ class VLM_Wing:
 
         return self._Qjj 
 
-    @property
-    def Gamma (self) -> np.ndarray:
-        """ 
-        2D array of gamma (circulation) values per panel
-            - as self.panels are only right hand side, symmetric left side will be added by VLM
-        """
-
-        if self._Gamma is None: 
-            self._Gamma, self._Q_ind = calc_Gamma (self.aerogrid, Ma=0.0, xz_symmetry = True)
-            logger.debug ( (f"{self} calc Gamma Qjj"))
-
-        return self._Gamma 
-
-    @property
-    def Gamma_panel (self) -> np.ndarray:
-        """ 1D array of gamma (circulation) summed per panel"""
-
-        G_panels = []
-        for i in range (0, self.n_panels):
-            G_panels.append (self.Gamma [i,:].mean())
-        return np.array(G_panels) 
-
-    @property
-    def Gamma_y (self) -> np.ndarray:
-        """ 1D array of gamma (circulation) summed per y stripe"""
-
-        G_y = []
-        for i in range (0, self.n_panels, self.nx_panels):
-            G_y.append (self.Gamma_panel [i:(i+self.nx_panels)].mean())
-        return np.array (G_y) 
-
 
     @property
     def y_stripes (self) -> np.ndarray:
         """ y position of all panel stripes (middle of panel)"""
 
-        y_pos = []
-        for i in range (0, self.n_panels, self.nx_panels):
-            y_pos.append (self.aerogrid['offset_l'][i][1])
-        return y_pos
+        if self._y_stripes is None: 
+            y_pos = []
+            for i in range (0, self.n_panels, self.nx_panels):
+                y_pos.append (self.aerogrid['offset_l'][i][1])
+            self._y_stripes = np.array(y_pos)
+        return self._y_stripes
 
 
     def polar_at (self, vtas: float) -> 'VLM_Polar':
@@ -444,10 +465,17 @@ class VLM_Polar:
 
     def __init__ (self, wing: VLM_Wing, vtas: float ):
 
-        self.wing           = wing 
-        self.vtas           = vtas                  # true air speed 
+        self.vlm_wing       = wing 
+        self.vtas           = vtas                      # true air speed
 
-        self._opPoints      = {}                    # dict of operating points 
+        self._opPoints      = {}                        # dict of operating points
+        self._error_reason  = []                        # list of error messages eg polar couldn't be loaded 
+        self._airfoil_polars= {}                        # dict of wingSections airfoil polar 
+        self._generating_airfoil_polars = False         # airfoil polars are currently generated 
+
+        self._alpha0_stripes= None                      # alpha0 per stripe interpolated from airfoil polat 
+
+        self._load_airfoil_polars ()                    # get airfoil poalrs from wingSections
 
         logger.debug (f"{self} created")
 
@@ -456,25 +484,237 @@ class VLM_Polar:
         # overwrite to get a nice print string 
         return f"<{type(self).__name__} {self.vtas:.1f}m/s >"
 
+    @property
+    def name (self) -> str:
+        """ name of polar like T1-22.3-VLM"""
+        return f"T1-{self.vtas:.1f}-VLM"
+
+
+    @property
+    def opPoints (self) -> list ['VLM_OpPoint']:
+        """ sorted list of existing opPoints of self"""
+        ops_sorted = dict(sorted(self._opPoints.items()))
+        return ops_sorted.values()
+
+
+    @property
+    def airfoil_polars (self) -> dict:
+        """ dict of airfoil polars, key is the wingSection y position"""
+        return self._airfoil_polars
+
+    @property
+    def error_reason (self) -> list[str]:
+        """ list of reasons why self is not ready / airfoil polars couldn't be loaded"""
+        return self._error_reason
+
+    @property
+    def is_generating_airfoil_polars (self) -> bool:
+        """ airfoil polars are currently generated """  
+        return self._generating_airfoil_polars 
+
+    def is_ready (self) -> bool: 
+        """ True if airfoil polas are complete for opPoint calculation """
+        if self.airfoil_polars:
+            return True
+        else: 
+            # try again to laod polars 
+            self._load_airfoil_polars ()
+            return bool (self.airfoil_polars)
+
 
     def opPoint_at (self, alpha: float) -> 'VLM_OpPoint':
-        """ returns opPOint at alpha"""
+        """ returns opPoint at alpha - or None if airfoil polars are not ready"""
 
-        a = round (alpha, 1)                        #  ensure clean key for dict
-        try:
-            opPoint = self._opPoints[a]             # already exisiting 
-        except:
-            opPoint = VLM_OpPoint (self, a)         # calculate new opPOint 
-            self._opPoints[a] = opPoint 
-        return opPoint 
+        if self.is_ready ():
+            a = round (alpha, 1)                        # ensure clean key for dict
+            try:
+                opPoint = self._opPoints[a]             # already exisiting
+            except:
+                opPoint = VLM_OpPoint (self, a)         # calculate new opPOint 
+                self._opPoints[a] = opPoint 
+            return opPoint 
+        else: 
+            return None 
 
+    def opPoint_at_alpha_max (self) -> 'VLM_OpPoint':
+        """ returns opPoint at alpha max - or None if airfoil polars are not ready"""
+
+        if self.is_ready ():
+            return self._find_alpha_max ()
+        
+
+    @property
+    def q_dyn (self) -> float:
+        """ dynamic pressure """
+        return 1.225 / 2.0 * self.vtas ** 2
+
+    @property
+    def alpha0_stripes (self) -> np.ndarray:
+        """ alpha_cl=0 from the airfoils at y position of panel stripes """
+        if self._alpha0_stripes is None: 
+            self._alpha0_stripes = self._get_alpha0_stripes ()
+        return self._alpha0_stripes
+
+    # ---- private ----
+
+
+    def _load_airfoil_polars (self):
+        """ loads for all wingSections polar of airfoil"""
+
+        from wing               import Wing, WingSection, Planform, Planform_Paneled
+        from model.polar_set    import Polar_Set, RE_SCALE_ROUND_TO
+
+        self._error_reason  = []
+        self._generating_airfoil_polars = False
+
+        planform : Planform = self.vlm_wing._planform
+        planform_paneled = planform.wing.planform_paneled 
+        section  : WingSection
+
+        for section in planform_paneled.wingSections_reduced():
+
+            section_y  = section.x / 1000
+            section_re = re_from_v (self.vtas, section.c / 1000, round_to=RE_SCALE_ROUND_TO)
+            airfoil_polarSet : Polar_Set = section.airfoil.polarSet
+            airfoil_polarSet.load_or_generate_polars()
+
+            for polar in airfoil_polarSet.polars:
+
+                if isclose (polar.re, section_re, rel_tol=0.05):
+                    if polar.isLoaded:
+
+                        # there is a polar that fits to Re of wingSection
+
+                        self._airfoil_polars[section_y] = polar
+
+                    else: 
+                        if polar.error_occurred: 
+                            self._error_reason.append (polar.error_reason)
+                        else: 
+                            self._generating_airfoil_polars = True 
+                    break
+
+            if not isclose (polar.re, section_re, rel_tol=0.05):
+                msg = f"No polar with Re = {section_re} in Polarset of {section}" 
+                logger.error (msg)
+                self._error_reason.append (msg)
+                 
+
+        # if polar couldn't be loaded or error occured, reset airfoil polars 
+
+        if self._error_reason or self._generating_airfoil_polars: 
+            self._airfoil_polars = {}
+            if self._error_reason:
+                logger.warning (f"{self} couldn't load polars: {"\n".join(self._error_reason)}")
+                 
+        return  
+
+
+    def _get_alpha0_stripes (self) -> np.ndarray:
+        """ 
+        returns alpha0 per stripe 
+            - interpolated from alpha0 of airfoils at wingSections 
+        """
+
+        from model.polar_set    import Polar
+
+        sections_alpha0 = []
+        sections_y      = []
+
+        # collect alpha0 of airfoils of wingSections from airfoil polar
+
+        airfoil_polar : Polar
+        for section_y, airfoil_polar in self.airfoil_polars.items():
+
+            alpha0_polar = np.interp(0.0, airfoil_polar.cl, airfoil_polar.alpha)  # 'normal' alpha0 of polar'
+                 
+            sections_alpha0.append(alpha0_polar)
+            sections_y.append(section_y)
+
+        # alpha0 per stripe by interpolation of section alpha0 
+
+        alpha0_stripes = np.interp (self.vlm_wing.y_stripes, sections_y, sections_alpha0)
+
+        return alpha0_stripes
+    
+
+    def _find_alpha_max (self) -> 'VLM_OpPoint':
+        """ find opPoint which is close before cl_max reached at a span position"""
+
+        found_above = False 
+        alpha_start = 0.0
+        step        = 5.0
+        alpha_max   = 25.0 + step
+        for alpha in np.arange (alpha_start, alpha_max, step):
+            if self.opPoint_at (alpha).cl_max_almost_reached:
+                found_above = True 
+                break
+
+        if not found_above: return None 
+        
+        found_above = False 
+        alpha_start = alpha - step 
+        step        = 1
+        alpha_max   = alpha + step
+        for alpha in np.arange (alpha_start, alpha_max, step):
+            if self.opPoint_at (alpha).cl_max_almost_reached:
+                found_above = True 
+                break
+
+        if not found_above: return None 
+
+        found_above = False 
+        alpha_start = alpha - step 
+        step        = 0.2
+        alpha_max   = alpha + step
+        for alpha in np.arange (alpha_start, alpha_max, step):
+            if self.opPoint_at (alpha).cl_max_almost_reached:
+                found_above = True 
+                break
+
+        if not found_above: return None 
+
+        return self.opPoint_at (alpha)
+
+
+    def export_to_csv (self, pathFileName, alpha_start = -3.0, alpha_end :float = None, step = 0.5):
+        """ 
+        Write polar data alpha, Cl, Lift to csv 
+            - if alpha_end is omitted, the polar ends when Cl is Cl_max / 2        
+        """
+
+        import csv
+
+        alpha_max = 25.0                                # maximum for polar 
+
+        with open(pathFileName, 'w', newline='') as csvfile:
+            fieldnames = ['Alpha', 'CL', 'Lift']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, dialect='excel')
+
+            writer.writer.writerow(["PlanformCreator2"])
+            writer.writer.writerow([f"Wing Name :", f"{self.vlm_wing._planform.wing.name}"])
+            writer.writer.writerow([f"Speed :", f"{self.vtas:.1f}"])
+            writer.writer.writerow([ ])
+
+            writer.writeheader()
+
+            CL_max = -5.0                               # dummy initial value 
+
+            for alpha in np.arange (alpha_start, alpha_max, step):
+ 
+                opPoint = self.opPoint_at (alpha)
+                writer.writerow({'Alpha': f"{opPoint.alpha:8.1f}", 'CL': f"{opPoint.CL:8.3f}", 'Lift': f"{opPoint.L:8.2f}"})
+
+                if opPoint.CL < CL_max and opPoint.CL < CL_max / 2:     # handle also negative values
+                    break 
+                if opPoint.CL > CL_max:
+                    CL_max = opPoint.CL
 
 
 
 class VLM_OpPoint:
-
     """ 
-    single operation point alpha of a VLM_Polar 
+    operation point having alpha of a VLM_Polar 
     """
 
     def __init__ (self, polar: VLM_Polar,  alpha : float ):
@@ -482,122 +722,411 @@ class VLM_OpPoint:
         self.alpha = alpha
         self.polar = polar 
 
-        # alpha is applied via downwash of flow 
-        downwash =  (np.pi * alpha / 180) * polar.vtas
-        self.wj = np.ones(self.n_panels) * downwash / polar.vtas
-
         self._cp = None                             # pressure coefficient 
-        self._L  = None                             # total Lift
+        self._aero_results   = {}                   # dict with all results along span
+        self._aero_results_list  = []               # viscous loop list of aero_results
+        
+        self._cl_max_reached = False                # a stripe has reached cl_max of airfoil
+
+        # if there are no airfoil polars - break 
+
+        if not self.airfoil_polars:
+            raise ValueError ("Airfoil polars missing")
+
+
+    def __repr__(self) -> str:
+        # overwrite to get a nice print string 
+        return f"<{type(self).__name__} {self.name}>"
+
+    @property
+    def airfoil_polars (self) -> dict:
+        """ dict of airfoil polars, key is the wingSection y position"""
+        return self.polar.airfoil_polars
 
 
     @property
     def wing (self) -> VLM_Wing:
-        return self.polar.wing
+        return self.polar.vlm_wing
+
 
     @property
-    def Qjj (self) -> np.ndarray:
-        return self.polar.wing.Qjj
+    def name (self) -> str:
+        return f"{self.polar.vtas:.1f}m/s, {self.alpha:.1f}°"
+
     
     @property
-    def N (self) -> np.ndarray:
-        return self.polar.wing.N
-
-    @property
-    def A_ges (self) -> np.ndarray:
-        return self.polar.wing.A_ges
-
-    @property
-    def A_panels (self) -> np.ndarray:
-        return self.polar.wing.A_panels
-
-    @property
-    def q_dyn (self) -> float:
-        """ dynamic pressure """
-        return 1.225 / 2.0 * self.polar.vtas ** 2
-
-
-    @property
-    def n_panels (self) -> int:
-        return self.polar.wing.n_panels
-
-    @property
-    def nx_panels (self) -> int:
-        """ number of panels in x direction"""
-        return self.polar.wing.nx_panels 
-
-
-    @property
     def Cp_panels (self) -> np.ndarray:
-        """ cp of panel"""
+        """ 
+        cp of panels of VLM calculation - not limited by cl max of airfoil 
+
+        Core calculation of VLM 
+
+        """
         if self._cp is None: 
-            self._cp = self.Qjj.dot(self.wj)
+
+            self.aero_results                   # will run viscous loop
+
         return self._cp
 
+
     @property
-    def Fxyz_panels (self) -> np.ndarray:
-        """ vorce vector of panel"""
-        return self.q_dyn * self.N.T * self.A_panels * self.Cp_panels
+    def Cp_viscous_panels (self) -> np.ndarray:
+        """ cp of panels of VLM calculation - being 0.0 if cl_max of airfoil exceeded"""
+
+        if self._cl_max_reached:
+            Cp_panels = np.copy (self.Cp_panels)
+            Cl_stripes = self.aero_results [OpPoint_Var.CL] 
+            n        = self.wing.n_panels
+            nx  	 = self.wing.nx_panels
+            ns       = int (n / nx)  
+
+            # set cp of a panel where its stripe reached cl_max to 0.0 
+            for i_s in range(ns):
+                if Cl_stripes [i_s] == 0.0: 
+                    istart = i_s * nx
+                    Cp_panels [istart : istart+nx] = 0.0
+            return Cp_panels
+        else: 
+            return self.Cp_panels
+
+
+    @property
+    def aero_results (self) -> dict:
+        """ dict with all results along span"""
+
+        if not self._aero_results:
+
+            self._aero_results_list = self._viscous_loop ()
+            self._aero_results = self._aero_results_list [-1]
+
+        return self._aero_results  
 
 
     @property
     def L (self) -> float:
-        """ Lift of wing"""
-        if self._L is None: 
-            self._L = self.Qjj.dot(self.wj)
-        return self._cp
+        """ Lift of complete wing"""
+        lift_stripes : np.ndarray = self.aero_results[OpPoint_Var.LIFT_STRIPE] 
+        return lift_stripes.sum() * 2.0 
+
+    @property
+    def CL (self) -> float:
+        """ CL of wing"""
+        return self.L / (self.polar.q_dyn * self.wing.A_ges * 2.0)
+
+    @property
+    def cl_max_reached (self) -> bool:
+        """ is cl_max of airfoil reached at a span position"""
+
+        self.aero_results                       # force calculation 
+        return self._cl_max_reached
+
+    @property
+    def cl_max_almost_reached (self) -> bool:
+        """ is cl_max of airfoil almost reached (-5% or so) at a span position"""
+
+        mask = self.aero_results[OpPoint_Var.MAX_MASK] 
+        return  np.any(mask)
 
 
-    def aero_results (self) -> tuple[np.ndarray, dict]:
+    # ----- private --------------------------------------------------
+
+    def _calc_aero_results (self, Cp: np.ndarray, alpha0: np.ndarray) -> tuple[np.ndarray, dict]:
         """ 
-        op point results at y stations of panel stripes
+        op point results at y stations of panel stripes derivated from main calculation 
+            in viscous loop 
+
+        Args: 
+            Cp: Cp of each panel
+            alpha0: alpha0 per panel stripe 
         
         Returns: 
             y_pos:  y position of a panel stripe (middle) 
-            vars:   dictionary with values per y_pos   
-                    .CL
-                    .LIFT
-                    .ALPHA 
-                    .APLHA_IND        
-                    .APLHA_EFF        
+            aero_results: dict with values per y_pos - see enum OpPoint_Var
         """
 
-        nx  	 = self.nx_panels
+        # ---- known values ------
+
+        n        = self.wing.n_panels
+        nx  	 = self.wing.nx_panels
+        ns       = int (n / nx)                                                 # n stripes 
         aerogrid = self.wing.aerogrid
-        q_dyn    = self.q_dyn
+        q_dyn    = self.polar.q_dyn
 
         b_panels    : np.ndarray = aerogrid['b']                                # width 
         l_panels    : np.ndarray = aerogrid['l']                                # depth 
-        y_panels    : np.ndarray = aerogrid['offset_l'] [:,1]                   # y_posiition of panels 
-        lift_panels : np.ndarray = self.Fxyz_panels [2]
 
-        lift  = []
-        cl    = []
-        y_pos = []
-        alpha_eff = []
-        alpha_ind = []
+        # ---- lift per panel 
 
-        for i in range (0, self.n_panels, nx):                      # step through panels stripewise 
+        N = self.wing.N                           # normal vector per panel 
+        A = self.wing.A_panels                    # area per panel 
 
-            lift_stripe = lift_panels [i:(i+nx)].sum() 
-            b_stripe    = b_panels [i]
-            c_stripe    = l_panels [i:(i+nx)].sum() 
+        lift_panels =  (self.polar.q_dyn * N.T * A * Cp)[2]
 
-            lift_local  = lift_stripe / b_stripe 
-            cl_local    = lift_local / (q_dyn * c_stripe)
-            a_l0_local  = 0.0                                       # tbd 
-            a_eff_local = (cl_local / (2 * np.pi) + a_l0_local) * 180 / np.pi
-            a_ind_local = self.alpha - a_eff_local
+        Cl_max      = self._get_cl_max ()
+        y_stripes   = self.wing.y_stripes
 
-            lift.append  (lift_local) 
-            cl.append    (cl_local)
-            y_pos.append (y_panels[i])
-            alpha_eff.append (a_eff_local)
-            alpha_ind.append (a_ind_local)
+        # ---- unknown values ------
 
-        vars = {}
-        vars[OpPoint_Var.CL]        = np.array (cl) 
-        vars[OpPoint_Var.LIFT]      = np.array (lift) 
-        vars[OpPoint_Var.ALPHA_EFF] = np.array (alpha_eff)              
-        vars[OpPoint_Var.ALPHA_IND] = np.array (alpha_ind)         
-        vars[OpPoint_Var.ALPHA]     = np.full (len(y_pos), self.alpha)             
-        return np.array(y_pos), vars 
+        Cl              = np.zeros (ns) 
+        Cl_VLM          = np.zeros (ns) 
+        lift            = np.zeros (ns) 
+        lift_stripe     = np.zeros (ns) 
+        alpha_eff_VLM   = np.zeros (ns) 
+        alpha_eff       = np.zeros (ns) 
+        alpha_ind       = np.zeros (ns) 
+
+        self._cl_max_reached = False
+
+        for i in range (0, self.wing.n_panels, nx):                             # step through panels stripewise 
+
+            i_s    = int (i/nx)
+            lift_s = lift_panels [i:(i+nx)].sum() 
+            b_s    = b_panels [i]                                           	# width of stripe 
+            c_s    = l_panels [i:(i+nx)].sum()                                  # chord of stripe 
+
+            # --- core  --  Anderson p. 409 -------------------
+
+            lift_y   = lift_s / b_s 
+            Cl_VLM_y = lift_y / (q_dyn * c_s)
+            if Cl_VLM_y > Cl_max[i_s]:                                          # Cl break down if > cl_max of airfoil 
+                Cl_y   = 0.0
+                lift_y = 0.0                                                    # lift break down if > cl_max of airfoil 
+                self._cl_max_reached = True 
+            else: 
+                Cl_y   = Cl_VLM_y
+
+            a_eff_y     = Cl_y     / (2 * np.pi)  * 180 / np.pi + alpha0[i_s]   # in degress
+            a_eff_VLM_y = Cl_VLM_y / (2 * np.pi)  * 180 / np.pi + alpha0[i_s]   # in degress
+            a_ind_y     = self.alpha - a_eff_y
+
+            if Cl_y == 0.0:
+                pass
+            # store results 
+
+            lift [i_s]          = lift_y     
+            lift_stripe [i_s]   = lift [i_s] * b_s 
+            Cl [i_s]            = Cl_y
+            Cl_VLM [i_s]        = Cl_VLM_y
+            alpha_eff [i_s]     = a_eff_y
+            alpha_ind [i_s]     = a_ind_y
+            alpha_eff_VLM [i_s] = a_eff_VLM_y
+
+        results = {}
+        results[OpPoint_Var.Y]              = y_stripes
+        results[OpPoint_Var.CL]             = Cl
+        results[OpPoint_Var.CL_VLM]         = Cl_VLM
+        results[OpPoint_Var.CL_MAX]         = Cl_max 
+        results[OpPoint_Var.MAX_MASK]       = (Cl_max * 0.98 - Cl_VLM) < 0        # numpy mask where Cl_VLM reaches, exceeds CL_MAX              
+
+        results[OpPoint_Var.LIFT]           = lift
+        results[OpPoint_Var.LIFT_STRIPE]    = lift_stripe
+        results[OpPoint_Var.ALPHA_MAX]      = self._get_alpha_max () 
+        results[OpPoint_Var.ALPHA_EFF]      = alpha_eff            
+        results[OpPoint_Var.ALPHA_EFF_VLM]  = alpha_eff_VLM            
+        results[OpPoint_Var.ALPHA_IND]      = -alpha_ind                            # take now negative   
+        results[OpPoint_Var.ALPHA]          = np.full (ns, self.alpha)     
+        results[OpPoint_Var.ALPHA0]         = alpha0     
+
+        # self._dump_aero_results (results)
+
+        if self._cl_max_reached:
+            pass
+
+        return results 
+    
+
+    def _viscous_loop (self):
+        """
+        Main VLM calculation as a loop to consider non-linear airfoil dcl/dalpha
+
+        Returns:
+            results_lists: aero_results of each iteration - the last one is the actual 
+        """
+
+        # first guess with alpha0 from airfoil polar 
+
+        alpha0  = self.polar.alpha0_stripes
+        wj      = self._calc_downwash (alpha0)                      # add downwash of flow and alpha0 of airfoil
+        cp      = self.wing.Qjj.dot(wj)                             # calc cp per panel 
+
+        results = self._calc_aero_results (cp, alpha0)              # derive all values from cp per panels    
+
+        Cl_VLM  = results[OpPoint_Var.CL_VLM].mean()                # to compare in Loop 
+        results_list = [results]
+
+        # iterate until only minor change in Lift of wing
+
+        for i in range (5):
+
+            # get current Lift to compare with result 
+
+            alpha_eff : np.ndarray = results[OpPoint_Var.ALPHA_EFF_VLM] 
+
+            # calculate new alpha0 per stripe based on alpha_eff of former calculation 
+
+            alpha0  = self._get_alpha0_from_alpha_eff (alpha_eff_stripes=alpha_eff)
+            wj      = self._calc_downwash (alpha0)
+            cp      = self.wing.Qjj.dot(wj)
+
+            results = self._calc_aero_results (cp, alpha0)
+
+            results_list.append (results)
+
+            # ---
+
+            Cl_VLM_new  = results[OpPoint_Var.CL_VLM].mean()                 # to compare in Loop 
+
+            # print (Cl_VLM, Cl_VLM_new)
+            if isclose (Cl_VLM, Cl_VLM_new, rel_tol=0.01):                   # 1.0% accuracy
+                break
+
+            Cl_VLM = Cl_VLM_new
+
+        self._cp = cp
+
+        return results_list
+
+
+    def _dump_aero_results (self, results : dict): 
+        
+        print(f"------- v: {self.polar.vtas:.2f}m/s  alpha: {self.alpha:.1f}° \n")
+
+        lift_stripes : np.ndarray = results[OpPoint_Var.LIFT_STRIPE]
+        L =  lift_stripes.sum() * 2.0 
+
+        print (f"   Total Lift: {L:.1f}  Mass: {L / 9.81: .2f} ")
+
+        print (f"{"i":>4s} {"y":>8s} {"cl":>8s} {"a0":>8s} {"a ind":>8s} {"a eff":>8s}")  
+
+        for i in range(self.wing.ny_panels):
+
+            y         = results[OpPoint_Var.Y] [i]
+            Cl        = results[OpPoint_Var.CL] [i] 
+            alpha0    = results[OpPoint_Var.ALPHA0] [i]  
+            alpha_ind = results[OpPoint_Var.ALPHA_IND] [i]  
+            alpha_eff = results[OpPoint_Var.ALPHA_EFF] [i]  
+
+            print (f"{i:4d} {y:8.2f} {Cl:8.2f} {alpha0:8.2f} {alpha_ind:8.2f} {alpha_eff:8.2f}")  
+
+
+    def _get_alpha0_from_alpha_eff (self, alpha_eff_stripes : np.ndarray) -> np.ndarray:
+        """ 
+        returns alpha0 per stripe based on current alpha_eff at stripe
+            - alpha_eff is taken to get cl of airfoil 
+            - based on alpha0 = alpha - cl/0.11 alpha0 is calculated per stripe 
+
+        This is a major part of the vsicous calculation loop  
+        """
+
+        from model.polar_set    import Polar
+
+        y_stripes = self.wing.y_stripes
+
+        sections_alpha0 = []
+        sections_y      = []
+
+        # collect alpha0 of airfoils of wingSections from airfoil polar
+
+        airfoil_polar : Polar
+        for section_y, airfoil_polar in self.airfoil_polars.items():
+
+            # extrapolate alpha_eff of stripe to get value for root and tip 
+            if section_y == [*self.airfoil_polars][0]:                      # extrapolate first section
+                z = np.polyfit(y_stripes[:2], alpha_eff_stripes[:2], 1)     # calculate polynomial of line
+                f = np.poly1d(z)
+                alpha_eff = f(section_y)
+            elif section_y == [*self.airfoil_polars][-1]:                   # extrapolate last section
+                z = np.polyfit(y_stripes[-2:], alpha_eff_stripes[-2:], 1)
+                f = np.poly1d(z)
+                alpha_eff = f(section_y)
+            else:
+                alpha_eff =  np.interp(section_y, y_stripes, alpha_eff_stripes)
+
+            # interpolate cl value in airfoil polar base on alpha_eff
+            Cl = np.interp(alpha_eff, airfoil_polar.alpha, airfoil_polar.cl)  # 'normal' alpha0 of polar'
+
+            # calaculate the inviscid equivalence alpha0 based on '2*pi' 
+            alpha0 = alpha_eff - Cl / 0.11
+
+            sections_alpha0.append(alpha0)
+            sections_y.append(section_y)
+
+        # alpha0 of stripe by interpolation of section alpha0 
+
+        alpha0_stripes = np.interp (self.wing.y_stripes, sections_y, sections_alpha0)
+
+        return alpha0_stripes
+
+
+    def _get_cl_max (self) -> np.ndarray:
+        """ 
+        retrieve cl_max per stripe from airfoil polars 
+        """
+
+        from model.polar_set    import Polar
+
+        # collect cl_max of airfoils of wingSections from airfoil polar
+
+        sections_cl_max = []
+        sections_y      = []
+        airfoil_polar : Polar
+
+        for section_y, airfoil_polar in self.airfoil_polars.items():
+            sections_cl_max.append(airfoil_polar.cl_max)
+            sections_y.append(section_y)
+
+        # alpha0 of stripe by interpolation of section alpha0 
+
+        cl_max_stripes = np.interp (self.wing.y_stripes, sections_y, sections_cl_max)
+        return cl_max_stripes
+
+
+
+    def _get_alpha_max (self) -> np.ndarray:
+        """ 
+        retrieve alpha_max (which is alpha at cl_max) per stripe from airfoil polars 
+        """
+
+        from model.polar_set    import Polar
+
+        # collect cl_max of airfoils of wingSections from airfoil polar
+
+        sections_alpha_max = []
+        sections_y      = []
+        airfoil_polar : Polar
+        
+        for section_y, airfoil_polar in self.airfoil_polars.items():
+            cl_max = airfoil_polar.cl_max
+            alpha_max = np.interp(cl_max, airfoil_polar.cl, airfoil_polar.alpha)
+            sections_alpha_max.append(alpha_max)
+            sections_y.append(section_y)
+
+        # alpha_max of stripe by interpolation of section alpha_max 
+
+        alpha_max_stripes = np.interp (self.wing.y_stripes, sections_y, sections_alpha_max)
+        return alpha_max_stripes
+
+
+    def _calc_downwash (self, alpha0_stripes : np.ndarray) -> np.ndarray:
+        """ 
+        calculate initial downwash per panel as the sum of 
+            - geometric alpha 
+            - alpha0 of the airfoils to represent camber of an airfoil 
+        """
+        alpha_rad      = self.alpha * np.pi / 180 
+        downwash_geo   = self.polar.vtas * alpha_rad # * cos (alpha_rad)
+
+        wj = np.zeros(self.wing.n_panels)
+
+        for istripe in range (self.wing.ny_panels):
+
+            alpha0_stripe   = - alpha0_stripes[istripe]         # alpha0 is negative 
+            downwash_alpha0 = self.polar.vtas * alpha0_stripe * np.pi / 180
+
+            istart = istripe * self.wing.nx_panels
+            iend   = istart + self.wing.nx_panels 
+            wj [istart:iend] = (downwash_geo + downwash_alpha0) / self.polar.vtas
+
+        return wj
+
+

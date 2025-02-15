@@ -11,6 +11,7 @@ import logging
 
 from base.widgets           import * 
 from base.diagram           import * 
+from base.panels            import Container_Panel, MessageBox
 
 from PyQt6.QtWidgets        import QFileDialog, QGraphicsLayoutItem
 
@@ -26,7 +27,7 @@ from pc2_artists            import *
 from pc2_dialogs            import Dialog_Edit_Image, Dialog_Edit_Paneling
 from wing                   import Wing, Planform, Planform_Paneled
 
-from modules.model.VLM_wing import VLM_OpPoint, OpPoint_Var
+from modules.model.VLM_wing import VLM_OpPoint, OpPoint_Var, v_from_re
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -121,6 +122,12 @@ class Diagram_Abstract (Diagram):
 
     def on_paneling_changed (self):
         """ slot to handle changed polar definitions """
+        # will behandled in subclass which has polars 
+        pass
+
+    @override
+    def on_new_polars (self):
+        """ slot to handle new polars loaded which were generated async by Worker """
         # will behandled in subclass which has polars 
         pass
 
@@ -275,10 +282,10 @@ class Item_Planform (Diagram_Item):
             l = QGridLayout()
             r,c = 0, 0
             CheckBox (l,r,c, text="Bounding Box", 
-                      get=lambda: self.show_bounding_box, set=self.set_show_bounding_box) 
+                      get=lambda: self.show_bounding_box, set=self.set_show_bounding_box)
             r += 1
             CheckBox (l,r,c, text="Airfoils", 
-                      get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
+                      get=lambda: self.show_airfoils, set=self.set_show_airfoils)
             CheckBox (l,r,c+1, text="also straked", 
                         get=lambda: self.show_strak, set=self.set_show_strak,
                         disable=lambda: not self.show_airfoils)    
@@ -337,12 +344,14 @@ class Item_Chord (Diagram_Item):
         """ define view range of this plotItem"""
 
         self.viewBox.setDefaultPadding(0.05)
-        self.viewBox.setYRange( 0, 1.1, padding=0.08)   
+        self.viewBox.setYRange( 0, 1.1, padding=0.08)  
 
         y_axis : pg.AxisItem = self.getAxis ("left")
         y_axis.setLabel (units="%")
         y_axis.setScale (100)
         self.showGrid(x=True, y=True)
+
+        logger.debug (f"{self} setup viewRange")
 
 
     @property
@@ -499,7 +508,7 @@ class Item_Panelling (Diagram_Item):
         """ dialog to edit paneling paramters  """
 
         # do an initial calculation of panels to get the chord difference value 
-        self.planform_paneled().c_diff_lines()
+        self.planform_paneled().recalc_cn_diff()
 
         dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled)  
 
@@ -530,7 +539,7 @@ class Item_VLM_Panels (Diagram_Item):
         super().__init__(*args, **kwargs)
 
         # set margins (inset) of self - there is an extra colum for color bar!
-        self.setContentsMargins ( 0,20,10,20)
+        self.setContentsMargins ( 0,30,10,10)
 
 
 
@@ -545,12 +554,20 @@ class Item_VLM_Panels (Diagram_Item):
 
 
     @override
+    def plot_title(self, **kwargs):
+
+        n_panels = self.wing().vlm_wing.n_panels
+        return super().plot_title(subtitle=f"{n_panels} panels", **kwargs)
+    
+
+
+    @override
     def setup_artists (self):
         """ create and setup the artists of self"""
         
         # self._add_artist (Airfoil_Name_Artist   (self, self.planform, show_legend=False))
         self._add_artist (VLM_Panels_Artist     (self, self.planform, opPoint_fn=self.opPoint, show_legend=False))
-        self._add_artist (WingSections_Artist   (self, self.planform, show=False, show_legend=False,
+        self._add_artist (WingSections_Artist   (self, self.planform, show=True, show_legend=False,
                                                         show_mouse_helper=False, wingSection_fn=self._wingSection_fn))  
 
     @override
@@ -567,7 +584,18 @@ class Item_VLM_Panels (Diagram_Item):
         self.showAxis('left', show=True)
         self.showAxis('bottom', show=True)
 
+        logger.debug (f"{self} setup viewRange")
 
+
+    @property 
+    def show_colorBar (self) -> bool:
+        """ show color bar for Cp"""
+        artist : VLM_Panels_Artist = self._get_artist (VLM_Panels_Artist)[0]
+        return artist.show_colorBar
+    
+    def set_show_colorBar (self, aBool: bool):
+        artist : VLM_Panels_Artist = self._get_artist (VLM_Panels_Artist)[0]
+        return artist.set_show_colorBar (aBool)
 
 
     @property
@@ -580,8 +608,14 @@ class Item_VLM_Panels (Diagram_Item):
             r,c = 0, 0 
             Button     (l,r,c, text="Paneling Options", width=130, colSpan=3,
                         set=self._edit_paneling, toolTip="Define / Edit paneling options")
+            r +=1
+            SpaceR   (l,r)
+            r += 1
+            CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
+                        obj=self, prop=Item_VLM_Panels.show_colorBar,
+                        disable=lambda: self.opPoint() is None)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height =80,
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height =100,
                                               switched_on=self._show,  
                                               switchable=True, on_switched=self.setVisible)
             
@@ -592,7 +626,7 @@ class Item_VLM_Panels (Diagram_Item):
         """ dialog to edit paneling paramters  """
 
         # do an initial calculation of panels to get the chord difference value 
-        self.wing().planform_paneled.c_diff_lines()
+        self.wing().planform_paneled.recalc_cn_diff()
 
         # show difference between original and paneled planform before dialog
         panels_artist : VLM_Panels_Artist = self._get_artist(VLM_Panels_Artist)[0]
@@ -616,38 +650,62 @@ class Item_VLM_Result (Diagram_Item):
     Diagram (Plot) Item to show result of aero calculation
     """
 
-    name        = "View VLM Results"                               # used for link and section header 
-    title       = "VLM Results"                 
+    name        = "Aero Analysis"                           # used for link and section header 
+    title       = ""                                        # will be dynamically set                 
     subtitle    = ""                                 
+
+    sig_opPoint_changed       = pyqtSignal()                # polar definition changed  
+
 
     def __init__(self, *args, wingSection_fn = None, opPoint_fn = None, **kwargs):
 
         self._wingSection_fn = wingSection_fn               # bound method to get currrent wing section
-        self._opPoint_fn = opPoint_fn                       # bound method to get currrent opPoint
-        self._opPoint_var = OpPoint_Var.CL
+
+        self._opPoint_fn    = opPoint_fn                    # bound method to get currrent opPoint
+        self._opPoint_var   = OpPoint_Var.CL
+        self._vtas          = None                          # true air speed
+        self._opPoint_alpha = None
+        self._polar_name    = None
+        self._opPoint_fixed_to_alpha_max = False            # opPoint is fixed at alpha_max 
 
         super().__init__(*args, **kwargs)
 
-        self.setContentsMargins ( 0,50,50,20)
+        self.setContentsMargins ( 0,30,50,10)
 
 
     def wing (self) -> Wing: 
         return self._getter()
 
+
     def planform (self) -> Planform:
         return self.wing()._planform
 
-    def opPoint (self) -> VLM_OpPoint:
-        return self._opPoint_fn()
 
+    def polar (self) -> VLM_Polar:
+        """ current VLM polar """
+        return self.wing().vlm_wing.polar_at (self.vtas)
+
+
+    def opPoint (self) -> VLM_OpPoint:
+        """ current selected opPoint based on vta and aplha"""
+        return self.polar().opPoint_at (self.opPoint_alpha) if self.isVisible() else None
+
+
+    @override
+    def plot_title(self, **kwargs):
+
+        opPoint_label = self.opPoint().name if self.opPoint() else ""
+        return super().plot_title(title = f"{self.opPoint_var} along span", subtitle=opPoint_label, **kwargs)
+    
 
     @override
     def setup_artists (self):
         """ create and setup the artists of self"""
         
-        self._add_artist (VLM_Result_Artist     (self, self.planform, opPoint_fn=self.opPoint, show_legend=True))
+        self._add_artist (VLM_Result_Artist     (self, self.planform, show_legend=True,
+                                                        polar_fn=self.polar, 
+                                                        opPoint_fn=self.opPoint))
                 
-
     @override
     def setup_viewRange (self):
         """ define view range of this plotItem"""
@@ -666,19 +724,88 @@ class Item_VLM_Result (Diagram_Item):
         rect = self.viewBox.childrenBoundingRect()
         max_val, min_val = rect.top(), rect.bottom() 
         max_val, min_val = (max_val, min_val) if max_val > min_val else (min_val, max_val)
+        max_val, min_val = round(max_val,2), round(min_val,2)
 
         if self.opPoint_var == OpPoint_Var.ALPHA:
             range_max = 10 if max_val < 10 else (int (max_val/5) + 1) * 5
             range_min = 0  if min_val >= 0 else (int (min_val/5) - 1) * 5
-        if self.opPoint_var == OpPoint_Var.CL:
+        elif self.opPoint_var == OpPoint_Var.CL:
             range_max = 1  if max_val < 1  else (int (max_val/0.5) + 1) * 0.5
             range_min = 0  if min_val >= 0 else (int (min_val/0.5) - 1) * 0.5
         else:
             range_min = 0.0 if min_val > 0 else min_val
             range_max = max_val * 1.2 if max_val > 0 else 0
 
+        logger.debug (f"{self} set viewBox yRange {range_min} {range_max}")
         self.viewBox.setYRange (range_min, range_max)
 
+
+    @property
+    def vtas (self) -> float:
+        """ true air speed"""
+
+        chord  = self.wing().planform.chord_root / 1000
+        return v_from_re (self.polar_def.re, chord)
+
+    @property
+    def polar_def_list (self) -> list:
+
+        polars = self.wing().polar_definitions
+        return [polar.name for polar in polars]
+
+    @property
+    def polar_def (self) -> Polar_Definition:
+        """ polar definition of wingSection at root"""
+        polars = self.wing().polar_definitions
+
+        for polar in polars:
+            if polar.name == self._polar_name: 
+                return polar
+        return polars[0]
+
+
+    @property
+    def polar_def_name (self) -> str:
+        return self.polar_def.name
+        
+    def set_polar_def_name (self, polar_name): 
+        polars = self.wing().polar_definitions
+        for polar in polars:
+            if polar.name == polar_name: 
+                self._polar_name = polar_name
+                self.refresh()
+
+    @property
+    def opPoint_alpha (self) -> float:
+        """ true air speed"""
+        return self._opPoint_alpha if self._opPoint_alpha is not None else 2.0
+
+    def set_opPoint_alpha (self, aVal : float):
+        self._opPoint_alpha = clip (aVal, -20, 20)
+        self.refresh ()
+        self._set_yRange ()
+        self.sig_opPoint_changed.emit()
+
+
+    @property
+    def opPoint_fixed_to_alpha_max (self)-> bool:
+        """ opPoint is fixed to alpha_max"""
+        return self._opPoint_fixed_to_alpha_max
+
+    def set_opPoint_fixed_to_alpha_max (self, aBool : bool):
+        if aBool: 
+            opPoint = self.polar().opPoint_at_alpha_max ()
+            if opPoint is not None: 
+                self._opPoint_fixed_to_alpha_max = True
+                self.set_opPoint_alpha (opPoint.alpha)
+            else: 
+                self._opPoint_fixed_to_alpha_max = False
+                MessageBox.error (self,"VLM calculation", "Alpha max could not be determined")
+        else: 
+            self._opPoint_fixed_to_alpha_max = False
+            # self.set_opPoint_alpha (2.0)
+            self.refresh()
+        
 
     @property
     def opPoint_var (self) -> OpPoint_Var:
@@ -691,6 +818,7 @@ class Item_VLM_Result (Diagram_Item):
         artist : VLM_Result_Artist = self._get_artist (VLM_Result_Artist)[0]
         artist.set_opPoint_var (aVal)
 
+        self.refresh()
         self._set_yRange ()
 
     @property
@@ -705,22 +833,62 @@ class Item_VLM_Result (Diagram_Item):
 
         if self._section_panel is None:   
 
-            l = QGridLayout()   
-            r, c = 0, 0  
-            Label       (l,r,c,   width=60, get="Variable")
+            l = QGridLayout()
+            r,c = 0, 0
+            Label    (l,r,c, colSpan=4, get=f"Operating Point Definition", style=style.COMMENT)
+            r += 1
+            Label    (l,r,c,   width=60, get="Polar")
+            ComboBox (l,r,c+1, width=130, obj=self, prop=Item_VLM_Result.polar_def_name, colSpan=2,
+                         options=lambda: self.polar_def_list)
+            r +=1
+            FieldF   (l,r,c, lab="Speed", lim=(1,500), step=0.5, width=60, unit="m/s", dec=1, 
+                        obj=self, prop=Item_VLM_Result.vtas, disable=True) 
+            r += 1
+            CheckBox (l,r,c, text="Set close to Alpha max", colSpan=3,
+                        obj=self, prop=Item_VLM_Result.opPoint_fixed_to_alpha_max)
+            r +=1
+            FieldF   (l,r,c, lab="Alpha", lim=(-20,20), step=0.5, width=60, unit="°", dec=1, 
+                        obj=self, prop=Item_VLM_Result.opPoint_alpha,
+                        disable=lambda: self.opPoint_fixed_to_alpha_max) 
+            # slider bug - dec values 
+            # Slider   (l,r,c+2, lim=(-20,20), step=0.5, width=60, dec=1, 
+            #             obj=self, prop=Item_VLM_Result.opPoint_alpha,
+            #             hide=lambda: self.opPoint_fixed_to_alpha_max) 
+            r += 1
+            SpaceR   (l,r, height=10)
+            r += 1
+            Label    (l,r,c, colSpan=4, get=f"Diagram Variable", style=style.COMMENT)
+            r += 1
+            Label    (l,r,c,   width=60, get="Variable")
 
-            ComboBox    (l,r,c+1, width=60, obj=self, prop=Item_VLM_Result.opPoint_var, 
-                         options=OpPoint_Var.values)
+            ComboBox (l,r,c+1, width=60, obj=self, prop=Item_VLM_Result.opPoint_var, 
+                         options=self.opPoint_var_list)
+            r += 1
+            SpaceR   (l,r, height=10, stretch=3)
+            r += 1
+            Label    (l,r,c, colSpan=4, get=f"Powered by Panel Aero", style=style.COMMENT, fontSize=size.SMALL)
+            l.setColumnStretch (3,2)
+            l.setColumnMinimumWidth (0,50)
 
-            SpaceR      (l,r)
-            l.setColumnMinimumWidth (0,60)
-            l.setColumnStretch (2,2)
-
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height =80,
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height =260,
                                               switched_on=self._show,  
-                                              switchable=True, on_switched=self.setVisible)
-            
+                                              switchable=True, on_switched=self.setVisible)        
         return self._section_panel 
+
+
+    def reset_settings (self): 
+        """ reset section settings (when new wing)"""
+        
+        self._opPoint_var   = OpPoint_Var.CL
+        self._vtas          = None                          # true air speed
+        self._opPoint_alpha = None
+        self._polar_name    = None
+        self._opPoint_fixed_to_alpha_max = False            # opPoint is fixed at alpha_max 
+
+        artist : VLM_Result_Artist = self._get_artist (VLM_Result_Artist)[0]
+        artist.set_opPoint_var (self._opPoint_var)
+
+
 
 
 
@@ -2141,6 +2309,7 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
     # --- public slots ---------------------------------------------------
 
 
+    @override
     def on_new_polars (self):
         """ slot to handle new polars loaded which were generated async by Worker """
 
@@ -2187,10 +2356,6 @@ class Diagram_Wing_Aero (Diagram_Abstract):
         self._airfoil_panel      = None         
         self._export_panel       = None                     # export to xflr5 ...
         self._general_panel      = None                     # panel with general settings  
-        self._show_wingSections  = False
-
-        self._vtas               = 20.0                     # true air speed
-        self._alpha              = 2.0
 
         super().__init__(*args, **kwargs)
 
@@ -2215,6 +2380,9 @@ class Diagram_Wing_Aero (Diagram_Abstract):
         self._add_item (i, 2, 0)
         i.viewBox.setXLink (Item_VLM_Panels.name)
 
+        i.sig_opPoint_changed.connect   (self._on_opPoint_changed)
+        i.sig_visible.connect           (self._on_aero_analysis_visible)
+
         # generic connect to artist changed signals 
 
         for item in self.diagram_items:
@@ -2225,13 +2393,18 @@ class Diagram_Wing_Aero (Diagram_Abstract):
                 artist.sig_wingSection_new.connect      (self.sig_wingSection_new.emit) 
                 artist.sig_wingSection_selected.connect (self.sig_wingSection_selected.emit) 
 
+        # show wingSections where possible
+
+        for artist in self._get_artist (WingSections_Artist): 
+            artist.set_show (True) 
+
 
     def on_paneling_changed (self):
         """ slot to handle changed polar definitions """
 
         logger.debug (f"{str(self)} on paneling changed - visible: {self.isVisible()}")
 
-        self.refresh()
+        self.refresh(also_viewRange=False)
 
 
     @override
@@ -2240,6 +2413,28 @@ class Diagram_Wing_Aero (Diagram_Abstract):
         # overridden to refresh only wingSection artist 
         for artist in self._get_artist (WingSections_Artist):
             artist.refresh ()
+
+
+    def _on_opPoint_changed (self): 
+        """ slot to handle new opPOint in VLM_Result item """
+        artist = self._get_artist (VLM_Panels_Artist)[0]
+        artist.refresh()
+
+
+    def _on_aero_analysis_visible (self): 
+        """ slot to handle activation of aero analysis """
+        item = self._get_items (Item_VLM_Panels)[0]
+        item.section_panel.refresh()                                    # disable check show cp 
+
+
+    @override
+    def _on_wingSection_changed (self):
+        """ slot to handle section changes made in diagram """
+
+        logger.debug (f"{str(self)} on on_wingSection_changed in diagram")
+    
+        # do not refresh as panelling will also change and refresh 
+        self.sig_wingSection_changed.emit()         # refresh app
 
 
     # --- view section panels ---------------------------------------------------
@@ -2260,7 +2455,6 @@ class Diagram_Wing_Aero (Diagram_Abstract):
                 layout.addWidget (item.section_panel,stretch=1)
 
         layout.insertWidget (0, self.general_panel, stretch=0)          # common settings
-        layout.insertWidget (layout.count()-1, self.section_panel)      # vlm aero panel         
         layout.addStretch (1)
         layout.addWidget (self.export_panel)                            # export xflr5 panel 
 
@@ -2275,10 +2469,10 @@ class Diagram_Wing_Aero (Diagram_Abstract):
 
     @property
     def show_wingSections (self) -> bool: 
-        return self._show_wingSections
+        artist = self._get_artist (WingSections_Artist)[0]
+        return artist.show 
     
     def set_show_wingSections (self, aBool : bool): 
-        self._show_wingSections = aBool == True
         self._show_artist (WingSections_Artist, show=aBool)
 
     @property
@@ -2308,54 +2502,12 @@ class Diagram_Wing_Aero (Diagram_Abstract):
         self.wing().planform_paneled.set_use_nick_name(aBool == True)
         self.airfoil_name_artist.set_use_nick_name (aBool)
 
-    def _on_show_vlm (self, aBool):
-        """ slot - user switched VLM analysis"""
-
-        item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
-        item.section_panel.set_visibilty (aBool)
-
-        if aBool:
-            if item.section_panel.switched_on:
-                item.show()
-        else:  
-            item.hide()
-        
-        # item.section_panel.set_switched_on (aBool)
-
-
-    @property
-    def vtas (self) -> float:
-        """ true air speed"""
-        return self._vtas
-
-    def set_vtas (self, aVal : float):
-        self._vtas = clip (aVal, 1, 500)
-        self.refresh()
-
-
-    @property
-    def alpha (self) -> float:
-        """ true air speed"""
-        return self._alpha
-
-    def set_alpha (self, aVal : float):
-        self._alpha = clip (aVal, -20, 20)
-        self.refresh ()
 
     def opPoint (self) -> VLM_OpPoint:
         """ current selected opPoint based on vta and aplha"""
 
-        return self.wing().vlm_wing.polar_at (self.vtas).opPoint_at (self.alpha)
-
-    @property 
-    def show_colorBar (self) -> bool:
-        """ show color bar for Cp"""
-        artist : VLM_Panels_Artist = self._get_artist (VLM_Panels_Artist)[0]
-        return artist.show_colorBar
-    
-    def set_show_colorBar (self, aBool: bool):
-        artist : VLM_Panels_Artist = self._get_artist (VLM_Panels_Artist)[0]
-        return artist.set_show_colorBar (aBool)
+        item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
+        return item.opPoint()
 
 
     @property 
@@ -2376,39 +2528,6 @@ class Diagram_Wing_Aero (Diagram_Abstract):
             self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
                                               switchable=False, switched_on=True)
         return self._general_panel 
-
-
-    @property
-    def section_panel (self) -> Edit_Panel:
-        """ return section panel within view panel"""
-
-        if self._section_panel is None:   
-
-            l = QGridLayout()
-            r,c = 0, 0
-            FieldF   (l,r,c, lab="Speed", lim=(1,500), step=0.5, width=80, unit="m/s",
-                        obj=self, prop=Diagram_Wing_Aero.vtas) 
-            r +=1
-            FieldF   (l,r,c, lab="Alpha", lim=(-20,20), step=0.5, width=80, unit="°",
-                        obj=self, prop=Diagram_Wing_Aero.alpha) 
-            r +=1
-            Slider   (l,r,c+1, lim=(-10,20), step=0.5, width=80, dec=0, 
-                        obj=self, prop=Diagram_Wing_Aero.alpha) 
-            r +=1
-            SpaceR (l,r)
-            r += 1
-            CheckBox   (l,r,c, text="Show Cp in panels", colSpan=2,
-                            obj=self, prop=Diagram_Wing_Aero.show_colorBar)
-            r +=1
-            SpaceR (l,r)
-            l.setColumnStretch (2,2)
-            l.setColumnMinimumWidth (0,60)
-
-            self._section_panel = Edit_Panel (title="Aero Analysis", layout=l, height=160,
-                                              switchable=True, hide_switched=True, switched_on=True, 
-                                              on_switched=self._on_show_vlm)
-
-        return self._section_panel 
 
 
     @property
@@ -2446,6 +2565,10 @@ class Diagram_Wing_Aero (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 1
+            Button      (l,r,c, text="Export Polar", width=100, set=self._export_polar)
+            r += 1
+            SpaceR      (l,r,10,0)
+            r += 1
             Button      (l,r,c, text="Export Xflr5", width=100, set=self.sig_export_xflr5.emit)
             r += 1
             SpaceR      (l,r,2,0)
@@ -2462,9 +2585,78 @@ class Diagram_Wing_Aero (Diagram_Abstract):
             l.setColumnMinimumWidth (0,10)
             l.setColumnStretch (2,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(100,None),
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(120,None),
                                               switchable=False, switched_on=True)
         return self._export_panel 
+
+
+
+    def _export_polar (self):
+        """ generate and export a polar to csv"""
+
+        item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
+        vtas = item.vtas
+
+        polar = self.wing().vlm_wing.polar_at (vtas)
+        fileName = f"{polar.name}.csv"
+
+        filters  = "Polar csv files (*.csv)"
+        newPathFilename, _ = QFileDialog.getSaveFileName(self, caption="Save Wing Polar", 
+                                                         directory=fileName, filter=filters)
+
+        if newPathFilename: 
+            polar.export_to_csv (newPathFilename)
+
+
+
+
+
+    # --- public slots ---------------------------------------------------
+
+
+    def on_new_polars (self):
+        """ slot to handle new polars loaded which were generated async by Worker """
+
+        logger.debug (f"{str(self)} on new polars")
+
+        if self.isVisible():
+            item = self._get_items (Item_VLM_Panels)[0]
+            if item.isVisible(): 
+                item.refresh()
+            
+            item = self._get_items (Item_VLM_Result)[0]
+            if item.isVisible():
+                item.refresh()
+                item.setup_viewRange ()                             # new polars could leed to show first time 
+
+
+    @override
+    def on_wingSection_changed (self):
+        """ slot to handle changed wing section data"""
+
+        # overridden to ensure new strak (-> airfoil polar) when wingSection changed 
+        self.wing().planform.wingSections.do_strak()
+        super().refresh(also_viewRange=False)
+
+
+    @override
+    def on_wingSection_selected (self):
+        """ slot to handle changed wing section data"""
+
+        # overridden to ensure new strak (-> airfoil polar) when wingSection changed 
+        self.wing().planform.wingSections.do_strak()
+        super().refresh(also_viewRange=False)
+
+
+    @override
+    def on_wing_new (self):
+        """ slot to handle new wing signal """
+
+        # overridden to ensure reset section variables when new wing 
+        item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
+        item.reset_settings ()
+
+        super().refresh()                                   
 
 
 

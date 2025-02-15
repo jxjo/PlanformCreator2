@@ -16,12 +16,12 @@ from pathlib import Path
 
 from PyQt6.QtCore           import QMargins
 from PyQt6.QtWidgets        import QApplication, QMainWindow, QWidget, QMessageBox, QFileDialog
-from PyQt6.QtWidgets        import QGridLayout, QVBoxLayout, QHBoxLayout
+from PyQt6.QtWidgets        import QVBoxLayout, QHBoxLayout
 from PyQt6.QtWidgets        import QTabWidget
 from PyQt6.QtGui            import QCloseEvent, QGuiApplication
 
 # let python find the other modules in modules relativ to path of self - ! before python system modules
-# common modules hosted by AirfoilEditor 
+# common modules hosted by AirfoilEditor
 sys.path.insert (1,os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree/modules'))
 # local modules
 sys.path.insert (1,os.path.join(Path(__file__).parent , 'modules'))
@@ -39,7 +39,6 @@ from pc2_panels             import *
 from pc2_diagrams           import *
 from pc2_dialogs            import *
 
-from modules.model.VLM_wing import VLM_Wing
 
 import logging
 logger = logging.getLogger(__name__)
@@ -272,21 +271,21 @@ class App_Main (QMainWindow):
                                         geometry=geometry, maximize=maximize)
 
 
-        # Worker for polar generation ready? 
+        # Worker for polar generation ready?
 
         Worker().isReady (__file__, min_version=self.WORKER_MIN_VERSION)
         # if Worker.ready:
         #     Worker().clean_workingDir (self.airfoil().pathName)
 
-        # if no initial pc2 file, try to get last openend pc2 file 
+        # if no initial pc2 file, try to get last openend pc2 file
 
         if not pc2_file: 
-            pc2_file = Settings().get('last_opened', default=None) 
+            pc2_file = Settings().get('last_opened', default=None)
 
         if pc2_file and not os.path.isfile (pc2_file):
-                logger.error ("Parameter file '%s' doesn't exist" %pc2_file )
-                Settings().set('last_opened', None) 
-                pc2_file = None
+            logger.error (f"Parameter file '{pc2_file}' doesn't exist")
+            Settings().set('last_opened', None)
+            pc2_file = None
 
 
         # create the 'wing' model  
@@ -357,8 +356,7 @@ class App_Main (QMainWindow):
             self._watchdog.start()
 
             for diagram in self._diagrams:
-                if isinstance(diagram, Diagram_Airfoil_Polar):
-                    self._watchdog.sig_new_polars.connect         (diagram.on_new_polars)
+                self._watchdog.sig_new_polars.connect         (diagram.on_new_polars)
 
 
     def __repr__(self) -> str:
@@ -486,7 +484,7 @@ class App_Main (QMainWindow):
     def refresh_paneling (self):
         """ refresh vlm panels"""
 
-        self.wing()._vlm_wing = None 
+        self.wing().vlm_wing_reset ()
 
         self.sig_paneling_changed.emit()
 
@@ -629,7 +627,6 @@ class App_Main (QMainWindow):
 
         # dialog = Dialog_Settings (self, name=self.name)
         # self.wait_window (dialog)
-        pass
 
 
     #-------------

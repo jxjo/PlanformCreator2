@@ -922,7 +922,7 @@ class Dialog_Edit_Paneling (Dialog):
                             style=lambda: style.WARNING if self.planform.is_cn_diff_exceeded else style.NORMAL,
                             hide= lambda: not bool(self.planform.cn_diff_max))
             Label       (l,r,c+5, get="Currently exceeded", colSpan=2, 
-                            style=style.COMMENT, hide=lambda: not bool(self.planform.cn_diff_max))
+                            style=style.COMMENT, hide=lambda: not self.planform.is_cn_diff_exceeded)
             Label       (l,r,c+5, get=lambda: f"Currently {self.planform.cn_diff:.1%}", height=20, colSpan=2, 
                             style=style.COMMENT, hide=lambda: self.planform.is_cn_diff_exceeded)
             r += 1

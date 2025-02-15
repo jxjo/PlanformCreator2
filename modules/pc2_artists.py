@@ -18,7 +18,7 @@ from wing                       import WingSection, WingSections
 from wing                       import Flaps, Flap, Image_Definition
 from model.airfoil              import Airfoil, GEO_BASIC
 from model.polar_set            import *
-from modules.model.VLM_wing     import VLM_OpPoint, OpPoint_Var
+from modules.model.VLM_wing     import VLM_OpPoint, VLM_Polar,OpPoint_Var
 
 from PyQt6.QtGui                import QColor, QImage, QBrush, QPen, QTransform
 from PyQt6.QtCore               import pyqtSignal
@@ -716,7 +716,7 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
 
         self._plot_panels ()
 
-        self.set_help_message ("Adapt paneling of the wing with 'Paneling Options'")
+        self.set_help_message ("Paneling of the wing can be customized with 'Paneling Options'")
 
 
     def _plot_panels (self):
@@ -726,14 +726,19 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         nx = self.wing.vlm_wing.nx_panels
         ny = self.wing.vlm_wing.ny_panels
 
-        if self.show_colorBar:
-            z_panel = self.opPoint.Cp_panels
+        if self.show_colorBar and self.opPoint:
+            z_panel    = self.opPoint.Cp_viscous_panels
             colorMap   = pg.colormap.get ('viridis')
             edgecolors = pg.mkPen(COLOR_BOX.darker(130))
         else: 
-            z_panel = np.zeros (len(panels))
-            colorMap   = pg.colormap.get ('CET-C5s')
+            if self.opPoint:
+                z_panel = self._get_z_critical_panels (len(panels))
+                colorMap   = pg.colormap.get ('CET-L13')
+            else:
+                z_panel    = np.zeros (len(panels))
+                colorMap   = pg.colormap.get ('CET-C5s')
             edgecolors = pg.mkPen (COLOR_BOX)
+
 
 
         # build 2d mesh array for PColorMeshItem
@@ -755,7 +760,7 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         for iy in range (ny):
             y_vals = [panels[i].p0[1]] * (nx+1) 
             x_vals = []
-            z_vals = [] # np.linspace (0,1, nx)          # testing 
+            z_vals = []  
 
             for ix in range (nx): 
                 x_vals.append (panels[i].p0[0])
@@ -786,9 +791,9 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         x_mm = np.array(y) * 1000
         z    = np.array(z) 
 
-        p = pg.PColorMeshItem (x_mm,y_mm,z, edgecolors=edgecolors, enableAutoLevels=True, width=1)
+        p = pg.PColorMeshItem (x_mm,y_mm,z, edgecolors=edgecolors, enableAutoLevels=False, width=1)
 
-        # p.setLevels ((0,3))
+        p.setLevels (self._get_mesh_levels (z, max_default=3))
         p.setColorMap (colorMap)
 
         self._add (p)
@@ -825,6 +830,20 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         # spen = pg.mkPen (color = "yellow")
         # self._plot_dataItem  (ljk_x, ljk_y, pen=pen, symbol="o", symbolPen=spen, symbolSize=3, zValue=2)   
 
+    def _get_mesh_levels (self, z : np.ndarray, max_default = 5.0) -> tuple[float,float]: 
+        """ returns min, max for the color mesh with z value  """
+
+        # get y data range and adjust new  
+        max_val, min_val = np.max (z), np.min (z)
+        max_val, min_val = round(max_val,2), round(min_val,2)
+
+        step = max_default / 2
+
+        range_max = max_default if max_val < max_default else (int (max_val/step) + 1) * step
+        range_min = 0  if min_val >= 0 else (int (min_val/step) - 1) * step
+
+        return range_min, range_max
+
 
     def _add_colorBar (self, colorMeshItem):
         """ add color bar to show colored panels fo Cp"""
@@ -844,14 +863,30 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
             self._colorBar.setImageItem (colorMeshItem)                 # update colorBar
 
 
-
     def _remove_colorBar (self):
-
+        """ remove again existing color bar"""
         if self._colorBar is not None: 
             self._pi.layout.removeItem(self._colorBar)
             self._pi.layout.setColumnMinimumWidth ( 3, 50)              # ensure width for color keeps reserved
             self._colorBar = None           
 
+
+    def _get_z_critical_panels (self,npanels) -> np.ndarray:
+        """ returns z-Value of panels where Cl reaches Cl_max"""
+
+        z_panel    = np.zeros (npanels)
+
+        mask    = self.opPoint.aero_results [OpPoint_Var.MAX_MASK] 
+
+        nx = self.opPoint.wing.nx_panels
+        ny = self.opPoint.wing.ny_panels
+
+        for iy in range (ny): 
+            if mask[iy]:
+                istart = iy * nx
+                z_panel[istart:istart+nx] = 1.5 
+
+        return z_panel        
 
 
 class VLM_Result_Artist (Abstract_Artist_Planform):
@@ -861,20 +896,26 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
     """    
 
     def __init__ (self, *args, 
+                  polar_fn = None, 
                   opPoint_fn = None, 
                   opPoint_var = OpPoint_Var.CL, 
-                  show_strak=False, 
                   **kwargs):
         
-        self._opPointFn     = opPoint_fn                                    # bound method to get current opPoint
+        self._polar_fn      = polar_fn                      # bound method to get current polar
+        self._opPoint_fn    = opPoint_fn                    # bound method to get current opPoint
         self._opPoint_var   = opPoint_var
         super().__init__ (*args, **kwargs)
+
+
+    @property
+    def polar (self) -> VLM_Polar:
+        """ current wing polar """
+        return self._polar_fn()
 
     @property
     def opPoint (self) -> VLM_OpPoint:
         """ current opPoint to show (e.g. cp value of panel)"""
-        return self._opPointFn()
-
+        return self._opPoint_fn()
 
     @property
     def opPoint_var (self) -> OpPoint_Var:
@@ -883,42 +924,124 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
     def set_opPoint_var (self, aVal : OpPoint_Var):
         self._opPoint_var = aVal
-        self.refresh()
 
 
     def _plot (self): 
-    
-        
+
+        # is polar ready to show results?
+
+        if not self.polar.is_ready ():
+            if self.polar.is_generating_airfoil_polars:
+                self._plot_text (f"Generating polars", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
+            else:
+                text = 'huhu'.join (self.polar.error_reason)  
+                text = text.replace ("<", "'").replace (">", "'").replace ("huhu", "<br>") 
+                self._plot_text (text, color=qcolors.ERROR, itemPos=(0.5,0.5))
+            return   
+
         # get dict with results of aero calculation - values per y position
 
-        y, vars_values  = self.opPoint.aero_results()
-        x_mm  = y * 1000                            # change coordinate system to local [mm]
+        aero_results  = self.opPoint.aero_results
 
         # in case of ALPHA we'll plot the three angles 
 
-        if self.opPoint_var in [OpPoint_Var.ALPHA_EFF, OpPoint_Var.ALPHA_IND, OpPoint_Var.ALPHA]:
-            opPoint_vars = [OpPoint_Var.ALPHA_EFF, OpPoint_Var.ALPHA_IND, OpPoint_Var.ALPHA]
+        if self.opPoint_var == OpPoint_Var.ALPHA:
+            opPoint_vars = [OpPoint_Var.ALPHA_EFF, OpPoint_Var.ALPHA_IND, 
+                            OpPoint_Var.ALPHA, OpPoint_Var.ALPHA0, OpPoint_Var.ALPHA_MAX]
+        elif self.opPoint_var == OpPoint_Var.CL:
+            opPoint_vars = [OpPoint_Var.CL, OpPoint_Var.CL_MAX, OpPoint_Var.CL_VLM]
         else: 
             opPoint_vars = [self.opPoint_var]
 
         # plot all opPoint variables 
 
         for opPoint_var in opPoint_vars:
-            var_values = vars_values [opPoint_var]
 
+            brush = None 
             if opPoint_var == OpPoint_Var.ALPHA:
                 pen   = pg.mkPen (color="red", width=1,style=Qt.PenStyle.DashLine)
             elif opPoint_var == OpPoint_Var.ALPHA_IND:
                 pen   = pg.mkPen (color="red", width=1,style=Qt.PenStyle.DotLine)
-            elif opPoint_var == OpPoint_Var.ALPHA:
+            elif opPoint_var == OpPoint_Var.ALPHA_EFF:
                 pen   = pg.mkPen (color="red", width=1)
+            elif opPoint_var == OpPoint_Var.ALPHA0:
+                pen   = pg.mkPen (color="darkorchid", width=1, style=Qt.PenStyle.DashLine)
+            elif opPoint_var == OpPoint_Var.ALPHA_MAX:
+                pen   = pg.mkPen (color="orange", width=1, style=Qt.PenStyle.DashLine)
+            elif opPoint_var == OpPoint_Var.CL_MAX:
+                pen   = pg.mkPen (color="orange", width=1, style=Qt.PenStyle.DashLine)
+            elif opPoint_var == OpPoint_Var.CL_VLM:
+                pen   = pg.mkPen (color="limegreen", width=1, style=Qt.PenStyle.DotLine)
             else:
                 pen   = pg.mkPen (color="limegreen", width=1)
+                brush = pg.mkBrush (QColor("limegreen").darker (600))
 
             label = str(opPoint_var)
-            self._plot_dataItem  (x_mm, var_values, pen=pen, name=label, antialias=False, zValue=1)   
+
+            y          = aero_results [OpPoint_Var.Y]
+            var_values = aero_results [opPoint_var]
+
+            self._plot_dataItem  (y * 1000, var_values, pen=pen, name=label, antialias=False, zValue=1,
+                                fillLevel=0.0, fillBrush=brush) 
+
+            if opPoint_var == OpPoint_Var.CL_VLM:
+                self._plot_critical_Cl_stripes (aero_results)
 
 
+            # show viscous loop 
+            # zValue = 10 
+
+            # for aero_results in reversed (self.opPoint._aero_results_list):
+            #     y          = aero_results [OpPoint_Var.Y]
+            #     var_values = aero_results [opPoint_var]
+
+            #     zLabel = label + str(zValue)
+            #     self._plot_dataItem  (y * 1000, var_values, pen=pen, name=zLabel, antialias=False, zValue=zValue,
+            #                         fillLevel=0.0, fillBrush=brush) 
+
+            #     newPen = QPen (pen)
+            #     color = newPen.color().darker (150)
+            #     newPen.setColor (color) 
+            #     pen = newPen
+            #     zValue -= 1
+
+    def _plot_critical_Cl_stripes (self, results):
+        """plot 'red' line where Cl reaches Cl_max using the max_mask flags from aero calculation"""
+
+        mask    = results [OpPoint_Var.MAX_MASK] 
+
+        if np.any (mask):
+
+            Cl_VLM  = results [OpPoint_Var.CL_VLM]
+            y       = results [OpPoint_Var.Y]
+
+            color = QColor ("red")
+            color.darker(50)
+            color.setAlphaF (0.6)
+            pen   = pg.mkPen (color, width=8)
+
+            iStart = None 
+            iEnd   = None
+
+            for i in range (len(y)-1):
+
+                if mask[i] and iStart is None: 
+                    iStart = i
+
+                if (not mask[i+1] and iStart is not None):
+                    iEnd = i + 1 
+                elif i == (len(y)-2) and mask[i+1] and iStart is not None: 
+                    iEnd = i + 2 
+
+                if iEnd is not None:     
+                    y_crit  = y      [iStart: iEnd]
+                    Cl_crit = Cl_VLM [iStart: iEnd]
+                    self._plot_dataItem  (y_crit * 1000, Cl_crit, pen=pen, name="Critical range", 
+                                          antialias=False, zValue=2) 
+                    iStart = None
+                    iEnd   = None
+
+ 
 
 
 class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
@@ -2356,7 +2479,7 @@ class Polar_Artist (Abstract_Artist_Planform):
                     else: 
                         label_airfoil = None 
 
-                    self._plot_polar (label_airfoil, polar, color)
+                    self._plot_polar (airfoil.isBlendAirfoil, label_airfoil, polar, color)
 
                     if not polar.isLoaded: 
                         nPolar_generating += 1
@@ -2384,7 +2507,7 @@ class Polar_Artist (Abstract_Artist_Planform):
 
 
 
-    def _plot_polar (self, label_airfoil : str, polar: Polar, color): 
+    def _plot_polar (self, isBlendAirfoil: bool, label_airfoil : str, polar: Polar, color): 
         """ plot a single polar"""
 
         # build nice label (for first polar)
@@ -2398,15 +2521,15 @@ class Polar_Artist (Abstract_Artist_Planform):
 
         # finally plot 
 
-        antialias = True
-        linewidth = 1.0
-        zValue    = 1
-        pen       = pg.mkPen(color, width=linewidth)
+        if isBlendAirfoil:
+            pen = pg.mkPen(color, width=1.0, style=Qt.PenStyle.DashLine)
+        else:
+            pen = pg.mkPen(color, width=1.0)
 
         x,y = polar.ofVars (self.xyVars)
 
         self._plot_dataItem  (x, y, name=label, pen = pen, 
-                                symbol=None, antialias = antialias, zValue=zValue)
+                                symbol=None, antialias = True, zValue=1)
 
-        print (f"{polar}  cl_max {polar.cl_max}  cd_min={polar.cd_min}  glide_max={polar.glide_max} \
-                          alpha_0={polar.alpha_cl0} alpha_0_inv={polar.alpha_cl0_inviscid}")
+        # print (f"{polar}  cl_max {polar.cl_max}  cd_min={polar.cd_min}  glide_max={polar.glide_max} \
+        #                   alpha_0={polar.alpha_cl0} alpha_0_inv={polar.alpha_cl0_inviscid}")

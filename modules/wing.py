@@ -406,9 +406,22 @@ class Wing:
         """ wing for VLM aero calculation """
 
         if self._vlm_wing is None: 
+
+            # ensure all wingSections have straked airfoils
+            self.planform.wingSections.do_strak ()
+
+            # ensure all wingSections have a polar with the current re
+            self.planform.wingSections.refresh_polar_sets ()
+
+            # create new VLM_WIng
             self._vlm_wing = VLM_Wing (self.planform_paneled)
+
         return self._vlm_wing
 
+    def vlm_wing_reset (self):
+        """ reset (will init new) VLM wing"""
+        self._vlm_wing = None
+        
 
     @property
     def background_image (self) -> 'Image_Definition':
@@ -1313,7 +1326,7 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         xn, cn = [], []
         section : WingSection
         for section in self._parent_planform.wingSections:
-            if self.cn_tip_min is None or section.cn >= self.cn_tip_min :
+            if self.cn_tip_min is None or round(section.cn,3) >= self.cn_tip_min :
                 xn.append(section.xn)
                 cn.append(section.cn)
 
@@ -1446,13 +1459,12 @@ class WingSection :
 
             # ... trapezoid planform: section may have both which will define planform  
 
-            if self._xn == 0.0 or self._cn == 1.0:
-                self._xn = 0.0
-                self._cn = 1.0
-                self._defines_cn = True
-            elif self._xn == 1.0:
+            if self._xn == 1.0:
                 if self._cn is None:
                     self._cn = 0.25                                         # take default 
+                self._defines_cn = True
+            elif self._xn == 0.0:
+                self._cn = 1.0
                 self._defines_cn = True
             else:
                 self._defines_cn = self._xn is not None and self._cn is not None
@@ -2069,9 +2081,17 @@ class WingSections (list):
                 left_sec, right_sec = self.neighbours_having_airfoil(section) 
                 left, right = left_sec.airfoil, right_sec.airfoil
 
-                # blend value is defined by chord leation to left and right 
-                 
-                blendBy  = (section.cn - left_sec.cn) / (right_sec.cn - left_sec.cn)
+                if left_sec.airfoil.name == right_sec.airfoil.name:
+                    # both are the same airfoil -> dummy blend 
+                    blendBy = 0.0 
+
+                elif right_sec.cn == left_sec.cn:
+                    # rectangular planform - no chord difference - take pos difference
+                    blendBy  = (section.xn - left_sec.xn) / (right_sec.xn - left_sec.xn)
+
+                else: 
+                    # blend value is defined by chord relation to left and right              
+                    blendBy  = (section.cn - left_sec.cn) / (right_sec.cn - left_sec.cn)
 
                 airfoil.do_blend (left, right, blendBy, geometry_class)
 
@@ -3528,7 +3548,8 @@ class Planform_Paneled (Planform):
         self._wx_dist        = fromDict (dataDict, "wx_distribution", "uniform")
 
         self._width_min      = fromDict (dataDict, "width_min", None)                # min panel width 1%
-        self.set_cn_tip_min   (fromDict (dataDict, "cn_tip_min",None))              # min tip chord 10%
+
+        self._n_distrib.set_cn_tip_min (fromDict (dataDict, "cn_tip_min",None))      # min tip chord 10%
         self._cn_diff_max    = fromDict (dataDict, "cn_diff_max", None)              # max cn difference 5%
 
         self._use_nick_name  = fromDict (dataDict, "use_nick_name", False)           # use airfoil nick name for export%
@@ -3634,7 +3655,13 @@ class Planform_Paneled (Planform):
         return self._is_width_min_applied
 
     @property
-    def cn_diff (self):                 return self._cn_diff
+    def cn_diff (self):                 
+        return self._cn_diff
+    
+    def recalc_cn_diff (self):
+        """ recalc current chord deviation"""
+        self.c_diff_lines()
+
 
     @property
     def cn_diff_max (self):
@@ -3664,6 +3691,8 @@ class Planform_Paneled (Planform):
     
     def set_cn_tip_min (self, aVal):
         self._n_distrib.set_cn_tip_min (aVal)
+        self.recalc_cn_diff ()
+
 
     @property
     def is_cn_tip_min_applied (self) -> bool:
