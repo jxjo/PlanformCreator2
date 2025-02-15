@@ -71,7 +71,7 @@ class var (StrEnum_Extended):
     CD      = "cd"               
     ALPHA   = "alpha"               
     GLIDE   = "cl/cd" 
-    SINK    = "sink"        # "cl^1.5/cd"              
+    SINK    = "sink"                                    # "cl^1.5/cd"              
     CM      = "cm"               
     XTRT    = "xtrt"               
     XTRB    = "xtrb"    
@@ -84,6 +84,9 @@ class polarType (StrEnum_Extended):
 
 
 SPEC_ALLOWED = [var.ALPHA, var.CL]
+
+RE_SCALE_ROUND_TO  = 5000                               # round when polar is scaled down 
+MA_SCALE_ROUND_DEC = 2
 
 
 #------------------------------------------------------------------------------
@@ -320,7 +323,7 @@ class Polar_Set:
 
         self._airfoil = myAirfoil 
         self._polars = []                                   # list of Polars of self is holding
-        self._re_scale = clip (re_scale, 0.02, 10)
+        self._re_scale = clip (re_scale, 0.001, 10)
 
         self._polar_worker_tasks = []                       # polar generation tasks for worker 
         self._polar_tasks_created = False
@@ -555,6 +558,8 @@ class Polar (Polar_Definition):
 
         """
         self._polar_set = mypolarSet
+        self._re_scale  = re_scale
+
         self._error_reason = None               # if error occurred during polar generation 
 
         self._opPoints = []                     # the single opPoins of self
@@ -578,8 +583,11 @@ class Polar (Polar_Definition):
             self.set_valRange   (polar_def.valRange)
 
             if re_scale != 1.0:                              # scale reynolds if requested
-                self.set_re_asK (self.re_asK * re_scale)
-                self.set_ma     (self.ma     * re_scale)
+                re_scaled = round (self.re * re_scale / RE_SCALE_ROUND_TO, 0)
+                re_scaled = re_scaled * RE_SCALE_ROUND_TO
+                ma_scaled = round (self.ma * re_scale,  MA_SCALE_ROUND_DEC)
+                self.set_re (re_scaled)
+                self.set_ma (ma_scaled)
 
 
     def __repr__(self) -> str:
