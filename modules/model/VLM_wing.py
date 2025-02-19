@@ -23,11 +23,9 @@ Wing build with VLM_Panels based on Planform_Paneled
 import numpy as np
 from enum                       import StrEnum
 from typing                     import NamedTuple
-from math                       import isclose, radians, cos
-from copy                       import deepcopy
+from math                       import isclose
 
-
-from modules.model.VLM          import calc_Qjj, calc_Gamma
+from modules.model.VLM          import calc_Qjj
 
 import logging
 logger = logging.getLogger(__name__)
@@ -203,7 +201,8 @@ class VLM_Wing:
         self._Gamma         = None                  # circulation
         self._Q_ind         = None 
         self._A_ges         = None                  # total panel area in m²
-        self._y_stripes     = None
+        self._y_stripes     = None                  # y (middle) of stripes 
+        self._b_stripes     = None                  # width of stripes 
 
         self._polars        = {}                    # dict of polars
 
@@ -282,7 +281,7 @@ class VLM_Wing:
         if self._Qjj is None: 
             # Bjj matrix for induced drag is not needed 
             self._Qjj, _ = calc_Qjj (self.aerogrid, Ma=0.0, xz_symmetry = True)
-            logger.debug ( (f"{self} build Qjj"))
+            # logger.debug ( (f"{self} build Qjj"))
 
         return self._Qjj 
 
@@ -297,6 +296,19 @@ class VLM_Wing:
                 y_pos.append (self.aerogrid['offset_l'][i][1])
             self._y_stripes = np.array(y_pos)
         return self._y_stripes
+
+
+    @property
+    def b_stripes (self) -> np.ndarray:
+        """ width of all panel stripes"""
+
+        if self._b_stripes is None: 
+            b = []
+            for i in range (0, self.n_panels, self.nx_panels):
+                b.append (self.aerogrid['b'][i])
+            self._b_stripes = np.array(b)
+        return self._b_stripes
+
 
 
     def polar_at (self, vtas: float) -> 'VLM_Polar':
@@ -411,7 +423,7 @@ class VLM_Wing:
             'n': n,
             }
         
-        logger.debug (f"{self} build aerogrid")
+        # logger.debug (f"{self} build aerogrid")
 
         return aerogrid 
     
@@ -472,6 +484,7 @@ class VLM_Polar:
         self._error_reason  = []                        # list of error messages eg polar couldn't be loaded 
         self._airfoil_polars= {}                        # dict of wingSections airfoil polar 
         self._generating_airfoil_polars = False         # airfoil polars are currently generated 
+        self._use_viscous_loop          = True          # in opPoint calculation
 
         self._alpha0_stripes= None                      # alpha0 per stripe interpolated from airfoil polat 
 
@@ -487,7 +500,11 @@ class VLM_Polar:
     @property
     def name (self) -> str:
         """ name of polar like T1-22.3-VLM"""
-        return f"T1-{self.vtas:.1f}-VLM"
+        if self.use_viscous_loop:
+            v = "non_linear"
+        else: 
+            v = "linear"
+        return f"T1-{self.vtas:.1f}-VLM_{v}"
 
 
     @property
@@ -521,6 +538,15 @@ class VLM_Polar:
             self._load_airfoil_polars ()
             return bool (self.airfoil_polars)
 
+    @property 
+    def use_viscous_loop (self) -> bool:
+        """ use viscous loop - non-linear aero calculation"""
+        return self._use_viscous_loop
+    
+    def set_use_viscous_loop (self, aBool : bool): 
+        self._use_viscous_loop = aBool
+        self._opPoints = {}                             # remove current results 
+
 
     def opPoint_at (self, alpha: float) -> 'VLM_OpPoint':
         """ returns opPoint at alpha - or None if airfoil polars are not ready"""
@@ -541,6 +567,8 @@ class VLM_Polar:
 
         if self.is_ready ():
             return self._find_alpha_max ()
+        else: 
+            return None
         
 
     @property
@@ -650,31 +678,32 @@ class VLM_Polar:
                 found_above = True 
                 break
 
-        if not found_above: return None 
+        if found_above: 
         
-        found_above = False 
-        alpha_start = alpha - step 
-        step        = 1
-        alpha_max   = alpha + step
-        for alpha in np.arange (alpha_start, alpha_max, step):
-            if self.opPoint_at (alpha).cl_max_almost_reached:
-                found_above = True 
-                break
+            found_above = False 
+            alpha_start = alpha - step 
+            step        = 1
+            alpha_max   = alpha + step
+            for alpha in np.arange (alpha_start, alpha_max, step):
+                if self.opPoint_at (alpha).cl_max_almost_reached:
+                    found_above = True 
+                    break
 
-        if not found_above: return None 
+            if found_above:  
 
-        found_above = False 
-        alpha_start = alpha - step 
-        step        = 0.2
-        alpha_max   = alpha + step
-        for alpha in np.arange (alpha_start, alpha_max, step):
-            if self.opPoint_at (alpha).cl_max_almost_reached:
-                found_above = True 
-                break
+                found_above = False 
+                alpha_start = alpha - step 
+                step        = 0.2
+                alpha_max   = alpha + step
+                for alpha in np.arange (alpha_start, alpha_max, step):
+                    if self.opPoint_at (alpha).cl_max_almost_reached:
+                        found_above = True 
+                        break
 
-        if not found_above: return None 
-
-        return self.opPoint_at (alpha)
+        if not found_above: 
+            return None 
+        else: 
+            return self.opPoint_at (alpha)
 
 
     def export_to_csv (self, pathFileName, alpha_start = -3.0, alpha_end :float = None, step = 0.5):
@@ -828,6 +857,44 @@ class VLM_OpPoint:
         return  np.any(mask)
 
 
+
+    def export_to_csv (self, pathFileName, alpha_start = -3.0, alpha_end :float = None, step = 0.5):
+        """ 
+        Write opPoint data y, chord, alpha ind, alpha eff, Cl        
+        """
+
+        import csv
+
+        n        = self.wing.n_panels
+        nx  	 = self.wing.nx_panels
+        ns       = int (n / nx)                                                 # n stripes 
+
+        with open(pathFileName, 'w', newline='') as csvfile:
+            fieldnames = ['y pos', 'Alpha ind', 'Alpha eff', 'Cl']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, dialect='excel')
+
+            writer.writer.writerow(["PlanformCreator2"])
+            writer.writer.writerow([f"Wing Name :", f"{self.wing._planform.wing.name}"])
+            writer.writer.writerow([f"Speed :", f"{self.polar.vtas:.1f}"])
+            writer.writer.writerow([f"Alpha :", f"{self.alpha:.1f}"])
+            writer.writer.writerow([ ])
+
+            writer.writeheader()
+
+            for i in range (ns):
+
+                y         = self.aero_results[OpPoint_Var.Y] [i]
+                Cl        = self.aero_results[OpPoint_Var.CL] [i] 
+                alpha_ind = self.aero_results[OpPoint_Var.ALPHA_IND] [i]  
+                alpha_eff = self.aero_results[OpPoint_Var.ALPHA_EFF] [i]  
+
+                writer.writerow({'y pos': f"{y:8.3f}", 'Alpha ind': f"{alpha_ind:8.3f}", 
+                                 'Alpha eff': f"{alpha_eff:8.3f}", 'Cl': f"{Cl:8.3f}"})
+
+
+
+
+
     # ----- private --------------------------------------------------
 
     def _calc_aero_results (self, Cp: np.ndarray, alpha0: np.ndarray) -> tuple[np.ndarray, dict]:
@@ -899,8 +966,6 @@ class VLM_OpPoint:
             a_eff_VLM_y = Cl_VLM_y / (2 * np.pi)  * 180 / np.pi + alpha0[i_s]   # in degress
             a_ind_y     = self.alpha - a_eff_y
 
-            if Cl_y == 0.0:
-                pass
             # store results 
 
             lift [i_s]          = lift_y     
@@ -954,33 +1019,35 @@ class VLM_OpPoint:
         Cl_VLM  = results[OpPoint_Var.CL_VLM].mean()                # to compare in Loop 
         results_list = [results]
 
-        # iterate until only minor change in Lift of wing
+        if self.polar.use_viscous_loop:
 
-        for i in range (5):
+            # iterate until only minor change in Lift of wing
 
-            # get current Lift to compare with result 
+            for i in range (5):
 
-            alpha_eff : np.ndarray = results[OpPoint_Var.ALPHA_EFF_VLM] 
+                # get current Lift to compare with result 
 
-            # calculate new alpha0 per stripe based on alpha_eff of former calculation 
+                alpha_eff : np.ndarray = results[OpPoint_Var.ALPHA_EFF_VLM] 
 
-            alpha0  = self._get_alpha0_from_alpha_eff (alpha_eff_stripes=alpha_eff)
-            wj      = self._calc_downwash (alpha0)
-            cp      = self.wing.Qjj.dot(wj)
+                # calculate new alpha0 per stripe based on alpha_eff of former calculation 
 
-            results = self._calc_aero_results (cp, alpha0)
+                alpha0  = self._get_alpha0_from_alpha_eff (alpha_eff_stripes=alpha_eff)
+                wj      = self._calc_downwash (alpha0)
+                cp      = self.wing.Qjj.dot(wj)
 
-            results_list.append (results)
+                results = self._calc_aero_results (cp, alpha0)
 
-            # ---
+                results_list.append (results)
 
-            Cl_VLM_new  = results[OpPoint_Var.CL_VLM].mean()                 # to compare in Loop 
+                # ---
 
-            # print (Cl_VLM, Cl_VLM_new)
-            if isclose (Cl_VLM, Cl_VLM_new, rel_tol=0.01):                   # 1.0% accuracy
-                break
+                Cl_VLM_new  = results[OpPoint_Var.CL_VLM].mean()                 # to compare in Loop 
 
-            Cl_VLM = Cl_VLM_new
+                # print (Cl_VLM, Cl_VLM_new)
+                if isclose (Cl_VLM, Cl_VLM_new, rel_tol=0.01):                   # 1.0% accuracy
+                    break
+
+                Cl_VLM = Cl_VLM_new
 
         self._cp = cp
 
@@ -1013,7 +1080,7 @@ class VLM_OpPoint:
         """ 
         returns alpha0 per stripe based on current alpha_eff at stripe
             - alpha_eff is taken to get cl of airfoil 
-            - based on alpha0 = alpha - cl/0.11 alpha0 is calculated per stripe 
+            - based on alpha0 = alpha - cl/0.1097 alpha0 is calculated per stripe 
 
         This is a major part of the vsicous calculation loop  
         """
@@ -1046,7 +1113,7 @@ class VLM_OpPoint:
             Cl = np.interp(alpha_eff, airfoil_polar.alpha, airfoil_polar.cl)  # 'normal' alpha0 of polar'
 
             # calaculate the inviscid equivalence alpha0 based on '2*pi' 
-            alpha0 = alpha_eff - Cl / 0.11
+            alpha0 = alpha_eff - Cl / 0.1097
 
             sections_alpha0.append(alpha0)
             sections_y.append(section_y)

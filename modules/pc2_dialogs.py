@@ -864,7 +864,7 @@ class Dialog_Edit_Paneling (Dialog):
                      get="Define number of panels along chord (x) and per section of wing (y)")
         r += 1
 
-        FieldI      (l,r,c, width=70, lab="x-Panels", step=1, lim=(2, 20),
+        FieldI      (l,r,c, width=70, lab="x-Panels", step=1, lim=(1, 20),
                         obj=self.planform, prop=Planform_Paneled.wx_panels)
         r += 1
         Label       (l,r,c, get="x-Distribution")
@@ -917,7 +917,7 @@ class Dialog_Edit_Paneling (Dialog):
             CheckBox    (l,r,c, text="Minimize deviation of chord", colSpan=4,
                                 get=lambda: bool(self.planform.cn_diff_max),
                                 set=self.planform.set_cn_diff_max)                       # bool will be clipped to min value 
-            FieldF      (l,r,c+4, width=70, step=1, lim=(0.5, 50), dec=0.5, unit="%", 
+            FieldF      (l,r,c+4, width=70, step=1, lim=(0.5, 50), dec=1, unit="%", 
                             obj=self.planform, prop=Planform_Paneled.cn_diff_max, 
                             style=lambda: style.WARNING if self.planform.is_cn_diff_exceeded else style.NORMAL,
                             hide= lambda: not bool(self.planform.cn_diff_max))

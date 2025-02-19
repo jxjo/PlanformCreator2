@@ -27,6 +27,8 @@ import sys
 import copy
 from typing                 import override
 from pathlib                import Path
+from math                   import isclose
+
 
 
 # let python find the other modules in the dir of self  
@@ -406,12 +408,12 @@ class Wing:
         """ wing for VLM aero calculation """
 
         if self._vlm_wing is None: 
-
+ 
             # ensure all wingSections have straked airfoils
             self.planform.wingSections.do_strak ()
 
             # ensure all wingSections have a polar with the current re
-            self.planform.wingSections.refresh_polar_sets ()
+            self.planform.wingSections.refresh_polar_sets (ensure=False)
 
             # create new VLM_WIng
             self._vlm_wing = VLM_Wing (self.planform_paneled)
@@ -1483,6 +1485,8 @@ class WingSection :
 
         self._airfoil = self._get_airfoil (pathFileName = fromDict (dataDict, "airfoil", None), workingDir=self.workingDir)
 
+        self._strak_info = None                                             # keep info of strak 
+
 
     def __repr__(self) -> str:
 
@@ -2093,21 +2097,28 @@ class WingSections (list):
                     # blend value is defined by chord relation to left and right              
                     blendBy  = (section.cn - left_sec.cn) / (right_sec.cn - left_sec.cn)
 
-                airfoil.do_blend (left, right, blendBy, geometry_class)
+                blendBy = round (blendBy,2)                             # ensure 1% steps 
 
-                # build long but hopefully unique name  
+                # was it already straked? - skip 
 
-                name = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}"
-                airfoil.set_name     (name, reset_original=True)  
+                if not section._strak_info == f"{left.name}{right.name}{blendBy}":
 
-                fileName = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}_{right.fileName_stem}.dat"    
-                airfoil.set_fileName (fileName)
-                airfoil.set_pathName (strak_dir, noCheck=True) 
-                airfoil.set_isModified (False)       # avoid save and polar generation if file alreday exists
+                    airfoil.do_blend (left, right, blendBy, geometry_class)
 
-                airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
+                    # build long but hopefully unique name  
 
-                self._strak_done = True 
+                    name = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}"
+                    airfoil.set_name     (name, reset_original=True)  
+
+                    fileName = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}_{right.fileName_stem}.dat"    
+                    airfoil.set_fileName (fileName)
+                    airfoil.set_pathName (strak_dir, noCheck=True) 
+                    airfoil.set_isModified (False)       # avoid save and polar generation if file alreday exists
+
+                    airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
+
+                    self._strak_done = True 
+                    section._strak_info = f"{left.name}{right.name}{blendBy}"
 
 
     @property
@@ -2234,7 +2245,7 @@ class WingSections (list):
         return None
 
 
-    def refresh_polar_sets (self):
+    def refresh_polar_sets (self, ensure=True):
         """ refresh polar set of wingSections airfoil"""
 
         polar_defs = self._planform.wing.polar_definitions
@@ -2242,7 +2253,14 @@ class WingSections (list):
         section : WingSection
         for section in self:
             airfoil = section.airfoil
-            airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
+            polarSet : Polar_Set = airfoil.polarSet
+
+            if polarSet and isclose (polarSet._re_scale, section.cn, rel_tol=0.01) and not ensure:
+                # there is already a polarSet which is scaled approx.
+                pass
+            else:
+                # create new, fresh polarSet
+                airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
 
 
 
@@ -2906,7 +2924,7 @@ class Planform:
          
         # late setting of polar sets as chord is needed for reynolds factor 
         
-        self._wingSections.refresh_polar_sets ()
+        self._wingSections.refresh_polar_sets (ensure=False)
 
 
 
@@ -3544,7 +3562,7 @@ class Planform_Paneled (Planform):
         self._wy_panels      = fromDict (dataDict, "wy_panels", 8)
         self._wy_dist        = fromDict (dataDict, "wy_distribution", "uniform")
 
-        self._wx_panels      = fromDict (dataDict, "wx_panels", 8)
+        self._wx_panels      = fromDict (dataDict, "wx_panels", 4)
         self._wx_dist        = fromDict (dataDict, "wx_distribution", "uniform")
 
         self._width_min      = fromDict (dataDict, "width_min", None)                # min panel width 1%

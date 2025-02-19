@@ -984,9 +984,13 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
             self._plot_dataItem  (y * 1000, var_values, pen=pen, name=label, antialias=False, zValue=1,
                                 fillLevel=0.0, fillBrush=brush) 
 
+            # plot additional infos 
+
             if opPoint_var == OpPoint_Var.CL_VLM:
                 self._plot_critical_Cl_stripes (aero_results)
 
+            if opPoint_var == OpPoint_Var.CL_MAX:
+                self._plot_Cl_max_values (aero_results, "orange")
 
             # show viscous loop 
             # zValue = 10 
@@ -1014,6 +1018,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
             Cl_VLM  = results [OpPoint_Var.CL_VLM]
             y       = results [OpPoint_Var.Y]
+            b       = self.polar.vlm_wing.b_stripes                 # width of stripe 
 
             color = QColor ("red")
             color.darker(50)
@@ -1029,19 +1034,79 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
                     iStart = i
 
                 if (not mask[i+1] and iStart is not None):
-                    iEnd = i + 1 
+                    iEnd = i  
                 elif i == (len(y)-2) and mask[i+1] and iStart is not None: 
-                    iEnd = i + 2 
+                    iEnd = i + 1 
 
                 if iEnd is not None:     
                     y_crit  = y      [iStart: iEnd]
                     Cl_crit = Cl_VLM [iStart: iEnd]
+
+                    # extrapolate to beginning of istart stripe 
+                    if iStart == 0:
+                        z = np.polyfit(y[:iStart+2], Cl_VLM[:iStart+2], 1)      # calculate polynomial of line
+                    else: 
+                        z = np.polyfit(y[iStart-1:iStart+1], Cl_VLM[iStart-1:iStart+1], 1)    
+
+                    y_start = y[iStart] - b[iStart]/2
+                    f = np.poly1d(z)
+                    Cl_start = f(y_start)
+                    y_crit  = np.insert (y_crit,  0, y_start)
+                    Cl_crit = np.insert (Cl_crit, 0, Cl_start)
+
+                    # extrapolate to end of end stripe 
+                    if iEnd == len(y)-1:
+                        z = np.polyfit(y[iEnd-1:], Cl_VLM[iEnd-1:], 1)          # calculate polynomial of line
+                    else: 
+                        z = np.polyfit(y[iEnd:iEnd+2], Cl_VLM[iEnd:iEnd+2], 1)    
+
+                    y_end = y[iEnd] + b[iEnd]/2
+                    f = np.poly1d(z)
+                    Cl_end = f(y_end)
+                    y_crit  = np.append (y_crit,  y_end)
+                    Cl_crit = np.append (Cl_crit, Cl_end)
+
                     self._plot_dataItem  (y_crit * 1000, Cl_crit, pen=pen, name="Critical range", 
                                           antialias=False, zValue=2) 
                     iStart = None
                     iEnd   = None
 
- 
+
+    def _plot_Cl_max_values (self, results, color):
+        """plot Cl max at wingsection """
+
+        Cl_max  = results [OpPoint_Var.CL_MAX]
+        y       = results [OpPoint_Var.Y]
+        y_max   = np.max (y) 
+        y_last  = -9999.99
+        y_in_x  = y * 1000.0
+
+        section : WingSection
+        for section in self.wing.planform_paneled.wingSections_reduced():
+
+            idx = (np.abs(y_in_x - section.x)).argmin()
+
+            y_pos = section.x/1000
+
+            # far enough away from neighbour (values shouldn't overlap)?
+            if y_pos - y_last > 0.03 * y_max:
+                # get (closest) polar for y pos 
+                polars_dict = self.opPoint.polar.airfoil_polars
+                polar : Polar = polars_dict[y_pos] if y_pos in polars_dict \
+                                                else polars_dict[min(polars_dict.keys(), key=lambda k: abs(k-y_pos))]
+
+                text   = f"{polar.re_asK}k\n{Cl_max [idx]:.2f}"  
+                text_color = QColor (color).darker(120)
+                anchor = (0.5,1)
+
+                self._plot_point (section.x, Cl_max [idx], color=text_color, size=0, text=text, 
+                                textColor=text_color, anchor=anchor)
+                y_last = y_pos 
+
+            else:
+                # just plot point 
+                self._plot_point (section.x, Cl_max [idx], color=text_color, symbol="o", size=5, text=None)
+
 
 
 class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):

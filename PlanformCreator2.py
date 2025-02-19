@@ -232,7 +232,7 @@ class App_Main (QMainWindow):
 
     name = APP_NAME  
 
-    WORKER_MIN_VERSION          = '1.0.3'
+    WORKER_MIN_VERSION          = '1.0.5'
 
    # Signals 
 
@@ -303,8 +303,10 @@ class App_Main (QMainWindow):
         self._add_diagram (Diagram_Making_Of     (self, self.wing))
         self._add_diagram (Diagram_Wing          (self, self.wing))
         self._add_diagram (Diagram_Planform      (self, self.wing, self.wingSection))
-        self._add_diagram (Diagram_Airfoil_Polar (self, self.wing))
-        # self._add_diagram (Diagram_Panels        (self, self.wing, self.wingSection))
+
+        diagram_settings = Settings().get (Diagram_Airfoil_Polar.__name__, [])
+        self._add_diagram (Diagram_Airfoil_Polar (self, self.wing, diagram_settings= diagram_settings))
+        
         self._add_diagram (Diagram_Wing_Aero     (self, self.wing, self.wingSection))
 
         self._tab_panel.set_tab (Settings().get('current_diagram', Diagram_Making_Of.__name__))
@@ -477,7 +479,8 @@ class App_Main (QMainWindow):
     def refresh_polar_sets (self):
         """ refresh polar sets of all airfoils in wingSections"""
 
-        self.wing().planform.wingSections.refresh_polar_sets ()
+        # as polar definitions could have changed, ensure a new initialized polarSet 
+        self.wing().planform.wingSections.refresh_polar_sets (ensure=True)
 
         self.sig_polar_set_changed.emit()
 
@@ -518,6 +521,13 @@ class App_Main (QMainWindow):
         # save current tab as classname 
         current_diagram = self._tab_panel.currentWidget().__class__.__name__
         toDict (settings,'current_diagram',current_diagram)
+
+        # save settings of diagrams 
+        diagram : Diagram_Abstract
+        for diagram in self._diagrams:
+            parms = diagram._as_dict_list ()
+            toDict (settings, diagram.__class__.__name__, parms)
+
 
         Settings().write_dataDict (settings)
         

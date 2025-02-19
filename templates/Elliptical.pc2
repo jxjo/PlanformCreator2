@@ -60,14 +60,5 @@
   ],
   "flaps":{
     "hinge_equal_ref_line":false
-  },
-  "panels":{
-    "wy_panels":8,
-    "wy_distribution":"uniform",
-    "wx_panels":8,
-    "wx_distribution":"uniform",
-    "width_min":0.02,
-    "cn_tip_min":0.109,
-    "cn_diff_max":0.02
   }
 }
