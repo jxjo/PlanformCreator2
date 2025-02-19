@@ -54,6 +54,17 @@ type Polylines  = tuple[Array, Array, Array]
 
 
 # ---- Model --------------------------------------
+
+
+#------------------------------------------------
+
+
+TEMP_DIR_FALLBACK       = "airfoil_straks"
+TEMP_DIR_POSTFIX        = "_tmp"
+
+
+
+
 class Wing:
     """ 
 
@@ -516,7 +527,13 @@ class Wing:
     def wing_tmp_dir (self): 
         """directory within working dir for tmp files like straked airfoils and polars """
 
-        return os.path.join (self.workingDir, Path(self.parm_filePath).stem + "_tmp" )
+        # initially there could be no parm_file
+        if self.parm_filePath is None: 
+            tmp_dir = TEMP_DIR_FALLBACK + TEMP_DIR_POSTFIX 
+        else:
+            tmp_dir = Path(self.parm_filePath).stem + TEMP_DIR_POSTFIX 
+
+        return os.path.join (self.workingDir, tmp_dir)
 
 
     # ---Methods --------------------- 

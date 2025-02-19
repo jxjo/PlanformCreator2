@@ -14,9 +14,9 @@ from base.common_utils          import *
 
 from wing                       import Wing
 from wing                       import Planform, N_Distrib_Bezier
-from wing                       import WingSection, WingSections 
-from wing                       import Flaps, Flap, Image_Definition
-from model.airfoil              import Airfoil, GEO_BASIC
+from wing                       import WingSection, WingSections, Flaps, Flap, Image_Definition
+
+from model.airfoil              import GEO_BASIC
 from model.polar_set            import *
 from modules.model.VLM_wing     import VLM_OpPoint, VLM_Polar,OpPoint_Var
 

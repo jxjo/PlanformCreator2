@@ -10,6 +10,7 @@ tmp*.inp
 test/*
 test_VLM/*
 *.xlsx
+*_tmp/*
 
 
 # Byte-compiled / optimized / DLL files

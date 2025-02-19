@@ -338,7 +338,7 @@ class VLM_Wing:
         #           |
         #           x
 
-        from wing                   import Planform_Paneled
+        from wing   import Planform_Paneled
         planform : Planform_Paneled = self._planform 
 
         panels = []
@@ -589,7 +589,7 @@ class VLM_Polar:
     def _load_airfoil_polars (self):
         """ loads for all wingSections polar of airfoil"""
 
-        from wing               import Wing, WingSection, Planform, Planform_Paneled
+        from wing               import WingSection, Planform
         from model.polar_set    import Polar_Set, RE_SCALE_ROUND_TO
 
         self._error_reason  = []
