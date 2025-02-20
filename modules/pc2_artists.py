@@ -7,6 +7,8 @@ The "Artists" to plot a airfoil object on a pg.PlotItem
 
 """
 from enum                       import Enum
+from math                       import isclose
+
 
 from base.math_util             import interpolate
 from base.artist                import *
@@ -1443,13 +1445,13 @@ class WingSections_Artist (Abstract_Artist_Planform):
         section : WingSection
         found = False
         for section in self.wingSections:
-            if round(section.x,4) == round(x,4): 
+            if isclose (section.x, x, rel_tol=0.005): 
                 found = True
                 break 
 
         # sanity 
         if not found:
-            logger.warning (f"Wing section at x={x} could be detected")
+            logger.warning (f"Wing section at x={x} couldn't be detected")
             return
 
 

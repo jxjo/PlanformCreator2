@@ -2617,8 +2617,6 @@ class Diagram_Wing_Aero (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 1
-            SpaceR      (l,r,10,0)
-            r += 1
             Button      (l,r,c, text="Export Xflr5", width=100, set=self.sig_export_xflr5.emit)
             r += 1
             SpaceR      (l,r,2,0)
@@ -2635,7 +2633,7 @@ class Diagram_Wing_Aero (Diagram_Abstract):
             l.setColumnMinimumWidth (0,10)
             l.setColumnStretch (2,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(100,None),
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(80,None),
                                               switchable=False, switched_on=True)
         return self._export_panel 
 
