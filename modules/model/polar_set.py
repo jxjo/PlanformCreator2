@@ -579,6 +579,7 @@ class Polar (Polar_Definition):
         self._sink = None
 
         if polar_def: 
+            self.set_active     (polar_def.active)
             self.set_type       (polar_def.type)
             self.set_re         (polar_def.re)     
             self.set_ma         (polar_def.ma)
