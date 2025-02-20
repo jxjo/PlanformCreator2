@@ -2527,12 +2527,13 @@ class Polar_Artist (Abstract_Artist_Planform):
 
                 color_airfoil : QColor = colors[i]
 
-                # get / prepare polars - filter for minimum re nimber 
+                # get / prepare polars - filter for minimum re number and only active polars
                  
                 polarSet : Polar_Set = airfoil.polarSet
                 polarSet.load_or_generate_polars ()
 
-                polars_to_plot = list(filter(lambda polar: polar.re_asK >= self.min_re_asK, polarSet.polars)) 
+                polars_to_plot = list(filter(lambda polar: polar.active, polarSet.polars)) 
+                polars_to_plot = list(filter(lambda polar: polar.re_asK >= self.min_re_asK, polars_to_plot)) 
 
                 polar : Polar 
                 for iPolar, polar in enumerate(reversed(polars_to_plot)): 
