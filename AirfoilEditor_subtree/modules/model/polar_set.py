@@ -311,7 +311,8 @@ class Polar_Set:
 
     def __init__(self, myAirfoil: Airfoil, 
                  polar_def : Polar_Definition | list | None = None,
-                 re_scale = 1.0):
+                 re_scale = 1.0,
+                 only_active : bool = False):
         """
         Main constructor for new polar set which belongs to an airfoil 
 
@@ -319,6 +320,7 @@ class Polar_Set:
             myAirfoil: the airfoil object it belongs to 
             polar_def: (list of) Polar_Definition to be added initially
             re_scale: will scale (down) all polars reynolds and mach number of self
+            only_active: add only the 'active' polar definitions
         """
 
         self._airfoil = myAirfoil 
@@ -329,7 +331,7 @@ class Polar_Set:
         self._polar_tasks_created = False
         self._worker_polar_sets = {}                        # polar generation job list for worker  
 
-        self.add_polar_defs (polar_def)                     # add initial polar def 
+        self._add_polar_defs (polar_def, only_active=only_active)  # add initial polar def 
 
         # not active Polar_Set.add_to_instances (self)
 
@@ -417,7 +419,9 @@ class Polar_Set:
 
     #---------------------------------------------------------------
 
-    def add_polar_defs (self, polar_defs, re_scale = None):
+    def _add_polar_defs (self, polar_defs, 
+                        re_scale :float | None = None,
+                        only_active : bool = False):
         """ 
         Adds polars based on a active polar_def to self.
         The polars won't be loaded (or generated) 
@@ -425,6 +429,7 @@ class Polar_Set:
         polar_defs can be a list or a single Polar_Definition
 
         re_scale will scale (down) reynolds and mach number of all polars 
+        only_active will add only the 'active' polar definitions
         """
 
         if isinstance(polar_defs, list):
@@ -449,7 +454,7 @@ class Polar_Set:
                     self.polars.remove(polar)
 
             # append new polar if it is active 
-            if polar_def.active:
+            if not only_active or (only_active and polar_def.active):
                 self.polars.append (Polar(self, polar_def, re_scale=self._re_scale))
 
 
