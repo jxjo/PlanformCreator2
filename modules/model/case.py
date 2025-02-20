@@ -5,8 +5,7 @@ import os
 import fnmatch      
 import shutil           
 
-from model.airfoil          import Airfoil, Airfoil_Bezier, Airfoil_Hicks_Henne, usedAs, GEO_BASIC, GEO_SPLINE
-from model.polar_set        import Polar_Set
+from model.airfoil          import Airfoil, Airfoil_Bezier, Airfoil_Hicks_Henne, GEO_SPLINE
 
 import logging
 logger = logging.getLogger(__name__)

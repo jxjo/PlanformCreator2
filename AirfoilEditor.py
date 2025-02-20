@@ -363,7 +363,7 @@ class App_Main (QMainWindow):
         """ refresh polar sets of all airfoils"""
 
         for airfoil in self.airfoils():
-            airfoil.set_polarSet (Polar_Set (airfoil, polar_def=self.polar_definitions()))
+            airfoil.set_polarSet (Polar_Set (airfoil, polar_def=self.polar_definitions(), only_active=True))
 
         self.sig_polar_set_changed.emit()
 
@@ -391,7 +391,7 @@ class App_Main (QMainWindow):
         """ set new current aurfoil """
 
         self._airfoil = aNew
-        self._airfoil.set_polarSet (Polar_Set (aNew, polar_def=self.polar_definitions()))
+        self._airfoil.set_polarSet (Polar_Set (aNew, polar_def=self.polar_definitions(), only_active=True))
 
         logger.debug (f"Load new airfoil: {aNew.name}")
         self.setWindowTitle (APP_NAME + "  v" + str(APP_VERSION) + "  [" + self.airfoil().fileName + "]")
@@ -424,7 +424,7 @@ class App_Main (QMainWindow):
         if new_airfoil_ref in self.airfoils_ref: return 
 
         if new_airfoil_ref:
-            new_airfoil_ref.set_polarSet (Polar_Set (new_airfoil_ref, polar_def=self.polar_definitions()))
+            new_airfoil_ref.set_polarSet (Polar_Set (new_airfoil_ref, polar_def=self.polar_definitions(), only_active=True))
             new_airfoil_ref.set_usedAs (usedAs.REF)   
 
         if cur_airfoil_ref:
@@ -453,7 +453,7 @@ class App_Main (QMainWindow):
     def set_airfoil_target (self, airfoil: Airfoil | None = None, refresh=True): 
 
         if airfoil is not None: 
-            airfoil.set_polarSet (Polar_Set (airfoil, polar_def=self.polar_definitions()))
+            airfoil.set_polarSet (Polar_Set (airfoil, polar_def=self.polar_definitions(), only_active=True))
             airfoil.set_usedAs (usedAs.TARGET)
         elif self._airfoil_target:                                  # reset the current/old target 
             self._airfoil_target.set_usedAs (usedAs.NORMAL) 
