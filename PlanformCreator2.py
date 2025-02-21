@@ -146,7 +146,7 @@ class App_Main (QMainWindow):
         diagram_settings = Settings().get (Diagram_Airfoil_Polar.__name__, [])
         self._add_diagram (Diagram_Airfoil_Polar (self, self.wing, diagram_settings= diagram_settings))
         
-        self._add_diagram (Diagram_Wing_Aero     (self, self.wing, self.wingSection))
+        self._add_diagram (Diagram_Wing_Analysis (self, self.wing, self.wingSection))
 
         self._tab_panel.set_tab (Settings().get('current_diagram', Diagram_Making_Of.__name__))
 

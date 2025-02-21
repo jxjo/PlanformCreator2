@@ -1478,11 +1478,11 @@ class WingSection :
 
             # ... trapezoid planform: section may have both which will define planform  
 
-            if self._xn == 1.0:
+            if self.is_tip:
                 if self._cn is None:
                     self._cn = 0.25                                         # take default 
                 self._defines_cn = True
-            elif self._xn == 0.0:
+            elif self.is_root:
                 self._cn = 1.0
                 self._defines_cn = True
             else:
@@ -3576,7 +3576,7 @@ class Planform_Paneled (Planform):
 
         # get panel paramters - x,y are in wing coordinate system (wy is along span)
 
-        self._wy_panels      = fromDict (dataDict, "wy_panels", 8)
+        self._wy_panels      = fromDict (dataDict, "wy_panels", 10)
         self._wy_dist        = fromDict (dataDict, "wy_distribution", "uniform")
 
         self._wx_panels      = fromDict (dataDict, "wx_panels", 4)
@@ -3807,76 +3807,6 @@ class Planform_Paneled (Planform):
 
         return xn_stations * self._parent_planform.span
     
-
-    def y_panel_polylines (self) -> tuple[list[Polyline], list[Polyline]]:
-        """
-        the lines from one section to the next along the span representing the y panels of the planform 
-        Returns:
-            :x: list of array of x-value of the line  
-            :y: list of array of y-value 
-        """
-
-        x_list = []
-        y_list = []
-
-        # all xn stations along span - optimized for width min 
-
-        xn_stations = self._get_x_stations () / self.span
-
-        # now build and add for every y station a polyline - same like le, te is build 
-
-        for cn_rel_station in self._cn_rel_stations():
-
-            # array of constant cn values along span 
-            cn_arr = np.full(len(xn_stations), cn_rel_station) 
-
-            # transform from norm chord to norm planform 
-            xn_arr, yn_arr = self.t_chord_to_norm (xn_stations, cn_arr)
-
-            # transform to plan 
-            x_arr, y_arr = self.t_norm_to_plan (xn_arr, yn_arr)
-
-            # build list of poylines 
-            x_list.append (x_arr)
-            y_list.append (y_arr)
-
-        return x_list, y_list
-
-
-
-    def x_panel_polylines (self) -> tuple[list[Polyline], list[Polyline]]:
-        """
-        the lines from le to te representing the x panels of the planform 
-        Returns:
-            :x: list of array of x-value of the line  
-            :y: list of array of y-value 
-        """
-
-        x_list = []
-        y_list = []
-
-        # all xn stations along span - optimized for width min 
-
-        xn_stations = self._get_x_stations () / self.span
-
-        # now build and add for every x station a line from le to te 
-
-        for xni in xn_stations:
-
-            xn_arr = np.array([xni, xni])
-            cn_arr = np.array([0.0, 1.0])
-
-            # transform from norm chord to norm planform 
-            xn_arr, yn_arr = self.t_chord_to_norm (xn_arr, cn_arr)
-
-            # transform to plan 
-            x_arr, y_arr = self.t_norm_to_plan (xn_arr, yn_arr)
-
-            # build list of poylines 
-            x_list.append (x_arr)
-            y_list.append (y_arr)
-
-        return x_list, y_list
 
 
     def nx_panels_of_section (self, index : int) -> int:

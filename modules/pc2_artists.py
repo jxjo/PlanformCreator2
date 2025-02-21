@@ -592,62 +592,6 @@ class Planform_Artist (Abstract_Artist_Planform):
 
 
 
-
-
-class Panelling_Artist (Abstract_Artist_Planform):
-    """
-    Plot the panels of planform
-        - mode DEFAULT
-    """    
-
-    def _plot (self): 
-    
-        planform        = self.wing.planform_paneled
-        parent_planform = planform._parent_planform
-
-        # plot le, te of parent  
-
-        x, le_y, te_y = parent_planform.le_te_polyline () 
-
-        pen = pg.mkPen (COLOR_PLANFORM.darker(150), width=1, style=Qt.PenStyle.DashLine)
-        self._plot_dataItem  (x, le_y, pen=pen, antialias=False, zValue=1, name=f"Planform")        
-        self._plot_dataItem  (x, te_y, pen=pen, antialias=False, zValue=1)
-
-        # plot planform by leading and trailing edge 
-
-        x, le_y, te_y = planform.le_te_polyline () 
-
-        self._plot_dataItem  (x, le_y, pen=pg.mkPen(COLOR_LE, width=1.5), antialias=True, zValue=3,
-                            name=f"Paneled Leading edge")        
-        self._plot_dataItem  (x, te_y, pen=pg.mkPen(COLOR_TE, width=1.5), antialias=True, zValue=3,
-                            name=f"Paneled Trailing edge")
-
-        # plot grid of panel x,y lines 
-
-        x_list, y_list = planform.y_panel_polylines ()
-
-        for i in range (len(x_list)):
-            x, y = x_list[i], y_list[i]
-            self._plot_dataItem  (x, y, pen=pg.mkPen(COLOR_BOX.darker(150), width=1), antialias=False, zValue=1)        
-
-        x_list, y_list = planform.x_panel_polylines ()
-
-        for i in range (len(x_list)):
-            x, y = x_list[i], y_list[i]
-            self._plot_dataItem  (x, y, pen=pg.mkPen(COLOR_BOX.darker(150), width=1), antialias=False, zValue=1)        
-
-
-        # plot vertical lines indicating to much delta between paneled chord and parent chord 
-
-        for line in planform.c_diff_lines ():
-
-            x, y = line[0], line[1]
-            color = COLOR_WARNING # .darker(50)
-            color.setAlphaF (0.5)
-            self._plot_dataItem  (x, y, pen=pg.mkPen(color, width=6), name="Chord difference", antialias=False, zValue=1)        
-
-
-
 class VLM_Panels_Artist (Abstract_Artist_Planform):
     """
     Plot the vlm panels of a VLM_Wing
@@ -671,7 +615,7 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
     @property
     def opPoint (self) -> VLM_OpPoint:
         """ current opPoint to show (e.g. cp value of panel)"""
-        return self._opPointFn()
+        return self._opPointFn() if callable (self._opPointFn) else None
 
     @property 
     def show_colorBar (self) -> bool:
@@ -701,7 +645,7 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         x, le_y, te_y = self.wing.planform.le_te_polyline () 
 
         pen = pg.mkPen (COLOR_PLANFORM.darker(150), width=1, style=Qt.PenStyle.DashLine)
-        self._plot_dataItem  (x, le_y, pen=pen, antialias=False, zValue=1, name=f"Planform")        
+        self._plot_dataItem  (x, le_y, pen=pen, antialias=False, zValue=1)        
         self._plot_dataItem  (x, te_y, pen=pen, antialias=False, zValue=1)
 
         # plot vertical lines indicating to much delta between paneled chord and parent chord 
@@ -735,10 +679,10 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         else: 
             if self.opPoint:
                 z_panel = self._get_z_critical_panels (len(panels))
-                colorMap   = pg.colormap.get ('CET-L13')
             else:
-                z_panel    = np.zeros (len(panels))
-                colorMap   = pg.colormap.get ('CET-C5s')
+                z_panel = np.zeros (len(panels))
+                # colorMap   = pg.colormap.get ('CET-C5s')
+            colorMap   = pg.colormap.get ('CET-L13')
             edgecolors = pg.mkPen (COLOR_BOX)
 
 
@@ -1353,7 +1297,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
             else: 
                 x,y = section.line ()
 
-            if section.defines_cn:
+            if section.defines_cn or section.is_root_or_tip:
                 pen   = pg.mkPen(color, width=1.0)
                 name  = "Wing Sections fix"                                     
             else:
@@ -2190,7 +2134,7 @@ class Airfoil_Name_Artist (Abstract_Artist_Planform):
                 # take root setion to get a constant offset for y of label 
 
                 if section.is_root:
-                    dy = (y[1] - y[0]) / 5
+                    dy = (y[1] - y[0]) / 4
 
                 # plot sec airfoil name in different modes 
 
@@ -2208,13 +2152,14 @@ class Airfoil_Name_Artist (Abstract_Artist_Planform):
                     anchor = (0.5,1.2)                                            # always constant above 
                 else:
                     point_y = y[0]                                                # point at le
-                    anchor = (0.5,1.5)                                            # label anchor 
+                    anchor = (0.0,1.0)                                            # angle=0.0: anchor = (0.5,1.5)           
 
+                angle    = 35.0                                                   # plot text diagonal 
                 point_y -= dy                                                     # plot above le
 
-                color = colors[isec].darker(110)
+                color = colors[isec] #.darker(110)
 
-                self._plot_point (point_x, point_y, color=color, size=0, text=name, textColor=color, anchor=anchor)
+                self._plot_point (point_x, point_y, color=color, size=0, text=name, textColor=color, anchor=anchor, angle=angle)
 
 
 

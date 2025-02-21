@@ -318,7 +318,7 @@ class VLM_Wing:
         try:
             polar = self._polars[v]                 # already exisiting 
         except:
-            polar = VLM_Polar (self, v)         # calculate new opPOint 
+            polar = VLM_Polar (self, v)             # calculate new opPOint 
             self._polars[v] = polar 
         return polar 
 
@@ -536,6 +536,7 @@ class VLM_Polar:
         else: 
             # try again to laod polars 
             self._load_airfoil_polars ()
+            # logger.warning (f"{self} not ready")
             return bool (self.airfoil_polars)
 
     @property 
@@ -568,6 +569,7 @@ class VLM_Polar:
         if self.is_ready ():
             return self._find_alpha_max ()
         else: 
+            logger.warning (f"{self} opPoint_at_alpha_max")
             return None
         
 
@@ -701,8 +703,10 @@ class VLM_Polar:
                         break
 
         if not found_above: 
+            logger.warning (f"{self} alpha_max not found ({len(self._opPoints)} opPoints")
             return None 
         else: 
+            logger.debug (f"{self} found alpha_max {self.opPoint_at (alpha)}")
             return self.opPoint_at (alpha)
 
 
