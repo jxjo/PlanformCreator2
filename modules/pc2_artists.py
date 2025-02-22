@@ -1324,7 +1324,8 @@ class WingSections_Artist (Abstract_Artist_Planform):
                 anchor = (0.5,2.0) if section.is_tip else (0.5,1.2)              
 
             if point_xy:
-                self._plot_point (point_xy, color=color, size=0, text=section.name_short, textColor=color, anchor=anchor)
+                self._plot_point (point_xy, color=color, size=0, text=section.name_short, 
+                                  textColor=color, anchor=anchor)
 
             # highlight current section - add movable points for move by pos and move by chord 
 
@@ -1359,7 +1360,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
             # make line clickable if there is a callback 
             if self._wingSection_fn:
-                p.setCurveClickable (True, width=8)
+                p.setCurveClickable (True, width=8)  
                 p.sigClicked.connect (self._section_item_clicked)
 
 
@@ -2157,7 +2158,7 @@ class Airfoil_Name_Artist (Abstract_Artist_Planform):
                 angle    = 35.0                                                   # plot text diagonal 
                 point_y -= dy                                                     # plot above le
 
-                color = colors[isec] #.darker(110)
+                color = colors[isec]  
 
                 self._plot_point (point_x, point_y, color=color, size=0, text=name, textColor=color, anchor=anchor, angle=angle)
 

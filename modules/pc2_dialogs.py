@@ -887,17 +887,6 @@ class Dialog_Edit_Paneling (Dialog):
         SpaceR      (l,r,height=20)
         r += 1
         Label       (l,r,c, height=30, colSpan=4, get="Optimize paneling for an evenly mesh")            
-        r += 1
-
-        CheckBox    (l,r,c, text="Set a minimum chord for tip", colSpan=4,
-                            get=lambda: bool(self.planform.cn_tip_min),
-                            set=self.planform.set_cn_tip_min)                       # bool will be clipped to min value 
-        FieldF      (l,r,c+4, width=70, step=1, lim=(1, 50), dec=1, unit="%", 
-                        obj=self.planform, prop=Planform_Paneled.cn_tip_min,
-                        style=lambda: style.HINT if self.planform.is_cn_tip_min_applied else style.NORMAL,
-                        hide= lambda: not bool(self.planform.cn_tip_min))
-        Label       (l,r,c+5, get="Sections are reduced",colSpan=2,
-                        style=style.COMMENT, hide=lambda: not self.planform.is_cn_tip_min_applied)
 
         r += 1
         CheckBox    (l,r,c, text="Set a minimum panel width", colSpan=4,
@@ -929,6 +918,18 @@ class Dialog_Edit_Paneling (Dialog):
             Button      (l,r,c+4, text="Optimize", set= self._optimize_cn_diff,
                             toolTip="Optimize paneling by inserting new sections",
                             hide= lambda: not bool(self.planform.cn_diff_max))
+        r += 1
+
+        CheckBox    (l,r,c, text="Set a minimum chord for tip", colSpan=4,
+                            get=lambda: bool(self.planform.cn_tip_min),
+                            set=self.planform.set_cn_tip_min)                       # bool will be clipped to min value 
+        FieldF      (l,r,c+4, width=70, step=1, lim=(1, 50), dec=1, unit="%", 
+                        obj=self.planform, prop=Planform_Paneled.cn_tip_min,
+                        style=lambda: style.HINT if self.planform.is_cn_tip_min_applied else style.NORMAL,
+                        hide= lambda: not bool(self.planform.cn_tip_min))
+        Label       (l,r,c+5, get="Sections are reduced",colSpan=2,
+                        style=style.COMMENT, hide=lambda: not self.planform.is_cn_tip_min_applied)
+
         r += 1
         SpaceR      (l,r, stretch=5, height=1)
         l.setColumnMinimumWidth (0,80)

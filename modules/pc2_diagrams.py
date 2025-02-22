@@ -138,6 +138,25 @@ class Diagram_Abstract (Diagram):
         # will behandled in subclass which has polars 
         pass
 
+    # --- common functions ---------------------------------------------------
+
+    @property
+    def show_mouse_helper (self) -> bool:
+        """ show mouse helper for all artists default"""
+        return Artist.show_mouse_helper_default
+    
+    def set_show_mouse_helper (self, aBool : bool):
+        """ global set show mouse helper default"""
+        Artist.show_mouse_helper_default = aBool == True
+
+        for item in self.diagram_items:
+            if aBool: 
+                item._help_messages_shown = {}                      # reset list of already shown help messages
+            else: 
+                item._help_messages = {}                            # reset list to show 
+                item._on_help_message (None, None)                  # ensure refresh of messages            
+
+        self.refresh ()        
 
     # --- private slots ---------------------------------------------------
 
@@ -246,10 +265,19 @@ class Item_Planform (Diagram_Item):
     def setup_viewRange (self):
         """ define view range of this plotItem"""
 
-        self.viewBox.autoRange (padding=0.1)                        # first ensure best range x,y 
         self.viewBox.setAspectLocked()
         self.viewBox.invertY(True)
         self.showGrid(x=True, y=True)
+
+        # pyqtgraph bug: During init autoRange gets confused if there are 
+        #   clickable items or text items with ensureInBounds (Airfoil names) 
+        #   Setup view range delayed ...
+        if not self._viewRange_set:
+            self._viewRange_set = True
+            QTimer().singleShot (5, self.setup_viewRange)
+            return
+        else:
+            self.viewBox.autoRange (padding=0.08)                   # first ensure best range x,y 
 
 
     @property
@@ -484,15 +512,15 @@ class Item_VLM_Panels (Diagram_Item):
         return super().plot_title(subtitle=f"{n_panels} panels", **kwargs)
     
 
-
     @override
     def setup_artists (self):
         """ create and setup the artists of self"""
         
-        # self._add_artist (Airfoil_Name_Artist   (self, self.planform, show_legend=False))
         self._add_artist (VLM_Panels_Artist     (self, self.planform, opPoint_fn=self.opPoint, show_legend=False))
         self._add_artist (WingSections_Artist   (self, self.planform, show=True, show_legend=False,
-                                                        show_mouse_helper=False, wingSection_fn=self._wingSection_fn))  
+                                                       wingSection_fn=self._wingSection_fn))  
+        self._add_artist (Airfoil_Name_Artist   (self, self.planform, show=False, show_legend=False))
+
 
     @override
     def setup_viewRange (self):
@@ -500,13 +528,19 @@ class Item_VLM_Panels (Diagram_Item):
 
         self.layout.setColumnMinimumWidth ( 3, 50)              # ensure width for color keeps reserved
 
-        self.viewBox.autoRange (padding=0.05)                   # first ensure best range x,y 
         self.viewBox.setAspectLocked()
         self.viewBox.invertY(True)
-
         self.showGrid(x=True, y=True)
-        self.showAxis('left', show=True)
-        self.showAxis('bottom', show=True)
+
+        # pyqtgraph bug: During init autoRange gets confused if there are 
+        #   clickable items or text items with ensureInBounds (Airfoil names) 
+        #   Setup view range delayed ...
+        if not self._viewRange_set:
+            self._viewRange_set = True
+            QTimer().singleShot (5, self.setup_viewRange)
+            return
+        else:
+            self.viewBox.autoRange (padding=0.08)                   # first ensure best range x,y 
 
         logger.debug (f"{self} setup viewRange")
 
@@ -533,11 +567,13 @@ class Item_VLM_Panels (Diagram_Item):
             Button     (l,r,c, text="Paneling Options", width=130, colSpan=3,
                         set=self._edit_paneling, toolTip="Define / Edit paneling options")
             r +=1
-            SpaceR   (l,r)
+            SpaceR   (l,r, height=5)
             r += 1
             CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
                         obj=self, prop=Item_VLM_Panels.show_colorBar,
                         disable=lambda: self.opPoint() is None)
+            r += 1
+            SpaceR   (l,r, stretch=3)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, height =100,
                                               switched_on=self._show,  
@@ -574,7 +610,7 @@ class Item_VLM_Result (Diagram_Item):
     Diagram (Plot) Item to show result of aero calculation
     """
 
-    name        = "Aero Analysis"                           # used for link and section header 
+    name        = "View Aero Analysis"                      # used for link and section header 
     title       = ""                                        # will be dynamically set                 
     subtitle    = ""                                 
 
@@ -753,8 +789,6 @@ class Item_VLM_Result (Diagram_Item):
                 # maybe polars were not ready  - so wait 
                 self._opPoint_fixed_to_alpha_max = True
                 self.set_opPoint_alpha (0, refresh=False)                           # avoid double refresh
-                # self._opPoint_fixed_to_alpha_max = False
-                # MessageBox.error (self.section_panel,"VLM calculation", "Alpha max could not be determined")
         else: 
             self._opPoint_fixed_to_alpha_max = False
             # self.set_opPoint_alpha (2.0)
@@ -1526,25 +1560,7 @@ class Diagram_Planform (Diagram_Abstract):
 
     def set_show_ref_planforms (self, aBool : bool): 
         self._show_artist (Ref_Planforms_Artist, aBool)
-
-
-    @property
-    def show_mouse_helper (self) -> bool:
-        """ show mouse helper for all artists default"""
-        return Artist.show_mouse_helper_default
-    
-    def set_show_mouse_helper (self, aBool : bool):
-        """ global set show mouse helper default"""
-        Artist.show_mouse_helper_default = aBool == True
-
-        for item in self.diagram_items:
-            if aBool: 
-                item._help_messages_shown = {}                      # reset list of already shown help messages
-            else: 
-                item._help_messages = {}                            # reset list to show 
-                item._on_help_message (None, None)                  # ensure refresh of messages            
-
-        self.refresh ()                                             # 
+                                      
 
 
     def create_diagram_items (self):
@@ -2290,7 +2306,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
         for artist in self._get_artist (WingSections_Artist): 
             artist.set_show (True) 
-            artist.set_show_mouse_helper (True) 
+            # artist.set_show_mouse_helper (True) 
 
 
     # --- view section panels ---------------------------------------------------
@@ -2330,33 +2346,19 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
     
     def set_show_wingSections (self, aBool : bool): 
         self._show_artist (WingSections_Artist, show=aBool)
-
-    @property
-    def show_mouse_helper (self) -> bool:
-        artist = self._get_artist (WingSections_Artist)[0]
-        return artist.show_mouse_helper
-    
-    def set_show_mouse_helper (self, aBool : bool):
-        artist = self._get_artist (WingSections_Artist)[0]
-        artist.set_show_mouse_helper(aBool)
-        artist.refresh ()
-
-
-    @property
-    def airfoil_name_artist (self) -> Airfoil_Name_Artist:
-        return self._get_artist (Airfoil_Name_Artist) [0]
-
-    def set_show_airfoil_names (self, aBool : bool):
-        self.airfoil_name_artist.set_show (aBool)
  
 
     @property
-    def use_nick_name (self) -> bool:
-        """ use nick name in diagram and export"""
-        return self.wing().planform_paneled.use_nick_name
-    def set_use_nick_name (self, aBool : bool):
-        self.wing().planform_paneled.set_use_nick_name(aBool == True)
-        self.airfoil_name_artist.set_use_nick_name (aBool)
+    def show_airfoils (self) -> bool: 
+        artist = self._get_artist (Airfoil_Name_Artist)[0]
+        return artist.show 
+    
+    def set_show_airfoils (self, aBool : bool): 
+        self._show_artist (Airfoil_Name_Artist, aBool)
+        self.general_panel.refresh()                                # enable straked checkbox 
+
+        item = self._get_items (Item_VLM_Panels)[0]
+        item.setup_viewRange()                                      # ensure airfoil names fit in current view 
 
 
     def opPoint (self) -> VLM_OpPoint:
@@ -2379,37 +2381,14 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             r += 1
             CheckBox (l,r,c, text="Wing Sections", 
                       get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
+            r += 1
+            CheckBox (l,r,c, text="Airfoils", 
+                      get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
             l.setColumnStretch (0,2)
 
             self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
                                               switchable=False, switched_on=True)
         return self._general_panel 
-
-
-    @property
-    def airfoil_panel (self) -> Edit_Panel:
-        """ return section panel within view panel"""
-
-        if self._airfoil_panel is None:
-        
-            l = QGridLayout()
-            r,c = 0, 0
-            CheckBox   (l,r,c, colSpan=2, text="Use airfoil nick name", 
-                        get=self.use_nick_name,
-                        set=self.set_use_nick_name) 
-            r +=1
-            CheckBox   (l,r,c, colSpan=2, text="Show straked airfoils", 
-                        get=self.airfoil_name_artist.show_strak,
-                        set=self.airfoil_name_artist.set_show_strak,) 
-            r +=1
-            SpaceR (l,r)
-            l.setColumnStretch (2,2)
-
-            self._airfoil_panel = Edit_Panel (title="Airfoils", layout=l, height=100,
-                                              switchable=True, hide_switched=True, switched_on=True, 
-                                              on_switched=self.set_show_airfoil_names)
-
-        return self._airfoil_panel 
 
 
 
