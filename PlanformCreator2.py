@@ -38,8 +38,7 @@ sys.path.insert (1,os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree\\
 
 # local modules - at the end - AirfoilEditor modules do have precedence
 sys.path.append (os.path.join(Path(__file__).parent , 'modules'))
-sys.path.append (os.path.join(Path(__file__).parent , 'modules\\model'))
-
+sys.path.append (os.path.join(Path(__file__).parent , 'modules\\wing_model'))
 from wing                   import Wing
 
 from base.common_utils      import * 

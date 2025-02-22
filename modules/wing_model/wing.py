@@ -40,7 +40,7 @@ from model.airfoil          import Airfoil, GEO_BASIC, GEO_SPLINE
 from model.polar_set        import Polar_Definition, Polar_Set
 from model.airfoil_examples import Root_Example, Tip_Example
 
-from modules.model.VLM_wing         import VLM_Wing
+from VLM_wing               import VLM_Wing
 
 import logging
 logger = logging.getLogger(__name__)
@@ -1278,18 +1278,16 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
     chord_defined_by_sections = True          # e.g trapezoid
 
 
-    def __init__(self, parent_planform : 'Planform', cn_tip_min=None):
+    def __init__(self, parent_planform : 'Planform'):
         """
         Create new chord distribution 
 
         Args:       
             parent_planform: parent self belongs to (trapezoidal need the wing sections)
-            dataDict: dictionary with parameters for self 
-            cn_tip_min: Minimum chord at tip - span will be reduced 
         """
 
-        self._parent_planform    = parent_planform
-        self._cn_tip_min  = cn_tip_min
+        self._parent_planform   = parent_planform
+        self._cn_tip_min        = None
 
         super().__init__ ()
 
@@ -1454,11 +1452,13 @@ class WingSection :
 
         self._planform    = planform
 
-        self._xn            = fromDict (dataDict, "xn", None)            # xn position
-        self._cn            = fromDict (dataDict, "cn", None)            # cn chord  
-        self._defines_cn    = fromDict (dataDict, "defines_cn", False)    # section must have cn and xn 
-        self._hinge_cn      = fromDict (dataDict, "hinge_cn", None)      # hinge chord position 
-        self._flap_group    = fromDict (dataDict, "flap_group", 1)       # flap group (starting here) 
+        self._xn            = fromDict (dataDict, "xn", None)               # xn position
+        self._cn            = fromDict (dataDict, "cn", None)               # cn chord  
+        self._defines_cn    = fromDict (dataDict, "defines_cn", False)      # section must have cn and xn 
+        self._hinge_cn      = fromDict (dataDict, "hinge_cn", None)         # hinge chord position 
+        self._flap_group    = fromDict (dataDict, "flap_group", 1)          # flap group (starting here) 
+        self._is_for_panels = fromDict (dataDict, "is_for_panels", False)   # extra section for paneling
+
 
         # sanity
 
@@ -1525,6 +1525,7 @@ class WingSection :
         toDict (d, "defines_cn",    self._defines_cn if self._defines_cn else None)
         toDict (d, "hinge_cn",      self._hinge_cn)
         toDict (d, "flap_group",    self.flap_group)
+        toDict (d, "is_for_panels", self._is_for_panels)
         if not self.airfoil.isBlendAirfoil:
             toDict (d, "airfoil",    self.airfoil.pathFileName)
         return d
@@ -1661,6 +1662,9 @@ class WingSection :
             if self._xn is None: self._xn = round(self.xn,10)           
             if self._cn is None: self._cn = round(self.cn,10) 
 
+        self.set_is_for_panels (False) 
+
+
     @property
     def x (self) -> float:
         """
@@ -1700,6 +1704,9 @@ class WingSection :
         else:                                                       # tapezoid must have both
             if self._xn is None: self._xn = round(self.xn,10)           
             if self._cn is None: self._cn = round(self.cn,10) 
+
+        self.set_is_for_panels (False) 
+
 
     @property
     def c (self) -> float:
@@ -1764,6 +1771,14 @@ class WingSection :
             return self._planform.chord_defined_by_sections             # for trapezoid yes 
         else: 
             return True
+
+    @property
+    def is_for_panels (self) -> bool:
+        """ self is additional created for paneling"""
+        return self._is_for_panels
+    
+    def set_is_for_panels (self, aBool : bool):
+        self._is_for_panels = aBool == True 
 
 
     def index (self) -> int:
@@ -1832,6 +1847,8 @@ class WingSection :
         if not self.hinge_equal_ref_line:
             aVal = clip (aVal, 0.0, 1.0)
             self._hinge_cn = round (aVal,10) 
+
+            self.set_is_for_panels (False) 
 
 
     @property
@@ -1946,7 +1963,7 @@ class WingSection :
 
 
 
-class WingSections (list):
+class WingSections (list [WingSection]):
     """ 
     container (list) for wing sections of a planform
     
@@ -2002,10 +2019,11 @@ class WingSections (list):
         return section_list
 
 
-    def create_after (self, aSection: 'WingSection'=None, index=None) -> 'WingSection' : 
+    def create_after (self, aSection: 'WingSection'=None, index=None, is_for_panels=False) -> 'WingSection' : 
         """
         creates and inserts a new wing section after aSection 
             with a chord in the middle to the next neighbour 
+            'is_for_panels' indicates an extra section created just for paneling
 
         Return: 
             newSection: the new wingSection
@@ -2023,7 +2041,10 @@ class WingSections (list):
             new_cn = (aSection.cn + right_sec.cn) / 2
             new_flap_group = aSection.flap_group 
 
-            new_section = WingSection (self._planform, {"cn": new_cn, "flap_group":new_flap_group})
+            new_section = WingSection (self._planform, 
+                                       {"cn": new_cn, 
+                                        "flap_group"  :new_flap_group,
+                                        "is_for_panels" : is_for_panels})
             self.insert (self.index(aSection) + 1, new_section)
 
         return new_section
@@ -2091,7 +2112,6 @@ class WingSections (list):
         if not os.path.isdir (strak_dir):
             os.mkdir(strak_dir)
 
-        section: WingSection
         for section in self:
 
             airfoil = section.airfoil
@@ -2219,8 +2239,6 @@ class WingSections (list):
         except: 
             return None, None
 
-        sec: WingSection
-
         #left neighbour 
         if aSection.is_root: 
             left_sec = None
@@ -2255,7 +2273,6 @@ class WingSections (list):
         else: 
             xn = x
 
-        section : WingSection = None
         for section in self:
             if abs( section.xn - xn) < tolerance :
                 return section
@@ -2267,7 +2284,6 @@ class WingSections (list):
 
         polar_defs = self._planform.wing.polar_definitions
 
-        section : WingSection
         for section in self:
             airfoil = section.airfoil
             polarSet : Polar_Set = airfoil.polarSet
@@ -2280,6 +2296,18 @@ class WingSections (list):
                 airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
 
 
+    def there_is_section_for_panel (self) -> bool:
+        """ True is there is a section created for paneling"""
+
+        return any(section.is_for_panels for section in self)
+
+    def remove_sections_for_panel (self):
+        """ remove again extra sections for paneling"""
+        for section in self [:]: 
+            if section.is_for_panels:
+                self.delete (section)
+
+        
 
 #-------------------------------------------------------------------------------
 # Flap   
@@ -3565,7 +3593,7 @@ class Planform_Paneled (Planform):
 
         # create Norm_Chord distribution based on parent planform 
 
-        self._n_distrib     = N_Distrib_Paneled (self._parent_planform, dataDict)
+        self._n_distrib     = N_Distrib_Paneled (self._parent_planform)
 
         # main objects from parent
 
@@ -3868,7 +3896,6 @@ class Planform_Paneled (Planform):
         return lines 
 
 
-
     def optimize_cn_diff (self):
         """ insert new sections until chord difference is below max value """
 
@@ -3888,12 +3915,20 @@ class Planform_Paneled (Planform):
                 cn_parent = self._parent_planform.n_distrib.at (xni)
                 if (cn_parent - cn_panel) > self.cn_diff_max:
 
-                    # too much difference - insert section at mean cn value 
-                    sections.create_after (index=i_sec)
+                    # too much difference - insert section at mean cn value, indicate as extra panel
+                    sections.create_after (index=i_sec, is_for_panels = True)
                     break
 
             i_cycle += 1
 
+        self.recalc_cn_diff ()
+
+
+    def undo_optimize (self):
+        """ remove additional sections inserted to optimize"""
+
+        self.wingSections.remove_sections_for_panel ()
+        self.recalc_cn_diff ()
 
 
 

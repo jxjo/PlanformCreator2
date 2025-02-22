@@ -22,7 +22,7 @@ from base.diagram           import Diagram, Diagram_Item
 from base.artist            import Artist
 from pc2_artists            import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
 
-from wing                   import Wing, Planform, Image_Definition, Planform_Paneled
+from wing                   import Wing, Planform, Image_Definition, Planform_Paneled, WingSections
 from wing_exports           import Export_Airfoils, Export_Dxf
 
 import logging
@@ -849,6 +849,10 @@ class Dialog_Edit_Paneling (Dialog):
             return self.dataObject
 
     @property
+    def wingSections (self) -> WingSections:
+            return self.planform.wingSections
+
+    @property
     def is_parent_trapezoidal (self) -> bool:
         """ True if parent planform is (already) trapezoidal"""
 
@@ -905,19 +909,21 @@ class Dialog_Edit_Paneling (Dialog):
             r += 1
             CheckBox    (l,r,c, text="Minimize deviation of chord", colSpan=4,
                                 get=lambda: bool(self.planform.cn_diff_max),
-                                set=self.planform.set_cn_diff_max)                       # bool will be clipped to min value 
-            FieldF      (l,r,c+4, width=70, step=1, lim=(0.5, 50), dec=1, unit="%", 
+                                set=self.planform.set_cn_diff_max)                # bool will be clipped to min value 
+            FieldF      (l,r,c+4, width=70, step=0.5, lim=(0.5, 50), dec=1, unit="%", 
                             obj=self.planform, prop=Planform_Paneled.cn_diff_max, 
                             style=lambda: style.WARNING if self.planform.is_cn_diff_exceeded else style.NORMAL,
                             hide= lambda: not bool(self.planform.cn_diff_max))
-            Label       (l,r,c+5, get="Currently exceeded", colSpan=2, 
-                            style=style.COMMENT, hide=lambda: not self.planform.is_cn_diff_exceeded)
             Label       (l,r,c+5, get=lambda: f"Currently {self.planform.cn_diff:.1%}", height=20, colSpan=2, 
-                            style=style.COMMENT, hide=lambda: self.planform.is_cn_diff_exceeded)
+                            style=style.COMMENT, hide= lambda: not bool(self.planform.cn_diff_max))
             r += 1
-            Button      (l,r,c+4, text="Optimize", set= self._optimize_cn_diff,
+            Button      (l,r,c+4, text="Optimize", set= self._optimize_cn_diff, width=70,
                             toolTip="Optimize paneling by inserting new sections",
-                            hide= lambda: not bool(self.planform.cn_diff_max))
+                            hide= lambda: not bool(self.planform.cn_diff_max),
+                            disable= lambda:  not self.planform.is_cn_diff_exceeded)
+            Button      (l,r,c+5, text="Undo", set= self._remove_addional_sections, width=70,
+                            toolTip="Remove again sections being inserted by optimization",
+                            disable= lambda: not self.wingSections.there_is_section_for_panel())
         r += 1
 
         CheckBox    (l,r,c, text="Set a minimum chord for tip", colSpan=4,
@@ -943,6 +949,12 @@ class Dialog_Edit_Paneling (Dialog):
     def _optimize_cn_diff (self):
         """ optimize sections until cn_diff_max is reached"""
         self.planform.optimize_cn_diff()
+        self.refresh()
+        self.sig_paneling_changed.emit()            # refresh diagram
+
+    def _remove_addional_sections (self):
+        """ remove again aditional sections of optimize"""
+        self.planform.undo_optimize ()
         self.refresh()
         self.sig_paneling_changed.emit()            # refresh diagram
 

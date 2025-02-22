@@ -20,7 +20,7 @@ from wing                       import WingSection, WingSections, Flaps, Flap, I
 
 from model.airfoil              import GEO_BASIC
 from model.polar_set            import *
-from modules.model.VLM_wing     import VLM_OpPoint, VLM_Polar,OpPoint_Var
+from VLM_wing                   import VLM_OpPoint, VLM_Polar,OpPoint_Var
 
 from PyQt6.QtGui                import QColor, QImage, QBrush, QPen, QTransform
 from PyQt6.QtCore               import pyqtSignal
@@ -35,21 +35,22 @@ logger.setLevel(logging.DEBUG)
 # -------- Colors ------------------------
 
 
-COLOR_PLANFORM = QColor ('whitesmoke')
-COLOR_LE       = QColor ('whitesmoke')
-COLOR_TE       = QColor ('coral')
+COLOR_PLANFORM      = QColor ('whitesmoke')
+COLOR_LE            = QColor ('whitesmoke')
+COLOR_TE            = QColor ('coral')
 
-COLOR_BOX      = QColor ('dodgerblue')
+COLOR_BOX           = QColor ('dodgerblue')
 
-COLOR_CHORD    = QColor ('paleturquoise')
-COLOR_REF_LINE = QColor ('springgreen')
-COLOR_BANANA   = QColor ('khaki')
-COLOR_SECTION  = QColor ('deeppink')
+COLOR_CHORD         = QColor ('paleturquoise')
+COLOR_REF_LINE      = QColor ('springgreen')
+COLOR_BANANA        = QColor ('khaki')
+COLOR_SECTION       = QColor ('deeppink')
+COLOR_EXTRA_SECTION = QColor ('gold').darker (120)
 
-COLOR_REF_ELLI = QColor ('dodgerblue')
-COLOR_REF_PC2  = QColor ('darkorchid')
+COLOR_REF_ELLI      = QColor ('dodgerblue')
+COLOR_REF_PC2       = QColor ('darkorchid')
 
-COLOR_WARNING  = QColor ('gold')
+COLOR_WARNING       = QColor ('gold')
 
 # -------- coordinate systems ------------------------
 
@@ -654,7 +655,7 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
             for line in self.wing.planform_paneled.c_diff_lines ():
 
                 x, y = line[0], line[1]
-                color = COLOR_WARNING # .darker(50)
+                color = COLOR_WARNING  
                 color.setAlphaF (0.6)
                 self._plot_dataItem  (x, y, pen=pg.mkPen(color, width=6), name="Chord difference", antialias=False, zValue=1)        
 
@@ -1281,7 +1282,6 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
     def _plot (self): 
 
-        color = COLOR_SECTION
         m     = self._mode 
 
         # plot all sections
@@ -1297,12 +1297,19 @@ class WingSections_Artist (Abstract_Artist_Planform):
             else: 
                 x,y = section.line ()
 
+            if section.is_for_panels:
+                color = COLOR_EXTRA_SECTION
+                name  = "Wing Section for paneling"                                    
+            else: 
+                color = COLOR_SECTION
+                name  = "Wing Section flex"                                    
+
             if section.defines_cn or section.is_root_or_tip:
                 pen   = pg.mkPen(color, width=1.0)
-                name  = "Wing Sections fix"                                     
+                name  = "Wing Section fix"                                     
             else:
                 pen   = pg.mkPen(color, width=1.0,style=Qt.PenStyle.DashLine)
-                name  = "Wing Sections flex"                                    
+
 
             p = self._plot_dataItem  (x, y,  name=name, pen = pen, antialias = False, zValue=3)
 

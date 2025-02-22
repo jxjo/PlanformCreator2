@@ -27,7 +27,7 @@ from pc2_artists            import *
 from pc2_dialogs            import Dialog_Edit_Image, Dialog_Edit_Paneling
 from wing                   import Wing, Planform, Planform_Paneled
 
-from modules.model.VLM_wing import VLM_OpPoint, OpPoint_Var, v_from_re
+from VLM_wing               import VLM_OpPoint, OpPoint_Var, v_from_re
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -517,7 +517,7 @@ class Item_VLM_Panels (Diagram_Item):
         """ create and setup the artists of self"""
         
         self._add_artist (VLM_Panels_Artist     (self, self.planform, opPoint_fn=self.opPoint, show_legend=False))
-        self._add_artist (WingSections_Artist   (self, self.planform, show=True, show_legend=False,
+        self._add_artist (WingSections_Artist   (self, self.planform, show=True, show_legend=True,
                                                        wingSection_fn=self._wingSection_fn))  
         self._add_artist (Airfoil_Name_Artist   (self, self.planform, show=False, show_legend=False))
 

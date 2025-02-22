@@ -25,7 +25,7 @@ from enum                       import StrEnum
 from typing                     import NamedTuple
 from math                       import isclose
 
-from modules.model.VLM          import calc_Qjj
+from VLM                        import calc_Qjj
 
 import logging
 logger = logging.getLogger(__name__)
