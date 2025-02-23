@@ -61,7 +61,7 @@ logger.setLevel(logging.DEBUG)
 #------------------------------------------------
 
 APP_NAME            = "Planform Creator 2"
-APP_VERSION         = "3.0 beta"
+APP_VERSION         = "3.0 beta 1"
 WORKER_MIN_VERSION  = '1.0.5'
 
 TEMPLATE_DIR        = "templates"
@@ -113,7 +113,7 @@ class App_Main (QMainWindow):
 
         # Worker for polar generation ready?
 
-        Worker().isReady (__file__, min_version=WORKER_MIN_VERSION)
+        Worker().isReady (os.path.dirname (__file__), min_version=WORKER_MIN_VERSION)
 
         # if no initial pc2 file, try to get last openend pc2 file
 

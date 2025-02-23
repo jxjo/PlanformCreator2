@@ -923,6 +923,7 @@ class Dialog_Edit_Paneling (Dialog):
                             disable= lambda:  not self.planform.is_cn_diff_exceeded)
             Button      (l,r,c+5, text="Undo", set= self._remove_addional_sections, width=70,
                             toolTip="Remove again sections being inserted by optimization",
+                            hide= lambda: not bool(self.planform.cn_diff_max),
                             disable= lambda: not self.wingSections.there_is_section_for_panel())
         r += 1
 

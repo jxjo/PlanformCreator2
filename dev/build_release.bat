@@ -1,6 +1,6 @@
 @echo off
 
-set APP_VERSION=3.0_beta
+set APP_VERSION=3.0_beta_1
 set WIN_RELEASE=PlanformCreator2_%APP_VERSION%_win
 
 echo.
@@ -26,7 +26,7 @@ if     exist releases\%WIN_RELEASE%.zip del releases\%WIN_RELEASE%.zip  /q
 
 mkdir releases\%WIN_RELEASE%
 
-xcopy templates                    releases\%WIN_RELEASE%\templates\   /s /i /q
+rem xcopy templates                    releases\%WIN_RELEASE%\templates\   /s /i /q
 xcopy examples                     releases\%WIN_RELEASE%\examples\   /s /i /q
 xcopy README.pdf                   releases\%WIN_RELEASE%\               /i /q
 

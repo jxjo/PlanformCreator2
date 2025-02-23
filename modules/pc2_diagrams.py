@@ -516,7 +516,7 @@ class Item_VLM_Panels (Diagram_Item):
     def setup_artists (self):
         """ create and setup the artists of self"""
         
-        self._add_artist (VLM_Panels_Artist     (self, self.planform, opPoint_fn=self.opPoint, show_legend=False))
+        self._add_artist (VLM_Panels_Artist     (self, self.planform, opPoint_fn=self.opPoint, show_legend=True))
         self._add_artist (WingSections_Artist   (self, self.planform, show=True, show_legend=True,
                                                        wingSection_fn=self._wingSection_fn))  
         self._add_artist (Airfoil_Name_Artist   (self, self.planform, show=False, show_legend=False))

@@ -1299,7 +1299,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
             if section.is_for_panels:
                 color = COLOR_EXTRA_SECTION
-                name  = "Wing Section for paneling"                                    
+                name  = "Extra Section for paneling"                                    
             else: 
                 color = COLOR_SECTION
                 name  = "Wing Section flex"                                    
