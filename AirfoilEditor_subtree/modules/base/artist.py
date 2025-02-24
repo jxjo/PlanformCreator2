@@ -863,14 +863,15 @@ class Artist(QObject):
         self._add (p, name=name)
 
         return p 
-        
+
 
     def _plot_point (self, 
                     *args,                     # optional: tuple or x,y
                      symbol='o', color=None, style=Qt.PenStyle.SolidLine, 
                      size=7, pxMode=True, 
                      brushColor=None, brushAlpha=1.0,
-                     text=None, textColor=None, textPos=None, anchor=None, angle=0):
+                     text=None, textColor=None, textFill=None,
+                     textPos=None, anchor=None, angle=0):
         """ plot point with text item at x, y - text will follow the point """
 
         if isinstance (args[0], tuple):
@@ -900,16 +901,17 @@ class Artist(QObject):
         if text is not None: 
             color = QColor(textColor) if textColor else QColor(self.COLOR_NORMAL)
             anchor = anchor if anchor else (0, 1)
-            t = pg.TextItem(text, color, anchor=anchor, angle=angle, ensureInBounds=True)
-            t.setZValue(3)                                      # move to foreground 
+
+            t = pg.TextItem(text, color, anchor=anchor, angle=angle, fill=textFill, ensureInBounds=True)
+
             # ? attach to parent doesn't work (because of PlotDataItem? )
             textPos = textPos if textPos is not None else (xt,yt)
             t.setPos (*textPos)
+            t.setZValue(3)                                      # move to foreground 
 
             self._add (t)
 
         return self._add(p) 
-
 
 
 
