@@ -1028,6 +1028,10 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
         y_last  = -9999.99
         y_in_x  = y * 1000.0
 
+        text_color = QColor (color).darker(120)
+        text_fill  = pg.mkBrush ("black")
+        anchor = (0.5,1.1)
+
         section : WingSection
         for section in self.wing.planform_paneled.wingSections_reduced():
 
@@ -1036,23 +1040,22 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
             y_pos = section.x/1000
 
             # far enough away from neighbour (values shouldn't overlap)?
-            if y_pos - y_last > 0.03 * y_max:
+            if y_pos - y_last > 0.02 * y_max:
                 # get (closest) polar for y pos 
                 polars_dict = self.opPoint.polar.airfoil_polars
                 polar : Polar = polars_dict[y_pos] if y_pos in polars_dict \
                                                 else polars_dict[min(polars_dict.keys(), key=lambda k: abs(k-y_pos))]
 
                 text   = f"{polar.re_asK}k\n{Cl_max [idx]:.2f}"  
-                text_color = QColor (color).darker(120)
-                anchor = (0.5,1)
 
-                self._plot_point (section.x, Cl_max [idx], color=text_color, size=0, text=text, 
+                self._plot_point (section.x, Cl_max [idx], color=text_color, textFill=text_fill, size=0, text=text, 
                                 textColor=text_color, anchor=anchor)
                 y_last = y_pos 
 
             else:
-                # just plot point 
-                self._plot_point (section.x, Cl_max [idx], color=text_color, symbol="o", size=5, text=None)
+                # just skip
+                pass
+                # self._plot_point (section.x, Cl_max [idx], color=text_color, symbol="o", size=5, text=None)
 
 
 
