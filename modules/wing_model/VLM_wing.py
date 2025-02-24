@@ -23,7 +23,7 @@ Wing build with VLM_Panels based on Planform_Paneled
 import numpy as np
 from enum                       import StrEnum
 from typing                     import NamedTuple
-from math                       import isclose
+from math                       import isclose, degrees, radians
 
 from VLM                        import calc_Qjj
 
@@ -911,7 +911,6 @@ class VLM_OpPoint:
             alpha0: alpha0 per panel stripe 
         
         Returns: 
-            y_pos:  y position of a panel stripe (middle) 
             aero_results: dict with values per y_pos - see enum OpPoint_Var
         """
 
@@ -966,8 +965,8 @@ class VLM_OpPoint:
             else: 
                 Cl_y   = Cl_VLM_y
 
-            a_eff_y     = Cl_y     / (2 * np.pi)  * 180 / np.pi + alpha0[i_s]   # in degress
-            a_eff_VLM_y = Cl_VLM_y / (2 * np.pi)  * 180 / np.pi + alpha0[i_s]   # in degress
+            a_eff_y     = degrees (Cl_y     / (2 * np.pi)) + alpha0[i_s]  
+            a_eff_VLM_y = degrees (Cl_VLM_y / (2 * np.pi)) + alpha0[i_s]    
             a_ind_y     = self.alpha - a_eff_y
 
             # store results 
@@ -1184,15 +1183,15 @@ class VLM_OpPoint:
             - geometric alpha 
             - alpha0 of the airfoils to represent camber of an airfoil 
         """
-        alpha_rad      = self.alpha * np.pi / 180 
-        downwash_geo   = self.polar.vtas * alpha_rad # * cos (alpha_rad)
+
+        downwash_geo   = self.polar.vtas * radians (self.alpha)   
 
         wj = np.zeros(self.wing.n_panels)
 
         for istripe in range (self.wing.ny_panels):
 
             alpha0_stripe   = - alpha0_stripes[istripe]         # alpha0 is negative 
-            downwash_alpha0 = self.polar.vtas * alpha0_stripe * np.pi / 180
+            downwash_alpha0 = self.polar.vtas * radians (alpha0_stripe)  
 
             istart = istripe * self.wing.nx_panels
             iend   = istart + self.wing.nx_panels 

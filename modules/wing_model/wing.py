@@ -1328,10 +1328,11 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         return False
 
 
-    def polyline (self) -> Polyline:
+    def polyline (self, cutted_tip=True) -> Polyline:
         """ 
-        Normalized polyline of chord along xn
+        Normalized polyline of chord along xn which can be reduced if cn_tip_min is active
             At root it is: cn [0] = 1.0 
+        Defaults to polyline of wingSections cutted because of cn_tip_min
 
         Returns:
             xn: normalized x coordinates
@@ -1343,7 +1344,7 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         xn, cn = [], []
         section : WingSection
         for section in self._parent_planform.wingSections:
-            if self.cn_tip_min is None or round(section.cn,3) >= self.cn_tip_min :
+            if self.cn_tip_min is None or not cutted_tip or (round(section.cn,3) >= self.cn_tip_min) :
                 xn.append(section.xn)
                 cn.append(section.cn)
 
@@ -1355,7 +1356,7 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         Main chord function - returns cn at xn
         """
 
-        xn_arr, cn_arr = self.polyline()
+        xn_arr, cn_arr = self.polyline(cutted_tip=False)        # ignore cutted tip!
         cn = np.interp(xn, xn_arr, cn_arr)                      # linear interpolation in polyline
 
         return round (cn,10) 
@@ -3718,7 +3719,8 @@ class Planform_Paneled (Planform):
         return self._is_width_min_applied
 
     @property
-    def cn_diff (self):                 
+    def cn_diff (self):
+        """ cached current max. chord difference """                 
         return self._cn_diff
     
     def recalc_cn_diff (self):
@@ -3902,22 +3904,35 @@ class Planform_Paneled (Planform):
         if not self.is_cn_diff_exceeded: return 
 
         i_cycle = 1
+        section_inserted = True 
 
-        while self.c_diff_lines() and i_cycle < 15:            # max iterations 
+        # while self.c_diff_lines() and section_inserted and i_cycle < 10:            # max iterations 
+        while section_inserted and i_cycle < 10:            # max iterations 
 
             sections = self.wingSections
+            section_inserted = False 
 
             for i_sec in range (len(sections) - 1):
 
-                # test chord difference in the middle of the section 
-                xni = (sections[i_sec].xn + sections[i_sec+1].xn) / 2
-                cn_panel  = self._n_distrib.at (xni)
-                cn_parent = self._parent_planform.n_distrib.at (xni)
-                if (cn_parent - cn_panel) > self.cn_diff_max:
+                # ensure a minimum width of a 'section stripe'
 
-                    # too much difference - insert section at mean cn value, indicate as extra panel
-                    sections.create_after (index=i_sec, is_for_panels = True)
-                    break
+                section_width   = sections[i_sec+1].xn - sections[i_sec].xn 
+                panel_width_min = self.width_min if self._width_min else 0.005       # default min panel width 0.05%
+
+                if section_width > (2 * panel_width_min):
+
+                    # test chord difference in the middle of the section 
+
+                    xni = (sections[i_sec].xn + sections[i_sec+1].xn) / 2
+                    cn_panel  = self._n_distrib.at (xni)
+                    cn_parent = self._parent_planform.n_distrib.at (xni)
+                    if (cn_parent - cn_panel) > self.cn_diff_max:
+
+                        # too much difference - insert section at mean cn value, indicate as extra panel
+                        sections.create_after (index=i_sec, is_for_panels = True)
+
+                        section_inserted = True 
+                        break
 
             i_cycle += 1
 
