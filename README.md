@@ -182,9 +182,9 @@ The polars along wingspan can be helpful to have a first assessment of the airfo
 The basis for an aerodynamic analysis of a wing is the idealization with panels.
 PC2 supports this paneling step with some helpful features. 
 
-The result can either be directly exported to Xflr5 and FLZ_vortex or used for the integrated analysis, as described below.
+The paneled planform can either be exported to Xflr5 and FLZ_vortex or used for the integrated aero analysis, as described below.
 
-The first step is the definition of the number of x and y-panels of the sections. In the case of a curved leading or trailing edge this can lead to considerable geometrical deviations between the original contour and the idealized which will lead to high inaccuracies of the aerodynamic calculation.
+The first step for paneling is the definition of the number of x and y-panels of the sections. In the case of a curved leading or trailing edge this can lead to considerable geometrical deviations between the original contour and the idealized which will lead to high inaccuracies of the aerodynamic calculation.
 
 
 <img src="./images/panelling_step_1.png" width="800" />
@@ -194,9 +194,9 @@ The first step is the definition of the number of x and y-panels of the sections
 
 Next, a mesh optimization can be applied based on the parameters:
 
-* Minimum chord at tip – this cuts the tip in such a way that a Re number is achieved that leads to meaningful Xfoil results.
 * Minimum panel width – the number of y panels per section will be adapted to achieve a uniform panel width along span
 * Minimum chord deviation to planform – additional wing sections will be inserted automatically until the deviation of the section trapezoids to the original planform is below the defined threshold
+* Minimum chord at tip – this cuts the tip in such a way that a Re number is achieved that leads to meaningful Xfoil results.
 
 
 <img src="images/panelling_step_2.png" width="800" />
@@ -222,10 +222,29 @@ Do not forget to adjust the plane mass before running a calculation.
 
 ### VLM Analysis
 
+PC2 has an integrated VLM (Vortex lattice method) module to calculate the lift distribution along wing span based on the previously carried paneling of the wing.
 
 <img src="./images/vlm_cp_panel.png" width="800" />
 
+The main objective of the aero analysis in PC2 is to find the region of the wing, which will fail when the angle of attack is increased towards stall. For this assessment the 2D airfoil polar data and the 3D lift aero data is combined in a 'viscous loop'.
 
+The 2D airfoil polar data is taken from the polar definitions as described in the section before. The airfoil polars are evaluated for each wing section. Note: For wing analysis only T1 polars (constant speed) are supported.
+
+The 'viscous loop' calculates the effective Cl and Alpha for each panel station along wing span.
+
+<img src="./images/vlm_viscous_loop.png" width="400" />
+
+The maximum possible angle of attack (close to stall) is automatically evaluated and the critical area is marked within the paneling view and in the lift distribution view:
+
+<img src="images/vlm_cl_max.png" width="800" />
+
+<sup>Simple wing example showing the critical wing regions where local Cl reaches cl max of the airfoil.</sup>
+
+By activating the chord distribution view, the chord and thus the area in which the wing will fail first can be changed interactively.
+
+<img src="images/vlm_cl_max_with_chord.png" width="800" />
+
+<sup>Interactive change in the chord distribution and thus the area in which the wing tends to stall first</sup>
 
 
 ## The App - a quick look 
@@ -249,10 +268,12 @@ In the 'examples' folder, you'll find some full flavored PC2 projects. Just 'Ope
 
 ## Software Aspects
 
-`PlanformCreator2` is developed in  [Python](https://www.python.org/) using [PyQt6](https://pypi.org/project/PyQt6/) which wraps and extends the [Qt UI framework](https://www.qt.io/product/framework) and [PyQtGraph](https://www.pyqtgraph.org/) which wraps the QT Graphics framework. 
+`PlanformCreator2` is developed in  [Python](https://www.python.org/) using [PyQt6](https://pypi.org/project/PyQt6/) which wraps and extends the Qt UI framework and [PyQtGraph](https://www.pyqtgraph.org/) which wraps the QT Graphics framework. 
 
 The main building blocks of the app are
 * Model - containing all geometry and math helper routines to create and modify a wing planform. The model is independent of the UI.
+
+* VLM - for calculation of the lift distribution the Python VLM implementation [Panel Aero](https://github.com/DLR-AE/PanelAero) is used as the core module - thanks to Arne Voß (DLR)   
 
 * UI-Framework - base classes and a little framework to ease the implementation of forms based on `Widgets` and `Diagrams`.
 Plots in `Diagrams` are handled by `Artists` where each of them viszualizes certain data aspects of a planform. The base classes are imported from the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) project as a Git subtree

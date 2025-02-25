@@ -46,8 +46,9 @@ class StrEnum_Extended (StrEnum):
 class OpPoint_Var (StrEnum_Extended):
     """ polar variables """
     Y               = "y position"               
-    CL              = "Cl"               
-    CL_VLM          = "Cl VLM"               
+    CL              = "Cl"                                  # viscous loop - Cl > cl_max = 0.0      
+    CL_VLM          = "Cl VLM"                              # viscous loop  
+    CL_VLM_LINEAR   = "Cl linear"                           # linear 
     CL_MAX          = "Airfoil cl max "               
     MAX_MASK        = "Cl VLM close MAX"                    # numpy mask where Cl_VLM reaches, exceeds CL_MAX              
     ALPHA_MAX       = "Airfoil alpha max "               
@@ -55,7 +56,7 @@ class OpPoint_Var (StrEnum_Extended):
     ALPHA_EFF       = "Alpha effective"               
     ALPHA_EFF_VLM   = "Alpha effective VLM"               
     ALPHA_IND       = "Alpha induced"  
-    ALPHA0          = "VLM Alpha0"             
+    ALPHA0          = "Alpha Cl=0"             
     LIFT            = "Lift"
     LIFT_STRIPE     = "Lift of stripe"
 
@@ -756,8 +757,7 @@ class VLM_OpPoint:
         self.polar = polar 
 
         self._cp = None                             # pressure coefficient 
-        self._aero_results   = {}                   # dict with all results along span
-        self._aero_results_list  = []               # viscous loop list of aero_results
+        self._aero_results        = {}              # viscous loop: dict with all results along span
         
         self._cl_max_reached = False                # a stripe has reached cl_max of airfoil
 
@@ -825,12 +825,17 @@ class VLM_OpPoint:
 
     @property
     def aero_results (self) -> dict:
-        """ dict with all results along span"""
+        """ viscous loop: dict with all results along span"""
 
         if not self._aero_results:
 
-            self._aero_results_list = self._viscous_loop ()
-            self._aero_results = self._aero_results_list [-1]
+            aero_results_list = self._viscous_loop ()
+
+            self._aero_results  = aero_results_list [-1]
+
+            # VLM_linear is result of first iteration 
+            aero_results_linear = aero_results_list [0]
+            self._aero_results[OpPoint_Var.CL_VLM_LINEAR] = aero_results_linear[OpPoint_Var.CL_VLM]
 
         return self._aero_results  
 
@@ -1011,6 +1016,8 @@ class VLM_OpPoint:
             results_lists: aero_results of each iteration - the last one is the actual 
         """
 
+        VISCOUS_EPSILON = 0.01                                      # max. delta of Cl-stripe to achieve per loop
+
         # first guess with alpha0 from airfoil polar 
 
         alpha0  = self.polar.alpha0_stripes
@@ -1019,12 +1026,13 @@ class VLM_OpPoint:
 
         results = self._calc_aero_results (cp, alpha0)              # derive all values from cp per panels    
 
-        Cl_VLM  = results[OpPoint_Var.CL_VLM].mean()                # to compare in Loop 
+        Cl_VLM_prev  = results[OpPoint_Var.CL_VLM]                  # to compare in Loop 
+
         results_list = [results]
 
         if self.polar.use_viscous_loop:
 
-            # iterate until only minor change in Lift of wing
+            # iterate until only minor change in Cl per stripe 
 
             for i in range (5):
 
@@ -1042,15 +1050,15 @@ class VLM_OpPoint:
 
                 results_list.append (results)
 
-                # ---
+                # delta Cl of stripe in viscous loop smaller epsilon?
 
-                Cl_VLM_new  = results[OpPoint_Var.CL_VLM].mean()                 # to compare in Loop 
+                Cl_VLM_cur   = results[OpPoint_Var.CL_VLM]
+                Cl_VLM_delta = np.abs((Cl_VLM_prev - Cl_VLM_cur) / Cl_VLM_prev)
 
-                # print (Cl_VLM, Cl_VLM_new)
-                if isclose (Cl_VLM, Cl_VLM_new, rel_tol=0.01):                   # 1.0% accuracy
+                if np.max(Cl_VLM_delta) < VISCOUS_EPSILON:                     
                     break
 
-                Cl_VLM = Cl_VLM_new
+                Cl_VLM_prev = np.array (Cl_VLM_cur)
 
         self._cp = cp
 

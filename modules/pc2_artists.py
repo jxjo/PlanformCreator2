@@ -896,7 +896,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
             opPoint_vars = [OpPoint_Var.ALPHA_EFF, OpPoint_Var.ALPHA_IND, 
                             OpPoint_Var.ALPHA, OpPoint_Var.ALPHA0, OpPoint_Var.ALPHA_MAX]
         elif self.opPoint_var == OpPoint_Var.CL:
-            opPoint_vars = [OpPoint_Var.CL, OpPoint_Var.CL_MAX, OpPoint_Var.CL_VLM]
+            opPoint_vars = [OpPoint_Var.CL, OpPoint_Var.CL_MAX, OpPoint_Var.CL_VLM_LINEAR]
         else: 
             opPoint_vars = [self.opPoint_var]
 
@@ -917,7 +917,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
                 pen   = pg.mkPen (color="orange", width=1, style=Qt.PenStyle.DashLine)
             elif opPoint_var == OpPoint_Var.CL_MAX:
                 pen   = pg.mkPen (color="orange", width=1, style=Qt.PenStyle.DashLine)
-            elif opPoint_var == OpPoint_Var.CL_VLM:
+            elif opPoint_var == OpPoint_Var.CL_VLM_LINEAR:
                 pen   = pg.mkPen (color="limegreen", width=1, style=Qt.PenStyle.DotLine)
             else:
                 pen   = pg.mkPen (color="limegreen", width=1)
@@ -933,7 +933,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
             # plot additional infos 
 
-            if opPoint_var == OpPoint_Var.CL_VLM:
+            if opPoint_var == OpPoint_Var.CL:
                 self._plot_critical_Cl_stripes (aero_results)
 
             if opPoint_var == OpPoint_Var.CL_MAX:
@@ -1331,11 +1331,12 @@ class WingSections_Artist (Abstract_Artist_Planform):
                 point_xy = None                                                 # skip left side root 
             else:
                 point_xy = (x[0],y[0])                                          # point at le
-                anchor = (0.5,2.0) if section.is_tip else (0.5,1.2)              
+                anchor = (-0.1,0.5) if section.is_tip else (0.5,1.2)              
 
             if point_xy:
+                text_fill  = pg.mkBrush (0,0,0,100)                             # black, half transparent
                 self._plot_point (point_xy, color=color, size=0, text=section.name_short, 
-                                  textColor=color, anchor=anchor)
+                                  textColor=color, textFill=text_fill, anchor=anchor)
 
             # highlight current section - add movable points for move by pos and move by chord 
 
