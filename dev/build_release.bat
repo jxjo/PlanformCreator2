@@ -1,6 +1,6 @@
 @echo off
 
-set APP_VERSION=3.0_beta_1
+set APP_VERSION=3.0_beta_2
 set WIN_RELEASE=PlanformCreator2_%APP_VERSION%_win
 
 echo.
@@ -19,7 +19,7 @@ rem ----- clean dist folder ------------
 if exist dist\PlanformCreator2\Root_Example.dat       del dist\PlanformCreator2\Root_Example.dat  /q
 if exist dist\PlanformCreator2\Tip_Example.dat       del dist\PlanformCreator2\Tip_Example.dat  /q
 if exist dist\PlanformCreator2\_internal\PlanformCreator2.settings del dist\PlanformCreator2\_internal\PlanformCreator2.settings  /q
-
+if exist dist\PlanformCreator2\airfoil_straks_tmp rd dist\PlanformCreator2\airfoil_straks_tmp  /s /q
 
 if     exist releases\%WIN_RELEASE% rd releases\%WIN_RELEASE% /s /q
 if     exist releases\%WIN_RELEASE%.zip del releases\%WIN_RELEASE%.zip  /q
