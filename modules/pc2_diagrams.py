@@ -265,19 +265,11 @@ class Item_Planform (Diagram_Item):
     def setup_viewRange (self):
         """ define view range of this plotItem"""
 
+        self.viewBox.autoRange (padding=0.08)
+
         self.viewBox.setAspectLocked()
         self.viewBox.invertY(True)
         self.showGrid(x=True, y=True)
-
-        # pyqtgraph bug: During init autoRange gets confused if there are 
-        #   clickable items or text items with ensureInBounds (Airfoil names) 
-        #   Setup view range delayed ...
-        if not self._viewRange_set:
-            self._viewRange_set = True
-            QTimer().singleShot (5, self.setup_viewRange)
-            return
-        else:
-            self.viewBox.autoRange (padding=0.08)                   # first ensure best range x,y 
 
 
     @property
@@ -528,19 +520,11 @@ class Item_VLM_Panels (Diagram_Item):
 
         self.layout.setColumnMinimumWidth ( 3, 50)              # ensure width for color keeps reserved
 
+        self.viewBox.autoRange (padding=0.08)
+
         self.viewBox.setAspectLocked()
         self.viewBox.invertY(True)
         self.showGrid(x=True, y=True)
-
-        # pyqtgraph bug: During init autoRange gets confused if there are 
-        #   clickable items or text items with ensureInBounds (Airfoil names) 
-        #   Setup view range delayed ...
-        if not self._viewRange_set:
-            self._viewRange_set = True
-            QTimer().singleShot (5, self.setup_viewRange)
-            return
-        else:
-            self.viewBox.autoRange (padding=0.08)                   # first ensure best range x,y 
 
         logger.debug (f"{self} setup viewRange")
 
@@ -548,8 +532,8 @@ class Item_VLM_Panels (Diagram_Item):
     @property 
     def show_colorBar (self) -> bool:
         """ show color bar for Cp"""
-        artist : VLM_Panels_Artist = self._get_artist (VLM_Panels_Artist)[0]
-        return artist.show_colorBar
+        artists = self._get_artist (VLM_Panels_Artist)
+        return artists[0].show_colorBar if artists else False
     
     def set_show_colorBar (self, aBool: bool):
         artist : VLM_Panels_Artist = self._get_artist (VLM_Panels_Artist)[0]
@@ -568,10 +552,10 @@ class Item_VLM_Panels (Diagram_Item):
                         set=self._edit_paneling, toolTip="Define / Edit paneling options")
             r +=1
             SpaceR   (l,r, height=5)
-            r += 1
-            CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
-                        obj=self, prop=Item_VLM_Panels.show_colorBar,
-                        disable=lambda: self.opPoint() is None)
+            # r += 1
+            # CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
+            #             obj=self, prop=Item_VLM_Panels.show_colorBar,
+            #             disable=lambda: self.opPoint() is None)
             r += 1
             SpaceR   (l,r, stretch=3)
 
@@ -1265,8 +1249,7 @@ class Item_Airfoils (Diagram_Item):
     def setup_viewRange (self):
         """ define view range of this plotItem"""
 
-        self.viewBox.setDefaultPadding(0.05)
-        self.viewBox.autoRange ()                                         # first ensure best range x,y 
+        self.viewBox.autoRange (padding=0.08)                                         # first ensure best range x,y 
         self.viewBox.setAspectLocked()
         self.viewBox.enableAutoRange(axis=pg.ViewBox.XAxis, enable=True)
         self.showGrid(x=True, y=True)
@@ -1433,9 +1416,7 @@ class Item_Polars (Diagram_Item):
     def setup_viewRange (self):
         """ define view range of this plotItem"""
 
-        self.viewBox.setDefaultPadding(0.05)
-
-        self.viewBox.autoRange ()                           # ensure best range x,y 
+        self.viewBox.autoRange (padding=0.05)                           # ensure best range x,y 
 
         # it could be that there are initially no polars, so autoRange wouldn't set a range, retry at next refresh
         if  self.viewBox.childrenBounds() != [None,None] and self._autoRange_not_set:
@@ -1765,7 +1746,7 @@ class Diagram_Making_Of (Diagram_Abstract):
         super().__init__(*args, **kwargs)
 
         self.graph_layout.setContentsMargins (10,30,20,10)     # default margins
-        self.graph_layout.setHorizontalSpacing (80)
+        self.graph_layout.setHorizontalSpacing (20)
         self.graph_layout.setVerticalSpacing (20)
 
         self._viewPanel.setMinimumWidth(240)
@@ -2302,11 +2283,10 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
                 artist.sig_wingSection_new.connect      (self.sig_wingSection_new.emit) 
                 artist.sig_wingSection_selected.connect (self.sig_wingSection_selected.emit) 
 
-        # show wingSections where possible
+        # show wingSections where possible (Item_Chord) 
 
         for artist in self._get_artist (WingSections_Artist): 
-            artist.set_show (True) 
-            # artist.set_show_mouse_helper (True) 
+            artist.set_show (True, refresh=False) 
 
 
     # --- view section panels ---------------------------------------------------
@@ -2350,8 +2330,8 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
     @property
     def show_airfoils (self) -> bool: 
-        artist = self._get_artist (Airfoil_Name_Artist)[0]
-        return artist.show 
+        artists = self._get_artist (Airfoil_Name_Artist)
+        return artists[0].show if artists else False  
     
     def set_show_airfoils (self, aBool : bool): 
         self._show_artist (Airfoil_Name_Artist, aBool)
@@ -2548,12 +2528,15 @@ class Item_Making_Of_Abstract (Diagram_Item):
    Abstract Making Of Diagram (Plot) Item 
     """
 
+    min_width   = 200                                   # min size needed - see below 
+    min_height  = 100 
+
     sig_planform_changed        = pyqtSignal()              
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.setContentsMargins (0,100,40,20)
+        self.setContentsMargins (20,100,20,20)
 
 
     def planform (self) -> Wing: 
@@ -2661,17 +2644,17 @@ class Item_Making_Of_Welcome (Item_Making_Of_Abstract):
 
 <span style="font-size: 10pt; color: darkgray">
 <p>
-    The app lets you design the planform of a wing either just as a draft<br> 
-    for further CAD processing or as the input for Xflr5 and FLZ_vortex for <br>
-    aerodynamic assessment of a wing using panel based calculation methods.
+    You can use the app to design the planform of a wing either just <br>
+    as a draft for CAD processing or as the input for Xflr5 and FLZ_vortex <br>
+    for further aerodynamic assessment.
     <p> 
-    The base element of the Planform Creator is the <span style="color: whitesmoke">Chord Distribution</span>, <br>
-    which is defined first and which will significantly determine the aerodynamic <br>
+    The base element of PlanformCreator2 is the <span style="color: whitesmoke">Chord Distribution</span>, <br>
+    which is defined first and which will essentially determine the aero<br>
     properties of a wing regardless of how the planform is later distorted <br>
-    within the PlanformCreaor, this chord distribution is retained.
+    within the app, this chord distribution is retained.
     </p> 
     <p> 
-    This diagram explains the individual steps of how the final planform <br>
+    This overview shows the individual steps of how the final planform <br>
     is constructed out the <span style="color: whitesmoke">Chord Distribution</span> and the <span style="color: whitesmoke">Chord Reference</span>.
     </p> 
     <p> 

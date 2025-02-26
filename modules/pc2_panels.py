@@ -88,7 +88,7 @@ class Tab_Panel (QTabWidget):
                 border-bottom: 0px;                                     /*remove */
                 border-top-left-radius: 3px;
                 border-top-right-radius: 3px;
-                min-width: 40ex;
+                min-width: 25ex;
                 padding: 6px;
             }
 

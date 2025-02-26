@@ -641,13 +641,13 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
     def _plot (self): 
         """ plot all panels as a colored mesh"""
 
-        # plot outline of parent with le and te dashed   
+        # plot outline of parent with le and te dashed - makes only sense for not trapezoidal  
 
-        x, le_y, te_y = self.wing.planform.le_te_polyline () 
-
-        pen = pg.mkPen (COLOR_PLANFORM.darker(150), width=1, style=Qt.PenStyle.DashLine)
-        self._plot_dataItem  (x, le_y, pen=pen, antialias=False, zValue=1)        
-        self._plot_dataItem  (x, te_y, pen=pen, antialias=False, zValue=1)
+        if not self.planform._n_distrib.isTrapezoidal:
+            x, le_y, te_y = self.wing.planform.le_te_polyline () 
+            pen = pg.mkPen (COLOR_PLANFORM.darker(150), width=1, style=Qt.PenStyle.DashLine)
+            self._plot_dataItem  (x, le_y, pen=pen, antialias=False, name="Planform", zValue=1)        
+            self._plot_dataItem  (x, te_y, pen=pen, antialias=False, zValue=1)
 
         # plot vertical lines indicating to much delta between paneled chord and parent chord 
 
@@ -1275,12 +1275,12 @@ class WingSections_Artist (Abstract_Artist_Planform):
             return None
 
     @override
-    def set_show (self, aBool : bool):
+    def set_show (self, aBool : bool, refresh=True):
         """ overridden to disconnect scene click when not shown"""
 
         if not aBool:
             self._disconnect_scene_mouseClick ()
-        super().set_show (aBool) 
+        super().set_show (aBool, refresh=refresh) 
 
 
     def _plot (self): 
@@ -1313,8 +1313,16 @@ class WingSections_Artist (Abstract_Artist_Planform):
             else:
                 pen   = pg.mkPen(color, width=1.0,style=Qt.PenStyle.DashLine)
 
+            # plot and make line clickable if there is a callback 
 
-            p = self._plot_dataItem  (x, y,  name=name, pen = pen, antialias = False, zValue=3)
+            clickable = True if self._wingSection_fn else False
+ 
+            p = self._plot_dataItem  (x, y,  name=name, pen = pen, clickable=clickable, antialias = False, zValue=3)
+
+            # connect click to slot 
+
+            if self._wingSection_fn:
+                p.sigClicked.connect (self._section_item_clicked)
 
             # plot section name in different modes 
 
@@ -1368,11 +1376,6 @@ class WingSections_Artist (Abstract_Artist_Planform):
                                                 move_by_pos=False, movable=movable,
                                                 on_changed=self.sig_wingSection_changed.emit)
                     self._add (pt) 
-
-            # make line clickable if there is a callback 
-            if self._wingSection_fn:
-                p.setCurveClickable (True, width=8)  
-                p.sigClicked.connect (self._section_item_clicked)
 
 
         if self.show_mouse_helper and not (m == mode.WING_LEFT or m == mode.WING_RIGHT):
@@ -2171,7 +2174,9 @@ class Airfoil_Name_Artist (Abstract_Artist_Planform):
 
                 color = colors[isec]  
 
-                self._plot_point (point_x, point_y, color=color, size=0, text=name, textColor=color, anchor=anchor, angle=angle)
+                self._plot_point (point_x, point_y, color=color, size=0, text=name, 
+                                  textColor=color, anchor=anchor, angle=angle,
+                                  ensureInBounds=True)
 
 
 

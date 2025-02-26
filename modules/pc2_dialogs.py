@@ -480,6 +480,10 @@ class Dialog_Select_Template (Dialog):
         title       = "Wing name"                 
         subtitle    = "dynamic"                                 # will be set dynamically 
 
+        min_width   = 200                                       # min size needed - see below 
+        min_height  = 50 
+
+
         sig_wing_selected         = pyqtSignal(Wing)             # self was clicked 
 
         def __init__(self, *args, **kwargs):
