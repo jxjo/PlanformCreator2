@@ -281,7 +281,11 @@ class Diagram_Item (pg.PlotItem):
     title       = "The Title"                           # title of diagram item
     subtitle    = "my subtitle"                         # optional subtitle 
 
+    min_width   = 600                                   # min size needed - see below 
+    min_height  = 200 
+
     # Signals 
+
     sig_visible = pyqtSignal(bool)                      # when self is set to show/hide 
 
 
@@ -326,6 +330,11 @@ class Diagram_Item (pg.PlotItem):
         # set margins (inset) of self - ensure some space for coordinates
 
         self.setContentsMargins ( 10,20,10,20)
+
+        # PlotItem needs a some size so that inital boundingBox calculation having pixel calculation work properly
+        #   - see pixelVectors  (important for clickable and movable (mousesize))
+        
+        self.setMinimumSize (self.min_width, self.min_height)
 
         # setup artists - must be override
 

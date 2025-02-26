@@ -711,18 +711,19 @@ class Artist(QObject):
         """ is self active """ 
         return self._show
 
-    def set_show (self, aBool):
+    def set_show (self, aBool, refresh=True):
         """
         switch to enable/disable self
-            - will immediatly refresh (if PlotItem is visible) 
+            - refresh=True: will immediatly refresh (if PlotItem is visible) 
         """
         self._show = aBool is True 
 
         if self.show: 
-            if not self._plots:
-                self.plot()                                 # first time, up to now no plots created ...
-            else: 
-                self.refresh()                              # normal refresh 
+            if refresh:
+                if not self._plots:
+                    self.plot()                                 # first time, up to now no plots created ...
+                else: 
+                    self.refresh()                              # normal refresh 
 
         else:
             p : pg.PlotDataItem
@@ -871,7 +872,8 @@ class Artist(QObject):
                      size=7, pxMode=True, 
                      brushColor=None, brushAlpha=1.0,
                      text=None, textColor=None, textFill=None,
-                     textPos=None, anchor=None, angle=0):
+                     textPos=None, anchor=None, angle=0,
+                     ensureInBounds=False):
         """ plot point with text item at x, y - text will follow the point """
 
         if isinstance (args[0], tuple):
@@ -902,7 +904,7 @@ class Artist(QObject):
             color = QColor(textColor) if textColor else QColor(self.COLOR_NORMAL)
             anchor = anchor if anchor else (0, 1)
 
-            t = pg.TextItem(text, color, anchor=anchor, angle=angle, fill=textFill, ensureInBounds=True)
+            t = pg.TextItem(text, color, anchor=anchor, angle=angle, fill=textFill, ensureInBounds=ensureInBounds)
 
             # ? attach to parent doesn't work (because of PlotDataItem? )
             textPos = textPos if textPos is not None else (xt,yt)
