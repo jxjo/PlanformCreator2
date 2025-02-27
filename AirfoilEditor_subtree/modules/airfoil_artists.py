@@ -974,7 +974,7 @@ class Polar_Artist (Artist):
 
         if error_msg:
             text = '<br>'.join (error_msg)          
-            self._plot_text (text, color=qcolors.ERROR, itemPos=(0.5,0.5))
+            self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
 
         # show generating message 
 

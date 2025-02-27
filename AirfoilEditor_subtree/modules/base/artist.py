@@ -16,7 +16,6 @@ see: https://pyqtgraph.readthedocs.io/en/latest/getting_started/plotting.html
 """
 
 from typing             import override
-from enum               import StrEnum
 
 import numpy as np
 
@@ -40,15 +39,13 @@ import logging
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 
-class qcolors (StrEnum):
 
-    EDITABLE      = 'orange' 
-    HOVER         = 'deepskyblue'
-    ERROR         = 'firebrick'
+COLOR_EDITABLE      = QColor('orange') 
+COLOR_HOVER         = QColor('deepskyblue')
+COLOR_ERROR         = QColor('red').darker(120)
+
 
 # -------- common methodes ------------------------
-
-
 
 def random_colors (nColors, h_start=0) -> list[QColor]:
     """ 
@@ -165,14 +162,14 @@ class Movable_Point (pg.TargetItem):
             symbol = self._symbol_movable
             size = size if size is not None else 9 
 
-            brush_color = QColor(color) if color else qcolors.EDITABLE
+            brush_color = QColor(color) if color else COLOR_EDITABLE
             brush_color = QColor(brush_color.darker(200))
 
-            color = movable_color if movable_color is not None else qcolors.EDITABLE
-            hoverBrush = qcolors.HOVER
+            color = movable_color if movable_color is not None else COLOR_EDITABLE
+            hoverBrush = COLOR_HOVER
 
             pen = pg.mkPen (color, width=1) 
-            hoverPen = pg.mkPen (qcolors.HOVER, width=1)
+            hoverPen = pg.mkPen (COLOR_HOVER, width=1)
 
             self._movingBrush =  QColor('black')
             self._movingBrush.setAlphaF (0.3) 
@@ -449,7 +446,7 @@ class Movable_Bezier (pg.PlotCurveItem):
         # init polyline of control points as PlotCurveItem
           
         if movable:
-            penColor = QColor (qcolors.EDITABLE).darker (120)
+            penColor = COLOR_EDITABLE
         else:
             penColor = QColor (color).darker (150)
         pen = pg.mkPen (penColor, width=1, style=Qt.PenStyle.DotLine)
