@@ -663,6 +663,14 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
 
         self._plot_panels ()
 
+        # plot distorted panels and error message for distorted panels 
+
+        if self.wing.vlm_wing.has_distorted_panels:
+            text = 'Geometry of some panels is too distorted for VLM (decrease x-Panels?)'         
+            self._plot_text (text, color=QColor("red").darker(120), parentPos = (0.5,0.9), itemPos=(0.5,0.5)) #qcolors.ERROR
+            self._plot_panels_distorted ()
+
+
         self.set_help_message ("Paneling of the wing can be customized with 'Paneling Options'")
 
 
@@ -777,6 +785,7 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         # spen = pg.mkPen (color = "yellow")
         # self._plot_dataItem  (ljk_x, ljk_y, pen=pen, symbol="o", symbolPen=spen, symbolSize=3, zValue=2)   
 
+
     def _get_mesh_levels (self, z : np.ndarray, max_default = 5.0) -> tuple[float,float]: 
         """ returns min, max for the color mesh with z value  """
 
@@ -823,17 +832,41 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
 
         z_panel    = np.zeros (npanels)
 
-        mask    = self.opPoint.aero_results [OpPoint_Var.MAX_MASK] 
+        max_mask    = self.opPoint.aero_results [OpPoint_Var.MAX_MASK] 
+        error_mask  = self.opPoint.aero_results [OpPoint_Var.ERROR_MASK] 
 
         nx = self.opPoint.wing.nx_panels
         ny = self.opPoint.wing.ny_panels
 
         for iy in range (ny): 
-            if mask[iy]:
+            if max_mask[iy]:
                 istart = iy * nx
                 z_panel[istart:istart+nx] = 1.5 
+            if error_mask[iy]:
+                istart = iy * nx
+                z_panel[istart:istart+nx] = 10 
 
         return z_panel        
+
+
+    def _plot_panels_distorted (self):
+        """ highlight all istorted panels """
+
+
+        for panel in self.wing.vlm_wing.panels_right: 
+            if panel.is_distorted:
+
+                x,y = panel.polygon_2D ()
+
+                x_mm = y * 1000
+                y_mm = x * 1000
+
+                color = QColor ("red").darker(120)  
+                # color.setAlphaF (0.8)
+                self._plot_dataItem  (x_mm, y_mm, pen=pg.mkPen(color, width=4), name="Distorted panel", antialias=False, zValue=2)       
+
+
+
 
 
 class VLM_Result_Artist (Abstract_Artist_Planform):
@@ -934,10 +967,22 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
             # plot additional infos 
 
             if opPoint_var == OpPoint_Var.CL:
-                self._plot_critical_Cl_stripes (aero_results)
+                self._plot_critical_Cl_stripes (aero_results, aero_results [OpPoint_Var.MAX_MASK], 
+                                                "Critical range", "orangered")
 
             if opPoint_var == OpPoint_Var.CL_MAX:
                 self._plot_Cl_max_values (aero_results, "orange")
+
+            
+            # error message for error in VLM calculation 
+
+            if self.opPoint.VLM_error and (opPoint_var == OpPoint_Var.CL or opPoint_var == OpPoint_Var.ALPHA):
+                text = 'VLM error occured (maybe less x-panels could help)'         
+                self._plot_text (text, color=qcolors.ERROR, itemPos=(0.5,0.5))
+
+                self._plot_critical_Cl_stripes (aero_results, aero_results [OpPoint_Var.ERROR_MASK], 
+                                                "VLM error", "red")
+
 
             # show viscous loop 
             # zValue = 10 
@@ -956,10 +1001,8 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
             #     pen = newPen
             #     zValue -= 1
 
-    def _plot_critical_Cl_stripes (self, results):
+    def _plot_critical_Cl_stripes (self, results, mask, label, color_red):
         """plot 'red' line where Cl reaches Cl_max using the max_mask flags from aero calculation"""
-
-        mask    = results [OpPoint_Var.MAX_MASK] 
 
         if np.any (mask):
 
@@ -967,9 +1010,9 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
             y       = results [OpPoint_Var.Y]
             b       = self.polar.vlm_wing.b_stripes                 # width of stripe 
 
-            color = QColor ("red")
-            color.darker(50)
-            color.setAlphaF (0.6)
+            color = QColor (color_red)
+            # color.darker(50)
+            color.setAlphaF (0.7)
             pen   = pg.mkPen (color, width=8)
 
             iStart = None 
@@ -982,8 +1025,10 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
                 if (not mask[i+1] and iStart is not None):
                     iEnd = i  
-                elif i == (len(y)-2) and mask[i+1] and iStart is not None: 
+                elif i == (len(y)-2) and mask[i+1]: 
                     iEnd = i + 1 
+                    if iStart is None:                                          # only the last is True 
+                        iStart = i + 1 
 
                 if iEnd is not None:     
                     y_crit  = y      [iStart: iEnd]
@@ -1013,7 +1058,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
                     y_crit  = np.append (y_crit,  y_end)
                     Cl_crit = np.append (Cl_crit, Cl_end)
 
-                    self._plot_dataItem  (y_crit * 1000, Cl_crit, pen=pen, name="Critical range", 
+                    self._plot_dataItem  (y_crit * 1000, Cl_crit, pen=pen, name=label, 
                                           antialias=False, zValue=2) 
                     iStart = None
                     iEnd   = None

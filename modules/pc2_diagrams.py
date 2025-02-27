@@ -552,10 +552,10 @@ class Item_VLM_Panels (Diagram_Item):
                         set=self._edit_paneling, toolTip="Define / Edit paneling options")
             r +=1
             SpaceR   (l,r, height=5)
-            # r += 1
-            # CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
-            #             obj=self, prop=Item_VLM_Panels.show_colorBar,
-            #             disable=lambda: self.opPoint() is None)
+            r += 1
+            CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
+                        obj=self, prop=Item_VLM_Panels.show_colorBar,
+                        disable=lambda: self.opPoint() is None)
             r += 1
             SpaceR   (l,r, stretch=3)
 

@@ -51,6 +51,7 @@ class OpPoint_Var (StrEnum_Extended):
     CL_VLM_LINEAR   = "Cl linear"                           # linear 
     CL_MAX          = "Airfoil cl max "               
     MAX_MASK        = "Cl VLM close MAX"                    # numpy mask where Cl_VLM reaches, exceeds CL_MAX              
+    ERROR_MASK      = "VLM error"                           # numpy mask where VLM couldn't calculate Cp              
     ALPHA_MAX       = "Airfoil alpha max "               
     ALPHA           = "Alpha"               
     ALPHA_EFF       = "Alpha effective"               
@@ -159,6 +160,16 @@ class VLM_Panel:
         l_m = (l_1 + l_2) / 2.0
         b_m = (b_1 + b_2) / 2.0
 
+        # sanity - is panel distorted? 
+        #          check if p3 is far behind x of p1 
+
+        sheer = (self.p3[0] - self.p1[0]) / l_1[0]
+        if sheer > 1.2:
+            self.is_distorted = True 
+            logger.warning (f"{self} sheer: {sheer:.1f} ")
+        else: 
+            self.is_distorted = False 
+
         # horseshoe data 
 
         self.l  = l_m [0]                                                   # length in x direction 
@@ -177,11 +188,14 @@ class VLM_Panel:
     def polygon_2D (self) -> tuple [list, list]:
         """ x,y polygon of self (for plotting)""" 
 
-        x = [self.p0[0] + 2, self.p1[0] - 2, self.p2[0] - 2, self.p3[0] + 2, self.p0[0] + 2]        
-        y = [self.p0[1] + 2, self.p1[1] + 2, self.p2[1] - 2, self.p3[1] - 2, self.p0[1] + 2]
+        x = np.array([self.p0[0], self.p1[0], self.p2[0], self.p3[0], self.p0[0]])        
+        y = np.array([self.p0[1], self.p1[1], self.p2[1], self.p3[1], self.p0[1]])
 
         return x, y
 
+    def __repr__(self) -> str:
+        # overwrite to get a nice print string
+        return f"<{type(self).__name__} at {self.p0[0]:.3f}, {self.p0[1]:.3f}>"
 
 
 class VLM_Wing:
@@ -196,6 +210,8 @@ class VLM_Wing:
         self._planform = planform                   # Planform_Paneled as base 
 
         self._panels_right  = None                  # VLM_Panels of the right wing side 
+        self._has_distorted_panels = False          # indicate distored (bad) panels 
+
         self._aerogrid      = None                  # input datastructure of VLM calculation 
         self._Qjj           = None                  # matrix of aerodynamic influence coefficients
         self._BJJ           = None
@@ -227,9 +243,14 @@ class VLM_Wing:
         """ panels of right half wing"""
 
         if self._panels_right is None:
-            self._panels_right = self._generate_panels_right ()
+            self._panels_right, self._has_distorted_panels = self._generate_panels_right ()
         return self._panels_right
 
+
+    @property 
+    def has_distorted_panels (self) -> bool: 
+        """ True if some panels are too much distorted for VLM"""
+        return self._has_distorted_panels
     
     @property
     def n_panels (self) -> int:
@@ -327,8 +348,14 @@ class VLM_Wing:
     # ----- private --------------------------------------------------
       
 
-    def _generate_panels_right (self) -> list [VLM_Panel]:
-        """ generate all panels of right half wing """
+    def _generate_panels_right (self) -> tuple[list [VLM_Panel], bool]:
+        """ 
+        Generate and return all panels of right half wing 
+        
+        Returns:
+            panels 
+            has_distorted_panels    - indicate bad panels 
+        """
 
         # Change to wing coordinates in [m]
         #
@@ -341,6 +368,8 @@ class VLM_Wing:
 
         from wing   import Planform_Paneled
         planform : Planform_Paneled = self._planform 
+
+        has_distorted_panels = False                                    # are there distorted panels  
 
         panels = []
         y_stations  = planform._get_x_stations ()  
@@ -381,9 +410,12 @@ class VLM_Wing:
 
                 panels.append(panel)
 
+                if panel.is_distorted:
+                    has_distorted_panels = True 
+
         logger.debug (f"{self} created {len(panels)} panels")
 
-        return panels 
+        return panels, has_distorted_panels 
         
 
     def _build_aeorogrid (self, panels : list [VLM_Panel]) -> dict: 
@@ -760,6 +792,7 @@ class VLM_OpPoint:
         self._aero_results        = {}              # viscous loop: dict with all results along span
         
         self._cl_max_reached = False                # a stripe has reached cl_max of airfoil
+        self._VLM_error      = False                # error occured e.g because of bad paneling 
 
         # if there are no airfoil polars - break 
 
@@ -865,6 +898,11 @@ class VLM_OpPoint:
         mask = self.aero_results[OpPoint_Var.MAX_MASK] 
         return  np.any(mask)
 
+    @property
+    def VLM_error (self) -> bool:
+        """ error occured in VLM calculation e.g. bad paneling """
+
+        return self._VLM_error
 
 
     def export_to_csv (self, pathFileName, alpha_start = -3.0, alpha_end :float = None, step = 0.5):
@@ -949,11 +987,16 @@ class VLM_OpPoint:
         alpha_eff_VLM   = np.zeros (ns) 
         alpha_eff       = np.zeros (ns) 
         alpha_ind       = np.zeros (ns) 
+        VLM_error       = np.full  (ns, False) 
 
         self._cl_max_reached = False
 
         for i in range (0, self.wing.n_panels, nx):                             # step through panels stripewise 
 
+            Cp_min = np.min (Cp [i:(i+nx)])
+            Cp_max = np.max (Cp [i:(i+nx)])
+            VLM_error_s = False
+            
             i_s    = int (i/nx)
             lift_s = lift_panels [i:(i+nx)].sum() 
             b_s    = b_panels [i]                                           	# width of stripe 
@@ -963,12 +1006,20 @@ class VLM_OpPoint:
 
             lift_y   = lift_s / b_s 
             Cl_VLM_y = lift_y / (q_dyn * c_s)
+
             if Cl_VLM_y > Cl_max[i_s]:                                          # Cl break down if > cl_max of airfoil 
-                Cl_y   = 0.0
-                lift_y = 0.0                                                    # lift break down if > cl_max of airfoil 
+                Cl_y     = 0.0
+                lift_y   = 0.0                                                    
+                lift_s   = 0.0                                                    
                 self._cl_max_reached = True 
+            elif (Cp_min * Cp_max < 0) and abs(Cp_max - Cp_min) > 10:           # VLM error e.g. bad paneling 
+                Cl_y     = 0.0
+                Cl_VLM_y = 0.0 
+                lift_y   = 0.0                                                    
+                lift_s   = 0.0                                                    
+                VLM_error_s = True 
             else: 
-                Cl_y   = Cl_VLM_y
+                Cl_y     = Cl_VLM_y
 
             a_eff_y     = degrees (Cl_y     / (2 * np.pi)) + alpha0[i_s]  
             a_eff_VLM_y = degrees (Cl_VLM_y / (2 * np.pi)) + alpha0[i_s]    
@@ -983,13 +1034,19 @@ class VLM_OpPoint:
             alpha_eff [i_s]     = a_eff_y
             alpha_ind [i_s]     = a_ind_y
             alpha_eff_VLM [i_s] = a_eff_VLM_y
+            VLM_error [i_s]     = VLM_error_s
+
+            if VLM_error_s:
+                self._VLM_error = True
+
 
         results = {}
         results[OpPoint_Var.Y]              = y_stripes
         results[OpPoint_Var.CL]             = Cl
         results[OpPoint_Var.CL_VLM]         = Cl_VLM
         results[OpPoint_Var.CL_MAX]         = Cl_max 
-        results[OpPoint_Var.MAX_MASK]       = (Cl_max * 0.98 - Cl_VLM) < 0        # numpy mask where Cl_VLM reaches, exceeds CL_MAX              
+        results[OpPoint_Var.MAX_MASK]       = (Cl_max * 0.98 - Cl_VLM) < 0          # numpy mask where Cl_VLM reaches, exceeds CL_MAX              
+        results[OpPoint_Var.ERROR_MASK]     = VLM_error                             # numpy mask where VLM error occured             
 
         results[OpPoint_Var.LIFT]           = lift
         results[OpPoint_Var.LIFT_STRIPE]    = lift_stripe
@@ -1001,9 +1058,6 @@ class VLM_OpPoint:
         results[OpPoint_Var.ALPHA0]         = alpha0     
 
         # self._dump_aero_results (results)
-
-        if self._cl_max_reached:
-            pass
 
         return results 
     
@@ -1053,12 +1107,21 @@ class VLM_OpPoint:
                 # delta Cl of stripe in viscous loop smaller epsilon?
 
                 Cl_VLM_cur   = results[OpPoint_Var.CL_VLM]
-                Cl_VLM_delta = np.abs((Cl_VLM_prev - Cl_VLM_cur) / Cl_VLM_prev)
 
-                if np.max(Cl_VLM_delta) < VISCOUS_EPSILON:                     
+                if np.all (Cl_VLM_prev):
+                    Cl_VLM_delta = np.abs((Cl_VLM_prev - Cl_VLM_cur) / Cl_VLM_prev)
+
+                    if np.max(Cl_VLM_delta) < VISCOUS_EPSILON:                     
+                        break
+                else: 
                     break
 
                 Cl_VLM_prev = np.array (Cl_VLM_cur)
+
+                # error in VLM (quite seldom) 
+
+                if self.VLM_error:
+                    break
 
         self._cp = cp
 
