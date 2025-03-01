@@ -52,7 +52,9 @@ The advantage is that the parameters can be changed independently of each other,
 Most important and usually defined first, is the chord distribution along the wing span. The geometric chord distribution directly and significantly determines the lift distribution along the span. The local lift coefficient depends on the local effective angle of attack (influenced by the wing shape) and on the local Reynolds number, which changes proportionally to the local chord.
 
 Two different "types" are available for defining the chord distribution:
-- **Bezier curve**: Using a start tangent at the root and a end tangent at the wing tip, the curve of the chord distribution is defined by dragging the control points with the mouse
+- **Bezier curve**: Using a start tangent at the root and a end tangent at the wing tip, the curve of the chord distribution is defined by dragging the control points with the mouse.<br>
+:new:  v3: Additional Bezier control points may be defined to achieve a wide range of chord distributions<br>
+:new:  v3: An area with constant chord can be defined by moving the start point of Bezier towards tip
 - **Trapezoid**: For the definition of a (multiple) trapezoid wing. The chord is defined by the chord length of the individual wing sections.
 
 In PC2, the chord distribution is always displayed in normalized form. Both span and chord length range from 0 to 1. This allows chord distributions - even of different wing designs - to be compared with each other without distortion.
