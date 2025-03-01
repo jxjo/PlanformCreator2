@@ -61,7 +61,7 @@ logger.setLevel(logging.DEBUG)
 #------------------------------------------------
 
 APP_NAME            = "Planform Creator 2"
-APP_VERSION         = "3.0 beta 2"
+APP_VERSION         = "3.0 beta 3"
 WORKER_MIN_VERSION  = '1.0.5'
 
 TEMPLATE_DIR        = "templates"

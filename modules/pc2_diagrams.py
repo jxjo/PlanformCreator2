@@ -2454,25 +2454,30 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
     def on_paneling_changed (self):
         """ slot to handle changed polar definitions """
 
-        logger.debug (f"{str(self)} on paneling changed - visible: {self.isVisible()}")
+        if self.isVisible():
 
-        # overridden to re-calc alpha max
-        item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
-        item.set_opPoint_fixed_to_alpha_max (item.opPoint_fixed_to_alpha_max, refresh=False)
+            logger.debug (f"{str(self)} on paneling changed - visible: {self.isVisible()}")
 
-        self.refresh(also_viewRange=False)
+            # overridden to re-calc alpha max
+            item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
+            item.set_opPoint_fixed_to_alpha_max (item.opPoint_fixed_to_alpha_max, refresh=False)
+
+            self.refresh(also_viewRange=False)
+
 
     @override
     def on_new_polars (self):
         """ slot to handle new polars loaded which were generated async by Worker """
 
-        logger.debug (f"{str(self)} on new polars changed - visible: {self.isVisible()}")
+        if self.isVisible():
 
-        # overridden to re-calc alpha max
-        item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
-        item.set_opPoint_fixed_to_alpha_max (item.opPoint_fixed_to_alpha_max, refresh=False)
+            logger.debug (f"{str(self)} on new polars changed - visible: {self.isVisible()}")
 
-        self.refresh(also_viewRange=False)
+            # overridden to re-calc alpha max
+            item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
+            item.set_opPoint_fixed_to_alpha_max (item.opPoint_fixed_to_alpha_max, refresh=False)
+
+            self.refresh(also_viewRange=False)
 
 
     @override

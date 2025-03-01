@@ -1042,7 +1042,8 @@ class N_Distrib_Abstract:
 
 class N_Distrib_Bezier (N_Distrib_Abstract): 
     """ 
-    Bezier based normalized chord distribition  
+    Bezier based normalized chord distribition allowing > 4 control points 
+        and straight line chord distribution at root  
     """
 
     name            = "Bezier"
@@ -1050,7 +1051,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
     isTemplate      = True
 
     description = "Chord based on a Bezier curve function,\n" + \
-                  "which is defined by its root and tip tangent"
+                  "allowing multi control points "
 
     # is the chord distribution defined by wing section or vice versa - overwrite 
     chord_defined_by_sections = False          # e.g trapezoid
@@ -1071,12 +1072,18 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         px = [0.0, 0.55, 1.0,  1.0]
         py = [1.0, 1.0, 0.55, 0.10]     
 
-        # from dict only the variable point coordinates of Bezier
+        # Compatibility 2.0: from dict only the variable point coordinates of Bezier
 
         px[1]   = fromDict (dataDict, "p1x", px[1])             # root tangent 
         py[1]   = fromDict (dataDict, "p1y", py[1])
         py[2]   = fromDict (dataDict, "p2y", py[2])             # nearly elliptic
         py[3]   = fromDict (dataDict, "p3y", py[3])             # defines tip chord 
+
+
+        # from dict control coordinates of Bezier
+
+        px    = fromDict (dataDict, "px", px)              
+        py    = fromDict (dataDict, "py", py)
 
         self._bezier = Bezier (px, py)
         self._u = np.linspace(0.0, 1.0, num=100)                # default Bezier u parameter
@@ -1086,10 +1093,15 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         """ returns a data dict with the paramters of self"""
 
         d = super()._as_dict()
+        toDict (d, "px", self._bezier.points_x)
+        toDict (d, "py", self._bezier.points_y)
+
+        # Compatibility 2.0 
         toDict (d, "p1x",       self._bezier.points_x[1])
         toDict (d, "p1y",       self._bezier.points_y[1])
-        toDict (d, "p2y",       self._bezier.points_y[2])
-        toDict (d, "p3y",       self._bezier.points_y[3])
+        toDict (d, "p2y",       self._bezier.points_y[-2])
+        toDict (d, "p3y",       self._bezier.points_y[-1])
+
         return d
 
 
@@ -1100,8 +1112,18 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
 
-        return round (self._bezier.eval_y_on_x (xn, fast=fast),10) 
+        xn_bezier_start = self._bezier.points_x[0]
 
+        # xn either on straight line or on Bezier 
+                           
+        if xn < xn_bezier_start:         
+            xn_line, cn_line = self.line_from_root ()
+            cn = round (np.interp(xn, xn_line, cn_line),10)
+        else:    
+            cn = round (self._bezier.eval_y_on_x (xn, fast=fast),10) 
+
+        return cn 
+    
 
     def xn_at (self, cn: float, fast=True) -> float:
         """ 
@@ -1110,7 +1132,26 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
 
-        return round (self._bezier.eval_x_on_y (cn, fast=fast), 10)
+        # sanity check 
+
+        if cn > 1.0: 
+            logger.warning (f"{self} cn={cn:.3f} clipped")
+            return 0.0  
+        elif cn < self._bezier.points_y [-1]:
+            logger.warning (f"{self} cn={cn:.3f} clipped")
+            return 1.0
+
+        # cn either on straight line or on Bezier 
+
+        cn_bezier_start = self._bezier.points_y[0]
+
+        if cn > cn_bezier_start:         
+            xn_line, cn_line = self.line_from_root ()
+            xn = round (np.interp(cn, cn_line, xn_line),10)
+        else:    
+            xn = round (self._bezier.eval_x_on_y (cn, fast=fast), 10)
+
+        return xn
 
 
     def polyline (self) -> Polyline:
@@ -1122,8 +1163,30 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
             xn: normalized x coordinates
             cn: normalized chord
         """
-        xn, cn = self._bezier.eval(self._u) 
+        xn_line, cn_line = self.line_from_root ()
+        xn_bez,  cn_bez  = self._bezier.eval(self._u) 
+
+        xn = np.append (xn_line, xn_bez)
+        cn = np.append (cn_line, cn_bez)
+
         return np.round(xn,10), np.round(cn,10) 
+
+
+    def line_from_root (self) -> Polyline:
+        """ 
+        If Bezier is not starting at root return straight line upto bezier
+
+        Returns:
+            xn: normalized x coordinates
+            cn: normalized chord
+        """
+
+        xn_bezier_start = self._bezier.points_x[0]
+                                                
+        if xn_bezier_start == 0.0:
+            return np.empty(0), np.empty(0)
+        else:
+            return np.array([0.0, xn_bezier_start]), np.array([1.0, self._bezier.points_y[0]])
 
 
     def bezier_as_jpoints (self, transform_fn = None) -> list[JPoint]: 
@@ -1134,27 +1197,32 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         """
 
         jpoints = []
+        n = len(self._bezier.points)
 
         for i, point in enumerate(self._bezier.points):
 
             jpoint = JPoint (point)   
 
             if i == 0:                                      # root 
-                jpoint.set_fixed (True)
-                jpoint.set_name ('') 
+                jpoint.set_x_limits ((0,0.9))
+                jpoint.set_y_limits ((0.1,1.0))
+                jpoint.set_name ('Bezier Start') 
             elif i == 1:                                    # root tangent
                 jpoint.set_x_limits ((0,1))
                 jpoint.set_y_limits ((0,1))
-                jpoint.set_name ('Root Tangent') 
-            elif i == 2:                                    # tip tangent
+                jpoint.set_name ('Start Tangent') 
+            elif i == n-2:                                  # tip tangent
                 jpoint.set_x_limits ((1,1))
                 jpoint.set_y_limits ((0.2,1))
-                jpoint.set_name ('Tip Tangent') 
-            else:
-                # jpoint.set_fixed (True)                   # tip
+                jpoint.set_name ('End Tangent') 
+            elif i == n-1:                                  # tip
                 jpoint.set_x_limits ((1,1))
                 jpoint.set_y_limits ((0.01,0.5))
                 jpoint.set_name ('Tip Chord') 
+            else:
+                jpoint.set_x_limits ((-0.5,1.5))
+                jpoint.set_y_limits ((0.01,1.0))
+                jpoint.set_name (f'Free {i}') 
 
             jpoints.append(jpoint.as_transformed (transform_fn))
 
@@ -1168,13 +1236,23 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         """
 
         px, py = [], []
-        for jpoint in jpoints:
+        for i, jpoint in enumerate (jpoints):
             jpoint_trans = jpoint.as_transformed (transform_fn)
-            px.append(jpoint_trans.x)
-            py.append(jpoint_trans.y)
+
+            if i == 0 and isclose (jpoint_trans.x, 0.0, abs_tol= 0.005):
+                xn = 0.0 
+                yn = 1.0 
+            elif isclose (jpoint_trans.x, 1.0, abs_tol= 0.005):
+                xn = 1.0
+                yn = jpoint_trans.y
+            else:
+                xn = jpoint_trans.x
+                yn = jpoint_trans.y
+
+            px.append(xn)
+            py.append(yn)
 
         self._bezier.set_points (px, py)
-
 
 
 
@@ -1994,14 +2072,13 @@ class WingSections (list [WingSection]):
             sections.append(WingSection (planform, {"cn": 0.6, "flap_group":2, "hinge_cn":0.70}))
             sections.append(WingSection (planform, {"xn": 1.0, "flap_group":2, "hinge_cn":0.75}))
 
-        # sanity
-        if not sections[0].is_root or not sections[-1].is_tip:
-            raise ValueError ("Wingsections data corrupted")
-
-        logger.info (" %d Wing sections added" % len(sections))
 
         self.extend (sections)
 
+        # final sanity
+        self.check_n_repair ()
+
+        logger.info (" %d Wing sections added" % len(sections))
 
 
     @property
@@ -2013,10 +2090,13 @@ class WingSections (list [WingSection]):
     def _as_list_of_dict (self) -> list[dict]:
         """ returns a data dict with the paramters of self"""
 
+        self.check_n_repair ()
+
         section_list  = []
         section : WingSection
         for section in self: 
             section_list.append (section._as_dict ()) 
+
         return section_list
 
 
@@ -2075,7 +2155,8 @@ class WingSections (list [WingSection]):
 
         new_section = WingSection (self._planform, {"xn": xn})
         self.insert (1,new_section)                                     # insert section somewhere
-        self.sort_by_xn ()                                               # and bring it in order 
+
+        self.check_n_repair ()                                          # re-sort
 
         # set flap group of new to the left neighbour 
         left_sec, _ = self.neighbours_of (new_section) 
@@ -2165,13 +2246,26 @@ class WingSections (list [WingSection]):
         return self._strak_done
 
 
-    def sort_by_xn (self):
-        """ 
-        Re-sort wing sections to an ascending xn pos. 
-        When changing major wing parms sections could become out of sort order when
-            they have fixed xn and chord mixed    
-        """
+    def check_n_repair (self):
+        """ sanity check of wingSections  - remove dirty ones"""
+
+        cn_tip = self[-1].cn
+
+        # sanity check for dirty section with cn smaller than tip 
+        for section in self [:]: 
+            if section._cn and section._cn < cn_tip:
+                logger.warning (f"{section} removed - cn {section._cn:.3f} smaller than tip") 
+                self.delete (section)        
+
+        # Re-sort wing sections to an ascending xn pos. 
+        # When changing major wing parms sections could become out of sort order when
+        #    they have fixed xn and chord mixed    
+
         self.sort (key=lambda sec: sec.xn) 
+
+        # there must be root and tip 
+        if not self[0].is_root or not self[-1].is_tip:
+            raise ValueError ("Wingsections data corrupted")
 
 
     def neighbours_of (self, aSection: WingSection) -> tuple [WingSection, WingSection]:

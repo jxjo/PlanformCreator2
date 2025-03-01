@@ -194,7 +194,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
             - add/delete 3rd point 
         """
 
-        class Movable_Ref_Line_Point (Movable_Point):
+        class Movable_Ref_Line_Point (Movable_Bezier_Point):
             """ 
             Represents one control point of Movable_Ref_Line_Bezier
                 - subclassed to get individual label 
@@ -491,16 +491,27 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
             pt = self.Movable_Chord_Bezier (self._pi, self.planform,
                                             t_fn = t_fn, tr_fn = tr_fn, 
                                             movable=True, color=color,
-                                            on_changed=self.sig_planform_changed.emit)
+                                            on_changed=self._on_bezier_changed)
             self._add (pt) 
 
-            self.set_help_message ("Chord distribution: Move Bezier control points to modify")
+            self.set_help_message ("Chord distribution: Move Bezier control points to modify, " + \
+                                   "ctrl-click to add, shift-click to remove.")
 
         # Chord trapezoidal - defined by wing sections
 
         elif self.planform.n_distrib.isTrapezoidal:
 
             pass
+
+        
+    def _on_bezier_changed (self): 
+        """ callback of movable bezier """
+
+        # the order of wingSections could have changed 
+        #   with fixed pos and fixed chord sections
+        self.wingSections.check_n_repair ()
+
+        self.sig_planform_changed.emit()
 
 
 
@@ -530,6 +541,78 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
         def u (self) -> list:
             """ the Bezier u parameter array """
             return np.linspace(0.0, 1.0, num=50)
+
+
+        @override
+        def _moving_point (self, aPoint : Movable_Point):
+            """ slot - point is moved by mouse """
+            # overridden to check if planform is still tapered
+
+            points_sav =  self.bezier.points[:]             # save for rollback
+
+            self.bezier.set_points(*self.points_xy())       # update of bezier
+            x,y = self.bezier.eval(self.u)
+
+            # tapered planform? - check if slope (dy) of Bezier becomes positive 
+
+            dx = np.diff (x,1)                              # dx should be >= 0.0 
+            dy = np.diff (y,1)                              # dy should be <= 0.0 
+
+            if np.amax (dy) > 0.0 or np.amin (dx) < 0.0:
+                # roll back 
+                i = aPoint.id 
+                self.bezier.set_points (points_sav)
+                aPoint.setPos_silent   (points_sav[i])
+                return
+            else: 
+                super()._moving_point (aPoint)
+
+        @override
+        def _update_bezier_item (self):
+            """ update bezier curve item from bezier"""
+
+            # a straight line segment from root is added to bezier 
+            if self._bezier_item: 
+                x,y = self.bezier.eval(self.u)                  
+                x,y = np.concatenate([[0.0],x]), np.concatenate([[1.0],y])
+                self._bezier_item.setData (x, y)
+                self._bezier_item.show()
+
+
+        @override
+        def _add_point (self, xy : tuple):
+            """ handle add point - will be called when ctrl_click on Bezier """
+
+            # limit n of control points 
+            if len(self._jpoints) >= 8: return   
+
+            # find insertion point 
+
+            px     = np.array( self.jpoints_xy ()[0]) 
+            px_new = xy[0]
+
+            idx = np.searchsorted(px, px_new)
+            idx = clip (idx, 2, len(px)-2)                  # between start and end tangent point
+
+            self._jpoints.insert (idx, JPoint (xy))
+
+            logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
+
+            self._finished_point (None)
+
+
+        @override
+        def _delete_point (self, aPoint : Movable_Point):
+            """ slot - point should be deleted """
+
+            # a minimum of 2 control points 
+            if len(self._jpoints) <= 4: return   
+
+            # do not delete first and last 2 control points 
+            i = aPoint.id
+            if i > 1 and i < (len(self._jpoints) -2):
+                super()._delete_point (aPoint)
+
 
         @override
         def _finished_point (self, aPoint):
@@ -916,7 +999,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
             else:
                 text = 'huhu'.join (self.polar.error_reason)  
                 text = text.replace ("<", "'").replace (">", "'").replace ("huhu", "<br>") 
-                self._plot_text (text, color=qcolors.ERROR, itemPos=(0.5,0.5))
+                self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
             return   
 
         # get dict with results of aero calculation - values per y position
@@ -978,7 +1061,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
             if self.opPoint.VLM_error and (opPoint_var == OpPoint_Var.CL or opPoint_var == OpPoint_Var.ALPHA):
                 text = 'VLM error occured (maybe less x-panels could help)'         
-                self._plot_text (text, color=qcolors.ERROR, itemPos=(0.5,0.5))
+                self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
 
                 self._plot_critical_Cl_stripes (aero_results, aero_results [OpPoint_Var.ERROR_MASK], 
                                                 "VLM error", "red")
@@ -1165,7 +1248,7 @@ class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
             - add/delete 3rd point 
         """
 
-        class Movable_Ref_Chord_Point (Movable_Point):
+        class Movable_Ref_Chord_Point (Movable_Bezier_Point):
             """ 
             Represents one control point of Movable_Ref_Chord_Bezier
                 - subclassed to get individual label 
@@ -2568,7 +2651,7 @@ class Polar_Artist (Abstract_Artist_Planform):
 
         if error_msg:
             text = '<br>'.join (error_msg)          
-            self._plot_text (text, color=qcolors.ERROR, itemPos=(0.5,0.5))
+            self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
 
         # show generating message 
 
