@@ -481,15 +481,15 @@ class Movable_Bezier (pg.PlotCurveItem):
 
         if movable or show_static: 
 
-            x,y = self.bezier.eval(self.u)
- 
             pen = pg.mkPen (QColor (color), width=1, style=Qt.PenStyle.DashLine)
-            self._bezier_item = pg.PlotCurveItem (x,y, pen=pen)
+            self._bezier_item = pg.PlotCurveItem ([0],[0], pen=pen)
             self._bezier_item.setParentItem (self)
 
+            self._update_bezier_item ()
+
             if not show_static:
- 
                 self._bezier_item.hide()
+
 
     @property
     def id (self):
@@ -535,7 +535,7 @@ class Movable_Bezier (pg.PlotCurveItem):
 
     @override
     def mouseClickEvent(self, ev : MouseClickEvent):
-        """ pg overloaded - handle crtl_click """
+        """ pg override - handle ctrl_click """
         if self.movable :
             if ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier: 
                 x = round (ev.pos().x(),6)
@@ -546,7 +546,6 @@ class Movable_Bezier (pg.PlotCurveItem):
                     ev.accept()
                 else: 
                     ev.ignore()
-
         return super().mouseClickEvent(ev)
 
 
@@ -558,8 +557,7 @@ class Movable_Bezier (pg.PlotCurveItem):
 
         if self._bezier_item:            
             self.bezier.set_points(*self.points_xy())      # update of bezier
-            x,y = self.bezier.eval(self.u)
-            self._bezier_item.setData (x, y)
+            self._update_bezier_item ()
             self._bezier_item.show()
 
 
@@ -576,7 +574,6 @@ class Movable_Bezier (pg.PlotCurveItem):
         return False
 
 
-
     def _delete_point (self, aPoint : Movable_Point):
         """ slot - point should be deleted """
 
@@ -589,14 +586,20 @@ class Movable_Bezier (pg.PlotCurveItem):
         px, py = self.jpoints_xy()
         self.setData(px, py)                                # update self (polyline) 
 
-        if self._bezier_item: 
-            x,y = self.bezier.eval(self.u)                  # update of bezier
-            self._bezier_item.setData (x, y)
-            self._bezier_item.show()
+        self._update_bezier_item ()                         # refresh bezier plot item
 
         self._finished_point (aPoint)
         if aPoint.scene():                                  # sometimes scene get lost ... (?) 
             aPoint.scene().removeItem(aPoint)               # final delete from scene 
+
+
+    def _update_bezier_item (self):
+        """ update bezier curve item from bezier"""
+
+        if self._bezier_item: 
+            x,y = self.bezier.eval(self.u)                  # update of bezier
+            self._bezier_item.setData (x, y)
+            self._bezier_item.show()
 
 
     def _finished_point (self, aPoint):
