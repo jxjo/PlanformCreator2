@@ -372,7 +372,7 @@ class VLM_Wing:
         has_distorted_panels = False                                    # are there distorted panels  
 
         panels = []
-        y_stations  = planform._get_x_stations ()  
+        y_stations  = planform._calc_x_stations ()  
         cn_stations = planform._cn_rel_stations ()  
 
         for iy in range (len(y_stations) -1): 

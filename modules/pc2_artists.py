@@ -767,7 +767,7 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         if self.show_colorBar and self.opPoint:
             z_panel    = self.opPoint.Cp_viscous_panels
             colorMap   = pg.colormap.get ('viridis')
-            edgecolors = pg.mkPen(COLOR_BOX.darker(130))
+            edgecolors = pg.mkPen(COLOR_BOX)
         else: 
             if self.opPoint:
                 z_panel = self._get_z_critical_panels (len(panels))

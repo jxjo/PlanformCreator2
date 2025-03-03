@@ -1069,8 +1069,8 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
 
         # init Cubic Bezier for chord distribution 
        
-        px = [0.0, 0.55, 1.0,  1.0]
-        py = [1.0, 1.0, 0.55, 0.10]     
+        px = [0.0, 0.5, 1.0,  1.0]
+        py = [1.0, 1.0, 0.8, 0.05]     
 
         # Compatibility 2.0: from dict only the variable point coordinates of Bezier
 
@@ -1604,7 +1604,8 @@ class WingSection :
         toDict (d, "defines_cn",    self._defines_cn if self._defines_cn else None)
         toDict (d, "hinge_cn",      self._hinge_cn)
         toDict (d, "flap_group",    self.flap_group)
-        toDict (d, "is_for_panels", self._is_for_panels)
+        if self.is_for_panels:
+            toDict (d, "is_for_panels", self.is_for_panels)
         if not self.airfoil.isBlendAirfoil:
             toDict (d, "airfoil",    self.airfoil.pathFileName)
         return d
@@ -2068,9 +2069,9 @@ class WingSections (list [WingSection]):
         # new wing - create default sections
         if not sections:
             logger.info ('Creating example wing sections')
-            sections.append(WingSection (planform, {"xn": 0.0, "flap_group":1, "hinge_cn":0.70}))
-            sections.append(WingSection (planform, {"cn": 0.6, "flap_group":2, "hinge_cn":0.70}))
-            sections.append(WingSection (planform, {"xn": 1.0, "flap_group":2, "hinge_cn":0.75}))
+            sections.append(WingSection (planform, {"xn": 0.0,  "flap_group":1, "hinge_cn":0.70}))
+            sections.append(WingSection (planform, {"cn": 0.65, "flap_group":2, "hinge_cn":0.70}))
+            sections.append(WingSection (planform, {"xn": 1.0,  "flap_group":2, "hinge_cn":0.75}))
 
 
         self.extend (sections)
@@ -3699,13 +3700,14 @@ class Planform_Paneled (Planform):
 
         # get panel paramters - x,y are in wing coordinate system (wy is along span)
 
-        self._wy_panels      = fromDict (dataDict, "wy_panels", 10)
+        self._wy_panels      = fromDict (dataDict, "wy_panels", 8)
         self._wy_dist        = fromDict (dataDict, "wy_distribution", "uniform")
 
-        self._wx_panels      = fromDict (dataDict, "wx_panels", 4)
+        self._wx_panels      = fromDict (dataDict, "wx_panels", 3)
         self._wx_dist        = fromDict (dataDict, "wx_distribution", "uniform")
 
-        self._width_min      = fromDict (dataDict, "width_min", None)                # min panel width 1%
+        self._width_min_targ = fromDict (dataDict, "width_min", None)                # target min panel width 1%
+        self._width_min_cur  = 0.0                                                   # actual min panel width
 
         self._n_distrib.set_cn_tip_min (fromDict (dataDict, "cn_tip_min",None))      # min tip chord 10%
         self._cn_diff_max    = fromDict (dataDict, "cn_diff_max", None)              # max cn difference 5%
@@ -3736,7 +3738,7 @@ class Planform_Paneled (Planform):
         toDict (d, "wx_panels",         self._wx_panels)
         toDict (d, "wx_distribution",   self._wx_dist)
 
-        toDict (d, "width_min",         self._width_min)                    # use instance variables to allow NOne      
+        toDict (d, "width_min",         self._width_min_targ)                     
         toDict (d, "cn_tip_min",        self._n_distrib.cn_tip_min)
         toDict (d, "cn_diff_max",       self._cn_diff_max)
         return d
@@ -3772,7 +3774,7 @@ class Planform_Paneled (Planform):
 
 
     @property
-    def wx_panels (self):                return self._wx_panels
+    def wx_panels (self) -> int:         return self._wx_panels
     def set_wx_panels (self, val: int):  self._wx_panels = int(val)
 
     @property
@@ -3782,7 +3784,7 @@ class Planform_Paneled (Planform):
             self._wx_dist = val
 
     @property
-    def wy_panels (self):                return self._wy_panels
+    def wy_panels (self) -> int:         return self._wy_panels
     def set_wy_panels (self, val: int):  self._wy_panels = int(val)
 
     @property
@@ -3791,26 +3793,35 @@ class Planform_Paneled (Planform):
         if val in self._wy_distribution_fns:
             self._wy_dist = val
 
+
     @property
-    def width_min (self):  
+    def width_min_targ (self):  
         """ minimum panel width - None or e.g. 0.01"""            
-        return self._width_min if self._width_min is not None else 0.0
+        return self._width_min_targ if self._width_min_targ is not None else 0.0
     
-    def set_width_min (self, val : float | bool | None):   
+    def set_width_min_targ (self, val : float | bool | None):   
         if isinstance (val, bool):
-            val = 0.01 if val else None
+            val = 0.02 if val else None
         if val is not None: 
             val = clip (val, 0.001, 0.2)
         else: 
             val = None
-        self._width_min = val
+        self._width_min_targ = val
+        self._width_min_cur  = 0.0                              # has to be re-calculated
 
-
+    @property
+    def width_min_cur (self) -> float:  
+        """ current min panel width along wing """
+        if self._width_min_cur == 0.0:
+            self._calc_x_stations ()
+        return self._width_min_cur
+    
     def is_width_min_applied (self) -> bool:
         """ True if x_panels were reduced due to width_min"""
         # ensure a recalc spanwise panels to ensure value
-        self._get_x_stations ()
+        self._calc_x_stations ()
         return self._is_width_min_applied
+
 
     @property
     def cn_diff (self):
@@ -3852,6 +3863,10 @@ class Planform_Paneled (Planform):
         self._n_distrib.set_cn_tip_min (aVal)
         self.recalc_cn_diff ()
 
+    @property
+    def cn_tip_cur (self) -> float:
+        """ current chord of cutted tip """
+        return self._n_distrib.polyline()[1][-1]
 
     @property
     def is_cn_tip_min_applied (self) -> bool:
@@ -3899,16 +3914,17 @@ class Planform_Paneled (Planform):
         return np.round (stations,10)
 
 
-    def _get_x_stations (self) -> np.ndarray:
+    def _calc_x_stations (self) -> np.ndarray:
         """
-        x stations of all panels - optimized for width_min 
+        calculate and return x stations of all panels - optimized for width_min 
         """
 
         self._is_width_min_applied = False
+        self._width_min_cur = 1.0                               # current width min - to be calculated
 
         # walk along span by section and add x stations 
 
-        xn_sec = self.n_distrib.polyline()[0]                     # take poyline as it can be already reduced
+        xn_sec = self.n_distrib.polyline()[0]                   # take poyline as it can be already reduced
 
         xn_rel_stations = self._xn_rel_stations()
         xn_stations = np.array ([0.0])
@@ -3916,18 +3932,25 @@ class Planform_Paneled (Planform):
         for isec in range (1, len(xn_sec)):      
             
             section_width   = xn_sec[isec] - xn_sec[isec-1]
-            xn_sec_stations =  xn_rel_stations [1:] * section_width 
+            panel_widths    = np.diff (xn_rel_stations) * section_width
 
             # check and correct for min panel width 
             wy_panels = self.wy_panels
-            while np.min (np.diff (xn_sec_stations)) < self.width_min and wy_panels > 2:
+            while np.min (panel_widths) < self.width_min_targ and wy_panels > 2:
+
                 wy_panels -= 1
-                xn_rel_stations_tmp = self._xn_rel_stations(wy_panels)
-                xn_sec_stations     =  xn_rel_stations_tmp [1:] * section_width 
+                panel_widths    = np.diff (self._xn_rel_stations(wy_panels)) * section_width
 
                 self._is_width_min_applied = True                           # flag for user info 
 
-            xn_stations = np.append (xn_stations, xn_sec_stations + xn_sec[isec-1])
+            for width_i in panel_widths [:-1]:
+                xn_next = xn_stations[-1] + width_i
+                xn_stations = np.append (xn_stations, xn_next)
+            xn_stations = np.append (xn_stations, xn_sec[isec])
+
+
+            # self._width_min_cur = min (self._width_min_cur, np.min (np.diff (xn_sec_stations)))
+            self._width_min_cur = min (self._width_min_cur, np.min (panel_widths))
 
         return xn_stations * self._parent_planform.span
     
@@ -3946,7 +3969,7 @@ class Planform_Paneled (Planform):
         if index > (len(self._wingSections) - 1):
             raise ValueError (f"Index {index} to get wing section is to high")        
 
-        x_stations = self._get_x_stations ()
+        x_stations = self._calc_x_stations ()
 
         npan = 0 
         for x in x_stations:
@@ -3963,7 +3986,7 @@ class Planform_Paneled (Planform):
 
         self._cn_diff = 0.0
 
-        x_stations = self._get_x_stations ()
+        x_stations = self._calc_x_stations ()
         lines =[]
 
         for xi in x_stations:
@@ -4001,7 +4024,7 @@ class Planform_Paneled (Planform):
         section_inserted = True 
 
         # while self.c_diff_lines() and section_inserted and i_cycle < 10:            # max iterations 
-        while section_inserted and i_cycle < 10:            # max iterations 
+        while section_inserted and i_cycle < 15:            # max iterations 
 
             sections = self.wingSections
             section_inserted = False 
@@ -4011,15 +4034,16 @@ class Planform_Paneled (Planform):
                 # ensure a minimum width of a 'section stripe'
 
                 section_width   = sections[i_sec+1].xn - sections[i_sec].xn 
-                panel_width_min = self.width_min if self._width_min else 0.005       # default min panel width 0.05%
+                panel_width_min = self.width_min_targ if self._width_min_targ else 0.005       # default min panel width 0.05%
 
-                if section_width > (2 * panel_width_min):
+                if section_width > (1.5 * panel_width_min):
 
                     # test chord difference in the middle of the section 
 
                     xni = (sections[i_sec].xn + sections[i_sec+1].xn) / 2
                     cn_panel  = self._n_distrib.at (xni)
                     cn_parent = self._parent_planform.n_distrib.at (xni)
+                    print (i_cycle, i_sec, cn_parent - cn_panel, self.cn_diff_max)
                     if (cn_parent - cn_panel) > self.cn_diff_max:
 
                         # too much difference - insert section at mean cn value, indicate as extra panel

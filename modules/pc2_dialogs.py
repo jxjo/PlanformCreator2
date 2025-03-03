@@ -818,7 +818,7 @@ class Dialog_Edit_Paneling (Dialog):
     Dialog to edit / define üaneling options of a Paneled Planform
     """
 
-    _width  = 490
+    _width  = 480
     _height = 370
 
     name = "Define Paneling"
@@ -868,9 +868,11 @@ class Dialog_Edit_Paneling (Dialog):
 
         l = QGridLayout()   
         r,c = 0, 0 
-        Label       (l,r,c, height=40, colSpan=6,
-                     get="Define number of panels along chord (x) and per section of wing (y)")
+        Label       (l,r,c, height=40, colSpan=7,
+                     get="Define number of panels along chord (x) and per section of wing (y)",
+                     style=style.COMMENT)
         r += 1
+        c += 1
 
         FieldI      (l,r,c, width=70, lab="x-Panels", step=1, lim=(1, 20),
                         obj=self.planform, prop=Planform_Paneled.wx_panels)
@@ -894,18 +896,11 @@ class Dialog_Edit_Paneling (Dialog):
         r,c = 3, 0 
         SpaceR      (l,r,height=20)
         r += 1
-        Label       (l,r,c, height=30, colSpan=4, get="Optimize paneling for an evenly mesh")            
+        Label       (l,r,c, height=30, colSpan=5, get="Optimize paneling for an evenly mesh",
+                     style=style.COMMENT)            
 
         r += 1
-        CheckBox    (l,r,c, text="Set a minimum panel width", colSpan=4,
-                        get=lambda: bool(self.planform.width_min),
-                        set=self.planform.set_width_min)
-        FieldF      (l,r,c+4, width=70,  step=0.5, lim=(0.5, 10), dec=1, unit="%", 
-                        obj=self.planform, prop=Planform_Paneled.width_min,
-                        style=lambda: style.HINT if self.planform.is_width_min_applied() else style.NORMAL,
-                        hide= lambda: not bool(self.planform.width_min))  
-        Label       (l,r,c+5, get=lambda: "Y-Panels are reduced", colSpan=2, 
-                        style=style.COMMENT, hide=lambda: not self.planform.is_width_min_applied())
+        c += 1
 
         # define max. deviation of chord - only if Bezier etc.
 
@@ -918,10 +913,10 @@ class Dialog_Edit_Paneling (Dialog):
                             obj=self.planform, prop=Planform_Paneled.cn_diff_max, 
                             style=lambda: style.WARNING if self.planform.is_cn_diff_exceeded else style.NORMAL,
                             hide= lambda: not bool(self.planform.cn_diff_max))
-            Label       (l,r,c+5, get=lambda: f"Currently {self.planform.cn_diff:.1%}", height=20, colSpan=2, 
-                            style=style.COMMENT, hide= lambda: not bool(self.planform.cn_diff_max))
+            Label       (l,r,c+5, get=lambda: f"currently {self.planform.cn_diff:.1%}", colSpan=2, 
+                            style=style.COMMENT)
             r += 1
-            Button      (l,r,c+4, text="Optimize", set= self._optimize_cn_diff, width=70,
+            Button      (l,r,c+4, text="Do", set= self._optimize_cn_diff, width=70,
                             toolTip="Optimize paneling by inserting new sections",
                             hide= lambda: not bool(self.planform.cn_diff_max),
                             disable= lambda:  not self.planform.is_cn_diff_exceeded)
@@ -929,7 +924,23 @@ class Dialog_Edit_Paneling (Dialog):
                             toolTip="Remove again sections being inserted by optimization",
                             hide= lambda: not bool(self.planform.cn_diff_max),
                             disable= lambda: not self.wingSections.there_is_section_for_panel())
+            r +=1
+        
+        # minimum panel width
+
+        CheckBox    (l,r,c, text="Set a minimum panel width", colSpan=4,
+                        get=lambda: bool(self.planform.width_min_targ),
+                        set=self.planform.set_width_min_targ)
+        FieldF      (l,r,c+4, width=70,  step=0.5, lim=(0.5, 10), dec=1, unit="%", 
+                        obj=self.planform, prop=Planform_Paneled.width_min_targ,
+                        style=lambda: style.HINT if self.planform.is_width_min_applied() else style.NORMAL,
+                        hide= lambda: not bool(self.planform.width_min_targ))  
+
+        Label       (l,r,c+5, get=lambda: f"currently {self.planform.width_min_cur:.1%}", colSpan=2, 
+                            style=style.COMMENT)
         r += 1
+        
+        # minimum tip chord
 
         CheckBox    (l,r,c, text="Set a minimum chord for tip", colSpan=4,
                             get=lambda: bool(self.planform.cn_tip_min),
@@ -938,15 +949,18 @@ class Dialog_Edit_Paneling (Dialog):
                         obj=self.planform, prop=Planform_Paneled.cn_tip_min,
                         style=lambda: style.HINT if self.planform.is_cn_tip_min_applied else style.NORMAL,
                         hide= lambda: not bool(self.planform.cn_tip_min))
-        Label       (l,r,c+5, get="Sections are reduced",colSpan=2,
-                        style=style.COMMENT, hide=lambda: not self.planform.is_cn_tip_min_applied)
+        Label       (l,r,c+5, get=lambda: f"currently {self.planform.cn_tip_cur:.1%}", colSpan=2, 
+                            style=style.COMMENT)
+        # Label       (l,r,c+5, get="Sections are reduced",colSpan=2,
+        #                 style=style.COMMENT, hide=lambda: not self.planform.is_cn_tip_min_applied)
 
         r += 1
         SpaceR      (l,r, stretch=5, height=1)
-        l.setColumnMinimumWidth (0,80)
-        l.setColumnMinimumWidth (3,50)
-        l.setColumnMinimumWidth (4,80)
-        l.setColumnStretch (6,5)
+        l.setColumnMinimumWidth (0,20)
+        # l.setColumnMinimumWidth (1,70)
+        l.setColumnMinimumWidth (4,40)
+        # l.setColumnMinimumWidth (5,70)
+        l.setColumnStretch (8,5)
         
         return l 
 
