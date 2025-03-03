@@ -11,7 +11,8 @@ test/*
 test_VLM/*
 *.xlsx
 *_tmp/*
-~$*.pptx					# tmp ppt 
+images/~*.pptx					# tmp ppt 
+doc/rcn
 
 
 # Byte-compiled / optimized / DLL files
