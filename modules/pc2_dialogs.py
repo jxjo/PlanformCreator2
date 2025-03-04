@@ -819,7 +819,7 @@ class Dialog_Edit_Paneling (Dialog):
     """
 
     _width  = 480
-    _height = 370
+    _height = 350
 
     name = "Define Paneling"
 
@@ -907,33 +907,20 @@ class Dialog_Edit_Paneling (Dialog):
         if not self.is_parent_trapezoidal:
             r += 1
             CheckBox    (l,r,c, text="Minimize deviation of chord", colSpan=4,
-                                get=lambda: bool(self.planform.cn_diff_max),
-                                set=self.planform.set_cn_diff_max)                # bool will be clipped to min value 
+                                obj=self, prop=Dialog_Edit_Paneling.activated_cn_diff_max)
             FieldF      (l,r,c+4, width=70, step=0.5, lim=(0.5, 50), dec=1, unit="%", 
                             obj=self.planform, prop=Planform_Paneled.cn_diff_max, 
-                            style=lambda: style.WARNING if self.planform.is_cn_diff_exceeded else style.NORMAL,
                             hide= lambda: not bool(self.planform.cn_diff_max))
             Label       (l,r,c+5, get=lambda: f"currently {self.planform.cn_diff:.1%}", colSpan=2, 
                             style=style.COMMENT)
-            r += 1
-            Button      (l,r,c+4, text="Do", set= self._optimize_cn_diff, width=70,
-                            toolTip="Optimize paneling by inserting new sections",
-                            hide= lambda: not bool(self.planform.cn_diff_max),
-                            disable= lambda:  not self.planform.is_cn_diff_exceeded)
-            Button      (l,r,c+5, text="Undo", set= self._remove_addional_sections, width=70,
-                            toolTip="Remove again sections being inserted by optimization",
-                            hide= lambda: not bool(self.planform.cn_diff_max),
-                            disable= lambda: not self.wingSections.there_is_section_for_panel())
             r +=1
         
         # minimum panel width
 
         CheckBox    (l,r,c, text="Set a minimum panel width", colSpan=4,
-                        get=lambda: bool(self.planform.width_min_targ),
-                        set=self.planform.set_width_min_targ)
+                            obj=self, prop=Dialog_Edit_Paneling.activated_width_min_targ)
         FieldF      (l,r,c+4, width=70,  step=0.5, lim=(0.5, 10), dec=1, unit="%", 
                         obj=self.planform, prop=Planform_Paneled.width_min_targ,
-                        style=lambda: style.HINT if self.planform.is_width_min_applied() else style.NORMAL,
                         hide= lambda: not bool(self.planform.width_min_targ))  
 
         Label       (l,r,c+5, get=lambda: f"currently {self.planform.width_min_cur:.1%}", colSpan=2, 
@@ -943,47 +930,57 @@ class Dialog_Edit_Paneling (Dialog):
         # minimum tip chord
 
         CheckBox    (l,r,c, text="Set a minimum chord for tip", colSpan=4,
-                            get=lambda: bool(self.planform.cn_tip_min),
-                            set=self.planform.set_cn_tip_min)                       # bool will be clipped to min value 
+                        obj=self, prop=Dialog_Edit_Paneling.activated_cn_tip_min)
         FieldF      (l,r,c+4, width=70, step=1, lim=(1, 50), dec=1, unit="%", 
                         obj=self.planform, prop=Planform_Paneled.cn_tip_min,
-                        style=lambda: style.HINT if self.planform.is_cn_tip_min_applied else style.NORMAL,
                         hide= lambda: not bool(self.planform.cn_tip_min))
         Label       (l,r,c+5, get=lambda: f"currently {self.planform.cn_tip_cur:.1%}", colSpan=2, 
                             style=style.COMMENT)
-        # Label       (l,r,c+5, get="Sections are reduced",colSpan=2,
-        #                 style=style.COMMENT, hide=lambda: not self.planform.is_cn_tip_min_applied)
 
         r += 1
         SpaceR      (l,r, stretch=5, height=1)
         l.setColumnMinimumWidth (0,20)
-        # l.setColumnMinimumWidth (1,70)
         l.setColumnMinimumWidth (4,40)
-        # l.setColumnMinimumWidth (5,70)
         l.setColumnStretch (8,5)
         
         return l 
 
+    @property
+    def activated_cn_diff_max (self) -> bool:
+        return self.planform.cn_diff_max is not None
 
-    def _optimize_cn_diff (self):
-        """ optimize sections until cn_diff_max is reached"""
-        self.planform.optimize_cn_diff()
-        self.refresh()
-        self.sig_paneling_changed.emit()            # refresh diagram
+    def set_activated_cn_diff_max (self, aBool):
+        if aBool and not self.activated_cn_diff_max:
+            self.planform.set_cn_diff_max (0.01)
+        elif not aBool:
+            self.planform.set_cn_diff_max (None)   
 
-    def _remove_addional_sections (self):
-        """ remove again aditional sections of optimize"""
-        self.planform.undo_optimize ()
-        self.refresh()
-        self.sig_paneling_changed.emit()            # refresh diagram
+    @property
+    def activated_cn_tip_min (self) -> bool:
+        return self.planform.cn_tip_min is not None
+
+    def set_activated_cn_tip_min (self, aBool):
+        if aBool and not self.activated_cn_tip_min:
+            self.planform.set_cn_tip_min (0.0)                  # will be recalc
+        elif not aBool:
+            self.planform.set_cn_tip_min (None)   
+
+
+    @property
+    def activated_width_min_targ (self) -> bool:
+        return self.planform.width_min_targ is not None
+
+    def set_activated_width_min_targ (self, aBool):
+        if aBool and not self.activated_width_min_targ:
+            self.planform.set_width_min_targ (0.0)              # will be recalc
+        elif not aBool:
+            self.planform.set_width_min_targ (None)   
 
 
     def _on_field_changed (self, *_):
         """ slot for widget changes"""
-        self.planform.n_distrib.polyline()
-        self.refresh ()                             # have 'soft' refresh when settings are changed
-        self.sig_paneling_changed.emit()            # refresh diagram
-
+        self.refresh ()                                         # have 'soft' refresh when settings are changed
+        self.sig_paneling_changed.emit()                        # refresh diagram
 
 
     @override

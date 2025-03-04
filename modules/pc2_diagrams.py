@@ -569,8 +569,7 @@ class Item_VLM_Panels (Diagram_Item):
     def _edit_paneling (self):
         """ dialog to edit paneling paramters  """
 
-        # do an initial calculation of panels to get the chord difference value 
-        self.wing().planform_paneled.recalc_cn_diff()
+        myParent : Diagram_Abstract = self._parent
 
         # show difference between original and paneled planform before dialog
         panels_artist : VLM_Panels_Artist = self._get_artist(VLM_Panels_Artist)[0]
@@ -578,7 +577,6 @@ class Item_VLM_Panels (Diagram_Item):
 
         dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled)  
 
-        myParent : Diagram_Abstract = self._parent
         dialog.sig_paneling_changed.connect (myParent.sig_panel_def_changed.emit)
 
         # refresh will be done via signal from app
