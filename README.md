@@ -200,8 +200,7 @@ Next, a mesh optimization can be applied based on the parameters:
 * Minimum chord deviation to planform – additional wing sections will be inserted automatically until the deviation of the section trapezoids to the original planform is below the defined threshold
 * Minimum chord at tip – this cuts the tip in such a way that a Re number is achieved that leads to meaningful Xfoil results.
 
-
-<img src="images/panelling_steps.png" width="1200" />
+![PC2](images/panelling_steps.png "Panelling steps")
 
 <sup>Auto-optimized panelling to reduce deviation between original and idealized contour. The maximum deviation of chord is now below 2% and good enough to achieve reasonable results.</sup>
 
