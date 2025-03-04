@@ -337,11 +337,13 @@ class VLM_Wing:
         """ returns polar for air speed vtas"""
 
         v = round (vtas, 1)                         #  ensure clean key for dict
-        try:
-            polar = self._polars[v]                 # already exisiting 
-        except:
+
+        polar = self._polars.get (v, None)         # already exisiting 
+        
+        if not polar:
             polar = VLM_Polar (self, v)             # calculate new opPOint 
             self._polars[v] = polar 
+            
         return polar 
 
 
@@ -1045,7 +1047,7 @@ class VLM_OpPoint:
         results[OpPoint_Var.CL]             = Cl
         results[OpPoint_Var.CL_VLM]         = Cl_VLM
         results[OpPoint_Var.CL_MAX]         = Cl_max 
-        results[OpPoint_Var.MAX_MASK]       = (Cl_max * 0.98 - Cl_VLM) < 0          # numpy mask where Cl_VLM reaches, exceeds CL_MAX              
+        results[OpPoint_Var.MAX_MASK]       = (Cl_max * 0.99 - Cl_VLM) < 0          # numpy mask where Cl_VLM reaches, exceeds CL_MAX              
         results[OpPoint_Var.ERROR_MASK]     = VLM_error                             # numpy mask where VLM error occured             
 
         results[OpPoint_Var.LIFT]           = lift

@@ -2122,6 +2122,8 @@ class WingSections (list [WingSection]):
                                         "is_for_panels" : is_for_panels})
             self.insert (self.index(aSection) + 1, new_section)
 
+            self._strak_done = False
+
         return new_section
 
 
@@ -2156,6 +2158,8 @@ class WingSections (list [WingSection]):
         left_sec, _ = self.neighbours_of (new_section) 
         new_section.set_flap_group (left_sec.flap_group)
 
+        self._strak_done = False
+
         return new_section
 
 
@@ -2166,6 +2170,9 @@ class WingSections (list [WingSection]):
             try:
                 index = self.index (aSection)
                 self.remove (aSection)
+
+                self._strak_done = False
+
                 return self[index-1] 
             except: 
                 pass
@@ -2386,17 +2393,6 @@ class WingSections (list [WingSection]):
                 # create new, fresh polarSet
                 airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
 
-
-    def there_is_section_for_panel (self) -> bool:
-        """ True is there is a section created for paneling"""
-
-        return any(section.is_for_panels for section in self)
-
-    def remove_sections_for_panel (self):
-        """ remove again extra sections for paneling"""
-        for section in self [:]: 
-            if section.is_for_panels:
-                self.delete (section)
 
         
 
@@ -4019,7 +4015,9 @@ class Planform_Paneled (Planform):
 
         if recalc_sections:
 
-            self.wingSections.remove_sections_for_panel () 
+            for section in self.wingSections [:]: 
+                if section.is_for_panels:
+                    self.wingSections.delete (section)
 
             # add new sections to achieve cn_diff_max
 
