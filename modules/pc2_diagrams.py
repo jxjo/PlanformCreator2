@@ -551,7 +551,7 @@ class Item_VLM_Panels (Diagram_Item):
             Button     (l,r,c, text="Paneling Options", width=130, colSpan=3,
                         set=self._edit_paneling, toolTip="Define / Edit paneling options")
             r +=1
-            SpaceR   (l,r, height=5)
+            SpaceR   (l,r, height=10)
             r += 1
             CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
                         obj=self, prop=Item_VLM_Panels.show_colorBar,
@@ -559,7 +559,7 @@ class Item_VLM_Panels (Diagram_Item):
             r += 1
             SpaceR   (l,r, stretch=3)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height =100,
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height =120,
                                               switched_on=self._show,  
                                               switchable=True, on_switched=self.setVisible)
             

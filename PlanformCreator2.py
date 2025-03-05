@@ -60,7 +60,7 @@ logger.setLevel(logging.DEBUG)
 
 #------------------------------------------------
 
-APP_NAME            = "Planform Creator 2"
+APP_NAME            = "PlanformCreator2"
 APP_VERSION         = "3.0 beta 4"
 WORKER_MIN_VERSION  = '1.0.5'
 
@@ -147,6 +147,7 @@ class App_Main (QMainWindow):
         
         self._add_diagram (Diagram_Wing_Analysis (self, self.wing, self.wingSection))
 
+        self._tab_panel.setMinimumHeight(760)
         self._tab_panel.set_tab (Settings().get('current_diagram', Diagram_Making_Of.__name__))
 
         l_main = self._init_layout() 
@@ -374,7 +375,7 @@ class App_Main (QMainWindow):
     def closeEvent  (self, event : QCloseEvent):
         """ main window is closed """
 
-        self._save_settings ()
+        button = None 
 
         # save changes? 
         if self.wing().has_changed(): 
@@ -400,6 +401,14 @@ class App_Main (QMainWindow):
             # remove lost worker input files 
             if Worker.ready:
                 Worker().clean_workingDir (self.workingDir)
+
+            # on Discard remove temp dir of airfoil strak etc.
+            if button == QMessageBox.StandardButton.Discard:
+                self.wing().remove_tmp ()
+        
+            # save application settings
+            elif button is not None:                                
+                self._save_settings ()
 
             # terminate polar watchdog thread 
 

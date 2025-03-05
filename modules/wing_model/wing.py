@@ -24,11 +24,10 @@ import os
 import numpy as np
 import bisect
 import sys
-import copy
+import shutil
 from typing                 import override
 from pathlib                import Path
 from math                   import isclose
-
 
 
 # let python find the other modules in the dir of self  
@@ -36,9 +35,10 @@ sys.path.append(Path(__file__).parent)
 from base.common_utils      import * 
 from base.math_util         import * 
 from base.spline            import Bezier
-from model.airfoil          import Airfoil, GEO_BASIC, GEO_SPLINE
+from model.airfoil          import Airfoil, GEO_BASIC
 from model.polar_set        import Polar_Definition, Polar_Set
 from model.airfoil_examples import Root_Example, Tip_Example
+from model.xo2_driver       import Worker
 
 from VLM_wing               import VLM_Wing
 
@@ -134,6 +134,11 @@ class Wing:
 
         self._airfoil_nick_prefix = fromDict (dataDict, "airfoil_nick_prefix", "JX-")
         self._airfoil_nick_base   = fromDict (dataDict, "airfoil_nick_base", 100)
+
+        # if new wing save initial dataDict for change detection on save 
+
+        if not self.dataDict:
+            self.dataDict = self._save()
         
         logger.info (str(self)  + ' created')
 
@@ -537,6 +542,23 @@ class Wing:
 
 
     # ---Methods --------------------- 
+
+
+    def remove_tmp (self): 
+        """ remove temporary files made during session"""
+
+        # remove tmp dir of strak airfoils 
+        if os.path.isdir(self.wing_tmp_dir):
+            shutil.rmtree(self.wing_tmp_dir, ignore_errors=True)
+
+        # remove persisted example airfoil its polar dir 
+        for section in self.planform.wingSections:
+            if section.airfoil.isExample:
+                if os.path.isfile (section.airfoil.pathFileName):
+                    os.remove (section.airfoil.pathFileName)
+
+                polarDir = str(Path(section.airfoil.pathFileName).with_suffix('')) + '_polars'
+                Worker.remove_polarDir (section.airfoil.pathFileName, polarDir) 
 
 
     def save (self, pathFileName):
