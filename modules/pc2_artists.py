@@ -676,6 +676,20 @@ class Planform_Artist (Abstract_Artist_Planform):
 
 
 
+class Neutral_Point_Artist (Abstract_Artist_Planform):
+    """
+    Plot Neutral Point 
+    """
+
+    def _plot (self): 
+
+        _, _, _, np_y = self.wing.wing_data ()
+
+        self._plot_point (0.0, np_y, size=9, color=COLOR_REF_LINE, brushColor=COLOR_REF_LINE.darker(200), 
+                          text="NP", textFill="black")
+
+
+
 class VLM_Panels_Artist (Abstract_Artist_Planform):
     """
     Plot the vlm panels of a VLM_Wing
@@ -2524,19 +2538,12 @@ class Wing_Data_Artist (Abstract_Artist_Planform):
         x1 = 140
         dy = 25
 
+        wing_area, wing_ar, mac, np_y = self.wing.wing_data ()
+
         y = 0 
         self._plot_text ("Wing Span",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{self.wing.wingspan:.0f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        self._plot_text (f"{self.wing.wingspan:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
         self._plot_text ("mm", parentPos=p0, offset=(x1, y))
-
-        y += dy
-        self._plot_text ("Wing Area",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{self.wing.wing_area/10000:.2f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
-        self._plot_text ("dm²", parentPos=p0, offset=(x1, y))
-
-        y += dy
-        self._plot_text ("Aspect Ratio",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{self.wing.wing_aspect_ratio:.2f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
 
         y += dy
         self._plot_text ("Root Chord",  parentPos=p0, offset=(0, y))
@@ -2544,8 +2551,22 @@ class Wing_Data_Artist (Abstract_Artist_Planform):
         self._plot_text ("mm", parentPos=p0, offset=(x1, y))
 
         y += dy
+        self._plot_text ("Wing Area",  parentPos=p0, offset=(0, y))
+        self._plot_text (f"{wing_area/10000:.2f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        self._plot_text ("dm²", parentPos=p0, offset=(x1, y))
+
+        y += dy
+        self._plot_text ("Aspect Ratio",  parentPos=p0, offset=(0, y))
+        self._plot_text (f"{wing_ar:.2f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+
+        y += dy
         self._plot_text ("MAC",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{self.planform.planform_mac:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        self._plot_text (f"{mac:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        self._plot_text ("mm", parentPos=p0, offset=(x1, y))
+
+        y += dy
+        self._plot_text ("NP_x geometric",  parentPos=p0, offset=(0, y))
+        self._plot_text (f"{np_y:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
         self._plot_text ("mm", parentPos=p0, offset=(x1, y))
 
 

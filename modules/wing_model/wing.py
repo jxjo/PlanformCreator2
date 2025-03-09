@@ -357,17 +357,26 @@ class Wing:
         aVal = clip (aVal, 0, self.wingspan/2)
         self._fuselage_width = aVal 
 
-    @property
-    def wing_area (self) -> float:
-        """ current wing area including fuselage"""
-        
-        fuselage_area = self.fuselage_width * self.planform.chord_root
-        return self.planform.planform_area * 2 + fuselage_area
 
-    @property
-    def wing_aspect_ratio (self) -> float:
-        """ aspect ratio of wing"""
-        return self.wingspan ** 2 / self.wing_area
+    def wing_data (self) -> tuple[float, float, float]:
+        """
+        derived wing data from geometry
+            - all together for performance reasons
+        
+        Returns:
+            area: total wing area including fuselage
+            ar: spect_ratio including fuselage
+            mac: mean aerodynamic chord
+            np_x: geometric neutral point in chord direction
+        """
+
+        planform_area, mac, np_y = self.planform._calc_area_mac_np ()
+        fuselage_area = self.fuselage_width * self.planform.chord_root
+
+        wing_area     = planform_area * 2 + fuselage_area 
+        wing_ar       = self.wingspan ** 2 / wing_area
+
+        return wing_area, wing_ar, mac, np_y
 
 
     @property
@@ -1185,7 +1194,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
             xn: normalized x coordinates
             cn: normalized chord
         """
-        xn_line, cn_line = self.line_from_root ()
+        xn_line, cn_line = self.line_from_root (npoints=20)
         xn_bez,  cn_bez  = self._bezier.eval(self._u) 
 
         xn = np.append (xn_line, xn_bez)
@@ -1194,9 +1203,10 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         return np.round(xn,10), np.round(cn,10) 
 
 
-    def line_from_root (self) -> Polyline:
+    def line_from_root (self, npoints=2) -> Polyline:
         """ 
         If Bezier is not starting at root return straight line upto bezier
+            npoints can be > 2 to get a curve for polyline (when ref line is banana)
 
         Returns:
             xn: normalized x coordinates
@@ -1206,9 +1216,12 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         xn_bezier_start = self._bezier.points_x[0]
                                                 
         if xn_bezier_start == 0.0:
-            return np.empty(0), np.empty(0)
+            xn = np.empty(0)
+            cn = np.empty(0)
         else:
-            return np.array([0.0, xn_bezier_start]), np.array([1.0, self._bezier.points_y[0]])
+            xn = np.linspace (0.0, xn_bezier_start, npoints)
+            cn = np.linspace (1.0, self._bezier.points_y[0], npoints)
+        return xn, cn
 
 
     def bezier_as_jpoints (self, transform_fn = None) -> list[JPoint]: 
@@ -1307,10 +1320,12 @@ class N_Distrib_Trapezoid (N_Distrib_Abstract):
         super().__init__ ()
 
 
-    def polyline (self) -> Polyline:
+    def polyline (self, npoints = 2) -> Polyline:
         """ 
-        Normalized polyline of chord along xn
-            At root it is: cn [0] = 1.0 
+        Normalized polyline of chord along xn (root cn[0]=1.0)
+           
+        Arguments:
+            npoints:    number of points of one line segment
 
         Returns:
             xn: normalized x coordinates
@@ -1326,11 +1341,16 @@ class N_Distrib_Trapezoid (N_Distrib_Abstract):
                 sections.append(section)
 
         # collect their position and length 
-        #        
-        xn, cn = [], []
-        for section in sections:
-            xn.append(section.xn)
-            cn.append(section.cn)
+                
+        xn, cn = np.zeros(0), np.zeros(0)
+
+        sec : WingSection
+        for isec, sec in enumerate (sections [:-1]):
+            next_sec : WingSection = sections [isec+1]
+            xn_sec = np.linspace (sec.xn, next_sec.xn, npoints) 
+            cn_sec = np.linspace (sec.cn, next_sec.cn, npoints) 
+            xn = np.append(xn, xn_sec)
+            cn = np.append(cn, cn_sec)
         return np.round(xn,10), np.round(cn,10) 
 
 
@@ -3019,15 +3039,11 @@ class Planform:
                  chord_ref : N_Chord_Reference = None,
                  ref_line : N_Reference_Line = None):
                 
-
         self._wing = wing
 
         self._span        = fromDict (dataDict, "halfspan", 1200.0) 
         self._chord_root  = fromDict (dataDict, "chord_root", 200.0)
         self._sweep_angle = fromDict (dataDict, "sweep_angle", 1.0)
-
-        self._planform_area = None                                        # will be calculated
-        self._planform_mac  = None                                        # mean aerodynamic chord - will be calculated
 
         self._wingSections  = None                                        # early to have property
 
@@ -3155,25 +3171,6 @@ class Planform:
         aVal = min ( 75.0, aVal)
         self._sweep_angle = aVal 
 
-    @property
-    def planform_area (self) -> float:
-        """ (approximated) planform area"""
-
-        if self._planform_area is None: 
-            # this is normally done automatically each time the le, te poyline is calculated
-            x, le_y, te_y = self.le_te_polyline ()
-            self._planform_area = self._calc_planform_area (x, le_y, te_y)
-        return self._planform_area
-
-    @property
-    def planform_mac (self) -> float:
-        """ (approximated) mean aerodynamic chord"""
-
-        if self._planform_mac is None: 
-            # this is normally done automatically each time the le, te poyline is calculated
-            x, le_y, te_y = self.le_te_polyline ()
-            self._planform_mac = self._calc_mac (x, le_y, te_y)
-        return self._planform_mac
 
     @property
     def chord_defined_by_sections (self) -> bool:
@@ -3327,10 +3324,6 @@ class Planform:
         x, le_y = self.t_norm_to_plan (xn, le_yn)
         x, te_y = self.t_norm_to_plan (xn, te_yn)
 
-        # as we have the data, calc area 
-        self._planform_area = self._calc_planform_area (x, le_y, te_y)
-        self._planform_mac  = self._calc_mac (x, le_y, te_y)
-        
         return x, le_y, te_y 
 
 
@@ -3375,10 +3368,54 @@ class Planform:
         i_c2 = 0.0 
         for i in range (len(x) -1):
             dx = x[i+1] - x[i]
-            c_mean = (te_y[i] - le_y[i] + te_y[i+1] - le_y[i+1]) / 2.0          # chord mean vlaue of dx 
+            c_mean = (te_y[i] - le_y[i] + te_y[i+1] - le_y[i+1]) / 2.0          # chord mean value of dx 
             i_c2 += c_mean **2 * dx
 
-        return i_c2 / self._calc_planform_area (x, le_y, te_y )
+        area = self._calc_planform_area (x, le_y, te_y )
+        mac  = i_c2 / area
+
+        return mac
+ 
+
+
+    def _calc_area_mac_np (self):
+        """calc mean aerodynamic chord, neutral point, area """
+
+        # http://walter.bislins.ch/blog/index.asp?page=Berechnung%3A+Mittlere+Aerodynamische+Fl%FCgeltiefe+%28MAC%29 
+
+        # get chord along span - for trapezoidal at least 3 points per segment are needed
+        if self.n_distrib.isTrapezoidal:
+            xn, cn = self.n_distrib.polyline(npoints=10)
+        else:
+            xn, cn = self.n_distrib.polyline()
+
+        x  = xn * self.span
+        c  = cn * self.chord_root
+
+        # t/4 line 
+        xn, le_yn = self.t_chord_to_norm (xn, np.full (len(xn), 1.0), cn=cn)
+        x, le_y   = self.t_norm_to_plan (xn, le_yn)
+        t4_y      = le_y + c / 4
+        dt4_y     = np.diff (t4_y)
+
+        # finite rectangle width=dx, height=chord mean value, pos = x mean value 
+        dx = np.diff (x)
+        dc = np.diff (c)
+        x_i    = x [:-1] + dx/2 
+        c_mean = c [:-1] + dc/2 
+        t4_y_i = t4_y [:-1] + dt4_y / 2 
+
+        # integral for geometric parms 
+        area   = np.sum(c_mean     * dx) 
+        c_int  = np.sum(c_mean **2 * dx) 
+        t4_int = np.sum(c_mean     * dx * t4_y_i)
+        # x_int  = np.sum(c_mean     * dx * x_i)
+        # np_x  = x_int  / area
+
+        mac   = c_int  / area
+        np_y  = t4_int / area
+         
+        return area, mac, np_y 
  
 
     def box_polygon (self) -> Polyline:

@@ -944,6 +944,7 @@ class Item_Wing (Diagram_Item):
         self._show_wingSections = False
         self._show_flaps        = True
         self._show_airfoils     = False
+        self._show_np           = False                         # neutral point 
 
         super().__init__(*args, **kwargs)
 
@@ -981,6 +982,8 @@ class Item_Wing (Diagram_Item):
         self._add_artist (Flaps_Artist          (self, self.planform, mode=mode.WING_LEFT))
         self._add_artist (WingSections_Artist   (self, self.planform, mode=mode.WING_LEFT, show=False))
 
+        self._add_artist (Neutral_Point_Artist  (self, self.planform, show=False))
+
         # switch off mose helper 
 
         for artist in self._artists: artist.set_show_mouse_helper (False) 
@@ -1016,6 +1019,10 @@ class Item_Wing (Diagram_Item):
     def show_airfoils (self) -> bool: 
         return self._show_airfoils
 
+    @property
+    def show_np (self) -> bool: 
+        return self._show_np
+
     def set_show_wingSections (self, aBool : bool): 
         self._wingSections = aBool == True
         self._show_artist (WingSections_Artist, aBool)
@@ -1031,6 +1038,10 @@ class Item_Wing (Diagram_Item):
     def set_show_airfoils (self, aBool : bool): 
         self._show_airfoils = aBool == True
         self._show_artist (Airfoil_Name_Artist, aBool)
+    
+    def set_show_np (self, aBool : bool): 
+        self._show_np = aBool == True
+        self._show_artist (Neutral_Point_Artist, aBool)
 
 
     @property
@@ -1054,10 +1065,13 @@ class Item_Wing (Diagram_Item):
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
             r += 1
+            CheckBox (l,r,c, text="Neutral Point (geometric)", 
+                      get=lambda: self.show_np, set=self.set_show_np) 
+            r += 1
             l.setColumnStretch (3,2)
             l.setRowStretch    (r,2)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=160, 
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height=180, 
                                               switchable=True, hide_switched=True, 
                                               on_switched=self.setVisible)
 
