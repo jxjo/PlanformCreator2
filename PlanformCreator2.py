@@ -34,11 +34,11 @@ from PyQt6.QtGui            import QCloseEvent, QGuiApplication
 
 # let python find the other modules in modules relativ to path of self -
 # common modules hosted by AirfoilEditor  ! before python system modules and PlanformCreator path 
-sys.path.insert (1,os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree\\modules'))
+sys.path.insert (1,os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree', 'modules'))
 
 # local modules - at the end - AirfoilEditor modules do have precedence
 sys.path.append (os.path.join(Path(__file__).parent , 'modules'))
-sys.path.append (os.path.join(Path(__file__).parent , 'modules\\wing_model'))
+sys.path.append (os.path.join(Path(__file__).parent , 'modules', 'wing_model'))
 from wing                   import Wing
 
 from base.common_utils      import * 
