@@ -836,10 +836,6 @@ class Item_VLM_Result (Diagram_Item):
             FieldF   (l,r,c, lab="Alpha", lim=(-20,20), step=0.5, width=60, unit="°", dec=1, 
                         obj=self, prop=Item_VLM_Result.opPoint_alpha,
                         disable=lambda: self.opPoint_fixed_to_alpha_max) 
-            # slider bug - dec values 
-            # Slider   (l,r,c+2, lim=(-20,20), step=0.5, width=60, dec=1, 
-            #             obj=self, prop=Item_VLM_Result.opPoint_alpha,
-            #             hide=lambda: self.opPoint_fixed_to_alpha_max) 
             r += 1
             SpaceR   (l,r, height=10,stretch=0)
             r += 1
