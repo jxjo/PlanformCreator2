@@ -288,10 +288,10 @@ class Export_Xflr5:
 
             # x
             for x_number_of_panels in newSectionXml.iter('x_number_of_panels'):
-                x_number_of_panels.text = str(self._planform_paneled.wy_panels)
+                x_number_of_panels.text = str(self._planform_paneled.wx_panels)
             for x_panel_distribution in newSectionXml.iter('x_panel_distribution'):
                 # map to xflr5 distribution names 
-                xflr5_dist = self.distrib_name_map[self._planform_paneled.wy_dist]
+                xflr5_dist = self.distrib_name_map[self._planform_paneled.wx_dist]
                 x_panel_distribution.text = str(xflr5_dist)
 
             # y
@@ -299,7 +299,7 @@ class Export_Xflr5:
                 y_number_of_panels.text = str(self._planform_paneled.nx_panels_of_section (iSec))
             for y_panel_distribution in newSectionXml.iter('y_panel_distribution'):
                 # map to xflr5 distribution names 
-                xflr5_dist = self.distrib_name_map[self._planform_paneled.wx_dist]
+                xflr5_dist = self.distrib_name_map[self._planform_paneled.wy_dist]
                 y_panel_distribution.text = str(xflr5_dist)
 
             for yPosition in newSectionXml.iter('y_position'):

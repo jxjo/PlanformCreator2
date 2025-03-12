@@ -2,7 +2,17 @@
 PlanformCreator2.settings
 PlanformCreator2.code-workspace
 README.pdf
+Root_Example.dat
+Tip_Example.dat
 releases
+T*.txt
+tmp*.inp
+test/*
+test_VLM/*
+*.xlsx
+*_tmp/*
+images/~*.pptx					# tmp ppt 
+doc/rcn
 
 
 # Byte-compiled / optimized / DLL files

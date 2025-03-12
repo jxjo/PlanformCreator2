@@ -24,9 +24,10 @@ import os
 import numpy as np
 import bisect
 import sys
-import copy
+import shutil
 from typing                 import override
 from pathlib                import Path
+from math                   import isclose
 
 
 # let python find the other modules in the dir of self  
@@ -34,8 +35,12 @@ sys.path.append(Path(__file__).parent)
 from base.common_utils      import * 
 from base.math_util         import * 
 from base.spline            import Bezier
-from model.airfoil          import Airfoil, GEO_BASIC, GEO_SPLINE
+from model.airfoil          import Airfoil, GEO_BASIC
+from model.polar_set        import Polar_Definition, Polar_Set
 from model.airfoil_examples import Root_Example, Tip_Example
+from model.xo2_driver       import Worker
+
+from VLM_wing               import VLM_Wing
 
 import logging
 logger = logging.getLogger(__name__)
@@ -49,6 +54,17 @@ type Polylines  = tuple[Array, Array, Array]
 
 
 # ---- Model --------------------------------------
+
+
+#------------------------------------------------
+
+
+TEMP_DIR_FALLBACK       = "airfoil_straks"
+TEMP_DIR_POSTFIX        = "_tmp"
+
+
+
+
 class Wing:
     """ 
 
@@ -82,6 +98,12 @@ class Wing:
         self._description           = fromDict (dataDict, "description", "This is just an example planform.\nUse 'New' to select another template.")
         self._fuselage_width        = fromDict (dataDict, "fuselage_width", 80.0)
 
+        # polar definitions
+
+        self._polar_definitions     = []
+        for def_dict in fromDict (dataDict, 'polar_definitions', []):
+            self._polar_definitions.append(Polar_Definition(dataDict=def_dict))
+
         # attach the Planform 
 
         self._planform              = Planform (self, dataDict)
@@ -104,10 +126,19 @@ class Wing:
         self._export_flz            = None 
         self._export_dxf            = None 
 
+        # wing for VLM aero calculation    
+
+        self._vlm_wing              = None
+
         # miscellaneous parms
 
         self._airfoil_nick_prefix = fromDict (dataDict, "airfoil_nick_prefix", "JX-")
         self._airfoil_nick_base   = fromDict (dataDict, "airfoil_nick_base", 100)
+
+        # if new wing save initial dataDict for change detection on save 
+
+        if not self.dataDict:
+            self.dataDict = self._save()
         
         logger.info (str(self)  + ' created')
 
@@ -131,6 +162,16 @@ class Wing:
         toDict (dataDict, "airfoil_nick_base",  self._airfoil_nick_base) 
         toDict (dataDict, "reference_pc2_file", self._reference_pc2_file)
         toDict (dataDict, "background_image",   self.background_image._as_dict())
+
+        # polar definitions - do not save if there is only a default definition 
+        def_list = []
+        for polar_def in self.polar_definitions:
+            def_dict = polar_def._as_dict()
+            if not (len (self.polar_definitions) == 1 and def_dict == Polar_Definition()._as_dict()):
+                def_list.append (polar_def._as_dict())
+        toDict (dataDict,'polar_definitions', def_list)
+
+        # save planform with all sub objects  
 
         self._planform._save_to (dataDict)
 
@@ -179,6 +220,9 @@ class Wing:
         chord_style = fromDict (dataDict, "planformType", N_Distrib_Bezier.name)
 
         chord_dict = {}
+
+        if chord_style == "trapezoidal":
+            chord_style = N_Distrib_Trapezoid.name
 
         toDict (chord_dict, "chord_style",   chord_style)
 
@@ -300,7 +344,7 @@ class Wing:
         return self.planform.span * 2 + self.fuselage_width
 
     def set_wingspan (self, aVal : float):
-        aVal = np.clip (aVal, 1, 50000)
+        aVal = clip (aVal, 1, 50000)
         self.planform.set_span ((aVal - self.fuselage_width) / 2.0)
 
 
@@ -310,20 +354,29 @@ class Wing:
         return self._fuselage_width
     
     def set_fuselage_width (self, aVal:float):
-        aVal = np.clip (aVal, 0, self.wingspan/2)
+        aVal = clip (aVal, 0, self.wingspan/2)
         self._fuselage_width = aVal 
 
-    @property
-    def wing_area (self) -> float:
-        """ current wing area including fuselage"""
-        
-        fuselage_area = self.fuselage_width * self.planform.chord_root
-        return self.planform.planform_area * 2 + fuselage_area
 
-    @property
-    def wing_aspect_ratio (self) -> float:
-        """ aspect ratio of wing"""
-        return self.wingspan ** 2 / self.wing_area
+    def wing_data (self) -> tuple[float, float, float]:
+        """
+        derived wing data from geometry
+            - all together for performance reasons
+        
+        Returns:
+            area: total wing area including fuselage
+            ar: spect_ratio including fuselage
+            mac: mean aerodynamic chord
+            np_x: geometric neutral point in chord direction
+        """
+
+        planform_area, mac, np_y = self.planform._calc_area_mac_np ()
+        fuselage_area = self.fuselage_width * self.planform.chord_root
+
+        wing_area     = planform_area * 2 + fuselage_area 
+        wing_ar       = self.wingspan ** 2 / wing_area
+
+        return wing_area, wing_ar, mac, np_y
 
 
     @property
@@ -373,7 +426,30 @@ class Wing:
             self._planform_ref_pc2 = Wing (self._reference_pc2_file).planform 
 
         return self._planform_ref_pc2
-    
+
+
+    @property
+    def vlm_wing (self) -> VLM_Wing:
+        """ wing for VLM aero calculation """
+
+        if self._vlm_wing is None: 
+ 
+            # ensure all wingSections have straked airfoils
+            self.planform.wingSections.do_strak ()
+
+            # ensure all wingSections have a polar with the current re
+            self.planform.wingSections.refresh_polar_sets (ensure=False)
+
+            # create new VLM_WIng
+            self._vlm_wing = VLM_Wing (self.planform_paneled)
+
+        return self._vlm_wing
+
+    def vlm_wing_reset (self):
+        """ reset (will init new) VLM wing"""
+        self._vlm_wing = None
+        
+
     @property
     def background_image (self) -> 'Image_Definition':
         """ returns the image definition of the background image"""
@@ -400,6 +476,15 @@ class Wing:
             self._airfoil_nick_base = int(aNumber) 
         except: 
             self._airfoil_nick_base = 100 
+
+
+    @property
+    def polar_definitions (self) -> list [Polar_Definition]:
+        """ list of actual polar definitions """
+
+        if not self._polar_definitions: 
+            self._polar_definitions = [Polar_Definition()]
+        return self._polar_definitions
 
 
     @property
@@ -448,11 +533,41 @@ class Wing:
 
     @property
     def workingDir(self): 
-        """returns the current working directory which is the dir of the paramter file"""
+        """directory of the paramter file"""
         return self.pathHandler.workingDir
 
 
+    @property
+    def wing_tmp_dir (self): 
+        """directory within working dir for tmp files like straked airfoils and polars """
+
+        # initially there could be no parm_file
+        if self.parm_filePath is None: 
+            tmp_dir = TEMP_DIR_FALLBACK + TEMP_DIR_POSTFIX 
+        else:
+            tmp_dir = Path(self.parm_filePath).stem + TEMP_DIR_POSTFIX 
+
+        return os.path.join (self.workingDir, tmp_dir)
+
+
     # ---Methods --------------------- 
+
+
+    def remove_tmp (self): 
+        """ remove temporary files made during session"""
+
+        # remove tmp dir of strak airfoils 
+        if os.path.isdir(self.wing_tmp_dir):
+            shutil.rmtree(self.wing_tmp_dir, ignore_errors=True)
+
+        # remove persisted example airfoil its polar dir 
+        for section in self.planform.wingSections:
+            if section.airfoil.isExample:
+                if os.path.isfile (section.airfoil.pathFileName):
+                    os.remove (section.airfoil.pathFileName)
+
+                polarDir = str(Path(section.airfoil.pathFileName).with_suffix('')) + '_polars'
+                Worker.remove_polarDir (section.airfoil.pathFileName, polarDir) 
 
 
     def save (self, pathFileName):
@@ -583,7 +698,7 @@ class N_Chord_Reference:
     
     def set_cr_root (self, aVal : float):
         px, _ = self._cr_bezier.points[0]
-        py    = np.clip (aVal, 0.0, 1.0)
+        py    = clip (aVal, 0.0, 1.0)
         self._cr_bezier.set_point (0, px, py)
 
     @property 
@@ -593,7 +708,7 @@ class N_Chord_Reference:
     
     def set_cr_tip (self, aVal : float):
         px, _ = self._cr_bezier.points[-1]
-        py    = np.clip (aVal, 0.0, 1.0)
+        py    = clip (aVal, 0.0, 1.0)
         self._cr_bezier.set_point (-1, px, py)
 
 
@@ -958,7 +1073,8 @@ class N_Distrib_Abstract:
 
 class N_Distrib_Bezier (N_Distrib_Abstract): 
     """ 
-    Bezier based normalized chord distribition  
+    Bezier based normalized chord distribition allowing > 4 control points 
+        and straight line chord distribution at root  
     """
 
     name            = "Bezier"
@@ -966,7 +1082,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
     isTemplate      = True
 
     description = "Chord based on a Bezier curve function,\n" + \
-                  "which is defined by its root and tip tangent"
+                  "allowing multi control points "
 
     # is the chord distribution defined by wing section or vice versa - overwrite 
     chord_defined_by_sections = False          # e.g trapezoid
@@ -984,15 +1100,21 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
 
         # init Cubic Bezier for chord distribution 
        
-        px = [0.0, 0.55, 1.0,  1.0]
-        py = [1.0, 1.0, 0.55, 0.10]     
+        px = [0.0, 0.5, 1.0,  1.0]
+        py = [1.0, 1.0, 0.8, 0.05]     
 
-        # from dict only the variable point coordinates of Bezier
+        # Compatibility 2.0: from dict only the variable point coordinates of Bezier
 
         px[1]   = fromDict (dataDict, "p1x", px[1])             # root tangent 
         py[1]   = fromDict (dataDict, "p1y", py[1])
         py[2]   = fromDict (dataDict, "p2y", py[2])             # nearly elliptic
         py[3]   = fromDict (dataDict, "p3y", py[3])             # defines tip chord 
+
+
+        # from dict control coordinates of Bezier
+
+        px    = fromDict (dataDict, "px", px)              
+        py    = fromDict (dataDict, "py", py)
 
         self._bezier = Bezier (px, py)
         self._u = np.linspace(0.0, 1.0, num=100)                # default Bezier u parameter
@@ -1002,10 +1124,15 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         """ returns a data dict with the paramters of self"""
 
         d = super()._as_dict()
+        toDict (d, "px", self._bezier.points_x)
+        toDict (d, "py", self._bezier.points_y)
+
+        # Compatibility 2.0 
         toDict (d, "p1x",       self._bezier.points_x[1])
         toDict (d, "p1y",       self._bezier.points_y[1])
-        toDict (d, "p2y",       self._bezier.points_y[2])
-        toDict (d, "p3y",       self._bezier.points_y[3])
+        toDict (d, "p2y",       self._bezier.points_y[-2])
+        toDict (d, "p3y",       self._bezier.points_y[-1])
+
         return d
 
 
@@ -1016,8 +1143,18 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
 
-        return round (self._bezier.eval_y_on_x (xn, fast=fast),10) 
+        xn_bezier_start = self._bezier.points_x[0]
 
+        # xn either on straight line or on Bezier 
+                           
+        if xn < xn_bezier_start:         
+            xn_line, cn_line = self.line_from_root ()
+            cn = round (np.interp(xn, xn_line, cn_line),10)
+        else:    
+            cn = round (self._bezier.eval_y_on_x (xn, fast=fast),10) 
+
+        return cn 
+    
 
     def xn_at (self, cn: float, fast=True) -> float:
         """ 
@@ -1026,7 +1163,26 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
 
-        return round (self._bezier.eval_x_on_y (cn, fast=fast), 10)
+        # sanity check 
+
+        if cn > 1.0: 
+            logger.warning (f"{self} cn={cn:.3f} clipped")
+            return 0.0  
+        elif cn < self._bezier.points_y [-1]:
+            logger.warning (f"{self} cn={cn:.3f} clipped")
+            return 1.0
+
+        # cn either on straight line or on Bezier 
+
+        cn_bezier_start = self._bezier.points_y[0]
+
+        if cn > cn_bezier_start:         
+            xn_line, cn_line = self.line_from_root ()
+            xn = round (np.interp(cn, cn_line, xn_line),10)
+        else:    
+            xn = round (self._bezier.eval_x_on_y (cn, fast=fast), 10)
+
+        return xn
 
 
     def polyline (self) -> Polyline:
@@ -1038,8 +1194,34 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
             xn: normalized x coordinates
             cn: normalized chord
         """
-        xn, cn = self._bezier.eval(self._u) 
+        xn_line, cn_line = self.line_from_root (npoints=20)
+        xn_bez,  cn_bez  = self._bezier.eval(self._u) 
+
+        xn = np.append (xn_line, xn_bez)
+        cn = np.append (cn_line, cn_bez)
+
         return np.round(xn,10), np.round(cn,10) 
+
+
+    def line_from_root (self, npoints=2) -> Polyline:
+        """ 
+        If Bezier is not starting at root return straight line upto bezier
+            npoints can be > 2 to get a curve for polyline (when ref line is banana)
+
+        Returns:
+            xn: normalized x coordinates
+            cn: normalized chord
+        """
+
+        xn_bezier_start = self._bezier.points_x[0]
+                                                
+        if xn_bezier_start == 0.0:
+            xn = np.empty(0)
+            cn = np.empty(0)
+        else:
+            xn = np.linspace (0.0, xn_bezier_start, npoints)
+            cn = np.linspace (1.0, self._bezier.points_y[0], npoints)
+        return xn, cn
 
 
     def bezier_as_jpoints (self, transform_fn = None) -> list[JPoint]: 
@@ -1050,27 +1232,32 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         """
 
         jpoints = []
+        n = len(self._bezier.points)
 
         for i, point in enumerate(self._bezier.points):
 
             jpoint = JPoint (point)   
 
             if i == 0:                                      # root 
-                jpoint.set_fixed (True)
-                jpoint.set_name ('') 
+                jpoint.set_x_limits ((0,0.9))
+                jpoint.set_y_limits ((0.1,1.0))
+                jpoint.set_name ('Bezier Start') 
             elif i == 1:                                    # root tangent
                 jpoint.set_x_limits ((0,1))
                 jpoint.set_y_limits ((0,1))
-                jpoint.set_name ('Root Tangent') 
-            elif i == 2:                                    # tip tangent
+                jpoint.set_name ('Start Tangent') 
+            elif i == n-2:                                  # tip tangent
                 jpoint.set_x_limits ((1,1))
                 jpoint.set_y_limits ((0.2,1))
-                jpoint.set_name ('Tip Tangent') 
-            else:
-                # jpoint.set_fixed (True)                   # tip
+                jpoint.set_name ('End Tangent') 
+            elif i == n-1:                                  # tip
                 jpoint.set_x_limits ((1,1))
                 jpoint.set_y_limits ((0.01,0.5))
                 jpoint.set_name ('Tip Chord') 
+            else:
+                jpoint.set_x_limits ((-0.5,1.5))
+                jpoint.set_y_limits ((0.01,1.0))
+                jpoint.set_name (f'Free {i}') 
 
             jpoints.append(jpoint.as_transformed (transform_fn))
 
@@ -1084,13 +1271,23 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         """
 
         px, py = [], []
-        for jpoint in jpoints:
+        for i, jpoint in enumerate (jpoints):
             jpoint_trans = jpoint.as_transformed (transform_fn)
-            px.append(jpoint_trans.x)
-            py.append(jpoint_trans.y)
+
+            if i == 0 and isclose (jpoint_trans.x, 0.0, abs_tol= 0.005):
+                xn = 0.0 
+                yn = 1.0 
+            elif isclose (jpoint_trans.x, 1.0, abs_tol= 0.005):
+                xn = 1.0
+                yn = jpoint_trans.y
+            else:
+                xn = jpoint_trans.x
+                yn = jpoint_trans.y
+
+            px.append(xn)
+            py.append(yn)
 
         self._bezier.set_points (px, py)
-
 
 
 
@@ -1101,7 +1298,6 @@ class N_Distrib_Trapezoid (N_Distrib_Abstract):
 
     name            = "Trapezoid"
     isTrapezoidal   = True
-    style           = "trapezoidal"
 
     description     = "Chord defined by its wing sections,\n" + \
                       "which have the attribut 'Defines planform'" 
@@ -1124,10 +1320,12 @@ class N_Distrib_Trapezoid (N_Distrib_Abstract):
         super().__init__ ()
 
 
-    def polyline (self) -> Polyline:
+    def polyline (self, npoints = 2) -> Polyline:
         """ 
-        Normalized polyline of chord along xn
-            At root it is: cn [0] = 1.0 
+        Normalized polyline of chord along xn (root cn[0]=1.0)
+           
+        Arguments:
+            npoints:    number of points of one line segment
 
         Returns:
             xn: normalized x coordinates
@@ -1143,11 +1341,16 @@ class N_Distrib_Trapezoid (N_Distrib_Abstract):
                 sections.append(section)
 
         # collect their position and length 
-        #        
-        xn, cn = [], []
-        for section in sections:
-            xn.append(section.xn)
-            cn.append(section.cn)
+                
+        xn, cn = np.zeros(0), np.zeros(0)
+
+        sec : WingSection
+        for isec, sec in enumerate (sections [:-1]):
+            next_sec : WingSection = sections [isec+1]
+            xn_sec = np.linspace (sec.xn, next_sec.xn, npoints) 
+            cn_sec = np.linspace (sec.cn, next_sec.cn, npoints) 
+            xn = np.append(xn, xn_sec)
+            cn = np.append(cn, cn_sec)
         return np.round(xn,10), np.round(cn,10) 
 
 
@@ -1195,51 +1398,49 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
     chord_defined_by_sections = True          # e.g trapezoid
 
 
-    def __init__(self, parent_planform : 'Planform', cn_tip_min=None):
+    def __init__(self, parent_planform : 'Planform'):
         """
         Create new chord distribution 
 
         Args:       
             parent_planform: parent self belongs to (trapezoidal need the wing sections)
-            dataDict: dictionary with parameters for self 
-            cn_tip_min: Minimum chord at tip - span will be reduced 
         """
 
-        self._parent_planform    = parent_planform
-        self._cn_tip_min  = cn_tip_min
-
-        self._is_cn_tip_min_applied = False                                     # flag for user info 
+        self._parent_planform   = parent_planform
+        self._cn_tip_min        = None
 
         super().__init__ ()
 
 
     @property
-    def cn_tip_min (self) -> float: 
+    def cn_tip_min (self) -> float | None: 
         """ the minimum normed chord at tip (will cut the tip)""" 
 
-        # wing sections can change during lifetime - so dynamic check 
-        cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
-        cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
-        self._cn_tip_min =  np.clip (self._cn_tip_min, cn_min, cn_max)
-
-        return round (self._cn_tip_min,3)                                  # calc of cn may have numerical issues 
+        if self._cn_tip_min is not None: 
+            # wing sections can change during lifetime - so dynamic check 
+            cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
+            cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
+            self._cn_tip_min = clip (self._cn_tip_min, cn_min, cn_max)
+            return round (self._cn_tip_min,2)                                  # calc of cn may have numerical issues 
+        else: 
+            return None 
     
-    def set_cn_tip_min (self, aVal):
+    def set_cn_tip_min (self, aVal : float | None):
         """ set minimum - it can't be smaller than parent tip section cn"""
 
-        cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
-        cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
-        self._cn_tip_min =  np.clip (aVal, cn_min, cn_max)
-
-    @property
-    def is_cn_tip_min_applied (self) -> bool:
-        """ True if sections were reduced due to tip_min"""
-        return self._is_cn_tip_min_applied
+        if aVal == 0.0:
+            self._cn_tip_min = round(self._parent_planform.wingSections[-1].cn + 0.005,2)     # round up
+        elif aVal is not None:
+            cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
+            cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
+            self._cn_tip_min = clip (aVal, cn_min, cn_max)
+        else: 
+            self._cn_tip_min = None
 
 
     def polyline (self) -> Polyline:
         """ 
-        Normalized polyline of chord along xn
+        Normalized polyline of chord along xn which can be reduced if cn_tip_min is active
             At root it is: cn [0] = 1.0 
 
         Returns:
@@ -1247,19 +1448,14 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
             cn: normalized chord
         """
 
-        self._is_cn_tip_min_applied = False
-        cn_tip_min = self.cn_tip_min
-
         # retrieve xn, cn of sections from parent chord 
 
         xn, cn = [], []
         section : WingSection
         for section in self._parent_planform.wingSections:
-            if cn_tip_min is None or section.cn >= cn_tip_min :
+            if self.cn_tip_min is None or  (round(section.cn,3) >= self.cn_tip_min) :
                 xn.append(section.xn)
                 cn.append(section.cn)
-            else:
-                self._is_cn_tip_min_applied = True 
 
         return np.round(xn,10), np.round(cn,10) 
 
@@ -1269,7 +1465,11 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         Main chord function - returns cn at xn
         """
 
-        xn_arr, cn_arr = self.polyline()
+        xn_arr, cn_arr = [], []
+        for section in self._parent_planform.wingSections:
+            xn_arr.append(section.xn)
+            cn_arr.append(section.cn)
+
         cn = np.interp(xn, xn_arr, cn_arr)                      # linear interpolation in polyline
 
         return round (cn,10) 
@@ -1366,11 +1566,13 @@ class WingSection :
 
         self._planform    = planform
 
-        self._xn            = fromDict (dataDict, "xn", None)            # xn position
-        self._cn            = fromDict (dataDict, "cn", None)            # cn chord  
-        self._defines_cn    = fromDict (dataDict, "defines_cn", False)    # section must have cn and xn 
-        self._hinge_cn      = fromDict (dataDict, "hinge_cn", None)      # hinge chord position 
-        self._flap_group    = fromDict (dataDict, "flap_group", 1)       # flap group (starting here) 
+        self._xn            = fromDict (dataDict, "xn", None)               # xn position
+        self._cn            = fromDict (dataDict, "cn", None)               # cn chord  
+        self._defines_cn    = fromDict (dataDict, "defines_cn", False)      # section must have cn and xn 
+        self._hinge_cn      = fromDict (dataDict, "hinge_cn", None)         # hinge chord position 
+        self._flap_group    = fromDict (dataDict, "flap_group", 1)          # flap group (starting here) 
+        self._is_for_panels = fromDict (dataDict, "is_for_panels", False)   # extra section for paneling
+
 
         # sanity
 
@@ -1378,10 +1580,10 @@ class WingSection :
             raise ValueError (f"{self} init - either xn or cn is missing")
 
         if self._xn is not None: 
-            self._xn = np.clip (self._xn, 0.0, 1.0)
+            self._xn = clip (self._xn, 0.0, 1.0)
             self._xn = round (self._xn, 10)
         if self._cn is not None: 
-            self._cn = np.clip (self._cn, 0.0, 1.0)
+            self._cn = clip (self._cn, 0.0, 1.0)
             self._cn = round (self._cn, 10)
 
         # sanity root and tip  
@@ -1390,13 +1592,12 @@ class WingSection :
 
             # ... trapezoid planform: section may have both which will define planform  
 
-            if self._xn == 0.0 or self._cn == 1.0:
-                self._xn = 0.0
-                self._cn = 1.0
-                self._defines_cn = True
-            elif self._xn == 1.0:
+            if self.is_tip:
                 if self._cn is None:
                     self._cn = 0.25                                         # take default 
+                self._defines_cn = True
+            elif self.is_root:
+                self._cn = 1.0
                 self._defines_cn = True
             else:
                 self._defines_cn = self._xn is not None and self._cn is not None
@@ -1414,6 +1615,8 @@ class WingSection :
         # create airfoil and load coordinates if exist 
 
         self._airfoil = self._get_airfoil (pathFileName = fromDict (dataDict, "airfoil", None), workingDir=self.workingDir)
+
+        self._strak_info = None                                             # keep info of strak 
 
 
     def __repr__(self) -> str:
@@ -1436,6 +1639,8 @@ class WingSection :
         toDict (d, "defines_cn",    self._defines_cn if self._defines_cn else None)
         toDict (d, "hinge_cn",      self._hinge_cn)
         toDict (d, "flap_group",    self.flap_group)
+        if self.is_for_panels:
+            toDict (d, "is_for_panels", self.is_for_panels)
         if not self.airfoil.isBlendAirfoil:
             toDict (d, "airfoil",    self.airfoil.pathFileName)
         return d
@@ -1486,14 +1691,40 @@ class WingSection :
         """ 
         set new airfoil - 'airfoil' can be 
             - an Airfoil object 
-            - an airfoils pathFilename
             - None - current airfoil will by a strak airfoil
         """
         if isinstance (airfoil, Airfoil):
+
+            # ensure airfoils path is relative to workingDir - if possible 
+            rel_pathFileName = PathHandler(workingDir=self.workingDir).relFilePath (airfoil.pathFileName)
+            airfoil.workingDir = self.workingDir
+            airfoil.set_pathFileName (rel_pathFileName)
+
+            # init polar set of airfoil 
+
+            polar_defs = self._planform.wing.polar_definitions
+            airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=self.cn))
+
             self._airfoil = airfoil
-        elif isinstance (airfoil, str) or airfoil is None:
-            # load new or remove existing (set as strak airfoil) 
-            self._airfoil = self._get_airfoil (pathFileName=airfoil) 
+
+        elif airfoil is None:
+            # remove existing (set as strak airfoil) 
+            self._airfoil = self._get_airfoil (pathFileName=None) 
+
+
+    def set_airfoil_by_path (self, pathFileName : str | None):
+        """ 
+        set new airfoil by an airfoils pathFileName 
+            - if None - current airfoil will by a strak airfoil
+        """
+        if os.path.isfile (pathFileName):
+            # ensure relative path to working dir
+            rel_pathFileName = PathHandler(workingDir=self.workingDir).relFilePath (pathFileName)
+            self._airfoil = self._get_airfoil (workingDir = self.workingDir, 
+                                               pathFileName =rel_pathFileName) 
+        elif  pathFileName is None:
+            # remove airfoil - set as strak 
+            self._airfoil = self._get_airfoil (pathFileName=None) 
 
 
     @property
@@ -1537,7 +1768,7 @@ class WingSection :
         if aVal is None:
             self._xn = None
         else:  
-            aVal = np.clip (aVal, 0.0, 1.0)
+            aVal = clip (aVal, 0.0, 1.0)
             self._xn = round(aVal,10)
 
         if not self.defines_cn and self.is_xn_fix:                  # reset cn 
@@ -1545,6 +1776,9 @@ class WingSection :
         else:                                                       # tapezoid must have both
             if self._xn is None: self._xn = round(self.xn,10)           
             if self._cn is None: self._cn = round(self.cn,10) 
+
+        self.set_is_for_panels (False) 
+
 
     @property
     def x (self) -> float:
@@ -1576,7 +1810,7 @@ class WingSection :
         if aVal is None:
             self._cn = None
         else:  
-            aVal = np.clip (aVal, 0.0, 1.0)
+            aVal = clip (aVal, 0.0, 1.0)
             self._cn = round(aVal,10)
 
         if not self.defines_cn: 
@@ -1585,6 +1819,9 @@ class WingSection :
         else:                                                       # tapezoid must have both
             if self._xn is None: self._xn = round(self.xn,10)           
             if self._cn is None: self._cn = round(self.cn,10) 
+
+        self.set_is_for_panels (False) 
+
 
     @property
     def c (self) -> float:
@@ -1650,10 +1887,22 @@ class WingSection :
         else: 
             return True
 
+    @property
+    def is_for_panels (self) -> bool:
+        """ self is additional created for paneling"""
+        return self._is_for_panels
+    
+    def set_is_for_panels (self, aBool : bool):
+        self._is_for_panels = aBool == True 
+
 
     def index (self) -> int:
         """ index of self with wingSections"""
-        return self._planform.wingSections.index (self)  
+        try: 
+            index = self._planform.wingSections.index (self)
+        except: 
+            index = 1
+        return index  
 
 
     def xn_limits (self) -> tuple:
@@ -1699,7 +1948,7 @@ class WingSection :
         relative hinge chord position cn of self
             - if no hinge positionen is defined, the calculated value from hingle line is taken
         """
-        if self.defines_hinge:
+        if self.defines_hinge and not self.hinge_equal_ref_line:
             return self._hinge_cn
         else: 
             # calculate hinge position from flap depth 
@@ -1711,8 +1960,10 @@ class WingSection :
     def set_hinge_cn (self, aVal : float):
         """ set relative hinge chord position cn of self """
         if not self.hinge_equal_ref_line:
-            aVal = np.clip (aVal, 0.0, 1.0)
+            aVal = clip (aVal, 0.0, 1.0)
             self._hinge_cn = round (aVal,10) 
+
+            self.set_is_for_panels (False) 
 
 
     @property
@@ -1738,7 +1989,7 @@ class WingSection :
         """ set hinge chord position cn by y value within planform"""
         le_y, _ = self.le_te () 
         hinge_c = y - le_y
-        hinge_c = np.clip (hinge_c, 0, self.c)
+        hinge_c = clip (hinge_c, 0, self.c)
 
         self.set_hinge_cn(0) 
         self.set_hinge_cn (hinge_c / self.c) 
@@ -1827,7 +2078,7 @@ class WingSection :
 
 
 
-class WingSections (list):
+class WingSections (list [WingSection]):
     """ 
     container (list) for wing sections of a planform
     
@@ -1853,39 +2104,43 @@ class WingSections (list):
         # new wing - create default sections
         if not sections:
             logger.info ('Creating example wing sections')
-            sections.append(WingSection (planform, {"xn": 0.0, "flap_group":1, "hinge_cn":0.70}))
-            sections.append(WingSection (planform, {"cn": 0.6, "flap_group":2, "hinge_cn":0.70}))
-            sections.append(WingSection (planform, {"xn": 1.0, "flap_group":2, "hinge_cn":0.75}))
+            sections.append(WingSection (planform, {"xn": 0.0,  "flap_group":1, "hinge_cn":0.70}))
+            sections.append(WingSection (planform, {"cn": 0.65, "flap_group":2, "hinge_cn":0.70}))
+            sections.append(WingSection (planform, {"xn": 1.0,  "flap_group":2, "hinge_cn":0.75}))
 
-        # sanity
-        if not sections[0].is_root or not sections[-1].is_tip:
-            raise ValueError ("Wingsections data corrupted")
-
-        logger.info (" %d Wing sections added" % len(sections))
 
         self.extend (sections)
+
+        # final sanity
+        self.check_n_repair ()
+
+        logger.info (" %d Wing sections added" % len(sections))
 
 
     @property
     def workingDir (self) -> str:
-       """ current working directory""" 
-       self._planform.workingDir 
+        """ current working directory""" 
+        return self._planform.workingDir 
    
 
     def _as_list_of_dict (self) -> list[dict]:
         """ returns a data dict with the paramters of self"""
 
+        self.check_n_repair ()
+
         section_list  = []
         section : WingSection
         for section in self: 
             section_list.append (section._as_dict ()) 
+
         return section_list
 
 
-    def create_after (self, aSection: 'WingSection'=None, index=None) -> 'WingSection' : 
+    def create_after (self, aSection: 'WingSection'=None, index=None, is_for_panels=False) -> 'WingSection' : 
         """
         creates and inserts a new wing section after aSection 
             with a chord in the middle to the next neighbour 
+            'is_for_panels' indicates an extra section created just for paneling
 
         Return: 
             newSection: the new wingSection
@@ -1903,8 +2158,13 @@ class WingSections (list):
             new_cn = (aSection.cn + right_sec.cn) / 2
             new_flap_group = aSection.flap_group 
 
-            new_section = WingSection (self._planform, {"cn": new_cn, "flap_group":new_flap_group})
+            new_section = WingSection (self._planform, 
+                                       {"cn": new_cn, 
+                                        "flap_group"  :new_flap_group,
+                                        "is_for_panels" : is_for_panels})
             self.insert (self.index(aSection) + 1, new_section)
+
+            self._strak_done = False
 
         return new_section
 
@@ -1924,7 +2184,7 @@ class WingSections (list):
         else: 
             xn = x
 
-        xn = np.clip (xn, 0.0, 1.0)
+        xn = clip (xn, 0.0, 1.0)
 
         # is there already a section? Return this one 
 
@@ -1933,11 +2193,14 @@ class WingSections (list):
 
         new_section = WingSection (self._planform, {"xn": xn})
         self.insert (1,new_section)                                     # insert section somewhere
-        self.sort_by_xn ()                                               # and bring it in order 
+
+        self.check_n_repair ()                                          # re-sort
 
         # set flap group of new to the left neighbour 
         left_sec, _ = self.neighbours_of (new_section) 
         new_section.set_flap_group (left_sec.flap_group)
+
+        self._strak_done = False
 
         return new_section
 
@@ -1949,6 +2212,9 @@ class WingSections (list):
             try:
                 index = self.index (aSection)
                 self.remove (aSection)
+
+                self._strak_done = False
+
                 return self[index-1] 
             except: 
                 pass
@@ -1964,24 +2230,59 @@ class WingSections (list):
             geometry: optional - the desired geometry of the new straked airfoils 
                                  either GEO_BASIC or GEO_SPLINE
         """
-        section: WingSection
+
+        strak_dir = self._planform._wing.wing_tmp_dir
+        polar_defs = self._planform.wing.polar_definitions
+
+        if not os.path.isdir (strak_dir):
+            os.mkdir(strak_dir)
 
         for section in self:
-            if section.airfoil.isBlendAirfoil: 
+
+            airfoil = section.airfoil
+            if airfoil.isBlendAirfoil: 
 
                 # get the neighbour wing sections  with real airfoils 
 
                 left_sec, right_sec = self.neighbours_having_airfoil(section) 
-                cn = left_sec.cn
-                blendBy  = (section.cn - left_sec.cn) / (right_sec.cn - left_sec.cn)
+                left, right = left_sec.airfoil, right_sec.airfoil
 
-                # strak - set new geometry to achieve higher quality with splined airfoils 
+                if left_sec.airfoil.name == right_sec.airfoil.name:
+                    # both are the same airfoil -> dummy blend 
+                    blendBy = 0.0 
 
-                section.airfoil.set_name (left_sec.airfoil.name, reset_original=True)     # name will be <left_name>_blend0.6
+                elif right_sec.cn == left_sec.cn:
+                    # rectangular planform - no chord difference - take pos difference
+                    blendBy  = (section.xn - left_sec.xn) / (right_sec.xn - left_sec.xn)
 
-                section.airfoil.do_blend (left_sec.airfoil,  right_sec.airfoil, blendBy, geometry_class)
+                else: 
+                    # blend value is defined by chord relation to left and right              
+                    blendBy  = (section.cn - left_sec.cn) / (right_sec.cn - left_sec.cn)
 
-                self._strak_done = True 
+                blendBy = round (blendBy,2)                             # ensure 1% steps 
+
+                # was it already straked? - skip 
+
+                strak_info = f"{left.name}{right.name}{blendBy}"
+
+                if section._strak_info != strak_info:
+
+                    airfoil.do_blend (left, right, blendBy, geometry_class)
+
+                    # build long but hopefully unique name  
+
+                    name = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}"
+                    airfoil.set_name     (name, reset_original=True)  
+
+                    fileName = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}_{right.fileName_stem}.dat"    
+                    airfoil.set_fileName (fileName)
+                    airfoil.set_pathName (strak_dir, noCheck=True) 
+                    airfoil.set_isModified (False)       # avoid save and polar generation if file alreday exists
+
+                    airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
+
+                    self._strak_done = True 
+                    section._strak_info = strak_info
 
 
     @property
@@ -1990,13 +2291,26 @@ class WingSections (list):
         return self._strak_done
 
 
-    def sort_by_xn (self):
-        """ 
-        Re-sort wing sections to an ascending xn pos. 
-        When changing major wing parms sections could become out of sort order when
-            they have fixed xn and chord mixed    
-        """
+    def check_n_repair (self):
+        """ sanity check of wingSections  - remove dirty ones"""
+
+        cn_tip = self[-1].cn
+
+        # sanity check for dirty section with cn smaller than tip 
+        for section in self [:]: 
+            if section._cn and section._cn < cn_tip:
+                logger.warning (f"{section} removed - cn {section._cn:.3f} smaller than tip") 
+                self.delete (section)        
+
+        # Re-sort wing sections to an ascending xn pos. 
+        # When changing major wing parms sections could become out of sort order when
+        #    they have fixed xn and chord mixed    
+
         self.sort (key=lambda sec: sec.xn) 
+
+        # there must be root and tip 
+        if not self[0].is_root or not self[-1].is_tip:
+            raise ValueError ("Wingsections data corrupted")
 
 
     def neighbours_of (self, aSection: WingSection) -> tuple [WingSection, WingSection]:
@@ -2065,8 +2379,6 @@ class WingSections (list):
         except: 
             return None, None
 
-        sec: WingSection
-
         #left neighbour 
         if aSection.is_root: 
             left_sec = None
@@ -2101,14 +2413,30 @@ class WingSections (list):
         else: 
             xn = x
 
-        section : WingSection = None
         for section in self:
             if abs( section.xn - xn) < tolerance :
                 return section
         return None
 
 
+    def refresh_polar_sets (self, ensure=True):
+        """ refresh polar set of wingSections airfoil"""
 
+        polar_defs = self._planform.wing.polar_definitions
+
+        for section in self:
+            airfoil = section.airfoil
+            polarSet : Polar_Set = airfoil.polarSet
+
+            if polarSet and isclose (polarSet._re_scale, section.cn, rel_tol=0.01) and not ensure:
+                # there is already a polarSet which is scaled approx.
+                pass
+            else:
+                # create new, fresh polarSet
+                airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
+
+
+        
 
 #-------------------------------------------------------------------------------
 # Flap   
@@ -2554,10 +2882,9 @@ class Flaps:
         le_y, te_y = self._planform.le_te_at (x)                    # calc real flap depth 
         depth      = te_y - hinge_y
         rel_depth  = depth / (te_y - le_y)  
-        rel_depth  = np.clip (rel_depth, 0.0, 1.0)                  # sanity    
+        rel_depth  = clip (rel_depth, 0.0, 1.0)                     # sanity    
 
         return depth, rel_depth 
-
 
 
     def flap_cn_polyline  (self) -> tuple [Array, Array]:
@@ -2712,15 +3039,13 @@ class Planform:
                  chord_ref : N_Chord_Reference = None,
                  ref_line : N_Reference_Line = None):
                 
-
         self._wing = wing
 
         self._span        = fromDict (dataDict, "halfspan", 1200.0) 
         self._chord_root  = fromDict (dataDict, "chord_root", 200.0)
         self._sweep_angle = fromDict (dataDict, "sweep_angle", 1.0)
 
-        self._planform_area = None                                        # will be calculated
-        self._planform_mac  = None                                        # mean aerodynamic chord - will be calculated
+        self._wingSections  = None                                        # early to have property
 
         # create Norm_Chord distribution depending on style e.g. 'Bezier'
 
@@ -2767,6 +3092,10 @@ class Planform:
 
         self._flaps           = Flaps (self, dataDict=fromDict(dataDict, "flaps", {}))
          
+        # late setting of polar sets as chord is needed for reynolds factor 
+        
+        self._wingSections.refresh_polar_sets (ensure=False)
+
 
 
     def _save_to (self, dataDict : dict) :
@@ -2842,25 +3171,6 @@ class Planform:
         aVal = min ( 75.0, aVal)
         self._sweep_angle = aVal 
 
-    @property
-    def planform_area (self) -> float:
-        """ (approximated) planform area"""
-
-        if self._planform_area is None: 
-            # this is normally done automatically each time the le, te poyline is calculated
-            x, le_y, te_y = self.le_te_polyline ()
-            self._planform_area = self._calc_planform_area (x, le_y, te_y)
-        return self._planform_area
-
-    @property
-    def planform_mac (self) -> float:
-        """ (approximated) mean aerodynamic chord"""
-
-        if self._planform_mac is None: 
-            # this is normally done automatically each time the le, te poyline is calculated
-            x, le_y, te_y = self.le_te_polyline ()
-            self._planform_mac = self._calc_mac (x, le_y, te_y)
-        return self._planform_mac
 
     @property
     def chord_defined_by_sections (self) -> bool:
@@ -3014,10 +3324,6 @@ class Planform:
         x, le_y = self.t_norm_to_plan (xn, le_yn)
         x, te_y = self.t_norm_to_plan (xn, te_yn)
 
-        # as we have the data, calc area 
-        self._planform_area = self._calc_planform_area (x, le_y, te_y)
-        self._planform_mac  = self._calc_mac (x, le_y, te_y)
-        
         return x, le_y, te_y 
 
 
@@ -3062,10 +3368,54 @@ class Planform:
         i_c2 = 0.0 
         for i in range (len(x) -1):
             dx = x[i+1] - x[i]
-            c_mean = (te_y[i] - le_y[i] + te_y[i+1] - le_y[i+1]) / 2.0          # chord mean vlaue of dx 
+            c_mean = (te_y[i] - le_y[i] + te_y[i+1] - le_y[i+1]) / 2.0          # chord mean value of dx 
             i_c2 += c_mean **2 * dx
 
-        return i_c2 / self._calc_planform_area (x, le_y, te_y )
+        area = self._calc_planform_area (x, le_y, te_y )
+        mac  = i_c2 / area
+
+        return mac
+ 
+
+
+    def _calc_area_mac_np (self):
+        """calc mean aerodynamic chord, neutral point, area """
+
+        # http://walter.bislins.ch/blog/index.asp?page=Berechnung%3A+Mittlere+Aerodynamische+Fl%FCgeltiefe+%28MAC%29 
+
+        # get chord along span - for trapezoidal at least 3 points per segment are needed
+        if self.n_distrib.isTrapezoidal:
+            xn, cn = self.n_distrib.polyline(npoints=10)
+        else:
+            xn, cn = self.n_distrib.polyline()
+
+        x  = xn * self.span
+        c  = cn * self.chord_root
+
+        # t/4 line 
+        xn, le_yn = self.t_chord_to_norm (xn, np.full (len(xn), 1.0), cn=cn)
+        x, le_y   = self.t_norm_to_plan (xn, le_yn)
+        t4_y      = le_y + c / 4
+        dt4_y     = np.diff (t4_y)
+
+        # finite rectangle width=dx, height=chord mean value, pos = x mean value 
+        dx = np.diff (x)
+        dc = np.diff (c)
+        x_i    = x [:-1] + dx/2 
+        c_mean = c [:-1] + dc/2 
+        t4_y_i = t4_y [:-1] + dt4_y / 2 
+
+        # integral for geometric parms 
+        area   = np.sum(c_mean     * dx) 
+        c_int  = np.sum(c_mean **2 * dx) 
+        t4_int = np.sum(c_mean     * dx * t4_y_i)
+        # x_int  = np.sum(c_mean     * dx * x_i)
+        # np_x  = x_int  / area
+
+        mac   = c_int  / area
+        np_y  = t4_int / area
+         
+        return area, mac, np_y 
  
 
     def box_polygon (self) -> Polyline:
@@ -3389,7 +3739,7 @@ class Planform_Paneled (Planform):
 
         # create Norm_Chord distribution based on parent planform 
 
-        self._n_distrib     = N_Distrib_Paneled (self._parent_planform, dataDict)
+        self._n_distrib     = N_Distrib_Paneled (self._parent_planform)
 
         # main objects from parent
 
@@ -3403,17 +3753,15 @@ class Planform_Paneled (Planform):
         self._wy_panels      = fromDict (dataDict, "wy_panels", 8)
         self._wy_dist        = fromDict (dataDict, "wy_distribution", "uniform")
 
-        self._wx_panels      = fromDict (dataDict, "wx_panels", 8)
+        self._wx_panels      = fromDict (dataDict, "wx_panels", 3)
         self._wx_dist        = fromDict (dataDict, "wx_distribution", "uniform")
 
-        self._width_min      = fromDict (dataDict, "width_min", 0.02)                # min panel width 1%
-        self.set_cn_tip_min   (fromDict (dataDict, "cn_tip_min", 0.05))              # min tip chord 10%
-        self._cn_diff_max    = fromDict (dataDict, "cn_diff_max", 0.02)              # max cn difference 5%
+        self._width_min_targ = fromDict (dataDict, "width_min", None)                # target min panel width 1%
+
+        self._n_distrib.set_cn_tip_min (fromDict (dataDict, "cn_tip_min",None))      # min tip chord 10%
+        self._cn_diff_max    = fromDict (dataDict, "cn_diff_max", None)              # max cn difference 5%
 
         self._use_nick_name  = fromDict (dataDict, "use_nick_name", False)           # use airfoil nick name for export%
-
-        self._is_width_min_applied = False                                           # flag for user info 
-        self._cn_diff              = 0.0                                             # cuurent max chord difference
 
         # dict of available panel distribution functions used for x and y  
 
@@ -3427,6 +3775,11 @@ class Planform_Paneled (Planform):
         self._wx_distribution_fns["uniform"]= lambda y : y
         self._wx_distribution_fns["cosine"] = lambda y : (np.cos ((y+1) * np.pi) + 1) / 2
 
+        # apply current settings 
+
+        self.optimize ()  
+
+
 
     def _as_dict (self) -> dict:
         """ returns a data dict with the paramters of self"""
@@ -3435,9 +3788,10 @@ class Planform_Paneled (Planform):
         toDict (d, "wy_distribution",   self._wy_dist)
         toDict (d, "wx_panels",         self._wx_panels)
         toDict (d, "wx_distribution",   self._wx_dist)
-        toDict (d, "width_min",         self._width_min)
-        toDict (d, "cn_tip_min",        self.cn_tip_min)
-        toDict (d, "cn_diff_max",       self.cn_diff_max)
+
+        toDict (d, "width_min",         self._width_min_targ)                     
+        toDict (d, "cn_tip_min",        self._n_distrib.cn_tip_min)
+        toDict (d, "cn_diff_max",       self._cn_diff_max)
         return d
     
 
@@ -3461,18 +3815,26 @@ class Planform_Paneled (Planform):
 
     def wingSections_reduced (self) -> list[WingSection]:
         """ returns list of wing sections if applicable reduced when cn_tip_min """
-        
-        if self.is_cn_tip_min_applied:
-            nsec = len(self.n_distrib.polyline () [0])      # get effective no of sections fro polyline
-            sections = self._wingSections [:nsec]           # reduce 
+
+        # is there a section having cn < cn_tip_min
+        isec_cutted = None 
+        for isec, section in enumerate (self.wingSections):
+            if self.cn_tip_min and round(section.cn,3) < self.cn_tip_min :
+                isec_cutted = isec
+                break
+
+        # if yes, reduce wing sections 
+        if isec_cutted:
+            sections = self._wingSections [:isec_cutted]           
         else: 
             sections = self._wingSections
         return sections
 
 
     @property
-    def wx_panels (self):                return self._wx_panels
-    def set_wx_panels (self, val: int):  self._wx_panels = int(val)
+    def wx_panels (self) -> int:         return self._wx_panels
+    def set_wx_panels (self, val: int):  
+        self._wx_panels = int(val)
 
     @property
     def wx_dist (self):                  return self._wx_dist
@@ -3480,9 +3842,12 @@ class Planform_Paneled (Planform):
         if val in self._wy_distribution_fns:
             self._wx_dist = val
 
+
     @property
-    def wy_panels (self):                return self._wy_panels
-    def set_wy_panels (self, val: int):  self._wy_panels = int(val)
+    def wy_panels (self) -> int:         return self._wy_panels
+    def set_wy_panels (self, val: int):  
+        self._wy_panels = int(val)
+
 
     @property
     def wy_dist (self):                  return self._wy_dist
@@ -3490,30 +3855,54 @@ class Planform_Paneled (Planform):
         if val in self._wy_distribution_fns:
             self._wy_dist = val
 
-    @property
-    def width_min (self):              return self._width_min
-    def set_width_min (self, val):     self._width_min = val
 
     @property
-    def is_width_min_applied (self) -> bool:
-        """ True if x_panels were reduced due to width_min"""
-        return self._is_width_min_applied
-
-    @property
-    def cn_diff (self):                 return self._cn_diff
-
-    @property
-    def cn_diff_max (self):             return self._cn_diff_max
-    def set_cn_diff_max (self, val):    self._cn_diff_max = val
-
-    @property
-    def is_cn_diff_exceeded (self) -> bool:
-        """ True if chord difference exceeds setting"""
-        return self.cn_diff > self.cn_diff_max
+    def width_min_targ (self):  
+        """ minimum panel width - None or e.g. 0.01"""            
+        return self._width_min_targ 
+    
+    def set_width_min_targ (self, val : float |  None):   
+        if val == 0.0:
+            self._width_min_targ = round(self.width_min_cur + 0.005,2)     # round up
+        elif val is not None: 
+            self._width_min_targ = clip (val, 0.001, 0.2)
+        else: 
+            self._width_min_targ = None
 
 
     @property
-    def cn_tip_min (self) -> float:             
+    def width_min_cur (self) -> float:  
+        """ current min panel width along wing """
+        _, width_min_cur = self._calc_x_stations ()
+        return width_min_cur
+    
+
+    @property
+    def cn_diff (self):
+        """ current max. chord difference """  
+
+        cn_diff = 0.0
+        for xi in self.x_stations():
+            c_diff   = self._parent_planform.c_at (xi) - self.c_at (xi)
+            cn_diff = max ((c_diff/self.chord_root), cn_diff)               
+        return cn_diff 
+    
+
+    @property
+    def cn_diff_max (self):
+        """ max deviation of chord of paneled ot original planform""" 
+        return self._cn_diff_max 
+
+    def set_cn_diff_max (self, val: float | None):    
+        if val is not None: 
+            self._cn_diff_max = clip (val, 0.0, 0.2)
+        else: 
+            self._cn_diff_max = None
+        self.optimize ()                          
+
+
+    @property
+    def cn_tip_min (self) -> float | None:             
         """ minimum chord at tip when generating panels"""
         return self._n_distrib.cn_tip_min
     
@@ -3521,9 +3910,10 @@ class Planform_Paneled (Planform):
         self._n_distrib.set_cn_tip_min (aVal)
 
     @property
-    def is_cn_tip_min_applied (self) -> bool:
-        """ True if sections were reduced due to min tip chord"""
-        return self._n_distrib.is_cn_tip_min_applied
+    def cn_tip_cur (self) -> float:
+        """ current chord of cutted tip """
+        return self._n_distrib.polyline()[1][-1]
+
 
     @property
     def wy_distribution_fns_names (self):
@@ -3557,7 +3947,8 @@ class Planform_Paneled (Planform):
         return np.round (stations,10)
 
 
-    def _cn_rel_stations (self) -> np.ndarray:
+    @property
+    def cn_rel_stations (self) -> np.ndarray:
         """ relative cn stations of the panels of a section"""
         wx_dist_fn = self._wy_distribution_fns [self.wx_dist]
         stations = np.linspace (0, 1, self.wx_panels +1)
@@ -3566,108 +3957,56 @@ class Planform_Paneled (Planform):
         return np.round (stations,10)
 
 
-    def _get_x_stations (self) -> np.ndarray:
+    def x_stations (self) -> np.ndarray:
+        """ x stations of all panels - optimized for width_min"""
+
+        x_stations, _ = self._calc_x_stations ()
+        return x_stations
+
+
+    def _calc_x_stations (self) -> tuple[np.ndarray, float]:
         """
-        x stations of all panels - optimized for width_min 
+        calculate x stations of all panels - optimized for width_min
+        Returns: 
+            x_stations: list 
+            width_min_cur: minimum panel width  (mean value for cosinus oder sinus distribution)  
         """
 
-        self._is_width_min_applied = False
+        width_min_targ = self.width_min_targ if self.width_min_targ else 0.0
+        width_min_cur  = 1.0                                    # current width min - to be calculated
 
         # walk along span by section and add x stations 
 
-        xn_sec = self.n_distrib.polyline()[0]                     # take poyline as it can be already reduced
+        xn_sec = self.n_distrib.polyline()[0]                   # take poyline as it can be already reduced
 
         xn_rel_stations = self._xn_rel_stations()
         xn_stations = np.array ([0.0])
 
+
         for isec in range (1, len(xn_sec)):      
             
             section_width   = xn_sec[isec] - xn_sec[isec-1]
-            xn_sec_stations =  xn_rel_stations [1:] * section_width 
+            panel_widths    = np.diff (xn_rel_stations) * section_width
 
-            # check and correct for min panel width 
+            # check and correct y panels for min panel width 
             wy_panels = self.wy_panels
-            while np.min (np.diff (xn_sec_stations)) < self._width_min and wy_panels > 2:
+            while np.mean (panel_widths) < width_min_targ and wy_panels > 2:  # mean for cosinus/sinus 
+
                 wy_panels -= 1
-                xn_rel_stations_tmp = self._xn_rel_stations(wy_panels)
-                xn_sec_stations     =  xn_rel_stations_tmp [1:] * section_width 
+                panel_widths    = np.diff (self._xn_rel_stations(wy_panels)) * section_width
 
-                self._is_width_min_applied = True                           # flag for user info 
 
-            xn_stations = np.append (xn_stations, xn_sec_stations + xn_sec[isec-1])
+            # calc new x station of panel stripes 
+            for width_i in panel_widths [:-1]:
+                xn_next = xn_stations[-1] + width_i
+                xn_stations = np.append (xn_stations, xn_next)
+            xn_stations = np.append (xn_stations, xn_sec[isec])
 
-        return xn_stations * self._parent_planform.span
+
+            width_min_cur = min (width_min_cur, np.mean (panel_widths))
+
+        return xn_stations * self._parent_planform.span, width_min_cur
     
-
-    def y_panel_polylines (self) -> tuple[list[Polyline], list[Polyline]]:
-        """
-        the lines from one section to the next along the span representing the y panels of the planform 
-        Returns:
-            :x: list of array of x-value of the line  
-            :y: list of array of y-value 
-        """
-
-        x_list = []
-        y_list = []
-
-        # all xn stations along span - optimized for width min 
-
-        xn_stations = self._get_x_stations () / self.span
-
-        # now build and add for every y station a polyline - same like le, te is build 
-
-        for cn_rel_station in self._cn_rel_stations():
-
-            # array of constant cn values along span 
-            cn_arr = np.full(len(xn_stations), cn_rel_station) 
-
-            # transform from norm chord to norm planform 
-            xn_arr, yn_arr = self.t_chord_to_norm (xn_stations, cn_arr)
-
-            # transform to plan 
-            x_arr, y_arr = self.t_norm_to_plan (xn_arr, yn_arr)
-
-            # build list of poylines 
-            x_list.append (x_arr)
-            y_list.append (y_arr)
-
-        return x_list, y_list
-
-
-
-    def x_panel_polylines (self) -> tuple[list[Polyline], list[Polyline]]:
-        """
-        the lines from le to te representing the x panels of the planform 
-        Returns:
-            :x: list of array of x-value of the line  
-            :y: list of array of y-value 
-        """
-
-        x_list = []
-        y_list = []
-
-        # all xn stations along span - optimized for width min 
-
-        xn_stations = self._get_x_stations () / self.span
-
-        # now build and add for every x station a line from le to te 
-
-        for xni in xn_stations:
-
-            xn_arr = np.array([xni, xni])
-            cn_arr = np.array([0.0, 1.0])
-
-            # transform from norm chord to norm planform 
-            xn_arr, yn_arr = self.t_chord_to_norm (xn_arr, cn_arr)
-
-            # transform to plan 
-            x_arr, y_arr = self.t_norm_to_plan (xn_arr, yn_arr)
-
-            # build list of poylines 
-            x_list.append (x_arr)
-            y_list.append (y_arr)
-
-        return x_list, y_list
 
 
     def nx_panels_of_section (self, index : int) -> int:
@@ -3683,10 +4022,8 @@ class Planform_Paneled (Planform):
         if index > (len(self._wingSections) - 1):
             raise ValueError (f"Index {index} to get wing section is to high")        
 
-        x_stations = self._get_x_stations ()
-
         npan = 0 
-        for x in x_stations:
+        for x in self.x_stations():
             if x > left_sec_x and x <= right_sec_x:
                 npan += 1
             elif x > right_sec_x:
@@ -3698,19 +4035,18 @@ class Planform_Paneled (Planform):
     def c_diff_lines (self) -> list:
         """ returns a list with lines indicating the difference between chord paneled and chord parent"""
 
-        self._cn_diff = 0.0
-
-        x_stations = self._get_x_stations ()
         lines =[]
 
-        for xi in x_stations:
+        c_diff_max = self.cn_diff_max * self.chord_root if self.cn_diff_max is not None else 0.0 
+
+        for xi in self.x_stations():
 
             # actual chords at station 
             c_panel  = self.c_at (xi)
             c_parent = self._parent_planform.c_at (xi)
             c_diff   = c_parent - c_panel
 
-            if c_diff > (self.cn_diff_max * self.chord_root):
+            if c_diff > c_diff_max:
 
                 # get leading and trailing edge of paneled and of parent planform 
                 le_y, te_y = self.le_te_at (xi)
@@ -3724,37 +4060,68 @@ class Planform_Paneled (Planform):
                 line_x, line_y = [xi, xi],  [te_y_parent, te_y]
                 lines.append ((line_x, line_y))
 
-            self._cn_diff = max ((c_diff/self.chord_root), self.cn_diff)       # save max difference
-
         return lines 
 
 
+    def optimize (self, recalc_sections=True):
+        """ 
+        build optimized mesh based on current settings
 
-    def optimize_cn_diff (self):
+        recalc_sections = False avoids re-creation of sections and re-strak of airfoils 
+        """
+
+        # remove already inserted helper sections if requested
+
+        if recalc_sections:
+
+            for section in self.wingSections [:]: 
+                if section.is_for_panels:
+                    self.wingSections.delete (section)
+
+            # add new sections to achieve cn_diff_max
+
+            if self._cn_diff_max:
+                self._optimize_cn_diff ()
+
+
+
+    def _optimize_cn_diff (self):
         """ insert new sections until chord difference is below max value """
 
-        if not self.is_cn_diff_exceeded: return 
+        # if not self.is_cn_diff_exceeded: return 
 
         i_cycle = 1
+        section_inserted = True 
 
-        while self.c_diff_lines() and i_cycle < 15:            # max iterations 
+        while section_inserted and i_cycle < 15:            # max iterations 
 
             sections = self.wingSections
+            section_inserted = False 
 
             for i_sec in range (len(sections) - 1):
 
-                # test chord difference in the middle of the section 
-                xni = (sections[i_sec].xn + sections[i_sec+1].xn) / 2
-                cn_panel  = self._n_distrib.at (xni)
-                cn_parent = self._parent_planform.n_distrib.at (xni)
-                if (cn_parent - cn_panel) > self.cn_diff_max:
+                # ensure a minimum width of a 'section stripe'
 
-                    # too much difference - insert section at mean cn value 
-                    sections.create_after (index=i_sec)
-                    break
+                section_width   = sections[i_sec+1].xn - sections[i_sec].xn 
+                panel_width_min = self.width_min_targ if self._width_min_targ else 0.005       # default min panel width 0.05%
+
+                if section_width > (1.5 * panel_width_min):
+
+                    # test chord difference in the middle of the section 
+
+                    xni = (sections[i_sec].xn + sections[i_sec+1].xn) / 2
+                    cn_panel  = self._n_distrib.at (xni)
+                    cn_parent = self._parent_planform.n_distrib.at (xni)
+
+                    if (cn_parent - cn_panel) > self.cn_diff_max:
+
+                        # too much difference - insert section at mean cn value, indicate as extra panel
+                        sections.create_after (index=i_sec, is_for_panels = True)
+
+                        section_inserted = True 
+                        break
 
             i_cycle += 1
-
 
 
 

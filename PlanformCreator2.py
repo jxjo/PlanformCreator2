@@ -5,8 +5,21 @@
 
     Object model overview (a little simplified) 
 
-    tbd.
+    App                                         - root frame 
+        |-- Panel_File                          - file functions
+        |-- Panel_Wing                          - wing data
+                ...                             - ...
 
+        |-- Diagram_Wing                        - wing overview diagram 
+                |-- Item_Wing                   - Pygtgraph Plot item for complete wing
+                |-- Item_Wing_Airfoils          - Pygtgraph Plot item for airfoils of wing 
+                ...                             - ...
+        |-- Diagram_Planform                    - planform diagram
+        ...
+
+        |-- Wing                                - Entry to model 
+                |-- Planform                    - the planform - main object 
+                ...                             - ...
 """
 
 import os
@@ -16,23 +29,25 @@ from pathlib import Path
 
 from PyQt6.QtCore           import QMargins
 from PyQt6.QtWidgets        import QApplication, QMainWindow, QWidget, QMessageBox, QFileDialog
-from PyQt6.QtWidgets        import QGridLayout, QVBoxLayout, QHBoxLayout
-from PyQt6.QtWidgets        import QTabWidget
-from PyQt6.QtGui            import QCloseEvent
+from PyQt6.QtWidgets        import QVBoxLayout, QHBoxLayout
+from PyQt6.QtGui            import QCloseEvent, QGuiApplication
 
-# let python find the other modules in modules relativ to path of self - ! before python system modules
-# common modules hosted by AirfoilEditor 
-sys.path.insert (1,os.path.join(Path(__file__).parent , 'AirfoilEditor_subtree/modules'))
-# local modules
-sys.path.insert (1,os.path.join(Path(__file__).parent , 'modules'))
+# let python find the other modules in modules relativ to path of self -
+# common modules hosted by AirfoilEditor  ! before python system modules and PlanformCreator path 
+sys.path.insert (1, str(Path(__file__).parent / 'AirfoilEditor_subtree' / 'modules'))
+
+# local modules - at the end - AirfoilEditor modules do have precedence
+sys.path.append(str(Path(__file__).parent / 'modules'))
+sys.path.append(str(Path(__file__).parent / 'modules' / 'wing_model'))
 
 from wing                   import Wing
 
 from base.common_utils      import * 
-from base.panels            import Container_Panel, MessageBox
+from base.panels            import Container_Panel, MessageBox, Win_Util
 from base.widgets           import *
+from model.xo2_driver       import Worker
 
-# from AirfoilEditor_subtree  import AirfoilEditor
+from AirfoilEditor_subtree.AirfoilEditor  import Polar_Watchdog
 
 from pc2_panels             import *
 from pc2_diagrams           import *
@@ -43,184 +58,14 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 #------------------------------------------------
 
-APP_NAME     = "Planform Creator 2"
-APP_VERSION  = "2.0"
+APP_NAME            = "PlanformCreator2"
+APP_VERSION         = "3.0"
+WORKER_MIN_VERSION  = '1.0.5'
 
-TEMPLATE_DIR = "templates"
-
-
-# --------------------- tmp ----------------------------------------------------
-
-
-class Tab_Panel (QTabWidget):
-    """ 
-    Tab Widget as parent for other items 
-    """
-
-    name = "Panel"             # will be title 
-
-    _width  = None
-    _height = None 
-
-
-    def __init__(self,  
-                 parent=None,
-                 width=None, 
-                 height=None, 
-                 **kwargs):
-        super().__init__(parent=parent, **kwargs)
-
-        self._parent = parent
-
-        if width  is not None: self._width = width
-        if height is not None: self._height = height
-
-        # set width and height 
-        Widget._set_width  (self, self._width)
-        Widget._set_height (self, self._height)
-
-        font = self.font() 
-        _font = size.HEADER.value
-        font.setPointSize(_font[0])
-        font.setWeight   (_font[1])  
-        self.setFont(font)
-
-        # see https://doc.qt.io/qt-6/stylesheet-examples.html
-
-        if Widget.light_mode:
-            tab_style = """
-            QTabWidget::pane { /* The tab widget frame */
-                border-top:1px solid #ababab;
-            }
-
-            QTabWidget::tab-bar {
-                left: 400px; /* move to the right by 5px */
-            }
-
-            /* Style the tab using the tab sub-control. Note that
-                it reads QTabBar _not_ QTabWidget */
-            QTabBar::tab {
-                /*background: green; */
-                border: 1px solid #C4C4C3;
-                border-bottom: 0px;                                     /*remove */
-                border-top-left-radius: 3px;
-                border-top-right-radius: 3px;
-                min-width: 40ex;
-                padding: 6px;
-            }
-
-            QTabBar::tab:!selected {
-                margin-top: 2px; /* make non-selected tabs look smaller */
-                background: #e5e5e5
-            }
-                            
-            QTabBar::tab:hover {
-                background: rgba(255, 255, 255, 0.2) /* rgba(255, 20, 147, 0.1); */              
-            }
-
-            QTabBar::tab:selected {
-                background: rgba(255, 255, 255, 0.9) /* background: rgba(255, 20, 147, 0.2); */               
-            }
-
-            QTabBar::tab:selected {
-                /*color: white; */
-                color: #303030;
-                font-weight: 600;
-                border-color: #9B9B9B;
-                border-bottom-color: #C2C7CB; /* same as pane color */
-            }
-            """
- 
-        else: 
-
-            tab_style = """
-            QTabWidget::pane { /* The tab widget frame */
-                border-top:1px solid #505050;
-            }
-
-            QTabWidget::tab-bar {
-                left: 400px; /* move to the right by 5px */
-            }
-
-            /* Style the tab using the tab sub-control. Note that
-                it reads QTabBar _not_ QTabWidget */
-            QTabBar::tab {
-                /*background: green; */
-                border: 1px solid #505050;  
-                border-bottom: 0px;                                     /*remove */
-                border-top-left-radius: 3px;
-                border-top-right-radius: 3px;
-                min-width: 40ex;
-                padding: 6px;
-            }
-
-            QTabBar::tab:!selected {
-                margin-top: 2px; /* make non-selected tabs look smaller */
-                color: #D0D0D0;
-                background: #353535
-            }
-                            
-            QTabBar::tab:hover {
-                background: rgba(255, 255, 255, 0.2) /* rgba(255, 20, 147, 0.1); */             
-            }
-
-            QTabBar::tab:selected {
-                background: rgba(77, 77, 77, 0.9) /* background: rgba(255, 20, 147, 0.2); */                   
-            }
-
-            QTabBar::tab:selected {
-                /*color: white; */
-                color: #E0E0E0;
-                font-weight: 600;
-                border-color: #909090;
-                border-bottom-color: #C2C7CB;   /* same as pane color */
-            }
-            """
-
-
-        self.setStyleSheet (tab_style) 
-
-
-    def __repr__(self) -> str:
-        # overwritten to get a nice print string 
-        return f"<Tab_Panel '{self.name}'>"
-
-
-    def add_tab (self, aWidget : QWidget, name : str = None):
-        """ at an item having 'name' to self"""
-
-        if name is None:
-            name = aWidget.name
-
-        self.addTab (aWidget, name)
-
-
-    def set_tab (self, class_name : str):
-        """ set the current tab to tab with widgets class name"""
-
-        for itab in range (self.count()):
-            if self.widget(itab).__class__.__name__ == class_name:
-                self.setCurrentIndex (itab)
-                return
-
-
-    def set_background_color (self, darker_factor : int | None = None,
-                                    color : QColor | int | None  = None,
-                                    alpha : float | None = None):
-        """ 
-        Set background color of a QWidget either by
-            - darker_factor > 100  
-            - color: QColor or string for new color
-            - alpha: transparency 0..1 
-        """
-        set_background (self, darker_factor=darker_factor, color=color, alpha=alpha)
-
-
-
-
-
+TEMPLATE_DIR        = "templates"
 
 
 #-------------------------------------------------------------------------------
@@ -237,6 +82,8 @@ class App_Main (QMainWindow):
     sig_planform_changed        = pyqtSignal()              # planform data changed via input fields 
     sig_wingSection_selected    = pyqtSignal()              # new current wing section 
     sig_wingSection_changed     = pyqtSignal()              # current wing section changed
+    sig_polar_set_changed       = pyqtSignal()              # new polar sets attached to airfoil
+    sig_paneling_changed        = pyqtSignal()              # paneling changed, new wing VLM 
 
 
     def __init__(self, pc2_file):
@@ -246,6 +93,8 @@ class App_Main (QMainWindow):
         self._cur_wingSection = None                        # Dispatcher field between Diagram and Edit
         self._pc2_file = ''                                 # paramter file with wing settings  
         self._myWing : Wing = None                          # actual wing model 
+
+        self._watchdog          = None                      # polling thread for new olars
 
         # get icon either in modules or in icons 
 
@@ -263,15 +112,19 @@ class App_Main (QMainWindow):
         Win_Util.set_initialWindowSize (self, size_frac= (0.80, 0.70), pos_frac=(0.1, 0.1),
                                         geometry=geometry, maximize=maximize)
 
-        # if no initial pc2 file, try to get last openend pc2 file 
+        # Worker for polar generation ready?
+
+        Worker().isReady (os.path.dirname (__file__), min_version=WORKER_MIN_VERSION)
+
+        # if no initial pc2 file, try to get last openend pc2 file
 
         if not pc2_file: 
-            pc2_file = Settings().get('last_opened', default=None) 
+            pc2_file = Settings().get('last_opened', default=None)
 
         if pc2_file and not os.path.isfile (pc2_file):
-                logger.error ("Parameter file '%s' doesn't exist" %pc2_file )
-                Settings().set('last_opened', None) 
-                pc2_file = None
+            logger.error (f"Parameter file '{pc2_file}' doesn't exist")
+            Settings().set('last_opened', None)
+            pc2_file = None
 
 
         # create the 'wing' model  
@@ -286,12 +139,16 @@ class App_Main (QMainWindow):
         self._tab_panel     = Tab_Panel        (self)
         self._diagrams      = []
 
-        self._add_diagram (Diagram_Making_Of(self, self.wing))
-        self._add_diagram (Diagram_Wing     (self, self.wing))
-        self._add_diagram (Diagram_Planform (self, self.wing, self.wingSection))
-        self._add_diagram (Diagram_Airfoils (self, self.wing))
-        self._add_diagram (Diagram_Panels   (self, self.wing, self.wingSection))
+        self._add_diagram (Diagram_Making_Of     (self, self.wing))
+        self._add_diagram (Diagram_Wing          (self, self.wing))
+        self._add_diagram (Diagram_Planform      (self, self.wing, self.wingSection))
 
+        diagram_settings = Settings().get (Diagram_Airfoil_Polar.__name__, [])
+        self._add_diagram (Diagram_Airfoil_Polar (self, self.wing, diagram_settings= diagram_settings))
+        
+        self._add_diagram (Diagram_Wing_Analysis (self, self.wing, self.wingSection))
+
+        self._tab_panel.setMinimumHeight(760)
         self._tab_panel.set_tab (Settings().get('current_diagram', Diagram_Making_Of.__name__))
 
         l_main = self._init_layout() 
@@ -310,9 +167,13 @@ class App_Main (QMainWindow):
 
         diagram : Diagram_Abstract
         for diagram in self._diagrams:
-            diagram.sig_wingSection_new.connect     (self.on_wingSection_selected)
+            diagram.sig_wingSection_new.connect     (self.on_wingSection_new)
+            diagram.sig_wingSection_selected.connect(self.on_wingSection_selected)
             diagram.sig_wingSection_changed.connect (self.refresh)
             diagram.sig_planform_changed.connect    (self.refresh)
+            diagram.sig_polar_def_changed.connect   (self.refresh_polar_sets)
+            diagram.sig_panel_def_changed.connect   (self.refresh_paneling)
+            
             diagram.sig_export_airfoils.connect     (self.export_airfoils)
             diagram.sig_export_xflr5.connect        (self.export_xflr5)
             diagram.sig_export_flz.connect          (self.export_flz)
@@ -327,7 +188,17 @@ class App_Main (QMainWindow):
             self.sig_wingSection_changed.connect    (diagram.on_wingSection_changed)
             self.sig_wing_new.connect               (diagram.on_wing_new)
             self.sig_planform_changed.connect       (diagram.on_planform_changed)
+            self.sig_polar_set_changed.connect      (diagram.on_polar_set_changed)
+            self.sig_paneling_changed.connect       (diagram.on_paneling_changed)
 
+        # install watchdog for polars generated by Worker 
+
+        if Worker.ready:
+            self._watchdog = Polar_Watchdog (self) 
+            self._watchdog.start()
+
+            for diagram in self._diagrams:
+                self._watchdog.sig_new_polars.connect         (diagram.on_new_polars)
 
 
     def __repr__(self) -> str:
@@ -425,16 +296,41 @@ class App_Main (QMainWindow):
         self.sig_wingSection_selected.emit()
 
 
-    def on_wingSection_selected (self, aSection : WingSection):
+    def on_wingSection_new (self, aSection : WingSection):
         """ slot for section signal from diagram"""
         self.set_wingSection (aSection) 
         self.refresh()
+
+
+    def on_wingSection_selected (self, aSection : WingSection):
+        """ slot for section signal from diagram"""
+        self.set_wingSection (aSection) 
+        self._data_panel.refresh()                                  # no refresh as paneling would be initiated
 
 
     def refresh(self):
         """ refreshes all child panels of edit_panel """
         self._data_panel.refresh()
         self._file_panel.refresh()
+
+        self.refresh_paneling()
+
+
+    def refresh_polar_sets (self):
+        """ refresh polar sets of all airfoils in wingSections"""
+
+        # as polar definitions could have changed, ensure a new initialized polarSet 
+        self.wing().planform.wingSections.refresh_polar_sets (ensure=True)
+
+        self.sig_polar_set_changed.emit()
+
+    def refresh_paneling (self):
+        """ refresh vlm panels"""
+
+        self.wing().vlm_wing_reset ()
+
+        self.sig_paneling_changed.emit()
+
 
 
     @property
@@ -456,19 +352,31 @@ class App_Main (QMainWindow):
     def _save_settings (self):
         """ save settings, eg Window size and position, to file """
 
-        Settings().set('window_geometry', self.normalGeometry ().getRect())
-        Settings().set('window_maximize', self.isMaximized())
+        # get settings dict to avoid a lot of read/write
+        settings = Settings().get_dataDict ()
+
+        toDict (settings,'window_geometry', self.normalGeometry ().getRect())
+        toDict (settings,'window_maximize', self.isMaximized())
 
         # save current tab as classname 
         current_diagram = self._tab_panel.currentWidget().__class__.__name__
-        Settings().set('current_diagram',current_diagram)
+        toDict (settings,'current_diagram',current_diagram)
 
+        # save settings of diagrams 
+        diagram : Diagram_Abstract
+        for diagram in self._diagrams:
+            parms = diagram._as_dict_list ()
+            toDict (settings, diagram.__class__.__name__, parms)
+
+
+        Settings().write_dataDict (settings)
+        
 
     @override
     def closeEvent  (self, event : QCloseEvent):
         """ main window is closed """
 
-        self._save_settings ()
+        button = None 
 
         # save changes? 
         if self.wing().has_changed(): 
@@ -487,7 +395,27 @@ class App_Main (QMainWindow):
         else:
             event.accept()
 
+        # final actions if not cancelled
 
+        if event.isAccepted():
+
+            # remove lost worker input files 
+            if Worker.ready:
+                Worker().clean_workingDir (self.workingDir)
+
+            # on Discard remove temp dir of airfoil strak etc.
+            if button == QMessageBox.StandardButton.Discard:
+                self.wing().remove_tmp ()
+        
+            # save application settings
+            elif button is not None:                                
+                self._save_settings ()
+
+            # terminate polar watchdog thread 
+
+            if self._watchdog:
+                self._watchdog.requestInterruption ()
+                self._watchdog.wait()           
 
         
 
@@ -532,9 +460,9 @@ class App_Main (QMainWindow):
             ok = self.wing().save(self._pc2_file)
             if ok:
                 _, filename = os.path.split(self._pc2_file)
-                MessageBox.success (self,"Save Planform", f"{filename} successfully saved", min_height= 60)
+                MessageBox.success (self,"Save Planform", f"'{filename}' saved", min_height= 60)
             else:
-                MessageBox.error   (self,"Save Planform", f"{self._pc2_file} couldn't be saved", min_height= 60)
+                MessageBox.error   (self,"Save Planform", f"'{self._pc2_file}' couldn't be saved", min_height= 60)
         else:
             self.saveAs ()
 
@@ -557,7 +485,6 @@ class App_Main (QMainWindow):
 
         # dialog = Dialog_Settings (self, name=self.name)
         # self.wait_window (dialog)
-        pass
 
 
     #-------------

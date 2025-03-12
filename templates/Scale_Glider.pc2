@@ -9,10 +9,10 @@
     "file":"ASW_17.png",
     "mirrored_horizontal":false,
     "mirrored_vertical":true,
+    "rotated":false,
     "invert":true,
     "remove_red":true,
     "black_level":26,
-    "white_level":154,
     "point_le":[
       74.55,
       41.4
@@ -22,6 +22,7 @@
       97.62
     ]
   },
+  "polar_definitions":[],
   "halfspan":2000.0,
   "chord_root":190.0,
   "sweep_angle":-1.5,
@@ -29,22 +30,18 @@
     "chord_style":"Trapezoid"
   },
   "chord_reference":{
-    "px":[
-      0.0,
-      1.0
-    ],
-    "py":[
-      0.82,
-      0.66
-    ]
+    "p0y":0.75,
+    "p1y":0.75
   },
+  "reference_line":{},
   "wingSections":[
     {
       "xn":0.0,
       "cn":1.0,
       "defines_cn":true,
       "hinge_cn":0.82,
-      "flap_group":1
+      "flap_group":1,
+      "airfoil":"Root_Example.dat"
     },
     {
       "xn":0.587083,
@@ -62,19 +59,19 @@
       "cn":0.43,
       "defines_cn":true,
       "hinge_cn":0.73,
-      "flap_group":2
+      "flap_group":2,
+      "airfoil":"Tip_Example.dat"
     }
   ],
   "flaps":{
     "hinge_equal_ref_line":false
   },
   "panels":{
-    "wy_panels":8,
+    "wy_panels":15,
     "wy_distribution":"uniform",
-    "wx_panels":8,
+    "wx_panels":4,
     "wx_distribution":"uniform",
     "width_min":0.02,
-    "cn_tip_min":0.43,
     "cn_diff_max":0.02
   }
 }

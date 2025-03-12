@@ -1,5 +1,5 @@
 {
-    "python.analysis.extraPaths": ["./AirfoilEditor_subtree/modules", "./modules"],
+    "python.analysis.extraPaths": ["./AirfoilEditor_subtree/modules", "./modules", "./modules/wing_model"],
     "python.analysis.typeCheckingMode": "off",
     "markdown.preview.fontSize": 13,
     "python.testing.pytestArgs": ["modules"],

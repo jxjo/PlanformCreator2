@@ -6,11 +6,24 @@
   "airfoil_nick_prefix":"JX-",
   "airfoil_nick_base":70,
   "background_image":{},
+  "polar_definitions":[],
   "halfspan":800.0,
   "chord_root":170.0,
-  "sweep_angle":11.0,
+  "sweep_angle":9.771965,
   "chord_distribution":{
     "chord_style":"Bezier",
+    "px":[
+      0.313231179,
+      0.797466,
+      1.0,
+      1.0
+    ],
+    "py":[
+      1.0,
+      1.0,
+      0.371219,
+      0.063864
+    ],
     "p1x":0.797466,
     "p1y":1.0,
     "p2y":0.371219,
@@ -18,28 +31,31 @@
   },
   "chord_reference":{
     "p0y":0.72,
-    "p1y":0.6
+    "p1y":0.429867
   },
   "reference_line":{
-    "banana_p1x":0.441806,
-    "banana_p1y":-0.455434
+    "banana_p1x":0.616305,
+    "banana_p1y":-0.532799
   },
   "wingSections":[
     {
       "xn":0.0,
       "hinge_cn":0.75,
       "flap_group":1,
+      "is_for_panels":false,
       "airfoil":"Root_Example.dat"
     },
     {
       "xn":0.3125,
-      "hinge_cn":0.77,
-      "flap_group":2
+      "hinge_cn":0.750182,
+      "flap_group":2,
+      "is_for_panels":false
     },
     {
       "xn":1.0,
-      "hinge_cn":0.73,
+      "hinge_cn":0.683954,
       "flap_group":2,
+      "is_for_panels":false,
       "airfoil":"Tip_Example.dat"
     }
   ],

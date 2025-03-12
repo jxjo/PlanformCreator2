@@ -25,7 +25,7 @@ from base.widgets       import ToolButton, Icon
 from base.artist        import Artist
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 
 
 
@@ -184,7 +184,8 @@ class Diagram (QWidget):
 
         item : Diagram_Item
         for item in self.diagram_items:
-            item.refresh() 
+            if item.isVisible(): 
+                item.refresh() 
 
         # refresh all panels on viewPanel 
 
@@ -280,7 +281,11 @@ class Diagram_Item (pg.PlotItem):
     title       = "The Title"                           # title of diagram item
     subtitle    = "my subtitle"                         # optional subtitle 
 
+    min_width   = 600                                   # min size needed - see below 
+    min_height  = 200 
+
     # Signals 
+
     sig_visible = pyqtSignal(bool)                      # when self is set to show/hide 
 
 
@@ -292,7 +297,7 @@ class Diagram_Item (pg.PlotItem):
         super().__init__(name=self.name,                # to link view boxes 
                          **kwargs)
 
-        self._parent : Diagram = parent
+        self._parent : Diagram = parent 
         self._getter = getter
         self._show   = show 
 
@@ -318,13 +323,18 @@ class Diagram_Item (pg.PlotItem):
 
         # setup item to print coordinates 
 
-        self._coordItem = pg.LabelItem("huhu", color=QColor(Artist.COLOR_LEGEND), size=f"{Artist.SIZE_NORMAL}pt", justify="left")  
+        self._coordItem = pg.LabelItem("", color=QColor(Artist.COLOR_LEGEND), size=f"{Artist.SIZE_NORMAL}pt", justify="left")  
         self._coordItem.setParentItem(self)  
         self._coordItem.anchor(parentPos=(0,1), itemPos=(0.0,0.0), offset=(45, -20))                       
 
         # set margins (inset) of self - ensure some space for coordinates
 
         self.setContentsMargins ( 10,20,10,20)
+
+        # PlotItem needs a some size so that inital boundingBox calculation having pixel calculation work properly
+        #   - see pixelVectors  (important for clickable and movable (mousesize))
+        
+        self.setMinimumSize (self.min_width, self.min_height)
 
         # setup artists - must be override
 
@@ -341,9 +351,9 @@ class Diagram_Item (pg.PlotItem):
         
         self.setup_axis()
 
-        # allow only view box context menu  (not plot item) 
+        # no pyqtgraph context menu  - no view box context menu , no plot item 
 
-        self.setMenuEnabled(enableMenu=False, enableViewBoxMenu=True)
+        self.setMenuEnabled(enableMenu=False, enableViewBoxMenu=False)
 
         # initial show or hide - use super() - avoid refresh
  
@@ -382,7 +392,7 @@ class Diagram_Item (pg.PlotItem):
 
         # logger.debug (f"{self} show artists: {show} - is visible: {self.isVisible()}")
         for artist in self._get_artist (artist_class):
-            artist.set_show (show, refresh=self.isVisible())            # refresh only if item is visible
+            artist.set_show (show)            
 
 
     def _on_help_message (self, aArtist :Artist | None, aMessage: str | None):
@@ -448,6 +458,8 @@ class Diagram_Item (pg.PlotItem):
             self.refresh_artists ()
             self.setup_viewRange()   
             self._viewRange_set = True
+
+            self.plot_title ()
 
 
     @override

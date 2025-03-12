@@ -16,7 +16,6 @@ see: https://pyqtgraph.readthedocs.io/en/latest/getting_started/plotting.html
 """
 
 from typing             import override
-from enum               import StrEnum
 
 import numpy as np
 
@@ -38,17 +37,15 @@ from base.spline        import Bezier
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
-class qcolors (StrEnum):
 
-    EDITABLE      = 'orange' 
-    HOVER         = 'deepskyblue'
+COLOR_EDITABLE      = QColor('orange') 
+COLOR_HOVER         = QColor('deepskyblue')
+COLOR_ERROR         = QColor('red').darker(120)
 
 
 # -------- common methodes ------------------------
-
-
 
 def random_colors (nColors, h_start=0) -> list[QColor]:
     """ 
@@ -66,6 +63,26 @@ def random_colors (nColors, h_start=0) -> list[QColor]:
         h = h % 1.0
         colors.append(QColor.fromHsvF (h, 0.5, 0.95, 1.0) ) #0.5
     return colors
+
+
+def color_in_series (color : QColor | str, i, n, delta_hue=0.1):
+    """ 
+    returns the i-th of n colors in a color hsv starting with color upto color + delta_hue
+    """
+
+    # sanity 
+    if n < 2:
+        n = 2
+        i = 0  
+
+    if isinstance (color, str): 
+        color = QColor (color) 
+
+    start_hue, sat, value, alpha = color.getHsvF ()
+    hue = start_hue + i * delta_hue / (n-1) 
+    hue = hue % 1.0
+
+    return QColor.fromHsvF (hue, sat, value, alpha)
 
 
 # -------- pg defaults ------------------------
@@ -145,14 +162,14 @@ class Movable_Point (pg.TargetItem):
             symbol = self._symbol_movable
             size = size if size is not None else 9 
 
-            brush_color = QColor(color) if color else qcolors.EDITABLE
+            brush_color = QColor(color) if color else COLOR_EDITABLE
             brush_color = QColor(brush_color.darker(200))
 
-            color = movable_color if movable_color is not None else qcolors.EDITABLE
-            hoverBrush = qcolors.HOVER
+            color = movable_color if movable_color is not None else COLOR_EDITABLE
+            hoverBrush = COLOR_HOVER
 
             pen = pg.mkPen (color, width=1) 
-            hoverPen = pg.mkPen (qcolors.HOVER, width=1)
+            hoverPen = pg.mkPen (COLOR_HOVER, width=1)
 
             self._movingBrush =  QColor('black')
             self._movingBrush.setAlphaF (0.3) 
@@ -429,7 +446,7 @@ class Movable_Bezier (pg.PlotCurveItem):
         # init polyline of control points as PlotCurveItem
           
         if movable:
-            penColor = QColor (qcolors.EDITABLE).darker (120)
+            penColor = COLOR_EDITABLE
         else:
             penColor = QColor (color).darker (150)
         pen = pg.mkPen (penColor, width=1, style=Qt.PenStyle.DotLine)
@@ -464,15 +481,15 @@ class Movable_Bezier (pg.PlotCurveItem):
 
         if movable or show_static: 
 
-            x,y = self.bezier.eval(self.u)
- 
             pen = pg.mkPen (QColor (color), width=1, style=Qt.PenStyle.DashLine)
-            self._bezier_item = pg.PlotCurveItem (x,y, pen=pen)
+            self._bezier_item = pg.PlotCurveItem ([0],[0], pen=pen)
             self._bezier_item.setParentItem (self)
 
+            self._update_bezier_item ()
+
             if not show_static:
- 
                 self._bezier_item.hide()
+
 
     @property
     def id (self):
@@ -518,7 +535,7 @@ class Movable_Bezier (pg.PlotCurveItem):
 
     @override
     def mouseClickEvent(self, ev : MouseClickEvent):
-        """ pg overloaded - handle crtl_click """
+        """ pg override - handle ctrl_click """
         if self.movable :
             if ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier: 
                 x = round (ev.pos().x(),6)
@@ -529,7 +546,6 @@ class Movable_Bezier (pg.PlotCurveItem):
                     ev.accept()
                 else: 
                     ev.ignore()
-
         return super().mouseClickEvent(ev)
 
 
@@ -541,8 +557,7 @@ class Movable_Bezier (pg.PlotCurveItem):
 
         if self._bezier_item:            
             self.bezier.set_points(*self.points_xy())      # update of bezier
-            x,y = self.bezier.eval(self.u)
-            self._bezier_item.setData (x, y)
+            self._update_bezier_item ()
             self._bezier_item.show()
 
 
@@ -559,7 +574,6 @@ class Movable_Bezier (pg.PlotCurveItem):
         return False
 
 
-
     def _delete_point (self, aPoint : Movable_Point):
         """ slot - point should be deleted """
 
@@ -572,14 +586,20 @@ class Movable_Bezier (pg.PlotCurveItem):
         px, py = self.jpoints_xy()
         self.setData(px, py)                                # update self (polyline) 
 
-        if self._bezier_item: 
-            x,y = self.bezier.eval(self.u)                  # update of bezier
-            self._bezier_item.setData (x, y)
-            self._bezier_item.show()
+        self._update_bezier_item ()                         # refresh bezier plot item
 
         self._finished_point (aPoint)
         if aPoint.scene():                                  # sometimes scene get lost ... (?) 
             aPoint.scene().removeItem(aPoint)               # final delete from scene 
+
+
+    def _update_bezier_item (self):
+        """ update bezier curve item from bezier"""
+
+        if self._bezier_item: 
+            x,y = self.bezier.eval(self.u)                  # update of bezier
+            self._bezier_item.setData (x, y)
+            self._bezier_item.show()
 
 
     def _finished_point (self, aPoint):
@@ -638,15 +658,15 @@ class Artist(QObject):
         """
  
         Args:
-            gv: GraphicsView where PlotDataItes will be added 
-            get: getter for data_objects (either bound method or objects)  
-            show: True: items will be show immidiatly show_points
+            pi: PlotItem where PlotDataItems will be added 
+            getter: getter for data_objects (either bound method or objects)  
+            show: True: self is active and will be shown on next refresh
             show_points: show data points as markers  
         """
 
         super().__init__()
 
-        self._pi = pi                       # (parent) plotItem)
+        self._pi = pi                       # (parent) plotItem
         self._getter = getter               # bounded method to the model e.g. Wing 
 
         self._show = show is True           # should self be plotted? 
@@ -658,16 +678,13 @@ class Artist(QObject):
         self._t_fn  = None                  # coordinate transformation function accepting x,y
         self._tr_fn = None                  # reverse transformation function accepting xt,yt
 
-
-        # do not 'plot' on init
-        # self.plot() 
+        # ! do not 'plot' on init 
 
 
     @override
     def __repr__(self) -> str:
         # get a nice print string 
-        text = '' 
-        return f"<{type(self).__name__}{text}>"
+        return f"<{type(self).__name__}>"
 
 
     # ------- public ----------------------
@@ -682,7 +699,7 @@ class Artist(QObject):
         
     @property
     def data_list (self): 
-        # to be ooverloaded - or implemented with semantic name        
+        # to be overloaded - or implemented with semantic name        
         if isinstance (self.data_object, list):
             return self.data_object
         else: 
@@ -690,12 +707,14 @@ class Artist(QObject):
 
 
     @property
-    def show (self): return self._show
+    def show (self):
+        """ is self active """ 
+        return self._show
 
     def set_show (self, aBool, refresh=True):
         """
-        switch to enable/disable ploting the data
-            - refresh=True will immediatly refresh 
+        switch to enable/disable self
+            - refresh=True: will immediatly refresh (if PlotItem is visible) 
         """
         self._show = aBool is True 
 
@@ -705,8 +724,7 @@ class Artist(QObject):
                     self.plot()                                 # first time, up to now no plots created ...
                 else: 
                     self.refresh()                              # normal refresh 
-            else: 
-                pass                                            # will be shown with next refresh 
+
         else:
             p : pg.PlotDataItem
             for p in self._plots:                               # always hide all plot 
@@ -721,7 +739,7 @@ class Artist(QObject):
     @property
     def show_legend (self): return self._show_legend
     def set_show_legend (self, aBool):
-        """ user switch to show legend for self plots
+        """ user switch to show legend for plots
         """
         self._show_legend = aBool is True 
 
@@ -788,16 +806,17 @@ class Artist(QObject):
 
 
     def plot (self):
-        """the artist will (re)plot - existing plots will be deleted 
         """
-        if self.show:
+        (re)plot - existing plots will be deleted - only if PlotItem of self is visible
+        """
+        if self.show and self._pi.isVisible():
 
             self._remove_legend_items ()
             self._remove_plots ()
 
-            if self.show_legend:
+            if self.show_legend and self._pi.legend is None:
                 # must be before .plot 
-                self._pi.addLegend(offset=(-50,10),  verSpacing=0 )  
+                self._pi.addLegend(offset=(-10,10),  verSpacing=0 )  
                 self._pi.legend.setLabelTextColor (self.COLOR_LEGEND)
 
             if len(self.data_list) > 0:
@@ -806,24 +825,19 @@ class Artist(QObject):
 
                 if self._plots:
                     logger.debug  (f"{self} of {self._pi} - plot {len(self._plots)} items")
-        # else:
-        #     self.set_help_message (None)                              # remove help message of self 
 
 
     def refresh(self):
-        """ refresh self plots by setting new x,y data """
+        """
+        refresh current plots - only if PlotItem of self is visible 
+        """
 
-        if self.show:
+        if self.show and self._pi.isVisible():
             self._refresh_plots ()
 
             if self.show_legend:
                 self._remove_legend_items ()
                 self._add_legend_items()
-
-        # else:
-
-        #     self.set_help_message (None)                              # remove help message of self 
-            # logging.debug (f"{self} refresh")
 
 
     # --------------  private -------------
@@ -850,15 +864,17 @@ class Artist(QObject):
         self._add (p, name=name)
 
         return p 
-        
+
 
     def _plot_point (self, 
                     *args,                     # optional: tuple or x,y
                      symbol='o', color=None, style=Qt.PenStyle.SolidLine, 
                      size=7, pxMode=True, 
                      brushColor=None, brushAlpha=1.0,
-                     text=None, textColor=None, textPos=None, anchor=None):
-        """ plot point with text label at x, y - text will follow the point """
+                     text=None, textColor=None, textFill=None,
+                     textPos=None, anchor=None, angle=0,
+                     ensureInBounds=False):
+        """ plot point with text item at x, y - text will follow the point """
 
         if isinstance (args[0], tuple):
             x = args[0][0] 
@@ -887,16 +903,17 @@ class Artist(QObject):
         if text is not None: 
             color = QColor(textColor) if textColor else QColor(self.COLOR_NORMAL)
             anchor = anchor if anchor else (0, 1)
-            t = pg.TextItem(text, color, anchor=anchor)
-            t.setZValue(3)                                      # move to foreground 
+
+            t = pg.TextItem(text, color, anchor=anchor, angle=angle, fill=textFill, ensureInBounds=ensureInBounds)
+
             # ? attach to parent doesn't work (because of PlotDataItem? )
             textPos = textPos if textPos is not None else (xt,yt)
             t.setPos (*textPos)
+            t.setZValue(3)                                      # move to foreground 
 
             self._add (t)
 
         return self._add(p) 
-
 
 
 

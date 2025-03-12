@@ -22,7 +22,7 @@ from base.diagram           import Diagram, Diagram_Item
 from base.artist            import Artist
 from pc2_artists            import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
 
-from wing                   import Wing, Planform, Image_Definition 
+from wing                   import Wing, Planform, Image_Definition, Planform_Paneled, WingSections
 from wing_exports           import Export_Airfoils, Export_Dxf
 
 import logging
@@ -360,7 +360,7 @@ class Dialog_Edit_Image (Dialog):
         self._ok_btn     : QPushButton = None
         self._close_btn  : QPushButton = None 
 
-        self._diagram : self.Diagram_Image = None
+        self._diagram : Dialog_Edit_Image.Diagram_Image = None
 
         super().__init__ ( *args, **kwargs)
 
@@ -471,7 +471,7 @@ class Dialog_Select_Template (Dialog):
     Dialog to select a template PC2 file to create a new planform
     """
 
-    class Item_Planform_Thumbnail (Diagram_Item):
+    class Item_Thumbnail (Diagram_Item):
         """ 
         Diagram (Plot) Item for a single wing as Thumbnail
         """
@@ -480,8 +480,11 @@ class Dialog_Select_Template (Dialog):
         title       = "Wing name"                 
         subtitle    = "dynamic"                                 # will be set dynamically 
 
-        sig_wing_selected         = pyqtSignal(Wing)             # self was clicked 
+        min_width   = 200                                       # min size needed - see below 
+        min_height  = 50 
 
+
+        sig_wing_selected         = pyqtSignal(Wing)             # self was clicked 
 
         def __init__(self, *args, **kwargs):
 
@@ -506,7 +509,6 @@ class Dialog_Select_Template (Dialog):
 
         @override
         def plot_title(self, **kwargs):
-
             text_with_br = self.wing().description.replace ("\n", "<br/>")      # textItem needs <br>
             super().plot_title (title=self.wing().name, title_size=Artist.SIZE_NORMAL,
                                 subtitle = text_with_br, offset=(10,10), **kwargs)
@@ -555,7 +557,6 @@ class Dialog_Select_Template (Dialog):
         @override
         def setup_artists (self):
             """ create and setup the artists of self"""
-            
             self._add_artist (Planform_Artist       (self, self.planform, as_contour=True, show_mouse_helper=False))
             self._add_artist (Ref_Line_Artist       (self, self.planform, mode=mode.REF_TO_PLAN, show_mouse_helper=False))
     
@@ -563,7 +564,6 @@ class Dialog_Select_Template (Dialog):
         @override
         def setup_viewRange (self):
             """ define view range of this plotItem"""
-
             self.viewBox.autoRange (padding=0.05)                   # first ensure best range x,y 
             self.viewBox.setAspectLocked()
             self.viewBox.invertY(True)
@@ -575,11 +575,10 @@ class Dialog_Select_Template (Dialog):
     # --------------------------------------------------------
 
 
-    class Diagram_Template_List (Diagram):
+    class Diagram_Templates (Diagram):
         """ Diagram with a list of planform Thumbnail items   """
 
         sig_wing_selected         = pyqtSignal(Wing)             # self was clicked 
-
 
         def __init__(self, *args, template_wings : list [Wing] = [], **kwargs):
 
@@ -590,7 +589,6 @@ class Dialog_Select_Template (Dialog):
             self.graph_layout.setContentsMargins (10,10,10,10)  # default margins
             self.graph_layout.setVerticalSpacing (10)   
             
-
             if not self.template_wings: 
                 self._message_show ("No template files available")
 
@@ -602,22 +600,20 @@ class Dialog_Select_Template (Dialog):
 
         def create_diagram_items (self):
             """ create all plot Items and add them to the layout """
-
             for i, wing in enumerate (self.template_wings):
-                item = Dialog_Select_Template.Item_Planform_Thumbnail (self, getter=wing)
+                item = Dialog_Select_Template.Item_Thumbnail (self, getter=wing)
                 self._add_item (item, i, 0)
 
                 item.sig_wing_selected.connect (self._on_wing_selected)
 
-            
         @override
         def create_view_panel (self):
             """ no view_panel"""
             pass
 
-
         def _on_wing_selected (self, aWing):
             self.sig_wing_selected.emit (aWing)
+
 
 
     # --- The Dialog ----------------------------------------------------
@@ -635,7 +631,7 @@ class Dialog_Select_Template (Dialog):
         self._cancel_btn : QPushButton = None 
         self._template_file_selected = None
 
-        self._diagram : self.Diagram_Template_List = None
+        self._diagram : Dialog_Select_Template.Diagram_Templates = None
 
         super().__init__ ( *args, **kwargs)
 
@@ -702,7 +698,7 @@ class Dialog_Select_Template (Dialog):
         l = QGridLayout()
 
         # create image diagram 
-        self._diagram = self.Diagram_Template_List (self, template_wings=self._template_wings())
+        self._diagram = self.Diagram_Templates (self, template_wings=self._template_wings())
         l.addWidget (self._diagram, 0, 0, 1, 10)        
  
         l.setRowStretch (0,1)    
@@ -814,3 +810,186 @@ class Dialog_TextEdit (Dialog):
         """ cancel button clicked"""
         super().reject()
         self.close()
+
+
+
+class Dialog_Edit_Paneling (Dialog):
+    """ 
+    Dialog to edit / define üaneling options of a Paneled Planform
+    """
+
+    _width  = 480
+    _height = 350
+
+    name = "Define Paneling"
+
+    sig_paneling_changed     = pyqtSignal ()                    # one of the parameters changed
+
+    # --------------------------------------------------------
+
+    def __init__ (self, *args, **kwargs): 
+
+        self._close_btn  : QPushButton = None 
+
+        super().__init__ ( *args, **kwargs)
+
+        # move window a little to the side 
+        p_center = self._parent.rect().center()               # parent should be main window
+        pos_x = p_center.x() + 100
+        pos_y = p_center.y() + 250            
+        self.move(pos_x, pos_y)
+
+        # connect dialog buttons
+        self._close_btn.clicked.connect  (self.close)
+
+        # connect widgets change to signal parent
+        w : Widget
+        for w in self.widgets:
+            w.sig_changed.connect (self._on_field_changed)
+
+
+    @property
+    def planform (self) -> Planform_Paneled:
+            return self.dataObject
+
+    @property
+    def wingSections (self) -> WingSections:
+            return self.planform.wingSections
+
+    @property
+    def is_parent_trapezoidal (self) -> bool:
+        """ True if parent planform is (already) trapezoidal"""
+
+        return self.planform._parent_planform._n_distrib.isTrapezoidal
+
+    # -------------------------------------------------------------------
+
+    def _init_layout(self) -> QLayout:
+
+        l = QGridLayout()   
+        r,c = 0, 0 
+        Label       (l,r,c, height=40, colSpan=7,
+                     get="Define number of panels along chord (x) and per section of wing (y)",
+                     style=style.COMMENT)
+        r += 1
+        c += 1
+
+        FieldI      (l,r,c, width=70, lab="x-Panels", step=1, lim=(1, 20),
+                        obj=self.planform, prop=Planform_Paneled.wx_panels)
+        r += 1
+        Label       (l,r,c, get="x-Distribution")
+        ComboBox    (l,r,c+1, width=70,
+                        obj=self.planform, prop=Planform_Paneled.wx_dist,
+                        options=self.planform.wx_distribution_fns_names)
+
+        r = 1
+        FieldI      (l,r,c+4, width=70, lab="y-Panels", step=1, lim=(2, 20),
+                        obj=self.planform, prop=Planform_Paneled.wy_panels)
+        r += 1
+        Label       (l,r,c+4, get="y-Distribution")
+        ComboBox    (l,r,c+5, width=70,
+                        obj=self.planform, prop=Planform_Paneled.wy_dist,
+                        options=self.planform.wy_distribution_fns_names)
+
+        # optimization settings 
+
+        r,c = 3, 0 
+        SpaceR      (l,r,height=20)
+        r += 1
+        Label       (l,r,c, height=30, colSpan=5, get="Optimize paneling for an evenly mesh",
+                     style=style.COMMENT)            
+
+        r += 1
+        c += 1
+
+        # define max. deviation of chord - only if Bezier etc.
+
+        if not self.is_parent_trapezoidal:
+            r += 1
+            CheckBox    (l,r,c, text="Minimize deviation of chord", colSpan=4,
+                                obj=self, prop=Dialog_Edit_Paneling.activated_cn_diff_max)
+            FieldF      (l,r,c+4, width=70, step=0.5, lim=(0.5, 50), dec=1, unit="%", 
+                            obj=self.planform, prop=Planform_Paneled.cn_diff_max, 
+                            hide= lambda: not bool(self.planform.cn_diff_max))
+            Label       (l,r,c+5, get=lambda: f"currently {self.planform.cn_diff:.1%}", colSpan=2, 
+                            style=style.COMMENT)
+            r +=1
+        
+        # minimum panel width
+
+        CheckBox    (l,r,c, text="Set a minimum panel width", colSpan=4,
+                            obj=self, prop=Dialog_Edit_Paneling.activated_width_min_targ)
+        FieldF      (l,r,c+4, width=70,  step=0.5, lim=(0.5, 10), dec=1, unit="%", 
+                        obj=self.planform, prop=Planform_Paneled.width_min_targ,
+                        hide= lambda: not bool(self.planform.width_min_targ))  
+
+        Label       (l,r,c+5, get=lambda: f"currently {self.planform.width_min_cur:.1%}", colSpan=2, 
+                            style=style.COMMENT)
+        r += 1
+        
+        # minimum tip chord
+
+        CheckBox    (l,r,c, text="Set a minimum chord for tip", colSpan=4,
+                        obj=self, prop=Dialog_Edit_Paneling.activated_cn_tip_min)
+        FieldF      (l,r,c+4, width=70, step=1, lim=(1, 50), dec=1, unit="%", 
+                        obj=self.planform, prop=Planform_Paneled.cn_tip_min,
+                        hide= lambda: not bool(self.planform.cn_tip_min))
+        Label       (l,r,c+5, get=lambda: f"currently {self.planform.cn_tip_cur:.1%}", colSpan=2, 
+                            style=style.COMMENT)
+
+        r += 1
+        SpaceR      (l,r, stretch=5, height=1)
+        l.setColumnMinimumWidth (0,20)
+        l.setColumnMinimumWidth (4,40)
+        l.setColumnStretch (8,5)
+        
+        return l 
+
+    @property
+    def activated_cn_diff_max (self) -> bool:
+        return self.planform.cn_diff_max is not None
+
+    def set_activated_cn_diff_max (self, aBool):
+        if aBool and not self.activated_cn_diff_max:
+            self.planform.set_cn_diff_max (0.01)
+        elif not aBool:
+            self.planform.set_cn_diff_max (None)   
+
+    @property
+    def activated_cn_tip_min (self) -> bool:
+        return self.planform.cn_tip_min is not None
+
+    def set_activated_cn_tip_min (self, aBool):
+        if aBool and not self.activated_cn_tip_min:
+            self.planform.set_cn_tip_min (0.0)                  # will be recalc
+        elif not aBool:
+            self.planform.set_cn_tip_min (None)   
+
+
+    @property
+    def activated_width_min_targ (self) -> bool:
+        return self.planform.width_min_targ is not None
+
+    def set_activated_width_min_targ (self, aBool):
+        if aBool and not self.activated_width_min_targ:
+            self.planform.set_width_min_targ (0.0)              # will be recalc
+        elif not aBool:
+            self.planform.set_width_min_targ (None)   
+
+
+    def _on_field_changed (self, *_):
+        """ slot for widget changes"""
+        self.refresh ()                                         # have 'soft' refresh when settings are changed
+        self.sig_paneling_changed.emit()                        # refresh diagram
+
+
+    @override
+    def _button_box (self):
+        """ returns the QButtonBox with the buttons of self"""
+
+        buttonBox = QDialogButtonBox (QDialogButtonBox.StandardButton.Close) #  | QDialogButtonBox.StandardButton.Cancel)
+
+        self._close_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Close)
+
+        return buttonBox 
+    

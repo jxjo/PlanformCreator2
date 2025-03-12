@@ -62,7 +62,7 @@ from base.spline import HicksHenne
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 
 CAMBER      = 'camber'
 
@@ -1432,21 +1432,19 @@ class Geometry ():
 
     """
 
-    class Mod (Enum):
-        """ possible modifications of airfoil geometry"""
-        
-        NORMALIZE       = ("normalized","norm")
-        REPANEL         = ("repan","p")
-        MAX_THICK       = ("thickness","t")
-        MAX_CAMB        = ("camber","c")
-        MAX_UPPER       = ("upper","u")
-        MAX_LOWER       = ("lower","l")
-        BEZIER_LOWER    = ("Bezier lower","mod")
-        BEZIER_UPPER    = ("Bezier upper","mod")
-        TE_GAP          = ("te_gap","te")
-        LE_RADIUS       = ("le_radius","r")
-        BLEND           = ("blended","blend")
+    # possible modifications of airfoil geometry 
 
+    MOD_NORMALIZE       = "normalized"
+    MOD_REPANEL         = "repan"
+    MOD_MAX_THICK       = "thickness"
+    MOD_MAX_CAMB        = "camber"
+    MOD_MAX_UPPER       = "upper"
+    MOD_MAX_LOWER       = "lower"
+    MOD_BEZIER_LOWER    = "Bezier lower"
+    MOD_BEZIER_UPPER    = "Bezier upper"
+    MOD_TE_GAP          = "te_gap"
+    MOD_LE_RADIUS       = "le_radius"
+    MOD_BLEND           = "blend"
 
 
     EPSILON_LE_CLOSE =  1e-6                    # max norm2 distance of le_real 
@@ -1476,11 +1474,6 @@ class Geometry ():
         self._upper     : Line = None           # upper side
         self._lower     : Line = None           # lower side
 
-        self._max_thick_initial = None          # to detect changes 
-        self._max_camb_initial  = None
-        self._max_upper_initial = None
-        self._max_lower_initial = None
-
         self._curvature : Curvature_of_Spline = None  # curvature object
 
         self._panelling = None                  # "paneller"  for spline or Bezier 
@@ -1494,7 +1487,7 @@ class Geometry ():
         return f"<{type(self).__name__}>"
 
 
-    def _changed (self, aMod : Mod, 
+    def _changed (self, aMod : str, 
                   val : float|str|None = None,
                   remove_empty = False):
         """ handle geometry changed 
@@ -1516,36 +1509,33 @@ class Geometry ():
             logger.debug (f"{self} no change callback to airfoil defined")
 
     @property
-    def modifications (self) -> list [tuple]:
+    def modification_dict (self) -> list [tuple]:
+        """returns a list of modfications as a dict of modifications"""
+        return self._modification_dict
+
+    @property
+    def modifications_as_list (self) -> list [tuple]:
         """returns a list of modfications as string like 'repenaled 190'"""
         mods = []
-        aMod : Geometry.Mod 
         for aMod, val in self._modification_dict.items():
                 val_str = f"{str(val)}" if val is not None else ''
-                mods.append (f"{aMod.value[0]} {val_str}" )
+                mods.append (f"{aMod} {val_str}" )
         return mods
 
     @property
     def modifications_as_label (self) -> str:
         """returns a short label string of all modifications  'norm_t8.1_cx40.3'"""
         mods = []
+
         # build list of relevant modifications (use short name) 
-        nmods = len (self._modification_dict)
-        aMod : Geometry.Mod 
         for aMod, val in self._modification_dict.items():
-                if nmods > 3 and aMod == Geometry.Mod.REPANEL:      # skip repanneled if too long
-                    continue
-                if nmods > 4 and aMod == Geometry.Mod.NORMALIZE:    # skip norm if too long
-                    continue
-                if aMod == Geometry.Mod.TE_GAP:
-                    val = round(val,2) 
-                elif aMod == Geometry.Mod.BLEND:
+                if aMod == Geometry.MOD_TE_GAP:
                     val = round(val,2) 
                 elif isinstance (val, float): 
                     val = round(val,1)
-                name_val = (aMod.value[1],val)
+                name_val = (aMod, val)
                 if not (name_val in mods):                  # avoid dublicates 
-                    mods.append ((aMod.value[1],val))
+                    mods.append ((aMod,val))
 
         # we got final list of tuples - build string
         label = ''
@@ -1835,7 +1825,7 @@ class Geometry ():
             self._rebuild_from_upper_lower ()
             if not moving:
                 self._reset () 
-                self._changed (Geometry.Mod.TE_GAP, round(self.te_gap * 100, 7))   # finalize (parent) airfoil 
+                self._changed (Geometry.MOD_TE_GAP, round(self.te_gap * 100, 7))   # finalize (parent) airfoil 
                 self._set_xy (self._x, self._y)
         except GeometryException:
             self._clear_xy()
@@ -1891,7 +1881,7 @@ class Geometry ():
             self._set_le_radius (new_radius, xBlend) 
             self._rebuild_from_camb_thick ()
             self._reset () 
-            self._changed (Geometry.Mod.LE_RADIUS, round(new_radius*100,2))
+            self._changed (Geometry.MOD_LE_RADIUS, round(new_radius*100,2))
             self._set_xy (self._x, self._y)
  
         except GeometryException:
@@ -1933,12 +1923,14 @@ class Geometry ():
 
     def set_max_camb (self, val : float): 
         """ change max camber"""
-        self.set_highpoint_of (self.camber,(None, val))
+        if not self.isSymmetrical:
+            self.set_highpoint_of (self.camber,(None, val))
 
 
     def set_max_camb_x (self, val : float): 
         """ change max camber x position"""
-        self.set_highpoint_of (self.camber,(val, None))
+        if not self.isSymmetrical:
+            self.set_highpoint_of (self.camber,(val, None))
            
 
     def set_highpoint_of (self, aLine: Line, xy : tuple, finished=True): 
@@ -1960,25 +1952,25 @@ class Geometry ():
         if aLine.type == Line.Type.THICKNESS:
             self._rebuild_from_camb_thick ()
 
-            amod = Geometry.Mod.MAX_THICK
-            lab = aLine.highpoint.label_changed (self._max_thick_initial)
+            amod = Geometry.MOD_MAX_THICK
+            lab = aLine.highpoint.label_percent ()
 
         elif aLine.type == Line.Type.CAMBER:
             self._rebuild_from_camb_thick ()
 
-            amod = Geometry.Mod.MAX_CAMB
-            lab = aLine.highpoint.label_changed (self._max_camb_initial)
+            amod = Geometry.MOD_MAX_CAMB
+            lab = aLine.highpoint.label_percent ()
 
         elif aLine.type == Line.Type.UPPER:
             self._rebuild_from_upper_lower ()
 
-            amod = Geometry.Mod.MAX_UPPER
+            amod = Geometry.MOD_MAX_UPPER
             lab = ' '
 
         elif aLine.type == Line.Type.LOWER:
             self._rebuild_from_upper_lower ()
 
-            amod = Geometry.Mod.MAX_LOWER
+            amod = Geometry.MOD_MAX_LOWER
             lab = ' '
 
         else:
@@ -2056,7 +2048,7 @@ class Geometry ():
         try: 
             self._push_xy ()                    # ensure a copy of x,y 
             self._normalize() 
-            self._changed (Geometry.Mod.NORMALIZE)       # finalize (parent) airfoil 
+            self._changed (Geometry.MOD_NORMALIZE)       # finalize (parent) airfoil 
             self._set_xy (self._x, self._y)
 
         except GeometryException:
@@ -2214,7 +2206,7 @@ class Geometry ():
             self._blend (geo1, geo2, blendBy, ensure_fast=False)        
             self._reset()
             
-            self._changed (Geometry.Mod.BLEND, blendBy)
+            self._changed (Geometry.MOD_BLEND, f"{blendBy*100:.0f}")
 
 
     # ------------------ private ---------------------------
@@ -2281,15 +2273,8 @@ class Geometry ():
 
         self._camber    = self.sideDefaultClass (upper.x, camber_y, 
                                             linetype=Line.Type.CAMBER)
-        
-        # keep initial max values for change detection 
-
-        if self._max_thick_initial is None: 
-            self._max_thick_initial = self._thickness.highpoint.xy
-        if self._max_camb_initial is None: 
-            self._max_camb_initial  = self._camber.highpoint.xy
-
         return 
+
 
     def _rebuild_from (self, x_upper, y_upper, x_lower, y_lower):
         """ rebuilds self out upper and lower x and y values  """
@@ -2297,11 +2282,11 @@ class Geometry ():
         self._x = np.concatenate ((np.flip(x_upper), x_lower[1:]))
         self._y = np.concatenate ((np.flip(y_upper), y_lower[1:]))
 
+
     def _rebuild_from_upper_lower (self):
         """ rebuilds self out upper and lower side"""
 
         self._rebuild_from (self.upper.x, self.upper.y, self.lower.x, self.lower.y)
-
 
 
     def _rebuild_from_camb_thick(self):
@@ -2588,7 +2573,7 @@ class Geometry_Splined (Geometry):
             self._panelling.save() 
 
             self._reset()
-            self._changed (Geometry.Mod.REPANEL)
+            self._changed (Geometry.MOD_REPANEL)
             self._set_xy (self._x, self._y)
 
         except GeometryException: 
@@ -2819,9 +2804,9 @@ class Geometry_Bezier (Geometry):
         self._reset()
 
         if aSide.isUpper:
-            self._changed (Geometry.Mod.BEZIER_UPPER, '')
+            self._changed (Geometry.MOD_BEZIER_UPPER, '')
         else:
-            self._changed (Geometry.Mod.BEZIER_LOWER, '')
+            self._changed (Geometry.MOD_BEZIER_LOWER, '')
 
 
 
@@ -2832,9 +2817,9 @@ class Geometry_Bezier (Geometry):
 
         self._reset()
         if aSide.isUpper:
-            self._changed (Geometry.Mod.BEZIER_UPPER, '')
+            self._changed (Geometry.MOD_BEZIER_UPPER, '')
         else:
-            self._changed (Geometry.Mod.BEZIER_LOWER, '')
+            self._changed (Geometry.MOD_BEZIER_LOWER, '')
 
 
     @property
@@ -2892,7 +2877,7 @@ class Geometry_Bezier (Geometry):
         self.lower.set_te_gap (- newGap / 2)
 
         self._reset () 
-        self._changed (Geometry.Mod.TE_GAP, round(self.te_gap * 100, 7))   # finalize (parent) airfoil 
+        self._changed (Geometry.MOD_TE_GAP, round(self.te_gap * 100, 7))   # finalize (parent) airfoil 
 
 
     @property
@@ -2927,7 +2912,7 @@ class Geometry_Bezier (Geometry):
 
         # reset chached values
         self._reset_lines()
-        self._changed (Geometry.Mod.REPANEL)
+        self._changed (Geometry.MOD_REPANEL)
 
 
 

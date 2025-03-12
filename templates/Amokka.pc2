@@ -6,11 +6,24 @@
   "airfoil_nick_prefix":"JX-",
   "airfoil_nick_base":100,
   "background_image":{},
+  "polar_definitions":[],
   "halfspan":1000.0,
   "chord_root":230.0,
   "sweep_angle":-2.2,
   "chord_distribution":{
     "chord_style":"Bezier",
+    "px":[
+      0.0,
+      0.55,
+      1.0,
+      1.0
+    ],
+    "py":[
+      1.0,
+      1.0,
+      0.55,
+      0.089282
+    ],
     "p1x":0.55,
     "p1y":1.0,
     "p2y":0.55,
@@ -25,32 +38,64 @@
     {
       "xn":0.0,
       "hinge_cn":0.76,
-      "flap_group":1
+      "flap_group":1,
+      "airfoil":"Root_Example.dat"
+    },
+    {
+      "cn":0.971205,
+      "flap_group":1,
+      "is_for_panels":true
     },
     {
       "xn":0.336134,
       "flap_group":2
     },
     {
+      "cn":0.860025,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
+      "cn":0.777641,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
+      "cn":0.612872,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
+      "cn":0.448104,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
+      "cn":0.36572,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
       "xn":0.973863,
       "hinge_cn":0.66,
-      "flap_group":2
+      "flap_group":3
     },
     {
       "xn":1.0,
-      "flap_group":2
+      "flap_group":2,
+      "airfoil":"Tip_Example.dat"
     }
   ],
   "flaps":{
     "hinge_equal_ref_line":false
   },
   "panels":{
-    "wy_panels":8,
+    "wy_panels":7,
     "wy_distribution":"uniform",
-    "wx_panels":8,
+    "wx_panels":3,
     "wx_distribution":"uniform",
     "width_min":0.02,
-    "cn_tip_min":0.109,
-    "cn_diff_max":0.02
+    "cn_tip_min":0.09,
+    "cn_diff_max":0.01
   }
 }

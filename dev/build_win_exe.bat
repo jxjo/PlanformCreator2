@@ -19,14 +19,17 @@ rem to show missing imports: 			--debug imports ^
 rem also look in modules for imports!: 	--paths modules ^
 rem more infos during build:		 	--log-level=INFO
 rem suppress console  					--noconsole    ^
-pyinstaller --noconfirm --log-level=INFO  --onedir --noconsole   ^
+pyinstaller --noconfirm --log-level=INFO  --onedir   ^
 	--icon=./modules/PC2_ico.ico ^
 	--paths="modules" ^
+	--paths="modules/wing_model" ^
 	--paths="AirfoilEditor_subtree/modules" ^
     --add-data="./modules/PC2_ico.ico;./icons" ^
     --add-data="./AirfoilEditor_subtree/modules/base/icons;./icons" ^
     --add-data="./templates;./templates" ^
+    --add-data="./AirfoilEditor_subtree/assets/windows/worker.exe;./assets/windows" ^
 	--runtime-tmpdir="mySuperTemp" ^
+	--exclude-module matplotlib ^
     PlanformCreator2.py 
 
 echo.

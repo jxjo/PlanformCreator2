@@ -6,6 +6,7 @@
 The "Artists" to plot a airfoil object on a pg.PlotItem 
 
 """
+import html 
 
 from base.math_util             import derivative1
 from base.artist                import *
@@ -14,38 +15,37 @@ from base.spline                import Bezier
 
 from model.airfoil              import Airfoil, Airfoil_Bezier, usedAs, Geometry
 from model.airfoil_geometry     import Line, Side_Airfoil_Bezier
+from model.polar_set            import * 
 
 from PyQt6.QtGui                import QColor, QBrush, QPen
 from PyQt6.QtCore               import pyqtSignal, QObject
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 # -------- helper functions ------------------------
 
-def _color_airfoil_of (airfoil_type : usedAs) -> QColor:
+def _color_airfoil (airfoils : list[Airfoil], airfoil: Airfoil) -> QColor:
     """ returns QColor for airfoil depending on its type """
 
     alpha = 1.0
+    airfoil_type = airfoil.usedAs
 
     if airfoil_type == usedAs.DESIGN:
         color = 'deeppink'
     elif airfoil_type == usedAs.NORMAL:
-        color = 'springgreen' # 'aquamarine'
-        alpha = 0.9
+        color = 'springgreen'  
+        alpha = 1.0
     elif airfoil_type == usedAs.FINAL:
         color = 'springgreen'
     elif airfoil_type == usedAs.SEED:
         color = 'dodgerblue'
     elif airfoil_type == usedAs.SEED_DESIGN:
         color = 'cornflowerblue'
-    elif airfoil_type == usedAs.REF1:                          # used also in 'blend' 
-        color = 'lightskyblue'  
-        alpha = 0.9
-    elif airfoil_type == usedAs.REF2:
-        color = 'orange'
+    elif airfoil_type == usedAs.REF:                         
+        color = _color_airfoil_ref (airfoils, airfoil)
         alpha = 0.9
     elif airfoil_type == usedAs.TARGET:
         color = 'cornflowerblue'
@@ -57,6 +57,40 @@ def _color_airfoil_of (airfoil_type : usedAs) -> QColor:
     if alpha != 1.0:
         qcolor.setAlphaF (alpha) 
     return qcolor
+
+
+def _color_airfoil_ref (airfoils : list[Airfoil], airfoil: Airfoil) -> QColor:
+    """ returns QColor for reference airfoil """
+
+    # get the how many reference 
+    iRef, nRef = 0, 0 
+    for a in airfoils:
+        if a == airfoil: iRef = nRef 
+        if a.usedAs == usedAs.REF: nRef += 1
+
+    # get color depending on iRef 
+    color = color_in_series ('lightskyblue', iRef, nRef, delta_hue=0.4)
+    color.setAlphaF (0.9)
+
+    return color 
+
+
+def _label_airfoil (airfoils : list[Airfoil], airfoil: Airfoil) -> str:
+    """ nice label including usedAs for airfoil"""
+
+    if airfoil.usedAs == usedAs.REF:
+        iRef, nRef = 0, 0                                       # get the how many reference 
+        for a in airfoils:
+            if a == airfoil: iRef = nRef 
+            if a.usedAs == usedAs.REF: nRef += 1
+        use = f"Ref {iRef+1}: "
+    elif airfoil.usedAs == usedAs.DESIGN or not airfoil.usedAs: # no prefix 
+        use = ""
+    else: 
+        use = f"{airfoil.usedAs}: " 
+
+    label = f"{use}{airfoil.name_to_show}"
+    return label 
 
 
 def _linestyle_of (aType : Line.Type) -> QColor:
@@ -409,14 +443,7 @@ class Airfoil_Artist (Artist):
         self._show_panels = False                       # show ony panels 
         self._show_points = show_points is True         # show coordinate points
 
-        self._label_with_airfoil_type = False           # include airfoil type in label 
-
         super().__init__ (*args, **kwargs)
-
- 
-    @property
-    def label_with_airfoil_type(self): return self._label_with_airfoil_type
-    def set_label_with_airfoil_type (self, aBool): self._label_with_airfoil_type = aBool 
 
 
     @property
@@ -463,7 +490,6 @@ class Airfoil_Artist (Artist):
 
         # are there many airfoils - one of them is DESIGN? 
 
-        airfoil: Airfoil
         airfoils_with_design = False 
         for airfoil in self.airfoils:
             if airfoil.usedAsDesign:
@@ -478,16 +504,12 @@ class Airfoil_Artist (Artist):
                 if len(self.airfoils) == 1:
                     label = None                            # suppress legend 
                 else: 
-                    if self.label_with_airfoil_type:
-                        label = f"{airfoil.usedAs}: {airfoil.name}"
-                    else: 
-                        label = f"{airfoil.name}"
+                    label = _label_airfoil (self.airfoils, airfoil)
 
                 # set color, width, ZValue, symbol style depending on airfoil usage and no of airfoils  
 
-                color = _color_airfoil_of (airfoil.usedAs)
-                if color is None:  
-                    color = color_palette [iair]
+                color = _color_airfoil (self.airfoils, airfoil)
+                if color is None: color = color_palette [iair]
 
                 # default 
                 width = 1
@@ -499,8 +521,8 @@ class Airfoil_Artist (Artist):
                         width = 2
                         antialias = True
                         zValue = 3
-                    else:
-                        color = QColor (color).darker (150)
+                    elif airfoil.usedAs != usedAs.NORMAL:
+                        color = QColor (color).darker (130)
                 elif airfoil.usedAs == usedAs.NORMAL:
                         width = 2
                         antialias = True
@@ -563,7 +585,7 @@ class Bezier_Artist (Artist):
         for airfoil in self.airfoils:
             if airfoil.isBezierBased and airfoil.isLoaded:
 
-                color = _color_airfoil_of (airfoil.usedAs)
+                color = _color_airfoil (self.airfoils, airfoil)
                 movable = airfoil.usedAsDesign
 
                 side : Side_Airfoil_Bezier
@@ -669,7 +691,7 @@ class Curvature_Artist (Artist):
 
         for airfoil in self.airfoils:
 
-            color = _color_airfoil_of (airfoil.usedAs)
+            color = _color_airfoil (self.airfoils, airfoil)
 
             sides = []
             if self.show_upper: sides.append (airfoil.geo.curvature.upper)
@@ -684,7 +706,7 @@ class Curvature_Artist (Artist):
                 else: 
                     pen = pg.mkPen(color, width=1, style=Qt.PenStyle.DashLine)
 
-                label = f"{side.name} - {airfoil.name}"
+                label = f"{side.name} - {airfoil.name_to_show}"
                 self._plot_dataItem (x, y, name=label, pen=pen)
 
                 # plot derivative1 of curvature ('spikes') 
@@ -771,7 +793,7 @@ class Curvature_Artist (Artist):
 #         if len(self.airfoils) != 2 : return 
 
 #         self.set_showLegend (False)                             # no legend 
-#         color = _color_airfoil_of (self.airfoil.usedAs)
+#         color = _color_airfoil (self.airfoil.usedAs)
 #         linewidth=0.8
 
 #         if self.upper:
@@ -808,7 +830,7 @@ class Airfoil_Line_Artist (Artist, QObject):
 
         for iair, airfoil in enumerate (self.airfoils):
 
-            color = _color_airfoil_of (airfoil.usedAs)
+            color = _color_airfoil (self.airfoils, airfoil)
             color.setAlphaF (0.8)
 
             # plot all 'lines' of airfoil 
@@ -864,3 +886,156 @@ class Airfoil_Line_Artist (Artist, QObject):
                                     movable=airfoil.usedAsDesign, color=color,
                                     on_changed=self.sig_geometry_changed.emit )
             self._add(pl) 
+
+
+
+
+
+class Polar_Artist (Artist):
+    """Plot the polars of airfoils """
+
+
+    def __init__ (self, axes, modelFn, 
+                  xyVars = (var.CD, var.CL), 
+                  **kwargs):
+        super().__init__ (axes, modelFn, **kwargs)
+
+        self._show_points = False                       # show point marker 
+        self._xyVars = xyVars                           # definition of x,y axis
+
+
+    @property
+    def show_points(self): return self._show_points
+    def set_show_points (self, aBool): 
+        self._show_points = aBool 
+        self.refresh()
+
+    @property
+    def xyVars(self): return self._xyVars
+    def set_xyVars (self, xyVars: Tuple[var, var]): 
+        """ set new x, y variables for polar """
+        self._xyVars = xyVars 
+        self.refresh()
+
+
+    @property
+    def airfoils (self) -> list [Airfoil]: return self.data_list
+
+
+    def _plot (self): 
+        """ do plot of airfoil polars in the prepared axes  """
+
+        if not self.airfoils : return 
+
+        # cancel all polar generations which are not for this current set of airfoils 
+        #   to avoid to many os worker threads 
+
+        Polar_Task.terminate_instances_except_for (self.airfoils)
+
+        # load or generate polars which are not loaded up to now
+
+        for airfoil in self.airfoils: 
+            polarSet = airfoil.polarSet
+            polarSet.load_or_generate_polars ()
+
+        # plot polars of airfoils
+
+        nPolar_plotted      = 0 
+        nPolar_generating = 0                     # is there a polar in calculation 
+        error_msg           = []  
+
+        airfoil: Airfoil
+        for airfoil in self.airfoils:
+ 
+            color_airfoil = _color_airfoil (self.airfoils, airfoil)
+
+            # first filter only visible polars to get number of polars and plot 
+
+            polarSet : Polar_Set = airfoil.polarSet
+            polars_to_plot = polarSet.polars
+
+            polar : Polar 
+            for iPolar, polar in enumerate(reversed(polars_to_plot)): 
+
+                # generate increasing color hue value for the polars of an airfoil 
+                color = color_in_series (color_airfoil, iPolar, len(polars_to_plot), delta_hue=0.1)
+
+                self._plot_polar (self.airfoils, airfoil, polar, color)
+
+                if not polar.isLoaded: 
+                    nPolar_generating += 1
+                elif polar.error_occurred:
+                    # in error_msg could be e.g. '<' 
+                    error_msg.append (f"'{airfoil.name_to_show} - {polar.name}': {html.escape(polar.error_reason)}")
+                else: 
+                    nPolar_plotted += 1
+
+        # show error messages 
+
+        if error_msg:
+            text = '<br>'.join (error_msg)          
+            self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
+
+        # show generating message 
+
+        if nPolar_generating > 0: 
+            if nPolar_generating == 1:
+                text = f"Generating polar"
+            else: 
+                text = f"Generating {nPolar_generating} polars"
+            self._plot_text (text, color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
+
+            # refresh for new polars 
+            # QTimer().singleShot(1000, self.check_for_new_polars)     # delayed emit 
+
+
+
+    def _plot_polar (self, airfoils: list[Airfoil], airfoil : Airfoil, polar: Polar, color): 
+        """ plot a single polar"""
+
+        airfoils_with_design = False 
+        for a in airfoils:
+            if a.usedAsDesign: airfoils_with_design = True 
+
+        # build nice label 
+
+        label = f"{_label_airfoil (airfoils, airfoil)} {polar.re_asK}k" 
+
+        if not polar.isLoaded:
+            label = label + ' generating'                       # async polar generation  
+
+        # set linewidth 
+
+        antialias = True
+
+        if self._show_points:
+            linewidth=0.5
+        elif airfoil.usedAs == usedAs.DESIGN:  
+            linewidth=1.5
+            antialias = True
+        elif airfoil.usedAs == usedAs.NORMAL and not airfoils_with_design:  
+            linewidth=1.5
+            antialias = True
+        else:
+            linewidth=1.0
+
+        # NORMAl and DESIGN polar above other polars 
+
+        if airfoil.usedAs == usedAs.DESIGN:
+            zValue = 3
+        elif airfoil.usedAs == usedAs.NORMAL:
+            zValue = 2
+        else: 
+            zValue = 1
+
+        # finally plot 
+
+        pen = pg.mkPen(color, width=linewidth)
+        sPen, sBrush, sSize = pg.mkPen(color, width=1), 'black', 7
+        s = 'o' if self.show_points else None 
+
+        x,y = polar.ofVars (self.xyVars)
+
+        self._plot_dataItem  (x, y, name=label, pen = pen, 
+                                symbol=s, symbolSize=sSize, symbolPen=sPen, symbolBrush=sBrush,
+                                antialias = antialias, zValue=zValue)

@@ -2,34 +2,40 @@
 ![PC2](images/PC2_logo.png "Logo")
 
 
-##
+# v3.0
 
-The Planform Creator 2 - short PC2 - is an app to design the planform of a wing focusing on model sailplanes 
+**PlanformCreator2** - short PC2 - is an app to design the planform of a wing focusing on model sailplanes. 
 
-Main features: 
+#### Planform Design 
 
-* Define a planform based on a chord distribution along the wing span
-* A chord reference defines how the chord is assigned towards leading and trailing edge  
-* Add wing sections with fixed position or relative chord length
-* View airfoil at wing sections and edit its properties using the [Airfoil Editor](https://github.com/jxjo/AirfoilEditor)
-* Generate blended airfoils for intermediate wing sections ('strak')
-* Define flaps hinge line and flaps 
+* Define a planform based on a chord distribution and a reference line along wing span
 * Import image of an existing wing as a background image for design
-* Auto panelling of the planform as preparation for aerodynamic calculation 
-* Export wing definition and airfoils to
-  * Xflr5 
-  * FLZ_vortex
-  * dxf file  - for use in CAD
+* Add wing sections with fixed position or relative chord length
+* Define flaps hinge line and flaps 
+* Export planform as dxf file for use in CAD
 
-The project was inspired by the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine) - Thanks Matthias!   
+#### Airfoils and Polars
+* Define airfoil at wing sections and edit its properties using the [Airfoil Editor](https://github.com/jxjo/AirfoilEditor)
+* Generate blended airfoils for intermediate wing sections ('strak')
+* :new:  v3: View polars of the airfoil based on xfoil polar generation
+
+#### Wing Analysis
+* Auto panelling of the planform as preparation for aerodynamic calculation 
+* :new:  v3: VLM based lift calculation 
+* :new:  v3: Determine critical sections where cl_max of airfoils will be reached
+* Export wing definition to Xflr5 and FLZ_vortex for further analysis
+
+The project was inspired by the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine).
 
 ## Basic concepts
 
-The idea behind Planform Creator 2 is to have a tool to design a new wing with a more graphical, 'playful' approach. It tries to fill the gap between CAD based design and aerodynamic analysis tools like Xflr5.
+The idea behind **PlanformCreator2** is to have a tool to design a new wing with a more graphical, 'playful' approach. It tries to fill the gap between CAD based design and aerodynamic analysis tools like Xflr5.
 
 <img src="images/PC2_usage.png" width="800" />
 
-Within the early design process of a wing Planform Creator 2 is the master of 'truth'. It provides the data for the aerodynamic analysis. The findings in the analysis can be used to modify the planform. 
+Within the early design process of a wing **PlanformCreator2** is the master of 'truth'. It provides the data for the aerodynamic analysis. A first lift and lift failure analysis of the wing is part of PC2. 
+Further analysis and performance assessments are made with external apps. 
+
 
 When the results are satisfying the planform and the envolved airfoils are exported as dxf to a CAD program to continue with the final 3D design e.g. for a mold of the wing. 
 
@@ -46,7 +52,9 @@ The advantage is that the parameters can be changed independently of each other,
 Most important and usually defined first, is the chord distribution along the wing span. The geometric chord distribution directly and significantly determines the lift distribution along the span. The local lift coefficient depends on the local effective angle of attack (influenced by the wing shape) and on the local Reynolds number, which changes proportionally to the local chord.
 
 Two different "types" are available for defining the chord distribution:
-- **Bezier curve**: Using a start tangent at the root and a end tangent at the wing tip, the curve of the chord distribution is defined by dragging the control points with the mouse
+- **Bezier curve**: Using a start tangent at the root and a end tangent at the wing tip, the curve of the chord distribution is defined by dragging the control points with the mouse.<br>
+:new:  v3: Additional Bezier control points may be defined to achieve a wide range of chord distributions<br>
+:new:  v3: An area with constant chord can be defined by moving the start point of Bezier towards tip
 - **Trapezoid**: For the definition of a (multiple) trapezoid wing. The chord is defined by the chord length of the individual wing sections.
 
 In PC2, the chord distribution is always displayed in normalized form. Both span and chord length range from 0 to 1. This allows chord distributions - even of different wing designs - to be compared with each other without distortion.
@@ -122,78 +130,7 @@ In certain cases, for example with a curved reference line, kinks in the hinge l
 
 <img src="images/flap_hinge_line.png" width="500" />
 
-
-## Airfoils
-
-A wing section can either be assigned a fixed airfoil or the airfoil can be left open. In this case, a 'strak' (or 'blended') airfoil is created for this wing section by blending the left and right neighboring airfoils. The 'blending ratio' is derived from the ratio of the respective chord length of the wing sections.
-
-For the root and the tip section an airfoil is mandatory. Initially example airfoils are assigned to these two sections.
-
-<img src="images/airfoil_names.png" width="800" />
-
-<sup>Wing sections with the corresponding airfoils. The airfoil at 'section 2' is created by blending JX-GP-100 and JX-GP-055.</sup>
-
-
-The airfoils can either be viewed in normal, normed scale or in their 'real' scale within their wing sections:
-
-<img src="images/airfoil_real_size.png" width="800" />
-
-
-All airfoils, including the generated 'straked' airfoils, can be exported as a .dat file at the end. Very practical is the optional setting of a continuous trailing edge thickness ('Te gap') in mm, which eliminates the often necessary manual reworking of the airfoils in CAD. 
-
-Included in the Planform Creator 2 is the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) which allows the typical modifications of an airfoil during wing design. 
-
-![PC2](images/AirfoilEditor_app.png "Screenshot of the AirfoilEditor ")
-<sup>The AirfoilEditor can also be used as a stand-alone program. Linked with the file extension ".dat" it acts as a smart display and edit app for airfoils.</sup>
-
-## Bridge to Xflr5 and FLZ_vortex
-
-One of the most important functions of PC2 is the export of the designed wing to Xflr5 or FLZ_vortex for aerodynamic calculation. In each case, the wing definition is prepared "bite-sized" for the respective program. 
-
-Both programs idealize a planform by trapezoidal segments which are defined by the wing sections. The trapezoidal segements are in turn divided into panels by an individual distribution function for x- and y-axes.
-
-In the case of a curved leading or trailing edge this can lead to considerable geometrical deviations between the original contour and the idealized which will lead to high inaccuracies of the aerodynamic calculation.
-
-<img src="./images/panelling_step_1.png" width="800" />
-
-<sup>Initial panelling of a planform having a single wing section '1' between root and tip. The deviation between the original contour and the trapezoidal contour, marked with yellow lines, is way to high to achieve valid results in aerodynamic calculation. </sup>
-
-
- PC2 lets you define the maximum acceptable deviation between original and idealized contour. A simple optimization function will then insert new wing sections until the desired maximum deviation is achieved.
-
- In addition a minimum chord at tip can be defined to limit the minimum Reynolds number during aerodynamic calculation. The limitation of tip chord is achieved by cutting off the tip. So the idealized may have a slightly smaller span than the original planform.
-
-
-<img src="images/panelling_step_2.png" width="800" />
-
-<sup>Auto-optimized panelling to reduce deviation between original and idealized contour. The maximum deviation of chord is now below 2% and good enough to achieve reasonable results.</sup>
-
-#### Xflr5
-
-When using PC2 together with Xlfr5 the major faciliation beside the definition of wing segements, is the automatic generation of all intermediate airfoils needed in Xflr5 at all wing sections. No further geometric work has to be done for wing definition and airfoils. The steps to perform wing analysis in Xflr5 together with PC2:
-1. PC2: *Export the xml wing definition and all airfoils involved to a subdirectory.* 
-2. Xflr5: *Open the airfoils in a single step.*
-3. Xflr5 - Xfoil Direct Analysis: *Batch Analysis of all the airfoils with a polarset covering the complete Reynolds range*
-4. Xflr5 - Wing and Plane Design: *Create a new plane*
-4. Xflr5 - Wing and Plane Design - Edit Wing: *Press menu button 'Other' and select 'Import Wing from xml file'*
-5. Xflr5: *Ready for calculation. Don't forget to define a 'Plane Mass' for T2 analysis.*  
-
-
-<img src="images/panelling_xflr5_loaded.png" width="800" />
-
-<sup>Xflr5: 'Wing Edition' after the wing xml file generated by PC2 is loaded.</sup>
-
-
-#### FLZ_vortex
-
-(Windows only) 
-
-PC2 generates a ready to use FLZ_vortex project file which can be loaded as a new 'flight scene' ('Flugszene') or FLZ_vortex can be launched directly from PC2 having the project file loaded. For direct launch the file extension .flz must be assigned to the app FLZ_vortex. 
-
-Do not forget to adjust the plane mass before running a calculation.
-
-
-## Export as dxf file 
+### Export as dxf file 
 Once the wing design has been completed, the new wing can be transferred to a CAD program as a dxf file. The used airfoils are optionally inserted into the drawing and / or additionally exported as a .dat file.
 
 A nice feature is to define a common trailing edge thickness (trailing edge gap) in mm for all airfoils involved.
@@ -204,11 +141,118 @@ So no manual post processing for the airfoils has to be done in CAD.
 
 The generated planform shouldn't be used directly for a 3D construction in the CAD program, since the contour line is approximated by many small straight line pieces (polyline). It is recommended to place a spline over the leading and trailing edge in the respective CAD program.
 
+
+## Airfoils and Polars
+
+### Assignment of Airfoils
+
+A wing section can either be assigned a fixed airfoil or the airfoil can be left open. In this case, a 'strak' (or 'blended') airfoil is created for this wing section by blending the left and right neighboring airfoils. The 'blending ratio' is derived from the ratio of the respective chord length of the wing sections.
+
+For the root and the tip section an airfoil is mandatory. Initially example airfoils are assigned to these two sections.
+
+<img src="images/airfoil_names.png" width="800" />
+
+<sup>Wing sections with the corresponding airfoils. The airfoil at 'section 2' is created by blending JX-GP-100 and JX-GP-055.</sup>
+
+
+The airfoils can either be viewed in normal, normed scale or in their 'real' scale within their wing sections.
+
+Included in the **PlanformCreator2** is the  [AirfoilEditor](https://github.com/jxjo/AirfoilEditor) which allows the typical modifications of an airfoil during wing design. 
+
+In the final stage of the design process the airfoils, including the generated 'straked' airfoils, can be exported as a .dat file. The optional setting of a continuous trailing edge thickness ('Te gap') in mm is very practical and makes the often necessary manual reworking of the airfoils in CAD superfluous.
+
+
+### Airfoil Polars
+
+To generate the polars of an airfoil the **PlanformCreator2** uses the Worker tool of the [Xoptfoil2 project](https://jxjo.github.io/Xoptfoil2). One of the Worker actions is the multi-threaded creation of a polar set using Xfoil.
+
+Within the app a polar is generated 'lazy' - meaning at the moment when the polar should be displayed - and asynchronous in a background task. Each polar is stored in a single file having the Xfoil polar format allowing to import the polar into Xflr5. 
+
+For polar generation the `auto_range` feature of the Worker is applied which optimizes the alpha range of the polar to show the complete T1 polar from `cl_min` to `cl_max` of the airfoil. 
+
+A polar of a specific Re number is defined for the root wing section. For the other wing sections the Re number is automatically adjusted based on the local chord. Afterwards the polars of all wing sections will be generated as one set.
+
+![Polars](images/airfoil_polars.png "Screenshot of Polar Generation")
+<sub>Airfoil and Polar view with the auto generated, Re number adjusted polars of the airfoils at the defined wing sections. </sub>
+
+The polars along wingspan can be helpful to have a first assessment of the airfoil ‘strak’ especially towards tip with its lower Re numbers.
+
+## Wing Analysis
+
+### Panel Generation
+
+The basis for an aerodynamic analysis of a wing is the idealization with panels.
+PC2 supports this paneling step with some helpful features. 
+
+The paneled planform can either be exported to Xflr5 and FLZ_vortex or used for the integrated aero analysis, as described below.
+
+The first step for paneling is the definition of the number of x and y-panels of the sections. In the case of a curved leading or trailing edge this can lead to considerable geometrical deviations between the original contour and the idealized which will lead to high inaccuracies of the aerodynamic calculation.
+
+
+<img src="./images/panelling_step_1.png" width="800" />
+
+<sup>Initial panelling of a planform having a single wing section '1' between root and tip. The deviation between the original contour and the trapezoidal contour, marked with yellow lines, is way to high to achieve valid results in aerodynamic calculation. </sup>
+
+
+Next, a mesh optimization can be applied based on the parameters:
+
+* Minimum panel width – the number of y panels per section will be adapted to achieve a uniform panel width along span
+* Minimum chord deviation to planform – additional wing sections will be inserted automatically until the deviation of the section trapezoids to the original planform is below the defined threshold
+* Minimum chord at tip – this cuts the tip in such a way that a Re number is achieved that leads to meaningful Xfoil results.
+
+![PC2](images/panelling_steps.png "Panelling steps")
+
+<sup>Auto-optimized panelling to reduce deviation between original and idealized contour. The maximum deviation of chord is now below 2% and good enough to achieve reasonable results.</sup>
+
+As for airfoil polar generation, panel generation is ‘lazy’: A new mesh is initialized each time the planform is changed by the user.
+
+
+#### Export to Xflr5
+
+When using PC2 together with Xlfr5 the major faciliation beside the definition of wing segements, is the automatic generation of all intermediate airfoils needed in Xflr5 at all wing sections. No further geometric work has to be done for wing definition and airfoils. 
+
+Please read [the short description](doc/PC2_export_to_Xflr5.md) of how it works.
+
+
+#### Export to FLZ_vortex
+
+
+PC2 generates a ready to use FLZ_vortex project file which can be loaded as a new 'flight scene' ('Flugszene') or FLZ_vortex can be launched directly from PC2 having the project file loaded. For direct launch the file extension .flz must be assigned to the app FLZ_vortex. 
+
+Do not forget to adjust the plane mass before running a calculation.
+
+### VLM Analysis
+
+PC2 has an integrated VLM (Vortex lattice method) module to calculate the lift distribution along wing span based on the previously carried paneling of the wing.
+
+<img src="./images/vlm_cp_panel.png" width="800" />
+
+The main objective of the aero analysis in PC2 is to find the region of the wing, which will fail when the angle of attack is increased towards stall. For this assessment the 2D airfoil polar data and the 3D lift aero data is combined in a 'viscous loop'.
+
+The 2D airfoil polar data is taken from the polar definitions as described in the section before. The airfoil polars are evaluated for each wing section. Note: For wing analysis only T1 polars (constant speed) are supported.
+
+The 'viscous loop' calculates the effective Cl and Alpha for each panel station along wing span.
+
+<img src="./images/vlm_viscous_loop.png" width="400" />
+
+The maximum possible angle of attack (close to stall) is automatically evaluated and the critical area is marked within the paneling view and in the lift distribution view:
+
+<img src="images/vlm_cl_max.png" width="800" />
+
+<sup>Simple wing example showing the critical wing regions where local Cl reaches cl max of the airfoil.</sup>
+
+By activating the chord distribution view, the chord and thus the area in which the wing will fail first can be changed interactively.
+
+<img src="images/vlm_cl_max_with_chord.png" width="800" />
+
+<sup>Interactive change in the chord distribution and thus the area in which the wing tends to stall first</sup>
+
+
 ## The App - a quick look 
   
 An attempt was made to provide a simple, intuitive UI to be able to 'playfully' explore the program and the design of a new wing. 
 
-![PC2](images/PC2_app.png "Planform Creator 2")
+![PC2](images/PC2_app.png "PlanformCreator2")
 
 - The upper tabs are used to switch between the different main views. 
 - Within the panel on the left the settings for current diagram can be customized. 
@@ -225,10 +269,12 @@ In the 'examples' folder, you'll find some full flavored PC2 projects. Just 'Ope
 
 ## Software Aspects
 
-`PlanformCreator2` is developed in  [Python](https://www.python.org/) using [PyQt6](https://pypi.org/project/PyQt6/) which wraps and extends the [Qt UI framework](https://www.qt.io/product/framework) and [PyQtGraph](https://www.pyqtgraph.org/) which wraps the QT Graphics framework. 
+`PlanformCreator2` is developed in  [Python](https://www.python.org/) using [PyQt6](https://pypi.org/project/PyQt6/) which wraps and extends the Qt UI framework and [PyQtGraph](https://www.pyqtgraph.org/) which wraps the QT Graphics framework. 
 
 The main building blocks of the app are
 * Model - containing all geometry and math helper routines to create and modify a wing planform. The model is independent of the UI.
+
+* VLM - for calculation of the lift distribution the Python VLM implementation [Panel Aero](https://github.com/DLR-AE/PanelAero) is used as the core module - thanks to Arne Voß (DLR)   
 
 * UI-Framework - base classes and a little framework to ease the implementation of forms based on `Widgets` and `Diagrams`.
 Plots in `Diagrams` are handled by `Artists` where each of them viszualizes certain data aspects of a planform. The base classes are imported from the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) project as a Git subtree

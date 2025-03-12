@@ -2,7 +2,11 @@
 releases
 AirfoilEditor.settings
 example.dat
+example_mod.dat
 README.pdf
+*_polars
+*_designs
+tmpinp*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -9,7 +9,7 @@ Extra functions (dialogs) to modify airfoil
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 import numpy as np
 import time 
@@ -27,6 +27,8 @@ from base.spline            import Bezier
 from model.airfoil          import Airfoil
 from model.airfoil_geometry import Side_Airfoil_Bezier, Line
 from model.airfoil_geometry import Geometry_Splined, Panelling_Spline
+from model.polar_set        import Polar_Definition, polarType, var
+
 from airfoil_widgets        import Airfoil_Select_Open_Widget
 
 
@@ -40,23 +42,39 @@ class Airfoil_Save_Dialog (Dialog):
     the new <Airfoil> as argument 
     """
 
-    _width  = (500, None)
-    _height = 250
+    _width  = (520, None)
+    _height = 300
 
-    name = "Save Airfoil ..."
+    name = "Save Airfoil Design as..."
+
+    def __init__ (self,*args, **kwargs):
+
+        self._remove_designs = False
+
+        super().__init__ (*args, **kwargs)
+
 
     @property
     def airfoil (self) -> Airfoil:
         return self.dataObject_copy
+
+    @property 
+    def remove_designs (self) -> bool:
+        """ remove designs and dir upon finish"""
+        return self._remove_designs
+    
+    def set_remove_designs (self, aBool : bool):
+        self._remove_designs = aBool
 
 
     def _init_layout(self) -> QLayout:
 
         l = QGridLayout()
         r = 0 
-        Label  (l,r,0, colSpan=4, get="Change airfoil name and/or filename before saving the airfoil" )
+        Label  (l,r,0, colSpan=4, get="Change airfoil name and/or filename before saving the airfoil",
+                       style=style.COMMENT )
         r += 1
-        SpaceR (l, r) 
+        SpaceR (l, r, stretch=0) 
         r += 1
         Field  (l,r,0, lab="Name", obj= self.airfoil, prop=Airfoil.name, width=(150,None),
                        style=self._style_names, signal=True)
@@ -64,7 +82,7 @@ class Airfoil_Save_Dialog (Dialog):
                        hide=self._names_are_equal, signal=True,
                        toolTip="Use filename as airfoil name")
         r += 1
-        SpaceR (l, r, stretch=0) 
+        Label  (l,r,1, colSpan=4, get=self._messageText, style=style.COMMENT, height=20)
         r += 1
         Field  (l,r,0, lab="Filename", obj=self.airfoil, prop=Airfoil.fileName, width=(150,None),
                 signal=True)
@@ -77,12 +95,17 @@ class Airfoil_Save_Dialog (Dialog):
         ToolButton (l,r,2, icon=Icon.OPEN, set=self._open_dir, signal=True,
                     toolTip = 'Select directory of airfoil') 
         r += 1
-        SpaceR (l, r, height=5, stretch=1) 
+        SpaceR (l, r, height=20, stretch=0) 
         r += 1
-        Label  (l,r,1, colSpan=4, get=self._messageText, style=style.COMMENT, height=(30,None))
+        CheckBox (l,r,0, text="Remove all designs and design directory on finish", colSpan=4,
+                        get=lambda: self.remove_designs, set=self.set_remove_designs)
+        r += 1
+        SpaceR (l, r, height=5, stretch=1) 
+
         l.setColumnStretch (1,5)
         l.setColumnMinimumWidth (0,80)
         l.setColumnMinimumWidth (2,35)
+
         return l
 
 
@@ -110,11 +133,10 @@ class Airfoil_Save_Dialog (Dialog):
 
     def _messageText (self): 
         """ info / wanrning text"""
-        text = []
         if not self._names_are_equal():
-             text.append("Name of airfoil and its filename are different.")
-             text.append("You can 'sync' either the name or the filename.")
-        text = '\n'.join(text)
+             text = "You may want to sync airfoil Name and Filename"
+        else: 
+             text = ""
         return text 
 
 
@@ -144,6 +166,8 @@ class Airfoil_Save_Dialog (Dialog):
 
         super().accept() 
 
+
+
 # ----- Blend two airfoils   -----------
 
 class Blend_Airfoil (Dialog):
@@ -154,10 +178,8 @@ class Blend_Airfoil (Dialog):
 
     name = "Blend Airfoil with ..."
 
-    sig_airfoil_changed    = pyqtSignal ()
+    sig_blend_changed      = pyqtSignal ()
     sig_airfoil2_changed   = pyqtSignal (Airfoil)
-
-    # ---- static members for external use 
 
 
     def __init__ (self, parent : QWidget, 
@@ -167,6 +189,8 @@ class Blend_Airfoil (Dialog):
         self._airfoil  = airfoil 
         self._airfoil1 = airfoil1
         self._airfoil2 = None
+        self._airfoil2_copy = None
+        
         self._blendBy  = 0.5                            # initial blend value 
 
         # init layout etc 
@@ -220,11 +244,11 @@ class Blend_Airfoil (Dialog):
         self._blendBy = aVal
         self.refresh()
 
-        # Blend with new blend value  
-        if self._airfoil2 is not None: 
-            self._airfoil.geo._blend(self._airfoil1.geo, self._airfoil2.geo, 
+        # Blend with new blend value - use copy as airfoil2 could be normalized
+        if self._airfoil2_copy is not None: 
+            self._airfoil.geo._blend(self._airfoil1.geo, self._airfoil2_copy.geo, 
                                      self._blendBy, ensure_fast=True)
-            self.sig_airfoil_changed.emit()
+            self.sig_blend_changed.emit()
 
 
     @property
@@ -238,11 +262,14 @@ class Blend_Airfoil (Dialog):
         self.refresh()
         self.sig_airfoil2_changed.emit (aAirfoil)
 
-        # first blend with new airfoil 
+        # first blend with new airfoil - use copy as airfoil2 could be normalized
+
+        self._airfoil2_copy = aAirfoil.asCopy()
+
         if aAirfoil is not None: 
-            self._airfoil.geo._blend(self._airfoil1.geo, self._airfoil2.geo, 
+            self._airfoil.geo._blend(self._airfoil1.geo, self._airfoil2_copy.geo, 
                                      self._blendBy, ensure_fast=True)
-            self.sig_airfoil_changed.emit()
+            self.sig_blend_changed.emit()
 
 
     @override
@@ -1104,4 +1131,105 @@ class Matcher (QThread):
             self.msleep(2)                      # give parent some time to do updates
 
         return obj 
+
+
+
+
+class Edit_Polar_Definition (Dialog):
+    """ Dialog to edit a single polar definition"""
+
+    _width  = 470
+    _height = 240
+
+    name = "Edit Polar Definition"
+
+    def __init__ (self, parent : QWidget, polar_def : Polar_Definition): 
+
+        self._polar_def = polar_def
+
+        self.has_been_chnaged = False
+
+        # init layout etc 
+
+        super().__init__ (parent=parent)
+
+        # move window a little to the side 
+        p_center = parent.rect().center()               # parent should be main window
+        pos_x = p_center.x() + 400
+        pos_y = p_center.y() + 250            
+        self.move(pos_x, pos_y)
+
+
+    @property
+    def polar_def (self) -> Polar_Definition:
+        return self._polar_def
+
+    def _init_layout(self) -> QLayout:
+
+        l = QGridLayout()
+        r,c = 0,0 
+        SpaceR (l, r, stretch=0, height=20) 
+        r += 1 
+        FieldF (l,r,c, lab="Re number", width=60, step=10, lim=(1, 5000), unit="k", dec=0,
+                        obj=self.polar_def, prop=Polar_Definition.re_asK)
+        l.setColumnMinimumWidth (c,80)
+        c += 2
+        SpaceC  (l,c)
+        c += 1
+        FieldF (l,r,c, lab="Mach", width=60, step=0.1, lim=(0, 1.0), dec=1,
+                        obj=self.polar_def, prop=Polar_Definition.ma)
+        l.setColumnMinimumWidth (c,40)
+        c += 2
+        SpaceC  (l,c)
+        c += 1
+        FieldF (l,r,c, lab="Ncrit", width=60, step=1, lim=(1, 20), dec=1,
+                        obj=self.polar_def, prop=Polar_Definition.ncrit)
+        l.setColumnMinimumWidth (c,40)
+        c += 2
+        SpaceC  (l,c, stretch=5)
+
+        c = 0 
+        r += 1
+        Label  (l,r,c, get="Polar type")
+        ComboBox (l,r,c+1,  width=60, options=polarType.values(),
+                        obj=self.polar_def, prop=Polar_Definition.type)
+        r += 1
+        SpaceR (l, r, stretch=0, height=20) 
+        r += 1 
+        CheckBox (l,r,c, text=lambda: f"Auto Range of polar {self.polar_def.specVar} values for a complete polar", colSpan=7,
+                        get=self.polar_def.autoRange)
+        r += 1
+        FieldF (l,r,c, lab=f"Step {var.ALPHA}", width=60, step=0.1, lim=(0.1, 1.0), dec=2,
+                        obj=self.polar_def, prop=Polar_Definition.valRange_step,
+                        hide = lambda: self.polar_def.specVar != var.ALPHA)
+        FieldF (l,r,c, lab=f"Step {var.CL}", width=60, step=0.01, lim=(0.01, 0.1), dec=2,
+                        obj=self.polar_def, prop=Polar_Definition.valRange_step,
+                        hide = lambda: self.polar_def.specVar != var.CL)
+        Label  (l,r,c+3, style=style.COMMENT, colSpan=6, 
+                        get="The smaller the value, the more time is needed")
+
+        r += 1
+        SpaceR (l, r, height=5) 
+
+        return l
+
+
+    @override
+    def _on_widget_changed (self):
+        """ slot a input field changed - repanel and refresh"""
+
+        self.refresh()
+
+        self.has_been_chnaged = True              # for change detection 
+
+
+    @override
+    def _button_box (self):
+        """ returns the QButtonBox with the buttons of self"""
+
+        buttons = QDialogButtonBox.StandardButton.Close
+        buttonBox = QDialogButtonBox(buttons)
+        buttonBox.rejected.connect(self.close)
+
+        return buttonBox 
 
