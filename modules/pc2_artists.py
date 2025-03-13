@@ -166,9 +166,9 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
         pen   = pg.mkPen(COLOR_REF_LINE, width=1.5)
         self._plot_dataItem  (x, y, name="Reference Line", pen = pen, antialias = True, zValue=4)
 
-        # mouse helper to change ref line Bezier 
+        # mouse helper to change ref line Bezier - only Bezier may have Banana
 
-        if self.show_mouse_helper:
+        if self.show_mouse_helper and self.planform.n_distrib.isBezier:
  
             # movable Bezier curve   
             pt = self.Movable_Ref_Line_Bezier (self._pi, self.planform, 
@@ -180,7 +180,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
             if self.planform.n_ref_line.is_straight_line():
                 msg = "Reference line: ctrl-click to add point for 'banana'"
             else: 
-                msg = "Reference line: Move Bezier control point to modify, shift-click to remove 'banana' point"
+                msg = "Reference line: Move Bezier control points to modify, shift-click to remove 'banana' points"
             self.set_help_message (msg)
 
 
@@ -250,24 +250,27 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
 
 
         @override
-        def _add_point (self, xy : tuple):
+        def _add_point (self, xy : tuple) -> bool:
             """ handle add point - will be called when ctrl_click on Bezier """
 
-            # only a third point may be added 
-            if len(self._jpoints) != 2: return   
+            # limit n of control points 
+            if len(self._jpoints) >= 8: return False   
 
-            # sanity - not too close to end points
-            if xy[0] > (self._jpoints[1].x * 0.1) and xy[0] < (self._jpoints[1].x * 0.9):
+            # find insertion point 
 
-                self._jpoints.insert (1, JPoint (xy))
+            px     = np.array( self.jpoints_xy ()[0]) 
+            px_new = xy[0]
 
-                logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
+            idx = np.searchsorted(px, px_new)
+            idx = clip (idx, 1, len(px)-1)                  # between start and end tangent point
 
-                self._finished_point (None)
+            self._jpoints.insert (idx, JPoint (xy))
 
-                return True
-            else:
-                return False 
+            logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
+
+            self._finished_point (None)
+
+            return True
             
 
         @override
@@ -580,11 +583,11 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
 
 
         @override
-        def _add_point (self, xy : tuple):
+        def _add_point (self, xy : tuple) -> bool:
             """ handle add point - will be called when ctrl_click on Bezier """
 
             # limit n of control points 
-            if len(self._jpoints) >= 8: return   
+            if len(self._jpoints) >= 8: return False  
 
             # find insertion point 
 
@@ -599,6 +602,8 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
             logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
 
             self._finished_point (None)
+
+            return True
 
 
         @override
@@ -1304,7 +1309,7 @@ class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
 
 
         @override
-        def _add_point (self, xy : tuple):
+        def _add_point (self, xy : tuple) -> bool:
             """ handle add point - will be called when ctrl_click on Bezier """
             return False 
             

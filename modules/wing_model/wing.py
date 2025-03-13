@@ -763,21 +763,13 @@ class N_Chord_Reference:
 
     def bezier_from_jpoints (self, jpoints : list[JPoint]): 
         """ 
-        set chord referenc eBezier control points from JPoints which  
+        set chord referenc Bezier control points from JPoints   
         """
 
         px, py = [], []
         for jpoint in jpoints:
             px.append(jpoint.x )
             py.append(jpoint.y)
-
-        # check if banana point was moved 
-        # bez_px1 = round (self._cr_bezier.points_x[1], 3)               # avoid numerical issues 
-        # bez_py1 = round (self._cr_bezier.points_y[1], 3)
-        # set_no_banana = False
-        # if not self.is_banana :
-        #     if bez_px1 == round(px[1],3) and bez_py1 == round(py[1],3):
-        #         set_no_banana = True 
 
         # update bezier 
         self._cr_bezier.set_points (px, py)
@@ -816,7 +808,7 @@ class N_Reference_Line:
         px = [0.0, 1.0]
         py = [0.0, 0.0]                                       
 
-        # handle banana
+        # Compatibility 3.0.0: handle banana (only 1 additional control point)
 
         banana_p1y = fromDict (dataDict, "banana_p1y", None)  
         banana_p1x = fromDict (dataDict, "banana_p1x", 0.0)
@@ -824,19 +816,23 @@ class N_Reference_Line:
             px.insert(1, banana_p1x)
             py.insert(1, banana_p1y)
 
-        # create Bezier for chord reference function
+        # from dict control coordinates of Bezier
+
+        px    = fromDict (dataDict, "px", px)              
+        py    = fromDict (dataDict, "py", py)
+
+        # create Bezier for reference line
 
         self._ref_bezier  : Bezier = Bezier (px, py)
-        self._ref_bezier_u = np.linspace(0.0, 1.0, num=20)             # default Bezier u parameter (for polyline)
+        self._ref_bezier_u = np.linspace(0.0, 1.0, num=50)             # default Bezier u parameter (for polyline)
 
 
     def _as_dict (self) -> dict:
         """ returns a data dict with the paramters of self"""
 
         d = {}
-        if self.is_banana:
-            toDict (d, "banana_p1x",        self._ref_bezier.points_x[1])
-            toDict (d, "banana_p1y",        self._ref_bezier.points_y[1])
+        toDict (d, "px", self._ref_bezier.points_x)
+        toDict (d, "py", self._ref_bezier.points_y)
         return d
 
 
@@ -871,35 +867,37 @@ class N_Reference_Line:
             px = self._ref_bezier.points_x
             py = self._ref_bezier.points_y
 
-            # check if the middle bezier point is on line between the two others
-            py_1_interpol = interpolate (px[0], px[2], py[0], py[2], px[1])
-            delta_y = abs (py_1_interpol - py[1])
-            return round (delta_y,2) == 0.0 
+            # check if the middle bezier points is on line between the two outer
+            for i, px_i in enumerate (px [1:-1]):
+                py_i = py[i]
+                py_i_interpol = interpolate (px[0], px[-1], py[0], py[-1], px_i)
+                if not isclose (py_i, py_i_interpol, abs_tol=0.005):
+                    return False  
+            return True
 
 
     @property
     def is_banana (self) -> bool:
         """ 
-        True if chord reference is not linear but a curve meaning 
+        True if reference line is not a straight line but a curve meaning 
         banana function 
         """ 
-
         return self._ref_bezier.npoints > 2
 
 
     def set_is_banana (self, aBool):
         """ 
-        set the reference function to a Bezier curve and not a straight line
-          meaning banana function (Bezier is n=2) 
+        set the reference line to a Bezier curve and not a straight line
+          meaning banana function (Bezier is n>2) 
         """ 
         px = self._ref_bezier.points_x
         py = self._ref_bezier.points_y
 
-        if len(px) == 3 and aBool == False:
+        if len(px) > 2 and aBool == False:
 
             # remove control point in the middle -> straight line 
-            del px [1]
-            del py [1]
+            px = [px[0], px[-1]]
+            py = [py[0], py[-1]]
 
             self._ref_bezier.set_points (px, py)
 
@@ -915,7 +913,7 @@ class N_Reference_Line:
 
     def polyline (self) -> tuple [Array, Array]:
         """
-        chord reference as polyline of cr 
+        reference line as polyline of cr 
         """
 
         if self.is_banana:
@@ -929,7 +927,7 @@ class N_Reference_Line:
 
     def bezier_as_jpoints (self)  -> list[JPoint]:
         """ 
-        chord reference Bezier control points as JPoints with limits and fixed property
+        reference line Bezier control points as JPoints with limits and fixed property
             - in normed coordinates 
         """
         jpoints = []
@@ -945,10 +943,10 @@ class N_Reference_Line:
             elif i == (n-1):                                    
                 jpoint.set_fixed (True)
                 jpoint.set_name ('Tip')
-            elif i == 1:                                     
+            else:                                     
                 jpoint.set_x_limits ((0,1))
                 jpoint.set_y_limits ((-2,2))
-                jpoint.set_name ("Banana")
+                jpoint.set_name (f"Banana {i}")
             jpoints.append(jpoint)
 
         return jpoints
@@ -964,20 +962,8 @@ class N_Reference_Line:
             px.append(jpoint.x )
             py.append(jpoint.y)
 
-        # check if banana point was moved 
-        bez_px1 = round (self._ref_bezier.points_x[1], 3)               # avoid numerical issues 
-        bez_py1 = round (self._ref_bezier.points_y[1], 3)
-        set_no_banana = False
-        if not self.is_banana :
-            if bez_px1 == round(px[1],3) and bez_py1 == round(py[1],3):
-                set_no_banana = True 
-
-        # update bezier 
         self._ref_bezier.set_points (px, py)
 
-        # remain in no_banana if banana point wasn't moved
-        if set_no_banana:
-            self.set_is_banana (False)
 
 
 
@@ -3080,7 +3066,10 @@ class Planform:
         # init reference line either new from dataDict or as argument of self
 
         if ref_line is None:
-            self._n_ref_line = N_Reference_Line (dataDict=fromDict(dataDict, "reference_line", {}))
+            if chord_style == N_Distrib_Bezier.name:                # only Distrib_Bezier may have Banana
+                self._n_ref_line = N_Reference_Line (dataDict=fromDict(dataDict, "reference_line", {}))
+            else: 
+                self._n_ref_line = N_Reference_Line (dataDict={})
         else: 
             self._n_ref_line = ref_line 
 
@@ -3443,7 +3432,7 @@ class Planform:
     def ref_polyline (self, normed=False) -> Polyline:
         """
         reference within a planform  which is normally a straight line
-        except Banana (Bezier quadratic) is applied
+        except Banana (Bezier) is applied
 
         Args:
             normed: True - x value is normed xn value
