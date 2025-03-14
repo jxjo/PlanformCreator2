@@ -297,6 +297,7 @@ pip3 install pyqt6
 pip3 install numpy
 pip3 install pyqtgraph 
 pip3 install termcolor
+pip3 install ezdxf
 
 ```
 
