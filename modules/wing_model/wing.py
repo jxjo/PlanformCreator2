@@ -132,7 +132,7 @@ class Wing:
 
         # miscellaneous parms
 
-        self._airfoil_nick_prefix = fromDict (dataDict, "airfoil_nick_prefix", "JX-")
+        self._airfoil_nick_prefix = fromDict (dataDict, "airfoil_nick_prefix", "PC2-")
         self._airfoil_nick_base   = fromDict (dataDict, "airfoil_nick_base", 100)
 
         # if new wing save initial dataDict for change detection on save 
@@ -1045,6 +1045,12 @@ class N_Distrib_Abstract:
         return self.at (1.0)
 
 
+    def set_cn_tip (self, aVal : float):
+        """ set normed chord at tip (only for Bezier chord distribution) """   
+        # to be overridden if it is supported by subclass
+        pass      
+
+
     def polyline (self) -> Polyline:
         """ 
         Normalized polyline of chord along xn
@@ -1171,6 +1177,21 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
 
         return xn
 
+    @override
+    def set_cn_tip (self, aVal : float):
+        """ set normed chord at tip via Bezier curve """   
+
+        # set Bezier tip control point 
+        px, _ = self._bezier.points[-1]
+        py    = clip (aVal,0.01,0.9)
+        self._bezier.set_point (-1, px, py)
+
+        # ensure y tip tangent control point is > y tip 
+        tx, ty = self._bezier.points[-2]
+        if ty < py:
+            ty = py * 1.01
+            self._bezier.set_point (-2, tx, ty)
+
 
     def polyline (self) -> Polyline:
         """ 
@@ -1239,7 +1260,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
                 jpoint.set_name ('End Tangent') 
             elif i == n-1:                                  # tip
                 jpoint.set_x_limits ((1,1))
-                jpoint.set_y_limits ((0.01,0.5))
+                jpoint.set_y_limits ((0.01,0.9))
                 jpoint.set_name ('Tip Chord') 
             else:
                 jpoint.set_x_limits ((-0.5,1.5))
@@ -1792,11 +1813,13 @@ class WingSection :
     def set_cn (self, aVal):
         """ set new chord - will switch self defined 'by chord' """
 
-        if self.is_root: 
-            return
+        if self.is_root: return                                     # root is always 1.0 
+
         if aVal is None:
             self._cn = None
-        else:  
+        elif self.is_tip and not self.defines_cn:                   # set tip chord via Bezier
+            self._planform.set_cn_tip (aVal)
+        else:                                                       # normal case
             aVal = clip (aVal, 0.0, 1.0)
             self._cn = round(aVal,10)
 
@@ -1870,7 +1893,7 @@ class WingSection :
         if self.is_root:
             return False                                                # chord at root always 1.0 
         elif self.is_tip:
-            return self._planform.chord_defined_by_sections             # for trapezoid yes 
+            return True # self._planform.chord_defined_by_sections             # for trapezoid yes 
         else: 
             return True
 
@@ -3146,6 +3169,11 @@ class Planform:
         self._chord_root = aVal 
 
 
+    def set_cn_tip (self, aVal : float):
+        """ set normed chord at tip (only for Bezier chord distribution) """        
+        self.n_distrib.set_cn_tip (aVal) 
+
+
     @property
     def sweep_angle (self) -> float:
         """ sweep angle of reference line in degrees"""
@@ -4246,19 +4274,4 @@ class Image_Definition:
         return self._point_te
     def set_point_te (self, xy : tuple):
         self._point_te = xy
-
-
-
-
-
-
-#-------------------------------------------------------------------------------
-
-# Main program for testing 
-if __name__ == "__main__":
-
-    print ("Current directory: ",os.getcwd())
-    filename = "..\\examples\\Amokka-JX\\Amokka-JX.json"
-    # filename = ""
-    myWing = Wing (filename)
 
