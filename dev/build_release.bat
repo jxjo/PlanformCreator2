@@ -1,6 +1,6 @@
 @echo off
 
-set APP_VERSION=3.0_beta_5
+set APP_VERSION=3.0.1_beta
 set WIN_RELEASE=PlanformCreator2_%APP_VERSION%_win
 
 echo.
@@ -32,9 +32,8 @@ xcopy README.pdf                   releases\%WIN_RELEASE%\               /i /q
 
 xcopy dist\PlanformCreator2        releases\%WIN_RELEASE%\   /s /i /q
 
-pause 
-
 rem ----- zip with powershell ------------
+
 cd releases
 powershell Compress-Archive %WIN_RELEASE%\* %WIN_RELEASE%.zip
 cd ..
