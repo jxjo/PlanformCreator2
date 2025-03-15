@@ -2125,12 +2125,19 @@ class Flaps_Artist (Abstract_Artist_Planform):
 class Airfoil_Artist (Abstract_Artist_Planform):
     """Plot the airfoils of a planform """
 
-    def __init__ (self, *args, show_strak=False, real_size=False, mini_mode=False,**kwargs):
+    def __init__ (self, *args, 
+                  show_strak=False, 
+                  real_size=False, 
+                  mini_mode=False,
+                  use_nick_name=False, 
+                  **kwargs):
 
         self._show_strak    = show_strak                    # show also straked airfoils 
         self._real_size     = real_size                     # plot airfoils in real size
         self._show_thick    = False                         # show max thickness
         self._mini_mode     = mini_mode                     # mini mode for overview 
+        self._use_nick_name = use_nick_name                 # take airfoils nick name
+
         super().__init__ (*args, **kwargs)
 
 
@@ -2157,6 +2164,14 @@ class Airfoil_Artist (Abstract_Artist_Planform):
         return self._show_thick
     def set_show_thick (self, aBool : bool):
         self._show_thick = aBool == True
+        self.refresh()
+
+
+    @property
+    def use_nick_name (self) -> bool:
+        return self._use_nick_name
+    def set_use_nick_name (self, aBool : bool):
+        self._use_nick_name = aBool == True
         self.refresh()
 
 
@@ -2193,11 +2208,17 @@ class Airfoil_Artist (Abstract_Artist_Planform):
                     x, y = airfoil.x, airfoil.y
 
                 color : QColor = colors[i]
+
+                if self.use_nick_name:
+                    airfoil_name = section.airfoil_nick_name
+                else: 
+                    airfoil_name = airfoil.name
+
                 if self._mini_mode:
                     color = color.darker(130)  
-                    label = f"{airfoil.name}"
+                    label = f"{airfoil_name}"
                 else:    
-                    label = f"{airfoil.name} @ {section.name_short}"  
+                    label = f"{airfoil_name} @ {section.name_short}"  
 
                 if airfoil.isBlendAirfoil:
                     pen = pg.mkPen(color, width=1.5, style=Qt.PenStyle.DashLine)

@@ -62,7 +62,7 @@ logger.setLevel(logging.DEBUG)
 #------------------------------------------------
 
 APP_NAME            = "PlanformCreator2"
-APP_VERSION         = "3.0"
+APP_VERSION         = "3.0.1"
 WORKER_MIN_VERSION  = '1.0.5'
 
 TEMPLATE_DIR        = "templates"
@@ -143,8 +143,8 @@ class App_Main (QMainWindow):
         self._add_diagram (Diagram_Wing          (self, self.wing))
         self._add_diagram (Diagram_Planform      (self, self.wing, self.wingSection))
 
-        diagram_settings = Settings().get (Diagram_Airfoil_Polar.__name__, [])
-        self._add_diagram (Diagram_Airfoil_Polar (self, self.wing, diagram_settings= diagram_settings))
+        diagram_settings = Settings().get (Diagram_Airfoils.__name__, [])
+        self._add_diagram (Diagram_Airfoils      (self, self.wing, diagram_settings= diagram_settings))
         
         self._add_diagram (Diagram_Wing_Analysis (self, self.wing, self.wingSection))
 
@@ -233,8 +233,8 @@ class App_Main (QMainWindow):
         l_lower.addWidget (self._data_panel, stretch=1)
         l_lower.setContentsMargins (QMargins(0, 0, 0, 0))
         lower = QWidget ()
-        lower.setMinimumHeight(190)
-        lower.setMaximumHeight(190)
+        lower.setMinimumHeight(165)
+        lower.setMaximumHeight(165)
         lower.setLayout (l_lower)
 
         # main layout with diagram panel and lower 

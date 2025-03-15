@@ -463,7 +463,8 @@ class Wing:
 
 
     @property
-    def airfoil_nick_prefix(self): return self._airfoil_nick_prefix
+    def airfoil_nick_prefix(self): 
+        return self._airfoil_nick_prefix if self._airfoil_nick_prefix else 'PC2-'
     def set_airfoil_nick_prefix(self, newStr): self._airfoil_nick_prefix = newStr
 
     @property
