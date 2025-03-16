@@ -409,6 +409,13 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
 
     @override
+    @property
+    def _isDisabled (self) -> bool:
+        """ overloaded: disabled if section is just for paneling """
+        return self._wingSection().is_for_panels
+
+
+    @override
     def _add_to_header_layout(self, l_head: QHBoxLayout):
         """ add Widgets to header layout"""
 
@@ -434,7 +441,8 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         # 1. column - section settings and airfoil 
 
-        Label  (l,r,c, get=self._section_info, colSpan=5, style=style.COMMENT,
+        Label  (l,r,c, get=self._section_info, colSpan=5, 
+                style=lambda: style.HINT if self._wingSection().is_for_panels else style.COMMENT,
                 hide = lambda: self.planform().chord_defined_by_sections) 
         CheckBox (l,r,c, text="Section defines chord", colSpan=5,               # toggle trapezoid or not 
                 obj=self._wingSection, prop=WingSection.defines_cn,
@@ -554,7 +562,9 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
     def _section_info (self) -> str:
         """ info text about section"""
-        if self._wingSection().defines_cn:
+        if self._wingSection().is_for_panels:
+            text = "Section is only for paneling support"
+        elif self._wingSection().defines_cn:
             text = "Section defines the planform"
         elif self._wingSection().is_xn_fix:
             text = "Section is at fixed span position"

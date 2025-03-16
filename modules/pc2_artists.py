@@ -1503,7 +1503,8 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
                     # mouse helper for position 
 
-                    movable = not (section.is_root_or_tip)
+                    movable = not section.is_root_or_tip and not section.is_for_panels
+
                     pt = self.Movable_Section_Point (self._pi, self.planform, section, 
                                                 mode = m, t_fn = self.t_fn, tr_fn = self.tr_fn,
                                                 move_by_pos=True, movable=movable,
@@ -1517,6 +1518,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
                     else:
                         movable = True and not section.is_root_or_tip \
                                   or (section.defines_cn and section.is_tip)            # define tip chord
+                        movable = movable and not section.is_for_panels                 # never for paneling sections
 
                     pt = self.Movable_Section_Point (self._pi, self.planform, section, 
                                                 mode = m, t_fn = self.t_fn, tr_fn = self.tr_fn,
