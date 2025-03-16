@@ -48,7 +48,7 @@ COLOR_SECTION       = QColor ('deeppink')
 COLOR_EXTRA_SECTION = QColor ('gold').darker (120)
 
 COLOR_REF_ELLI      = QColor ('dodgerblue')
-COLOR_REF_PC2       = QColor ('darkorchid')
+COLOR_REF_PC2       = QColor ('orchid')
 
 COLOR_WARNING       = QColor ('gold')
 

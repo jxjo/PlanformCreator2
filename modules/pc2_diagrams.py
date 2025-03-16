@@ -1697,9 +1697,9 @@ class Diagram_Planform (Diagram_Abstract):
 
             # toggle fields for pc2 reference planform 
             r += 1
-            CheckBox   (l,r,c, text="Another Planform",  
+            CheckBox   (l,r,c, text="Another PC2 Planform", colSpan=2,
                         hide = lambda: bool(self.wing().reference_pc2_file))
-            Button     (l,r,c+1, colSpan=2, text="Select", width=50, 
+            Button     (l,r,c+2, colSpan=2, text="Select", width=50, 
                         set=self._open_planform_ref_pc2, toolTip="Select another PC2 Planform as reference",
                         hide = lambda: bool(self.wing().reference_pc2_file))
 
@@ -1707,14 +1707,18 @@ class Diagram_Planform (Diagram_Abstract):
                         get=lambda: self.show_ref_pc2, set=self.set_show_ref_pc2, 
                         hide = lambda: not bool(self.wing().reference_pc2_file)) 
             ToolButton (l,r,c+2, icon=Icon.OPEN, 
-                        set=self._open_planform_ref_pc2, toolTip="Open new Planform",
+                        set=self._open_planform_ref_pc2, toolTip="Open new PC2 Planform",
                         hide = lambda: not bool(self.wing().reference_pc2_file))
+            ToolButton (l,r,c+3, icon=Icon.DELETE, 
+                        set=self._remove_planform_ref_pc2, toolTip="Remove PC2 Planform",
+                        hide = lambda: not bool(self.wing().reference_pc2_file))
+
 
             # toggle fields for background image
             r += 1
             CheckBox   (l,r,c, text="Background Image", get=False, 
                         hide = lambda: bool(self.wing().background_image.filename)) 
-            Button     (l,r,c+1, text="Select", width=50, colSpan=2,
+            Button     (l,r,c+2, text="Select", width=50, colSpan=2,
                         set=self._open_background_image, toolTip="Open background image as reference",
                         hide = lambda: bool(self.wing().background_image.filename))
 
@@ -1728,11 +1732,14 @@ class Diagram_Planform (Diagram_Abstract):
             ToolButton (l,r,c+2, icon=Icon.OPEN, 
                         set=self._open_background_image, toolTip="Open new background image",
                         hide = lambda: not bool(self.wing().background_image.filename))
+            ToolButton (l,r,c+3, icon=Icon.DELETE, 
+                        set=self._remove_background_image, toolTip="Remove background image",
+                        hide = lambda: not bool(self.wing().background_image.filename))
 
             l.setColumnStretch (0,3)
-            l.setColumnStretch (2,1)
+            # l.setColumnStretch (2,1)
 
-            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, height=140,
+            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, height=150,
                                               switchable=True, hide_switched=True, switched_on=False, 
                                               on_switched=self.set_show_ref_planforms)
 
@@ -1769,9 +1776,18 @@ class Diagram_Planform (Diagram_Abstract):
 
         if newPathFilename: 
             self.wing().set_reference_pc2_file (newPathFilename)
+            self.set_show_ref_pc2 (True)
             self.refresh ()  
 
 
+    def _remove_planform_ref_pc2 (self):
+        """ remove reference pc2 file """
+
+        self.wing().set_reference_pc2_file (None)
+        self.set_show_ref_pc2 (False)
+        self.refresh ()  
+
+    
     def _open_background_image (self):
         """ open background image file  """
 
@@ -1783,6 +1799,14 @@ class Diagram_Planform (Diagram_Abstract):
             self.wing().background_image.set_pathFilename (newPathFilename)
             self._edit_background_image ()  
             self.background_image_artist.set_show(True)
+
+
+    def _remove_background_image (self):
+        """ remove background image file  """
+
+        self.wing().background_image.set_pathFilename (None)
+        self.background_image_artist.set_show(False)
+        self.refresh ()  
 
 
     def _edit_background_image (self):
