@@ -476,7 +476,7 @@ class App_Main (QMainWindow):
 
         self.sig_enter_blend.emit()
 
-        dialog = Blend_Airfoil (self, self.airfoil(), self.airfoil_org)  
+        dialog = Blend_Airfoil (self, self.airfoil(), self.airfoil_org, dx=-250, dy=100)  
 
         dialog.sig_blend_changed.connect (self.sig_blend_changed.emit)
         dialog.sig_airfoil2_changed.connect (self.set_airfoil_target)
@@ -496,7 +496,7 @@ class App_Main (QMainWindow):
 
         self.sig_enter_panelling.emit()
 
-        dialog = Repanel_Airfoil (self, self.airfoil().geo)
+        dialog = Repanel_Airfoil (self, self.airfoil().geo, dx=-150, dy=50)
 
         dialog.sig_new_panelling.connect (self.sig_panelling_changed.emit)
         dialog.exec()     

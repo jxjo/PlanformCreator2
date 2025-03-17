@@ -694,9 +694,10 @@ class Panel_Bezier_Match (Panel_Airfoil_Abstract):
                             target_curv_le: float, max_curv_te : float  ): 
         """ run match bezier (dialog) """ 
 
-        matcher = Match_Bezier (self.myApp, aSide, aTarget_line,
+        matcher = Match_Bezier (self, aSide, aTarget_line,
                                 target_curv_le = target_curv_le,
-                                max_curv_te = max_curv_te)
+                                max_curv_te = max_curv_te,
+                                dx=-150, dy=-350)
 
         matcher.sig_new_bezier.connect     (self.myApp.sig_bezier_changed.emit)
         matcher.sig_match_finished.connect (self._on_match_finished)
@@ -801,7 +802,7 @@ class Panel_Polar_Defs (Edit_Panel):
     def edit_polar_def (self, id : int):
         """ edit polar definition with index idef"""
 
-        diag = Edit_Polar_Definition (self, self.polar_defs[id])
+        diag = Edit_Polar_Definition (self, self.polar_defs[id], dx=150, dy=-200)
         diag.exec()
 
         # sort polar definitions ascending re number 
