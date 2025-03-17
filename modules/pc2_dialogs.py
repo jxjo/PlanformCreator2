@@ -10,7 +10,7 @@ Dialog windows to handle the different extra functions
 import fnmatch             
 
 from PyQt6.QtWidgets        import QLayout, QDialogButtonBox, QPushButton, QDialogButtonBox
-from PyQt6.QtWidgets        import QFileDialog, QTextEdit
+from PyQt6.QtWidgets        import QFileDialog, QTextEdit, QDialog
 
 import pyqtgraph as pg
 from pyqtgraph.GraphicsScene.mouseEvents        import MouseClickEvent
@@ -46,12 +46,6 @@ class Dialog_Export_Airfoil (Dialog):
         self._close_btn  : QPushButton = None 
 
         super().__init__ ( *args, **kwargs)
-
-        # move window a little to the side 
-        p_center = self._parent.rect().center()               # parent should be main window
-        pos_x = p_center.x() - 300
-        pos_y = p_center.y() + 100            
-        self.move(pos_x, pos_y)
 
         # connect dialog buttons
         self._close_btn.clicked.connect  (self.close)
@@ -166,12 +160,6 @@ class Dialog_Export_Dxf (Dialog):
         self._close_btn  : QPushButton = None 
 
         super().__init__ ( *args, **kwargs)
-
-        # move window a little to the side 
-        p_center = self._parent.rect().center()               # parent should be main window
-        pos_x = p_center.x() - 300
-        pos_y = p_center.y() + 100            
-        self.move(pos_x, pos_y)
 
         # connect dialog buttons
         self._close_btn.clicked.connect  (self.close)
@@ -363,12 +351,6 @@ class Dialog_Edit_Image (Dialog):
         self._diagram : Dialog_Edit_Image.Diagram_Image = None
 
         super().__init__ ( *args, **kwargs)
-
-        # move window a little to the side 
-        p_center = self._parent.rect().center()               # parent should be main window
-        pos_x = p_center.x() - 500
-        pos_y = p_center.y() - 100            
-        self.move(pos_x, pos_y)
 
         self.setWindowTitle (f"{self.name}   [{self.img_def.filename}]")
 
@@ -635,12 +617,6 @@ class Dialog_Select_Template (Dialog):
 
         super().__init__ ( *args, **kwargs)
 
-        # move window a little to the side 
-        p_center = self._parent.rect().center()               # parent should be main window
-        pos_x = p_center.x() - 500
-        pos_y = p_center.y() - 100            
-        self.move(pos_x, pos_y)
-
         self._panel.layout().setContentsMargins (QMargins(0, 0, 0, 0))  # no borders in central panel 
 
         self.setWindowTitle (f"{self.name}")
@@ -733,26 +709,19 @@ class Dialog_TextEdit (Dialog):
 
     def __init__ (self, *args, title : str= None, **kwargs): 
 
-        self._ok_btn     : QPushButton = None
-        self._cancel_btn : QPushButton = None 
+        self._close_btn  : QPushButton = None 
 
         self._new_text  = None
 
         super().__init__ ( *args, **kwargs)
 
-        # move window a little to the side 
-        p_center = self._parent.rect().center()                         # parent should be main window
-        pos_x = p_center.x() - 100
-        pos_y = p_center.y() + 300           
-        self.move(pos_x, pos_y)
 
-        ittle = title if title is not None else self.name
+        title = title if title is not None else self.name
         self.setWindowTitle (f"{title}")
         self._panel.layout().setContentsMargins (QMargins(0, 0, 0, 0))  # no borders in central panel 
 
         # connect dialog buttons
-        self._cancel_btn.clicked.connect  (self.close)
-        self._ok_btn.clicked.connect  (self.accept)
+        self._close_btn.clicked.connect  (self.close)
 
 
     @property
@@ -790,26 +759,21 @@ class Dialog_TextEdit (Dialog):
     def _button_box (self):
         """ returns the QButtonBox with the buttons of self"""
 
-        buttonBox = QDialogButtonBox (QDialogButtonBox.StandardButton.Ok  | QDialogButtonBox.StandardButton.Cancel)
-
-        self._ok_btn     = buttonBox.button(QDialogButtonBox.StandardButton.Ok)
-        self._cancel_btn = buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
+        buttonBox = QDialogButtonBox (QDialogButtonBox.StandardButton.Close) #  | QDialogButtonBox.StandardButton.Cancel)
+        self._close_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Close)
 
         return buttonBox 
 
 
-    def accept (self):
-        """ ok button clicked"""
+    @override 
+    def close (self): 
+        """ close button clicked """
 
         self.set_new_text (self._qtextEdit.toPlainText ()) 
 
-        super().accept()
-        self.close()
+        super().close ()
 
-    def reject (self):
-        """ cancel button clicked"""
-        super().reject()
-        self.close()
+        self.setResult (QDialog.DialogCode.Accepted)
 
 
 
@@ -832,12 +796,6 @@ class Dialog_Edit_Paneling (Dialog):
         self._close_btn  : QPushButton = None 
 
         super().__init__ ( *args, **kwargs)
-
-        # move window a little to the side 
-        p_center = self._parent.rect().center()               # parent should be main window
-        pos_x = p_center.x() + 100
-        pos_y = p_center.y() + 250            
-        self.move(pos_x, pos_y)
 
         # connect dialog buttons
         self._close_btn.clicked.connect  (self.close)

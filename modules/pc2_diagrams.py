@@ -581,7 +581,7 @@ class Item_VLM_Panels (Diagram_Item):
         panels_artist : VLM_Panels_Artist = self._get_artist(VLM_Panels_Artist)[0]
         panels_artist.set_show_chord_diff (True)
 
-        dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled)  
+        dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled, dx=50, dy=-50)  
 
         dialog.sig_paneling_changed.connect (myParent.sig_panel_def_changed.emit)
 
@@ -1737,9 +1737,9 @@ class Diagram_Planform (Diagram_Abstract):
                         hide = lambda: not bool(self.wing().background_image.filename))
 
             l.setColumnStretch (0,3)
-            # l.setColumnStretch (2,1)
+            l.setRowStretch (r+1,3)
 
-            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, height=150,
+            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, height=130,
                                               switchable=True, hide_switched=True, switched_on=False, 
                                               on_switched=self.set_show_ref_planforms)
 
@@ -1814,7 +1814,7 @@ class Diagram_Planform (Diagram_Abstract):
 
         self.wing().background_image._qimage = None
 
-        dialog = Dialog_Edit_Image (self, self.wing().background_image)  
+        dialog = Dialog_Edit_Image (self.section_panel, self.wing().background_image, dx=150, dy=-400)  
         dialog.exec()   
 
         self.refresh()  

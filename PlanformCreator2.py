@@ -429,7 +429,7 @@ class App_Main (QMainWindow):
 
         template_dir  = os.path.join (os.path.dirname (__file__), TEMPLATE_DIR)
 
-        dialog = Dialog_Select_Template (self, template_dir) 
+        dialog = Dialog_Select_Template (self, template_dir, dx=-750, dy=-300) 
         dialog.exec()     
 
         if dialog.template_file_selected:
@@ -560,14 +560,14 @@ class App_Main (QMainWindow):
     def export_airfoils (self):
         """open export airfoils of wing dialog """
 
-        dialog = Dialog_Export_Airfoil (self, self.wing)  
+        dialog = Dialog_Export_Airfoil (self, self.wing, dx=-500, dy=-100)  
         dialog.exec()     
 
 
     def export_dxf (self):
         """open export planform to dxf dialog """
 
-        dialog = Dialog_Export_Dxf (self, self.wing)  
+        dialog = Dialog_Export_Dxf (self, self.wing, dx=-500, dy=-100)  
         dialog.exec()     
 
 

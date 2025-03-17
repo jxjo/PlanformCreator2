@@ -336,13 +336,12 @@ class Panel_Wing (Panel_Planform_Abstract):
     def _edit_description (self):
         """ open little text editor to edit description"""
 
-        dialog = Dialog_TextEdit (self.myApp, self.wing().description, title="Edit Description")
+        dialog = Dialog_TextEdit (self, self.wing().description, title="Description of Wing", dx=200, dy=-250)
         dialog.exec () 
 
         if dialog.result() == QDialog.DialogCode.Accepted:
             self.wing().set_description (dialog.new_text)
             self._on_widget_changed (dialog)                   # manual refresh a dialog is not a 'Widget'
-
 
 
 class Panel_Chord_Reference (Panel_Planform_Abstract):
