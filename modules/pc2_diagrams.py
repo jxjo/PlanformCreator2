@@ -320,10 +320,9 @@ class Item_Planform (Diagram_Item):
                         get=lambda: self.show_strak, set=self.set_show_strak,
                         hide=lambda: not self.show_airfoils)    
 
-
             l.setColumnMinimumWidth (0,70)
             l.setColumnStretch (3,5)
-            l.setRowStretch    (r,2)
+            l.setRowStretch    (r+1,2)
                      
             self._section_panel = Edit_Panel (title=self.name, layout=l, height=125, 
                                               switchable=True, hide_switched=True, 
@@ -1542,7 +1541,6 @@ class Diagram_Planform (Diagram_Abstract):
         self._show_ref_line = True                          # show reference line 
         self._show_ref_planform_elli = True
         self._show_wingSections = False
-        self._show_flaps = False
 
         super().__init__(*args,  **kwargs)
 
@@ -1595,11 +1593,23 @@ class Diagram_Planform (Diagram_Abstract):
 
     @property
     def show_flaps (self) -> bool: 
-        return self._show_flaps
+        artist = self._get_artist (Flaps_Artist)[0]
+        return artist.show
     
     def set_show_flaps (self, aBool : bool): 
-        self._show_flaps = aBool == True
         self._show_artist (Flaps_Artist, aBool)
+        self._viewPanel.refresh()
+
+
+    @property
+    def show_flap_depth (self) -> bool: 
+        artist : Flaps_Artist = self._get_artist (Flaps_Artist)[0]
+        return artist.show_depth
+    
+    def set_show_flap_depth (self, aBool : bool): 
+        artist : Flaps_Artist
+        for artist in self._get_artist (Flaps_Artist):
+            artist.set_show_depth (aBool)
 
 
     @property
@@ -1664,19 +1674,24 @@ class Diagram_Planform (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            CheckBox (l,r,c, text="Show mouse helper", 
+            CheckBox (l,r,c, text="Show mouse helper", colSpan=2,
                       get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
             r += 1
-            CheckBox (l,r,c, text="Reference Line", 
+            CheckBox (l,r,c, text="Reference Line",  colSpan=2,
                     get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
             r += 1
-            CheckBox (l,r,c, text="Wing Sections", 
+            CheckBox (l,r,c, text="Wing Sections",  colSpan=2,
                       get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
             r += 1
             CheckBox (l,r,c, text="Flaps", 
                       get=lambda: self.show_flaps, set=self.set_show_flaps) 
+            CheckBox (l,r,c+1, text="Flap depth", 
+                        get=lambda: self.show_flap_depth,
+                        set=self.set_show_flap_depth,
+                        hide=lambda: not self.show_flaps)
 
-            l.setColumnStretch (0,2)
+            l.setColumnMinimumWidth (0,70)
+            l.setColumnStretch (2,5)
 
             self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
                                               switchable=False, switched_on=True)

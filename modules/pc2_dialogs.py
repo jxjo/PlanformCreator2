@@ -895,11 +895,11 @@ class Dialog_Edit_Paneling (Dialog):
         Label       (l,r,c+5, get=lambda: f"currently {self.planform.cn_tip_cur:.1%}", colSpan=2, 
                             style=style.COMMENT)
 
-        r += 1
-        SpaceR      (l,r, stretch=5, height=1)
         l.setColumnMinimumWidth (0,20)
         l.setColumnMinimumWidth (4,40)
         l.setColumnStretch (8,5)
+
+        l.setRowStretch (r+1, 5)
         
         return l 
 

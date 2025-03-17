@@ -2617,6 +2617,18 @@ class Flap:
         return x, y 
 
 
+    def depth_left (self) -> tuple[float]:
+        """ 
+        flap depth absolut e.g. 35mm and relative e.g. 0.27 at left side        
+        """
+        return self._flaps.flap_depth_at (self.x_from)
+
+    def depth_right (self) -> tuple[float]:
+        """ 
+        flap depth absolut e.g. 35mm and relative e.g. 0.27 at right side        
+        """
+        return self._flaps.flap_depth_at (self.x_to)
+
 
 
 class Flaps:
@@ -2719,7 +2731,10 @@ class Flaps:
         start_section  = None
         section : WingSection
 
-        for section in self._wingSections:
+        # exclude sections for panelling
+        real_sections = [section for section in self._wingSections if not section.is_for_panels]
+
+        for section in real_sections:
 
             if start_section is None and section.flap_group > 0:
                 start_section = section
@@ -2879,7 +2894,7 @@ class Flaps:
 
 
 
-    def flap_depth_at (self, x : float, hinge_y : float = None) -> float:
+    def flap_depth_at (self, x : float, hinge_y : float = None) -> tuple[float]:
         """ 
         flap depth absolut e.g. 35mm and relative e.g. 0.27 at position x 
             if hinge_y is omitted it is calculated from current hinge line 

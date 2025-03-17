@@ -48,7 +48,7 @@ COLOR_SECTION       = QColor ('deeppink')
 COLOR_EXTRA_SECTION = QColor ('gold').darker (120)
 
 COLOR_REF_ELLI      = QColor ('dodgerblue')
-COLOR_REF_PC2       = QColor ('orchid')
+COLOR_REF_PC2       = QColor ('magenta').darker(120)
 
 COLOR_WARNING       = QColor ('gold')
 
@@ -1380,10 +1380,10 @@ class Ref_Planforms_Artist (Abstract_Artist_Planform):
 
             if planform.n_distrib.isElliptical:
                 color = COLOR_REF_ELLI
-                name  = f"Reference {planform.name}" 
+                name  = f"{planform.name}" 
             else:  
                 color = COLOR_REF_PC2
-                name  = f"Reference {self.wing.planform_ref_pc2_name}"
+                name  = f"{self.wing.planform_ref_pc2_name}"
 
             pen   = pg.mkPen(color, width=1)
 
@@ -1860,6 +1860,21 @@ class Flaps_Artist (Abstract_Artist_Planform):
         - mode NORM_PLANFORM
     """
 
+    def __init__ (self, *args, show_depth=False, **kwargs):
+
+        self._show_depth    = show_depth                    # show flap depth
+        super().__init__ (*args, **kwargs)
+
+
+    @property
+    def show_depth (self) -> bool:
+        """ also show flap depth"""
+        return self._show_depth
+    def set_show_depth (self, aBool : bool):
+        self._show_depth = aBool == True
+        self.refresh()
+
+
     def _plot (self): 
 
         flaps      = self.planform.flaps
@@ -1953,6 +1968,26 @@ class Flaps_Artist (Abstract_Artist_Planform):
             if not (self._mode == mode.WING_LEFT or self._mode == mode.WING_RIGHT):
                 x, y = flap.center()
                 self._plot_point (x,y, color=color, size=0, text=flap.name, textColor=color, anchor=(0.5,0.5))
+
+            # plot flap depth at left of the flap'
+            if self.show_depth:
+                depth, depth_rel = flap.depth_left ()
+                text = f"{depth:.1f}mm\n{depth_rel:.1%}"
+                l_x,l_y = flap.line_left ()  
+                x = l_x[0]
+                y = (l_y[0] + l_y[1]) / 2
+                self._plot_point (x,y, color=color, size=0, text=text, textColor=color, anchor=(-0.1,0.5))
+
+        # plot flap depth at tip
+        if self.show_depth and flap_list: 
+            flap = flap_list[-1]
+            depth, depth_rel = flap.depth_right ()
+            text = f"{depth:.1f}mm\n{depth_rel:.1%}"
+            l_x,l_y = flap.line_right ()  
+            x = l_x[0]
+            y = (l_y[0] + l_y[1]) / 2
+            self._plot_point (x,y, color=color, size=0, text=text, textColor=color, anchor=(-0.1,0.2))
+
 
 
 
