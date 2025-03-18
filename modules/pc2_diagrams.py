@@ -553,18 +553,17 @@ class Item_VLM_Panels (Diagram_Item):
 
             l = QGridLayout()   
             r,c = 0, 0 
-            Button     (l,r,c, text="Paneling Options", width=130, colSpan=3,
+            Button     (l,r,c, text="Define Paneling", width=100, colSpan=3,
                         set=self._edit_paneling, toolTip="Define / Edit paneling options")
             r +=1
-            SpaceR   (l,r, height=10)
+            SpaceR   (l,r, height=5)
             r += 1
             CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
                         obj=self, prop=Item_VLM_Panels.show_colorBar,
                         disable=lambda: self.opPoint() is None)
-            r += 1
-            SpaceR   (l,r, stretch=3)
+            l.setRowStretch (r+1,3)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height =120,
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height =100,
                                               switched_on=self._show,  
                                               switchable=True, on_switched=self.setVisible)
             
@@ -1538,9 +1537,6 @@ class Diagram_Planform (Diagram_Abstract):
 
         self._general_panel = None                          # panel with general settings  
         self._export_panel  = None                          # panel with export buttons
-        self._show_ref_line = True                          # show reference line 
-        self._show_ref_planform_elli = True
-        self._show_wingSections = False
 
         super().__init__(*args,  **kwargs)
 
@@ -1551,19 +1547,17 @@ class Diagram_Planform (Diagram_Abstract):
 
     @property
     def show_wingSections (self) -> bool: 
-        return self._show_wingSections
+        return self._get_artist (WingSections_Artist) [0].show
     
     def set_show_wingSections (self, aBool : bool): 
-        self._show_wingSections = aBool == True
         self._show_artist (WingSections_Artist, show=aBool)
 
 
     @property
     def show_ref_line (self) -> bool: 
-        return self._show_ref_line
+        return self._get_artist (Ref_Line_Artist) [0].show
     
     def set_show_ref_line (self, aBool : bool): 
-        self._show_ref_line = aBool == True
         self._show_artist (Ref_Line_Artist, aBool)
 
 
@@ -1656,14 +1650,12 @@ class Diagram_Planform (Diagram_Abstract):
         has a section_panel
         """
 
-        # override to add additional general settings panel on top 
-
         super().create_view_panel ()
 
         layout : QVBoxLayout = self._viewPanel.layout()
 
-        layout.insertWidget (0, self.general_panel, stretch=0)
-        layout.addWidget    (self.export_panel, stretch=0)
+        layout.insertWidget (0, self.general_panel, stretch=0)          # general at top
+        layout.addWidget    (self.export_panel, stretch=0)              # export at bottom
 
 
     @property 
@@ -1675,23 +1667,23 @@ class Diagram_Planform (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             CheckBox (l,r,c, text="Show mouse helper", colSpan=2,
-                      get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
+                        get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
             r += 1
             CheckBox (l,r,c, text="Reference Line",  colSpan=2,
-                    get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
+                        get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
             r += 1
             CheckBox (l,r,c, text="Wing Sections",  colSpan=2,
-                      get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
+                        get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
             r += 1
             CheckBox (l,r,c, text="Flaps", 
-                      get=lambda: self.show_flaps, set=self.set_show_flaps) 
+                        get=lambda: self.show_flaps, set=self.set_show_flaps) 
             CheckBox (l,r,c+1, text="Flap depth", 
-                        get=lambda: self.show_flap_depth,
-                        set=self.set_show_flap_depth,
+                        get=lambda: self.show_flap_depth, set=self.set_show_flap_depth,
                         hide=lambda: not self.show_flaps)
 
             l.setColumnMinimumWidth (0,70)
             l.setColumnStretch (2,5)
+            l.setRowStretch (r+1,3)
 
             self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
                                               switchable=False, switched_on=True)
@@ -1769,17 +1761,15 @@ class Diagram_Planform (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 1
-            Button      (l,r,c, text="Export Dxf", width=100,
-                         set=self.sig_export_dxf.emit)
-            r += 1
-            SpaceR      (l,r,10,3)
+            Button  (l,r,c, text="Export Dxf", width=100, set=self.sig_export_dxf.emit)
 
             l.setColumnMinimumWidth (0,10)
             l.setColumnStretch (2,2)
+            l.setRowStretch (r+1,3)
 
-            self._general_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(80,None),
                                               switchable=False, switched_on=True)
-        return self._general_panel 
+        return self._export_panel 
 
 
     def _open_planform_ref_pc2 (self):
@@ -2476,6 +2466,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
             l.setColumnStretch (0,2)
+            l.setRowStretch (r+1,3)
 
             self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
                                               switchable=False, switched_on=True)
@@ -2493,21 +2484,22 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             r,c = 0, 1
             Button      (l,r,c, text="Export Xflr5", width=100, set=self.sig_export_xflr5.emit)
             r += 1
-            SpaceR      (l,r,2,0)
+            SpaceR (l,r, height=2, stretch=0)
             r += 1
             Button      (l,r,c, text="Export FLZ", width=100, set=self.sig_export_flz.emit)
             r += 1
-            SpaceR      (l,r,2,0)
+            SpaceR (l,r, height=2, stretch=0)
             r += 1
             Button      (l,r,c, text="Launch FLZ", width=100, set=self.sig_launch_flz.emit,
                                 hide= not os.name == 'nt')                                  # only Windows
             r += 1
-            SpaceR      (l,r,10,1)
+            l.setRowMinimumHeight (r,10)
+            l.setRowStretch (r,3)
 
             l.setColumnMinimumWidth (0,10)
             l.setColumnStretch (2,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(80,None),
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(120,None),
                                               switchable=False, switched_on=True)
         return self._export_panel 
 
