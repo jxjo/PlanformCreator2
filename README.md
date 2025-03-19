@@ -316,8 +316,8 @@ Install
 
 ```
 # change to the PC2 directory
-python3 -m venv venv                        # create virtual environment, the second 'venv' is the directory name
-. venv/bin/activate                         # for Windows: 'venv\bin\activate' for Windows 
+python3 -m venv venv                        # create virtual environment
+. venv/bin/activate                         # for Windows: 'venv\bin\activate'
 pip3 install pyqt6
 pip3 install numpy
 pip3 install pyqtgraph 
