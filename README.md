@@ -300,13 +300,11 @@ pip3 install pyqtgraph
 pip3 install termcolor
 pip3 install ezdxf
 ```
-
 and Run
 
 ```
 python3 PlanformCreator2.py
 ```
-
 
 #### Windows and Linux using a virtual environment
 
