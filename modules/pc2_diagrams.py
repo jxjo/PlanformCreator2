@@ -11,27 +11,22 @@ import logging
 
 from base.widgets           import * 
 from base.diagram           import * 
-from base.panels            import Container_Panel, MessageBox
+from base.panels            import Container_Panel
 
 from PyQt6.QtWidgets        import QFileDialog, QGraphicsLayoutItem
-
-# from model.airfoil          import Airfoil
 
 from model.airfoil          import Airfoil
 from model.polar_set        import *
 from model.xo2_driver       import Worker
-
-from airfoil_ui_panels      import Panel_Polar_Defs
-
-from pc2_artists            import *
-from pc2_dialogs            import Dialog_Edit_Image, Dialog_Edit_Paneling
 from wing                   import Wing, Planform, Planform_Paneled
-
 from VLM_wing               import VLM_OpPoint, OpPoint_Var, v_from_re
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from airfoil_ui_panels      import Panel_Polar_Defs
+from pc2_artists            import *
+from pc2_dialogs            import Dialog_Edit_Image, Dialog_Edit_Paneling
 
+logger = logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG)
 
 
 #-------------------------------------------------------------------------------
@@ -224,14 +219,9 @@ class Item_Planform (Diagram_Item):
 
         self._wingSection_fn = wingSection_fn               # bound method to get currrent wing section
 
-        self._show_airfoils     = False
-        self._show_strak        = False
-        self._show_bounding_box = True
-
         super().__init__(*args, **kwargs)
-
-        # set margins (inset) of self 
-        self.setContentsMargins ( 0,50,0,20)
+  
+        self.setContentsMargins ( 0,50,0,20)                # set margins (inset) of self 
 
 
     def wing (self) -> Wing: 
@@ -273,33 +263,33 @@ class Item_Planform (Diagram_Item):
 
 
     @property
+    def airfoil_name_artist (self) -> Airfoil_Name_Artist:
+        return self._get_artist (Airfoil_Name_Artist) [0]
+
+
+    @property
     def show_airfoils (self) -> bool: 
-        return self._show_airfoils
+        return self.airfoil_name_artist.show
     
     def set_show_airfoils (self, aBool : bool): 
-        self._show_airfoils = aBool == True
-        self._show_artist (Airfoil_Name_Artist, aBool)
-        self.section_panel.refresh()                                # enable straked checkbox 
-
+        self.airfoil_name_artist.set_show (aBool)        
+        self.section_panel.refresh()                                # enable blended checkbox 
         self.setup_viewRange()                                      # ensure airfoil names fit in current view 
 
 
     @property
     def show_strak (self) -> bool: 
-        return self._show_strak
+        return self.airfoil_name_artist.show_strak
     
     def set_show_strak (self, aBool : bool): 
-        self._show_strak = aBool == True
-        artist : Airfoil_Name_Artist = self._get_artist (Airfoil_Name_Artist) [0]
-        artist.set_show_strak (aBool)
+        self.airfoil_name_artist.set_show_strak (aBool)
 
 
     @property
     def show_bounding_box (self) -> bool: 
-        return self._show_bounding_box
+        return self._get_artist (Planform_Box_Artist) [0].show
     
     def set_show_bounding_box (self, aBool : bool): 
-        self._show_bounding_box = aBool == True
         self._show_artist (Planform_Box_Artist, aBool)
 
 
@@ -310,17 +300,27 @@ class Item_Planform (Diagram_Item):
         if self._section_panel is None:    
             l = QGridLayout()
             r,c = 0, 0
-            CheckBox (l,r,c, text="Bounding Box", 
+            CheckBox (l,r,c, text="Bounding Box", colSpan=2,
                       get=lambda: self.show_bounding_box, set=self.set_show_bounding_box)
             r += 1
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils)
-            CheckBox (l,r,c+1, text="also straked", 
+            CheckBox (l,r,c+1, text="Use nick name", colSpan=3,
+                        get=lambda: self.airfoil_name_artist.use_nick_name,
+                        set=self.airfoil_name_artist.set_use_nick_name,
+                        hide=lambda: not self.show_airfoils,
+                        toolTip="Airfoils nick name is defined in diagram 'Airfoils'")
+            r += 1
+            CheckBox (l,r,c+1, text="Also blended", 
                         get=lambda: self.show_strak, set=self.set_show_strak,
-                        disable=lambda: not self.show_airfoils)    
+                        hide=lambda: not self.show_airfoils)    
+
+            l.setColumnMinimumWidth (0,70)
+            l.setColumnStretch (3,5)
+            l.setRowStretch    (r+1,2)
                      
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=100, 
-                                              switchable=True, hide_switched=False, 
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height=125, 
+                                              switchable=True, hide_switched=True, 
                                               switched_on=self._show,
                                               on_switched=self.setVisible)
         return self._section_panel 
@@ -548,18 +548,17 @@ class Item_VLM_Panels (Diagram_Item):
 
             l = QGridLayout()   
             r,c = 0, 0 
-            Button     (l,r,c, text="Paneling Options", width=130, colSpan=3,
+            Button     (l,r,c, text="Define Paneling", width=100, colSpan=3,
                         set=self._edit_paneling, toolTip="Define / Edit paneling options")
             r +=1
-            SpaceR   (l,r, height=10)
+            SpaceR   (l,r, height=5)
             r += 1
             CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
                         obj=self, prop=Item_VLM_Panels.show_colorBar,
                         disable=lambda: self.opPoint() is None)
-            r += 1
-            SpaceR   (l,r, stretch=3)
+            l.setRowStretch (r+1,3)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height =120,
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height =100,
                                               switched_on=self._show,  
                                               switchable=True, on_switched=self.setVisible)
             
@@ -575,7 +574,7 @@ class Item_VLM_Panels (Diagram_Item):
         panels_artist : VLM_Panels_Artist = self._get_artist(VLM_Panels_Artist)[0]
         panels_artist.set_show_chord_diff (True)
 
-        dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled)  
+        dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled, dx=50, dy=-50)  
 
         dialog.sig_paneling_changed.connect (myParent.sig_panel_def_changed.emit)
 
@@ -935,13 +934,6 @@ class Item_Wing (Diagram_Item):
     name = "View Wing"                                          # used for link and section header 
 
     def __init__(self, *args,  **kwargs):
-
-        self._show_ref_line     = True                          # show reference line 
-        self._show_wingSections = False
-        self._show_flaps        = True
-        self._show_airfoils     = False
-        self._show_np           = False                         # neutral point 
-
         super().__init__(*args, **kwargs)
 
         self.buttonsHidden      = True                          # don't show buttons and coordinates
@@ -989,6 +981,8 @@ class Item_Wing (Diagram_Item):
     def setup_viewRange (self):
         """ define view range of this plotItem"""
 
+        self.viewBox.autoRange (padding=0.08)
+
         self.viewBox.setDefaultPadding(0.02)
         self.viewBox.setAspectLocked()
         self.viewBox.invertY(True)
@@ -1001,42 +995,55 @@ class Item_Wing (Diagram_Item):
 
     @property
     def show_wingSections (self) -> bool: 
-        return self._show_wingSections
+        return self._get_artist (WingSections_Artist)[0].show
+
+    def set_show_wingSections (self, aBool : bool): 
+        self._show_artist (WingSections_Artist, aBool)
+
 
     @property
     def show_ref_line (self) -> bool: 
-        return self._show_ref_line
-    
+        return self._get_artist (Ref_Line_Artist)[0].show
+
+    def set_show_ref_line (self, aBool : bool): 
+        self._show_artist (Ref_Line_Artist, aBool)
+
+
     @property
     def show_flaps (self) -> bool: 
-        return self._show_flaps
+        return self._get_artist (Flaps_Artist)[0].show
+
+    def set_show_flaps (self, aBool : bool): 
+        self._show_artist (Flaps_Artist, aBool)
+
+
+    @property
+    def airfoil_name_artist (self) -> Airfoil_Name_Artist:
+        return self._get_artist (Airfoil_Name_Artist) [0]
 
     @property
     def show_airfoils (self) -> bool: 
-        return self._show_airfoils
+        return self.airfoil_name_artist.show
+
+    def set_show_airfoils (self, aBool : bool): 
+        self.airfoil_name_artist.set_show (aBool)
+        self.setup_viewRange()                                      # ensure airfoil names fit in current view 
+        self.section_panel.refresh()                                # enable nick checkbox 
+
+
+    @property
+    def use_nick_name (self) -> bool: 
+        return self.airfoil_name_artist.use_nick_name
+
+    def set_use_nick_name (self, aBool : bool): 
+        self.airfoil_name_artist.set_use_nick_name (aBool)
+
 
     @property
     def show_np (self) -> bool: 
-        return self._show_np
-
-    def set_show_wingSections (self, aBool : bool): 
-        self._wingSections = aBool == True
-        self._show_artist (WingSections_Artist, aBool)
- 
-    def set_show_ref_line (self, aBool : bool): 
-        self._show_ref_line = aBool == True
-        self._show_artist (Ref_Line_Artist, aBool)
-
-    def set_show_flaps (self, aBool : bool): 
-        self._show_flaps = aBool == True
-        self._show_artist (Flaps_Artist, aBool)
-    
-    def set_show_airfoils (self, aBool : bool): 
-        self._show_airfoils = aBool == True
-        self._show_artist (Airfoil_Name_Artist, aBool)
+        return self._get_artist (Neutral_Point_Artist)[0].show
     
     def set_show_np (self, aBool : bool): 
-        self._show_np = aBool == True
         self._show_artist (Neutral_Point_Artist, aBool)
 
 
@@ -1048,27 +1055,34 @@ class Item_Wing (Diagram_Item):
             l = QGridLayout()
             r,c = 0, 0 
             r += 1
-            CheckBox (l,r,c, text="Reference Line", 
+            CheckBox (l,r,c, text="Reference Line", colSpan=2, 
                         get=lambda: self.show_ref_line,
                         set=self.set_show_ref_line) 
             r += 1
-            CheckBox (l,r,c, text="Wing Sections", 
+            CheckBox (l,r,c, text="Wing Sections", colSpan=2, 
                         get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
             r += 1
-            CheckBox (l,r,c, text="Flaps", 
+            CheckBox (l,r,c, text="Flaps", colSpan=2, 
                         get=lambda: self.show_flaps, set=self.set_show_flaps) 
             r += 1
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
+            CheckBox (l,r,c+1, text="Use nick name",  
+                        get=lambda: self.use_nick_name,
+                        set=self.set_use_nick_name,
+                        hide=lambda: not self.show_airfoils,
+                        toolTip="Airfoils nick name is defined in diagram 'Airfoils'")
             r += 1
-            CheckBox (l,r,c, text="Neutral Point (geometric)", 
+            CheckBox (l,r,c, text="Neutral Point (geometric)", colSpan=3, 
                       get=lambda: self.show_np, set=self.set_show_np) 
             r += 1
-            l.setColumnStretch (3,2)
+            l.setColumnMinimumWidth (0,70)
+            l.setColumnMinimumWidth (1,80)
+            l.setColumnStretch (3,5)
             l.setRowStretch    (r,2)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, height=180, 
-                                              switchable=True, hide_switched=True, 
+                                              switchable=False, hide_switched=True, 
                                               on_switched=self.setVisible)
 
         return self._section_panel 
@@ -1098,10 +1112,6 @@ class Item_Wing_Airfoils (Diagram_Item):
     def planform (self) -> Wing: 
         return self.wing()._planform
 
-    @property
-    def airfoil_artist (self) -> Airfoil_Artist:
-        return self._get_artist (Airfoil_Artist) [0]
-
 
     @override
     def refresh(self):
@@ -1115,8 +1125,6 @@ class Item_Wing_Airfoils (Diagram_Item):
         """ create and setup the artists of self"""
 
         self._add_artist (Airfoil_Artist    (self, self.planform, show_legend=True))
-
-
 
 
     @override
@@ -1135,6 +1143,11 @@ class Item_Wing_Airfoils (Diagram_Item):
 
 
     @property
+    def airfoil_artist (self) -> Airfoil_Artist:
+        return self._get_artist (Airfoil_Artist) [0]
+
+
+    @property
     def section_panel (self) -> Edit_Panel:
         """ return section panel within view panel"""
 
@@ -1146,15 +1159,20 @@ class Item_Wing_Airfoils (Diagram_Item):
                         get=lambda: self.airfoil_artist.real_size,
                         set=self.airfoil_artist.set_real_size) 
             r += 1
-            CheckBox (l,r,c, text="Straked Airfoils", 
+            CheckBox (l,r,c, text="Also blended", 
                         get=lambda: self.airfoil_artist.show_strak,
                         set=self.airfoil_artist.set_show_strak) 
+            r += 1
+            CheckBox (l,r,c, text="Use nick name", 
+                        get=lambda: self.airfoil_artist.use_nick_name,
+                        set=self.airfoil_artist.set_use_nick_name, 
+                        toolTip="Airfoils nick name is defined in diagram 'Airfoils'")
             r += 1
             l.setColumnStretch (3,2)
             l.setRowStretch    (r,2)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, height=130, 
-                                              switchable=True, hide_switched=False, 
+                                              switchable=False, hide_switched=False, 
                                               on_switched=self.setVisible)
 
         return self._section_panel 
@@ -1227,7 +1245,7 @@ class Item_Airfoils (Diagram_Item):
     Diagram (Plot) Item for airfoils of a planform
     """
 
-    name        = "Airfoils"                                   
+    name        = "View Airfoils"                                   
     title       = "Airfoils"                       # title of diagram item
     subtitle    = ""
 
@@ -1266,6 +1284,22 @@ class Item_Airfoils (Diagram_Item):
     @property
     def airfoil_artist (self) -> Airfoil_Artist:
         return self._get_artist (Airfoil_Artist) [0]
+    
+    @property 
+    def airfoil_nick_prefix (self) -> str:
+        return self.wing().airfoil_nick_prefix
+    def set_airfoil_nick_prefix (self, aVal : str):
+        self.wing().set_airfoil_nick_prefix (aVal)
+        self.refresh()
+    
+    @property 
+    def airfoil_nick_base (self) -> str:
+        return self.wing().airfoil_nick_base
+    def set_airfoil_nick_base (self, aVal : str):
+        self.wing().set_airfoil_nick_base (aVal)
+        self.airfoil_artist.refresh()
+    
+    
 
     @property
     def section_panel (self) -> Edit_Panel:
@@ -1275,18 +1309,36 @@ class Item_Airfoils (Diagram_Item):
             l = QGridLayout()
             r,c = 0, 0 
             r += 1
-            CheckBox (l,r,c, text="In real size", 
+            CheckBox (l,r,c, text="In real size", colSpan=4,
                         get=lambda: self.airfoil_artist.real_size,
                         set=self.airfoil_artist.set_real_size) 
             r += 1
-            CheckBox (l,r,c, text="Show maximum thickness", 
+            CheckBox (l,r,c, text="Show maximum thickness", colSpan=4,
                         get=lambda: self.airfoil_artist.show_thick,
                         set=self.airfoil_artist.set_show_thick) 
             r += 1
-            l.setColumnStretch (3,2)
+            CheckBox (l,r,c, text="Use airfoils nick name", colSpan=4,
+                        get=lambda: self.airfoil_artist.use_nick_name,
+                        set=self.airfoil_artist.set_use_nick_name) 
+            r += 1
+            Field    (l,r,c+1, lab="Prefix", width=60,
+                        obj=self, prop=Item_Airfoils.airfoil_nick_prefix,
+                        toolTip="Common name prefix for all airfoils")
+            r += 1
+            FieldI   (l,r,c+1, lab="Base", width=60, step=10, lim=(10, 9990), 
+                        obj=self, prop=Item_Airfoils.airfoil_nick_base,
+                        toolTip="<div>Will be multiplied with the relative chord of the airfoils wing section and "+ \
+                                "added to the prefix</div>")
+
+            r += 1
+            l.setColumnMinimumWidth (0,20)
+            l.setColumnMinimumWidth (1,50)
+            l.setColumnMinimumWidth (2,70)
+            l.setColumnStretch (2,2)
+            l.setColumnStretch (3,5)
             l.setRowStretch    (r,2)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=100, 
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height=(180,None),
                                               switchable=True, hide_switched=True, 
                                               on_switched=self.setVisible)
         return self._section_panel 
@@ -1480,10 +1532,6 @@ class Diagram_Planform (Diagram_Abstract):
 
         self._general_panel = None                          # panel with general settings  
         self._export_panel  = None                          # panel with export buttons
-        self._show_ref_line = True                          # show reference line 
-        self._show_ref_planform_elli = True
-        self._show_wingSections = False
-        self._show_flaps = False
 
         super().__init__(*args,  **kwargs)
 
@@ -1494,19 +1542,17 @@ class Diagram_Planform (Diagram_Abstract):
 
     @property
     def show_wingSections (self) -> bool: 
-        return self._show_wingSections
+        return self._get_artist (WingSections_Artist) [0].show
     
     def set_show_wingSections (self, aBool : bool): 
-        self._show_wingSections = aBool == True
         self._show_artist (WingSections_Artist, show=aBool)
 
 
     @property
     def show_ref_line (self) -> bool: 
-        return self._show_ref_line
+        return self._get_artist (Ref_Line_Artist) [0].show
     
     def set_show_ref_line (self, aBool : bool): 
-        self._show_ref_line = aBool == True
         self._show_artist (Ref_Line_Artist, aBool)
 
 
@@ -1536,11 +1582,23 @@ class Diagram_Planform (Diagram_Abstract):
 
     @property
     def show_flaps (self) -> bool: 
-        return self._show_flaps
+        artist = self._get_artist (Flaps_Artist)[0]
+        return artist.show
     
     def set_show_flaps (self, aBool : bool): 
-        self._show_flaps = aBool == True
         self._show_artist (Flaps_Artist, aBool)
+        self._viewPanel.refresh()
+
+
+    @property
+    def show_flap_depth (self) -> bool: 
+        artist : Flaps_Artist = self._get_artist (Flaps_Artist)[0]
+        return artist.show_depth
+    
+    def set_show_flap_depth (self, aBool : bool): 
+        artist : Flaps_Artist
+        for artist in self._get_artist (Flaps_Artist):
+            artist.set_show_depth (aBool)
 
 
     @property
@@ -1587,12 +1645,12 @@ class Diagram_Planform (Diagram_Abstract):
         has a section_panel
         """
 
-        # override to add additional general settings panel on top 
-
         super().create_view_panel ()
 
-        self._viewPanel.layout().insertWidget (0, self.general_panel, stretch=0)
-        self._viewPanel.layout().addWidget    (self.export_panel, stretch=0)
+        layout : QVBoxLayout = self._viewPanel.layout()
+
+        layout.insertWidget (0, self.general_panel, stretch=0)          # general at top
+        layout.addWidget    (self.export_panel, stretch=0)              # export at bottom
 
 
     @property 
@@ -1603,19 +1661,24 @@ class Diagram_Planform (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            CheckBox (l,r,c, text="Show mouse helper", 
-                      get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
+            CheckBox (l,r,c, text="Show mouse helper", colSpan=2,
+                        get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
             r += 1
-            CheckBox (l,r,c, text="Reference Line", 
-                    get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
+            CheckBox (l,r,c, text="Reference Line",  colSpan=2,
+                        get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
             r += 1
-            CheckBox (l,r,c, text="Wing Sections", 
-                      get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
+            CheckBox (l,r,c, text="Wing Sections",  colSpan=2,
+                        get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
             r += 1
             CheckBox (l,r,c, text="Flaps", 
-                      get=lambda: self.show_flaps, set=self.set_show_flaps) 
+                        get=lambda: self.show_flaps, set=self.set_show_flaps) 
+            CheckBox (l,r,c+1, text="Flap depth", 
+                        get=lambda: self.show_flap_depth, set=self.set_show_flap_depth,
+                        hide=lambda: not self.show_flaps)
 
-            l.setColumnStretch (0,2)
+            l.setColumnMinimumWidth (0,70)
+            l.setColumnStretch (2,5)
+            l.setRowStretch (r+1,3)
 
             self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
                                               switchable=False, switched_on=True)
@@ -1636,9 +1699,9 @@ class Diagram_Planform (Diagram_Abstract):
 
             # toggle fields for pc2 reference planform 
             r += 1
-            CheckBox   (l,r,c, text="Another Planform",  
+            CheckBox   (l,r,c, text="Another PC2 Planform", colSpan=2,
                         hide = lambda: bool(self.wing().reference_pc2_file))
-            Button     (l,r,c+1, colSpan=2, text="Select", width=50, 
+            Button     (l,r,c+2, colSpan=2, text="Select", width=50, 
                         set=self._open_planform_ref_pc2, toolTip="Select another PC2 Planform as reference",
                         hide = lambda: bool(self.wing().reference_pc2_file))
 
@@ -1646,14 +1709,18 @@ class Diagram_Planform (Diagram_Abstract):
                         get=lambda: self.show_ref_pc2, set=self.set_show_ref_pc2, 
                         hide = lambda: not bool(self.wing().reference_pc2_file)) 
             ToolButton (l,r,c+2, icon=Icon.OPEN, 
-                        set=self._open_planform_ref_pc2, toolTip="Open new Planform",
+                        set=self._open_planform_ref_pc2, toolTip="Open new PC2 Planform",
                         hide = lambda: not bool(self.wing().reference_pc2_file))
+            ToolButton (l,r,c+3, icon=Icon.DELETE, 
+                        set=self._remove_planform_ref_pc2, toolTip="Remove PC2 Planform",
+                        hide = lambda: not bool(self.wing().reference_pc2_file))
+
 
             # toggle fields for background image
             r += 1
             CheckBox   (l,r,c, text="Background Image", get=False, 
                         hide = lambda: bool(self.wing().background_image.filename)) 
-            Button     (l,r,c+1, text="Select", width=50, colSpan=2,
+            Button     (l,r,c+2, text="Select", width=50, colSpan=2,
                         set=self._open_background_image, toolTip="Open background image as reference",
                         hide = lambda: bool(self.wing().background_image.filename))
 
@@ -1667,11 +1734,14 @@ class Diagram_Planform (Diagram_Abstract):
             ToolButton (l,r,c+2, icon=Icon.OPEN, 
                         set=self._open_background_image, toolTip="Open new background image",
                         hide = lambda: not bool(self.wing().background_image.filename))
+            ToolButton (l,r,c+3, icon=Icon.DELETE, 
+                        set=self._remove_background_image, toolTip="Remove background image",
+                        hide = lambda: not bool(self.wing().background_image.filename))
 
             l.setColumnStretch (0,3)
-            l.setColumnStretch (2,1)
+            l.setRowStretch (r+1,3)
 
-            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, height=140,
+            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, height=130,
                                               switchable=True, hide_switched=True, switched_on=False, 
                                               on_switched=self.set_show_ref_planforms)
 
@@ -1686,17 +1756,15 @@ class Diagram_Planform (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 1
-            Button      (l,r,c, text="Export Dxf", width=100,
-                         set=self.sig_export_dxf.emit)
-            r += 1
-            SpaceR      (l,r,10,3)
+            Button  (l,r,c, text="Export Dxf", width=100, set=self.sig_export_dxf.emit)
 
             l.setColumnMinimumWidth (0,10)
             l.setColumnStretch (2,2)
+            l.setRowStretch (r+1,3)
 
-            self._general_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(80,None),
                                               switchable=False, switched_on=True)
-        return self._general_panel 
+        return self._export_panel 
 
 
     def _open_planform_ref_pc2 (self):
@@ -1708,9 +1776,18 @@ class Diagram_Planform (Diagram_Abstract):
 
         if newPathFilename: 
             self.wing().set_reference_pc2_file (newPathFilename)
+            self.set_show_ref_pc2 (True)
             self.refresh ()  
 
 
+    def _remove_planform_ref_pc2 (self):
+        """ remove reference pc2 file """
+
+        self.wing().set_reference_pc2_file (None)
+        self.set_show_ref_pc2 (False)
+        self.refresh ()  
+
+    
     def _open_background_image (self):
         """ open background image file  """
 
@@ -1724,12 +1801,20 @@ class Diagram_Planform (Diagram_Abstract):
             self.background_image_artist.set_show(True)
 
 
+    def _remove_background_image (self):
+        """ remove background image file  """
+
+        self.wing().background_image.set_pathFilename (None)
+        self.background_image_artist.set_show(False)
+        self.refresh ()  
+
+
     def _edit_background_image (self):
         """ edit settings of background image   """
 
         self.wing().background_image._qimage = None
 
-        dialog = Dialog_Edit_Image (self, self.wing().background_image)  
+        dialog = Dialog_Edit_Image (self.section_panel, self.wing().background_image, dx=150, dy=-400)  
         dialog.exec()   
 
         self.refresh()  
@@ -1907,7 +1992,7 @@ class Diagram_Wing (Diagram_Abstract):
 
 
 
-class Diagram_Airfoil_Polar (Diagram_Abstract):
+class Diagram_Airfoils (Diagram_Abstract):
     """    
     Diagram view to show/plot airfoil diagrams - Container for diagram items 
     """
@@ -1923,7 +2008,7 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
         self._diagram_settings = diagram_settings
 
         self._show_operating_points = False                 # show polars operating points 
-        self._show_strak    = False                         # show straked airfoils
+        self._show_strak    = False                         # show blended airfoils
         self._min_re_asK    = 10                            # minimum re number / 1000 to plot 
         self._apply_min_re  = False                         # activate min re rumber 
 
@@ -2024,11 +2109,14 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
 
         super().create_view_panel ()
 
-        layout = self._viewPanel.layout()
+        layout : QVBoxLayout = self._viewPanel.layout()
+
         layout.insertWidget (0, self.general_panel, stretch=0)
         layout.insertWidget (2, self.polar_panel, stretch=0)
 
         # export panel at bottom 
+
+        layout.addStretch   (3)
 
         layout.addWidget    (self.export_panel, stretch=0)
 
@@ -2048,7 +2136,7 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
 
     @property 
     def show_strak (self) -> bool:
-        """ show straked airfoils """
+        """ show blended airfoils """
         return self._show_strak
 
     def set_show_strak (self, aBool : bool):
@@ -2096,7 +2184,7 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            CheckBox (l,r,c, text="Show straked airfoils", 
+            CheckBox (l,r,c, text="Show blended airfoils", 
                       get=lambda: self.show_strak, set=self.set_show_strak) 
             r += 1
             l.setColumnStretch (3,2)
@@ -2134,10 +2222,10 @@ class Diagram_Airfoil_Polar (Diagram_Abstract):
             SpaceR      (l,r, height=5, stretch=0) 
             r += 1
             CheckBox    (l,r,c, text="Minimum Re", colSpan=4,
-                            obj=self, prop=Diagram_Airfoil_Polar.apply_min_re,
+                            obj=self, prop=Diagram_Airfoils.apply_min_re,
                             toolTip="Apply a minimum Re number for polars in the diagrams")
             FieldF      (l,r,c+4, width=60, step=1, lim=(1, 1000), unit="k", dec=0,
-                            obj=self, prop=Diagram_Airfoil_Polar.min_re_asK,
+                            obj=self, prop=Diagram_Airfoils.min_re_asK,
                             hide=lambda: not self.apply_min_re)
 
             # polar diagrams variables setting 
@@ -2343,7 +2431,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
     
     def set_show_airfoils (self, aBool : bool): 
         self._show_artist (Airfoil_Name_Artist, aBool)
-        self.general_panel.refresh()                                # enable straked checkbox 
+        self.general_panel.refresh()                                # enable blended checkbox 
 
         item = self._get_items (Item_VLM_Panels)[0]
         item.setup_viewRange()                                      # ensure airfoil names fit in current view 
@@ -2373,6 +2461,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
             l.setColumnStretch (0,2)
+            l.setRowStretch (r+1,3)
 
             self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
                                               switchable=False, switched_on=True)
@@ -2390,21 +2479,22 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             r,c = 0, 1
             Button      (l,r,c, text="Export Xflr5", width=100, set=self.sig_export_xflr5.emit)
             r += 1
-            SpaceR      (l,r,2,0)
+            SpaceR (l,r, height=2, stretch=0)
             r += 1
             Button      (l,r,c, text="Export FLZ", width=100, set=self.sig_export_flz.emit)
             r += 1
-            SpaceR      (l,r,2,0)
+            SpaceR (l,r, height=2, stretch=0)
             r += 1
             Button      (l,r,c, text="Launch FLZ", width=100, set=self.sig_launch_flz.emit,
                                 hide= not os.name == 'nt')                                  # only Windows
             r += 1
-            SpaceR      (l,r,10,1)
+            l.setRowMinimumHeight (r,10)
+            l.setRowStretch (r,3)
 
             l.setColumnMinimumWidth (0,10)
             l.setColumnStretch (2,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(80,None),
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(120,None),
                                               switchable=False, switched_on=True)
         return self._export_panel 
 

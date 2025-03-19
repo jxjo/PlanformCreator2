@@ -48,7 +48,7 @@ COLOR_SECTION       = QColor ('deeppink')
 COLOR_EXTRA_SECTION = QColor ('gold').darker (120)
 
 COLOR_REF_ELLI      = QColor ('dodgerblue')
-COLOR_REF_PC2       = QColor ('darkorchid')
+COLOR_REF_PC2       = QColor ('magenta').darker(120)
 
 COLOR_WARNING       = QColor ('gold')
 
@@ -166,9 +166,9 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
         pen   = pg.mkPen(COLOR_REF_LINE, width=1.5)
         self._plot_dataItem  (x, y, name="Reference Line", pen = pen, antialias = True, zValue=4)
 
-        # mouse helper to change ref line Bezier 
+        # mouse helper to change ref line Bezier - only Bezier may have Banana
 
-        if self.show_mouse_helper:
+        if self.show_mouse_helper and self.planform.n_distrib.isBezier:
  
             # movable Bezier curve   
             pt = self.Movable_Ref_Line_Bezier (self._pi, self.planform, 
@@ -180,7 +180,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
             if self.planform.n_ref_line.is_straight_line():
                 msg = "Reference line: ctrl-click to add point for 'banana'"
             else: 
-                msg = "Reference line: Move Bezier control point to modify, shift-click to remove 'banana' point"
+                msg = "Reference line: Move Bezier control points to modify, shift-click to remove 'banana' points"
             self.set_help_message (msg)
 
 
@@ -250,24 +250,27 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
 
 
         @override
-        def _add_point (self, xy : tuple):
+        def _add_point (self, xy : tuple) -> bool:
             """ handle add point - will be called when ctrl_click on Bezier """
 
-            # only a third point may be added 
-            if len(self._jpoints) != 2: return   
+            # limit n of control points 
+            if len(self._jpoints) >= 8: return False   
 
-            # sanity - not too close to end points
-            if xy[0] > (self._jpoints[1].x * 0.1) and xy[0] < (self._jpoints[1].x * 0.9):
+            # find insertion point 
 
-                self._jpoints.insert (1, JPoint (xy))
+            px     = np.array( self.jpoints_xy ()[0]) 
+            px_new = xy[0]
 
-                logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
+            idx = np.searchsorted(px, px_new)
+            idx = clip (idx, 1, len(px)-1)                  # between start and end tangent point
 
-                self._finished_point (None)
+            self._jpoints.insert (idx, JPoint (xy))
 
-                return True
-            else:
-                return False 
+            logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
+
+            self._finished_point (None)
+
+            return True
             
 
         @override
@@ -580,11 +583,11 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
 
 
         @override
-        def _add_point (self, xy : tuple):
+        def _add_point (self, xy : tuple) -> bool:
             """ handle add point - will be called when ctrl_click on Bezier """
 
             # limit n of control points 
-            if len(self._jpoints) >= 8: return   
+            if len(self._jpoints) >= 8: return False  
 
             # find insertion point 
 
@@ -599,6 +602,8 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
             logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
 
             self._finished_point (None)
+
+            return True
 
 
         @override
@@ -1304,7 +1309,7 @@ class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
 
 
         @override
-        def _add_point (self, xy : tuple):
+        def _add_point (self, xy : tuple) -> bool:
             """ handle add point - will be called when ctrl_click on Bezier """
             return False 
             
@@ -1375,10 +1380,10 @@ class Ref_Planforms_Artist (Abstract_Artist_Planform):
 
             if planform.n_distrib.isElliptical:
                 color = COLOR_REF_ELLI
-                name  = f"Reference {planform.name}" 
+                name  = f"{planform.name}" 
             else:  
                 color = COLOR_REF_PC2
-                name  = f"Reference {self.wing.planform_ref_pc2_name}"
+                name  = f"{self.wing.planform_ref_pc2_name}"
 
             pen   = pg.mkPen(color, width=1)
 
@@ -1498,7 +1503,8 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
                     # mouse helper for position 
 
-                    movable = not (section.is_root_or_tip)
+                    movable = not section.is_root_or_tip and not section.is_for_panels
+
                     pt = self.Movable_Section_Point (self._pi, self.planform, section, 
                                                 mode = m, t_fn = self.t_fn, tr_fn = self.tr_fn,
                                                 move_by_pos=True, movable=movable,
@@ -1512,6 +1518,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
                     else:
                         movable = True and not section.is_root_or_tip \
                                   or (section.defines_cn and section.is_tip)            # define tip chord
+                        movable = movable and not section.is_for_panels                 # never for paneling sections
 
                     pt = self.Movable_Section_Point (self._pi, self.planform, section, 
                                                 mode = m, t_fn = self.t_fn, tr_fn = self.tr_fn,
@@ -1853,6 +1860,21 @@ class Flaps_Artist (Abstract_Artist_Planform):
         - mode NORM_PLANFORM
     """
 
+    def __init__ (self, *args, show_depth=False, **kwargs):
+
+        self._show_depth    = show_depth                    # show flap depth
+        super().__init__ (*args, **kwargs)
+
+
+    @property
+    def show_depth (self) -> bool:
+        """ also show flap depth"""
+        return self._show_depth
+    def set_show_depth (self, aBool : bool):
+        self._show_depth = aBool == True
+        self.refresh()
+
+
     def _plot (self): 
 
         flaps      = self.planform.flaps
@@ -1946,6 +1968,26 @@ class Flaps_Artist (Abstract_Artist_Planform):
             if not (self._mode == mode.WING_LEFT or self._mode == mode.WING_RIGHT):
                 x, y = flap.center()
                 self._plot_point (x,y, color=color, size=0, text=flap.name, textColor=color, anchor=(0.5,0.5))
+
+            # plot flap depth at left of the flap'
+            if self.show_depth:
+                depth, depth_rel = flap.depth_left ()
+                text = f"{depth:.1f}mm\n{depth_rel:.1%}"
+                l_x,l_y = flap.line_left ()  
+                x = l_x[0]
+                y = (l_y[0] + l_y[1]) / 2
+                self._plot_point (x,y, color=color, size=0, text=text, textColor=color, anchor=(-0.1,0.5))
+
+        # plot flap depth at tip
+        if self.show_depth and flap_list: 
+            flap = flap_list[-1]
+            depth, depth_rel = flap.depth_right ()
+            text = f"{depth:.1f}mm\n{depth_rel:.1%}"
+            l_x,l_y = flap.line_right ()  
+            x = l_x[0]
+            y = (l_y[0] + l_y[1]) / 2
+            self._plot_point (x,y, color=color, size=0, text=text, textColor=color, anchor=(-0.1,0.2))
+
 
 
 
@@ -2120,12 +2162,19 @@ class Flaps_Artist (Abstract_Artist_Planform):
 class Airfoil_Artist (Abstract_Artist_Planform):
     """Plot the airfoils of a planform """
 
-    def __init__ (self, *args, show_strak=False, real_size=False, mini_mode=False,**kwargs):
+    def __init__ (self, *args, 
+                  show_strak=False, 
+                  real_size=False, 
+                  mini_mode=False,
+                  use_nick_name=False, 
+                  **kwargs):
 
         self._show_strak    = show_strak                    # show also straked airfoils 
         self._real_size     = real_size                     # plot airfoils in real size
         self._show_thick    = False                         # show max thickness
         self._mini_mode     = mini_mode                     # mini mode for overview 
+        self._use_nick_name = use_nick_name                 # take airfoils nick name
+
         super().__init__ (*args, **kwargs)
 
 
@@ -2152,6 +2201,14 @@ class Airfoil_Artist (Abstract_Artist_Planform):
         return self._show_thick
     def set_show_thick (self, aBool : bool):
         self._show_thick = aBool == True
+        self.refresh()
+
+
+    @property
+    def use_nick_name (self) -> bool:
+        return self._use_nick_name
+    def set_use_nick_name (self, aBool : bool):
+        self._use_nick_name = aBool == True
         self.refresh()
 
 
@@ -2188,11 +2245,17 @@ class Airfoil_Artist (Abstract_Artist_Planform):
                     x, y = airfoil.x, airfoil.y
 
                 color : QColor = colors[i]
+
+                if self.use_nick_name:
+                    airfoil_name = section.airfoil_nick_name
+                else: 
+                    airfoil_name = airfoil.name
+
                 if self._mini_mode:
                     color = color.darker(130)  
-                    label = f"{airfoil.name}"
+                    label = f"{airfoil_name}"
                 else:    
-                    label = f"{airfoil.name} @ {section.name_short}"  
+                    label = f"{airfoil_name} @ {section.name_short}"  
 
                 if airfoil.isBlendAirfoil:
                     pen = pg.mkPen(color, width=1.5, style=Qt.PenStyle.DashLine)

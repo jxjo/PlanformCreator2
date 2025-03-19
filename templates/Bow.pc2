@@ -22,40 +22,72 @@
       1.0,
       1.0,
       0.371219,
-      0.063864
+      0.134876174
     ],
     "p1x":0.797466,
     "p1y":1.0,
     "p2y":0.371219,
-    "p3y":0.063864
+    "p3y":0.134876
   },
   "chord_reference":{
-    "p0y":0.72,
-    "p1y":0.429867
+    "p0y":0.75,
+    "p1y":0.65
   },
   "reference_line":{
-    "banana_p1x":0.616305,
-    "banana_p1y":-0.532799
+    "px":[
+      0.0,
+      0.3572514325,
+      0.6920991211,
+      1.0
+    ],
+    "py":[
+      0.0,
+      -0.3348332285,
+      -0.0977920783,
+      0.0
+    ]
   },
   "wingSections":[
     {
       "xn":0.0,
       "hinge_cn":0.75,
       "flap_group":1,
-      "is_for_panels":false,
       "airfoil":"Root_Example.dat"
     },
     {
       "xn":0.3125,
       "hinge_cn":0.750182,
+      "flap_group":2
+    },
+    {
+      "cn":0.941493,
       "flap_group":2,
-      "is_for_panels":false
+      "is_for_panels":true
+    },
+    {
+      "cn":0.882986,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
+      "cn":0.765972,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
+      "cn":0.531943,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
+      "cn":0.297915,
+      "flap_group":2,
+      "is_for_panels":true
     },
     {
       "xn":1.0,
-      "hinge_cn":0.683954,
+      "hinge_cn":0.7,
       "flap_group":2,
-      "is_for_panels":false,
       "airfoil":"Tip_Example.dat"
     }
   ],
@@ -65,10 +97,10 @@
   "panels":{
     "wy_panels":8,
     "wy_distribution":"uniform",
-    "wx_panels":8,
+    "wx_panels":6,
     "wx_distribution":"uniform",
     "width_min":0.02,
-    "cn_tip_min":0.064,
+    "cn_tip_min":0.13,
     "cn_diff_max":0.02
   }
 }

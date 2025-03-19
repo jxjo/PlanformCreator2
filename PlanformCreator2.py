@@ -56,13 +56,13 @@ from pc2_dialogs            import *
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.WARNING)
 
 
 #------------------------------------------------
 
 APP_NAME            = "PlanformCreator2"
-APP_VERSION         = "3.0"
+APP_VERSION         = "3.1"
 WORKER_MIN_VERSION  = '1.0.5'
 
 TEMPLATE_DIR        = "templates"
@@ -143,8 +143,8 @@ class App_Main (QMainWindow):
         self._add_diagram (Diagram_Wing          (self, self.wing))
         self._add_diagram (Diagram_Planform      (self, self.wing, self.wingSection))
 
-        diagram_settings = Settings().get (Diagram_Airfoil_Polar.__name__, [])
-        self._add_diagram (Diagram_Airfoil_Polar (self, self.wing, diagram_settings= diagram_settings))
+        diagram_settings = Settings().get (Diagram_Airfoils.__name__, [])
+        self._add_diagram (Diagram_Airfoils      (self, self.wing, diagram_settings= diagram_settings))
         
         self._add_diagram (Diagram_Wing_Analysis (self, self.wing, self.wingSection))
 
@@ -233,8 +233,8 @@ class App_Main (QMainWindow):
         l_lower.addWidget (self._data_panel, stretch=1)
         l_lower.setContentsMargins (QMargins(0, 0, 0, 0))
         lower = QWidget ()
-        lower.setMinimumHeight(190)
-        lower.setMaximumHeight(190)
+        lower.setMinimumHeight(165)
+        lower.setMaximumHeight(165)
         lower.setLayout (l_lower)
 
         # main layout with diagram panel and lower 
@@ -429,7 +429,7 @@ class App_Main (QMainWindow):
 
         template_dir  = os.path.join (os.path.dirname (__file__), TEMPLATE_DIR)
 
-        dialog = Dialog_Select_Template (self, template_dir) 
+        dialog = Dialog_Select_Template (self, template_dir, dx=-750, dy=-300) 
         dialog.exec()     
 
         if dialog.template_file_selected:
@@ -560,14 +560,14 @@ class App_Main (QMainWindow):
     def export_airfoils (self):
         """open export airfoils of wing dialog """
 
-        dialog = Dialog_Export_Airfoil (self, self.wing)  
+        dialog = Dialog_Export_Airfoil (self, self.wing, dx=-500, dy=-100)  
         dialog.exec()     
 
 
     def export_dxf (self):
         """open export planform to dxf dialog """
 
-        dialog = Dialog_Export_Dxf (self, self.wing)  
+        dialog = Dialog_Export_Dxf (self, self.wing, dx=-500, dy=-100)  
         dialog.exec()     
 
 
@@ -578,7 +578,7 @@ class App_Main (QMainWindow):
 if __name__ == "__main__":
 
 
-    dev_mode = True
+    dev_mode = False
 
     # init logging  
 

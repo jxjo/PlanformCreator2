@@ -536,8 +536,12 @@ class Dialog (QDialog):
     Extends QDialog with a dataObject (via 'getter') and common background
 
     Args:
-        QDialog (_type_): _description_
-
+        parent: parent widget self (position) should be related
+        getter: bound method for data object 
+        width : overwrite default width of self 
+        height: overwrite default height of self 
+        dx    : move top left corner dx pixel to the right of parent center
+        dy    : move top left corner dy pixel down of parent center
     Returns:
         _type_: _description_
     """
@@ -551,8 +555,10 @@ class Dialog (QDialog):
     def __init__(self,  
                  parent : QWidget =None,
                  getter = None, 
-                 width=None, 
-                 height=None, 
+                 width  : int | None =None, 
+                 height : int | None =None, 
+                 dx : int | None = None, 
+                 dy : int | None = None, 
                  title=None, **kwargs):
         super().__init__(parent=parent, **kwargs)
 
@@ -567,25 +573,34 @@ class Dialog (QDialog):
             self._height = height
 
         # set width and height 
+
         Widget._set_width  (self, self._width)
         Widget._set_height (self, self._height)
 
+        # move self relative to parent center
+
+        if dx is not None and dy is not None:
+            parent_center = self._parent.mapToGlobal (self._parent.rect().center())  # parent in global coordinates
+            pos_x = parent_center.x() + dx
+            pos_y = parent_center.y() + dy            
+            self.move (pos_x, pos_y)
+
+        # title of dialog 
+
         if title is not None: 
             self.name = title 
-
         self.setWindowTitle (self.name)
 
         # enable custom window hint, disable (but not hide) close button
         # self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
 
-        # inital content panel content - layout in >init  
+        # inital content panel content - layout in _init_layout()  
 
         self._panel = QWidget () 
         self.set_background_color (darker_factor=105)
 
         l_panel = self._init_layout()                               # subclass will create layout 
         l_panel.setContentsMargins (QMargins(15, 10, 15, 10))       # inset left 
-        # l_panel.setSpacing(2)
         self._panel.setLayout (l_panel)
 
         # Qt buttonBox at footer
@@ -593,8 +608,6 @@ class Dialog (QDialog):
         l_button = QHBoxLayout()
         l_button.addWidget(self._button_box())
         l_button.setContentsMargins (QMargins(5, 0, 25, 0))
-        # set_background (buttonBox, darker_factor=120)
-
  
         # main layout with title and panel 
 
@@ -606,6 +619,7 @@ class Dialog (QDialog):
         self.setLayout (l_main)
 
         # connect to change signal of widget 
+        
         for w in self.widgets:
             w.sig_changed.connect (self._on_widget_changed)
 

@@ -208,18 +208,22 @@ class Case_Direct_Design (Case_Abstract):
 
         airfoil = airfoil_design.asCopy ()
 
+        # create name extension - does name have already ..._mod?
+     
         if airfoil_org.name.find ('mod') >= 0:
             i = self.get_i_from_design (airfoil_design)
             if i is not None:
-                name = f"{airfoil_org.name}_Design_{i}"
+                name_ext = f"_Design_{i}"
             else: 
-                name = f"{airfoil_org.name}_Design"
+                name_ext = f"_Design"
         else: 
-            name = f"{airfoil_org.name}_mod"
+            name_ext = f"_mod"
 
-        airfoil.set_name (name)
+        # set new name and fileName 
+
+        airfoil.set_name     (airfoil_org.name + name_ext)
         airfoil.set_pathName (airfoil_org.pathName)
-        airfoil.set_fileName_from_name ()
+        airfoil.set_fileName (airfoil_org.fileName_stem + name_ext + airfoil_org.fileName_ext)
 
         return airfoil
 

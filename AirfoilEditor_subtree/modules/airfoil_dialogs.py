@@ -184,7 +184,8 @@ class Blend_Airfoil (Dialog):
 
     def __init__ (self, parent : QWidget, 
                   airfoil  : Airfoil, 
-                  airfoil1 : Airfoil): 
+                  airfoil1 : Airfoil,
+                  **kwargs): 
 
         self._airfoil  = airfoil 
         self._airfoil1 = airfoil1
@@ -194,14 +195,7 @@ class Blend_Airfoil (Dialog):
         self._blendBy  = 0.5                            # initial blend value 
 
         # init layout etc 
-
-        super().__init__ (parent=parent)
-
-        # move window a little to the side 
-        p_center = parent.rect().center()               # parent should be main window
-        pos_x = p_center.x() + 200
-        pos_y = p_center.y() + 250            
-        self.move(pos_x, pos_y)
+        super().__init__ (parent=parent, **kwargs)
 
 
     def _init_layout(self) -> QLayout:
@@ -297,27 +291,20 @@ class Repanel_Airfoil (Dialog):
 
     sig_new_panelling    = pyqtSignal ()
 
-    # ---- static members for external use 
-
 
     def __init__ (self, parent : QWidget, 
-                  geo : Geometry_Splined): 
+                  geo : Geometry_Splined, **kwargs): 
 
         self._geo = geo
         self.has_been_repaneled = False
 
         # init layout etc 
 
-        super().__init__ (parent=parent)
-
-        # move window a little to the side 
-        p_center = parent.rect().center()               # parent should be main window
-        pos_x = p_center.x() + 400
-        pos_y = p_center.y() + 250            
-        self.move(pos_x, pos_y)
+        super().__init__ (parent, **kwargs)
 
         # do a first repanel with the actual parameters 
         #       delayed as parent has to be connected to signal 
+
         timer = QTimer()                                
         timer.singleShot(20, self._on_widget_changed)     # delayed emit 
 
@@ -466,7 +453,8 @@ class Match_Bezier (Dialog):
     def __init__ (self, parent : QWidget, 
                   side_bezier : Side_Airfoil_Bezier, target_line: Line,
                   target_curv_le : float,
-                  max_curv_te : float): 
+                  max_curv_te : float,
+                  **kwargs): 
 
         self._side_bezier = side_bezier
         self._target_line = target_line
@@ -494,17 +482,10 @@ class Match_Bezier (Dialog):
         self._close_btn  : QPushButton = None 
         self._match_btn  : QPushButton = None 
 
-        super().__init__ (parent=parent)
-
-        self.setWindowTitle (self._titletext())
-
-        # move window a little to the side 
-        p_center = parent.rect().center()               # parent should be main window
-        pos_x = p_center.x() + 600
-        pos_y = p_center.y() + 200            
-        self.move(pos_x, pos_y)
+        super().__init__ (parent, title=self._titletext(), **kwargs)
 
         # handle button (signals) 
+
         self._stop_btn.clicked.connect (self._cancel_thread)
         self._close_btn.clicked.connect  (self.close)
         self._match_btn.clicked.connect  (self._start_matcher)
@@ -513,6 +494,7 @@ class Match_Bezier (Dialog):
         self._close_btn.setVisible (True) 
 
         # save current background color for state dependand backgrounds
+
         self._palette_normal = self._panel.palette()
 
 
@@ -1143,21 +1125,14 @@ class Edit_Polar_Definition (Dialog):
 
     name = "Edit Polar Definition"
 
-    def __init__ (self, parent : QWidget, polar_def : Polar_Definition): 
+    def __init__ (self, parent : QWidget, polar_def : Polar_Definition, **kwargs): 
 
         self._polar_def = polar_def
 
         self.has_been_chnaged = False
 
         # init layout etc 
-
-        super().__init__ (parent=parent)
-
-        # move window a little to the side 
-        p_center = parent.rect().center()               # parent should be main window
-        pos_x = p_center.x() + 400
-        pos_y = p_center.y() + 250            
-        self.move(pos_x, pos_y)
+        super().__init__ (parent=parent, **kwargs)
 
 
     @property

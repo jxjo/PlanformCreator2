@@ -285,11 +285,11 @@ class Panel_File (Panel_Planform_Abstract):
         Button (l,r,c+1, text="Save As", width=60, 
                 set=self.myApp.saveAs, toolTip="Save Planform to new parameter file")
         r += 1
-        SpaceR (l,r, stretch=4)
+        SpaceR (l,r, height=28, stretch=0)
         r += 1
         Button (l,r,c, text="&Exit", width=100, set=self.myApp.close)
         r += 1
-        SpaceR (l,r, height=5, stretch=1)        
+        SpaceR (l,r, height=5, stretch=2)        
         l.setColumnStretch (1,2)
         l.setContentsMargins (QMargins(0, 0, 0, 0)) 
 
@@ -301,7 +301,7 @@ class Panel_Wing (Panel_Planform_Abstract):
     """ Main geometry data of wing"""
 
     name = 'Wing'
-    _width  = (430, None)
+    _width  = (420, None)
 
     def _init_layout (self): 
 
@@ -309,7 +309,6 @@ class Panel_Wing (Panel_Planform_Abstract):
         r,c = 0, 0 
         Field  (l,r,c, lab="Name", colSpan=3,
                 obj=self.wing, prop=Wing.name)
-        # ToolButton  (l,r,c+4, icon=Icon.EDIT, set=self._edit_description)
         Button (l,r,c+4, text="Descr", width=75, set=self._edit_description)
         r += 1
         FieldF (l,r,c, lab="Wing Span", width=85, unit="mm", step=10, lim=(10, 20000), dec=0,
@@ -325,11 +324,6 @@ class Panel_Wing (Panel_Planform_Abstract):
         FieldF (l,r,c+3, lab="Sweep Angle", width=75, unit="°", step=0.1, lim=(-45, 45), dec=1,
                 obj=self.planform, prop=Planform.sweep_angle)
         r += 1
-        Field  (l,r,c, lab="Airfoil nick prefix", width=70,
-                obj=self.wing, prop=Wing.airfoil_nick_prefix)
-        FieldI  (l,r,c+3, lab="Airfoil nick base", width=75, step=10, lim=(10, 9990), 
-                obj=self.wing, prop=Wing.airfoil_nick_base)
-        r += 1
         SpaceR (l,r, height=5, stretch=2)        
 
         l.setColumnMinimumWidth (0,95)
@@ -338,10 +332,11 @@ class Panel_Wing (Panel_Planform_Abstract):
         l.setColumnStretch (5,2)
         return l 
 
+
     def _edit_description (self):
         """ open little text editor to edit description"""
 
-        dialog = Dialog_TextEdit (self.myApp, self.wing().description, title="Edit Description")
+        dialog = Dialog_TextEdit (self, self.wing().description, title="Description of Wing", dx=200, dy=-250)
         dialog.exec () 
 
         if dialog.result() == QDialog.DialogCode.Accepted:
@@ -349,20 +344,17 @@ class Panel_Wing (Panel_Planform_Abstract):
             self._on_widget_changed (dialog)                   # manual refresh a dialog is not a 'Widget'
 
 
-
 class Panel_Chord_Reference (Panel_Planform_Abstract):
     """ Main geometry data of wing"""
 
     name    = 'Chord Distribution and Reference'
-    _width  = (380, None)
+    _width  = (370, None)
 
     def _init_layout (self): 
         l = QGridLayout()
         r,c = 0, 0 
-        Label  (l,r,c,   get="Chord Distribution", style=style.COMMENT)
+        Label  (l,r,c,   get="Chord Distribution")
         Label  (l,r,c+1, get=lambda: self.n_chord().name, fontSize=size.HEADER_SMALL)  
-        r += 1
-        SpaceR (l,r, height=26, stretch=0)        
         r += 1
         FieldF (l,r,c,   lab="Reference at Root", width=70, unit="%", step=1, lim=(0,100), dec=1,
                 obj=self.n_chord_ref, prop=N_Chord_Reference.cr_root)
@@ -370,7 +362,8 @@ class Panel_Chord_Reference (Panel_Planform_Abstract):
                 obj=self.n_chord_ref, prop=N_Chord_Reference.cr_tip)
         r += 1
         CheckBox (l,r,c, text="Reference line is a curve (banana)", colSpan=5,
-                  obj=self.n_ref_line, prop=N_Reference_Line.is_banana)
+                obj=self.n_ref_line, prop=N_Reference_Line.is_banana,
+                hide=lambda: not self.planform().n_distrib.isBezier)    # banana only for Bezier
         r += 1
         CheckBox (l,r,c, text="Flaps hinge line equals Reference line", colSpan=5,  
                   obj=self.flaps, prop=Flaps.hinge_equal_ref_line)     
@@ -415,6 +408,13 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
 
     @override
+    @property
+    def _isDisabled (self) -> bool:
+        """ overloaded: disabled if section is just for paneling """
+        return self._wingSection().is_for_panels
+
+
+    @override
     def _add_to_header_layout(self, l_head: QHBoxLayout):
         """ add Widgets to header layout"""
 
@@ -438,10 +438,12 @@ class Panel_WingSection (Panel_Planform_Abstract):
         l = QGridLayout()
         r,c = 0, 0 
 
-        # toggle trapezoid or not 
-        Label  (l,r,c, get=self._section_info, colSpan=5, style=style.COMMENT,
+        # 1. column - section settings and airfoil 
+
+        Label  (l,r,c, get=self._section_info, colSpan=5, 
+                style=lambda: style.HINT if self._wingSection().is_for_panels else style.COMMENT,
                 hide = lambda: self.planform().chord_defined_by_sections) 
-        CheckBox (l,r,c, text="Section defines chord", colSpan=5,  
+        CheckBox (l,r,c, text="Section defines chord", colSpan=5,               # toggle trapezoid or not 
                 obj=self._wingSection, prop=WingSection.defines_cn,
                 disable=lambda: self._wingSection().is_root_or_tip,
                 hide=lambda:  not self.planform().chord_defined_by_sections)     
@@ -458,48 +460,68 @@ class Panel_WingSection (Panel_Planform_Abstract):
                 style=lambda: self._style_for_fixed(self._wingSection().is_cn_fix))
         FieldF (l,r,c+3, lab="of root", width=65, unit="%", step=1, lim=(1, 100), dec=1,
                 obj=self._wingSection, prop=WingSection.cn, disable=lambda: not self._wingSection().is_set_cn_allowed)
+
         r += 1
+
+        # seperate mini panel for airfoil 
+
+        p_foil = QWidget()
+        l_foil = QGridLayout (p_foil)
+        Field  (l_foil,0,0,   lab="Airfoil", # width=130,  
+                get=lambda: self._wingSection().airfoil.name)
+
+        Airfoil_Open_Widget (l_foil,0,2, asIcon=True, obj=self._wingSection, prop=WingSection.airfoil, signal=True)
+
+        ToolButton (l_foil,0,3, icon=Icon.DELETE, set=self._remove_airfoil,
+                    toolTip="Remove airfoil - airfoil at section will be blended", 
+                    disable=lambda: self._wingSection().airfoil.isBlendAirfoil)
+        ToolButton (l_foil,0,4, icon=Icon.AE,   set=self._edit_airfoil,   
+                    toolTip="Edit airfoil with the AirfoilEditor", 
+                    disable=lambda: self._wingSection().airfoil.isBlendAirfoil)
+        
+        l_foil.setContentsMargins (QMargins(0, 0, 0, 0)) 
+        l_foil.setSpacing (2)
+        l_foil.setColumnMinimumWidth (0,70)
+        l_foil.setColumnStretch (1,5)
+        l.addWidget (p_foil, r, c, 1, 5)
+
+        l.setColumnMinimumWidth (0,70)
+        l.setColumnMinimumWidth (2,10)
+        l.setColumnMinimumWidth (3,50)
+        l.setColumnMinimumWidth (5,50)
+
+        r += 1
+        l.setRowStretch (r,5)
+
+        # 2. column - flap and hingle line settings 
+
+        c = 6
+        r = 0
         Label  (l,r,c, get="Flaps hinge line is defined by reference line", colSpan=5, style=style.COMMENT,
                 hide=lambda: not self.flaps().hinge_equal_ref_line )
-        CheckBox (l,r,c, text="Section defines hinge line", colSpan=5,  
+        CheckBox (l,r,c, text="Section defines flaps hinge line", colSpan=5,  
                 obj=self._wingSection, prop=WingSection.defines_hinge,
                 hide=lambda: self.flaps().hinge_equal_ref_line)     
         r += 1
-        FieldF (l,r,c,   lab="Flap depth", width=85, unit="mm", step=1, lim=lambda: (0, self.planform().chord_root), dec=1,
+        FieldF (l,r,c,   lab="Flap depth", width=80, unit="mm", step=1, lim=lambda: (0, self.planform().chord_root), dec=1,
                 obj=self._wingSection, prop=WingSection.flap_c, specialText='Auto',
                 disable=lambda: not self._wingSection().defines_hinge or self._wingSection().hinge_equal_ref_line)
         FieldF (l,r,c+3, lab="of chord", width=65, unit="%", step=1, lim=(-1, 100), dec=1,
                 obj=self._wingSection, prop=WingSection.flap_cn, specialText='-',
                 disable=lambda: not self._wingSection().defines_hinge or self._wingSection().hinge_equal_ref_line)
+
         r += 1
-        SpaceR (l,r, height=5, stretch=2)        
-
-        c = 7
-        r = 1
-        Field  (l,r,c,   lab="Airfoil",  colSpan=1, get=lambda: self._wingSection().airfoil.name)
-
-        Airfoil_Open_Widget (l,r,c+2, asIcon=True, obj=self._wingSection, prop=WingSection.airfoil, signal=True)
-
-        ToolButton (l,r,c+3, icon=Icon.DELETE, set=self._remove_airfoil,
-                    toolTip="Remove airfoil - airfoil will be blended", 
-                    disable=lambda: self._wingSection().airfoil.isBlendAirfoil)
-        ToolButton (l,r,c+4, icon=Icon.AE,   set=self._edit_airfoil,   
-                    toolTip="Edit airfoil with the Airfoil Editor", 
-                    disable=lambda: self._wingSection().airfoil.isBlendAirfoil)
-        r += 1
-        Field  (l,r,c,   lab="Airfoil nick", width=None, colSpan=1, 
-                get=lambda: self._wingSection().airfoil_nick_name)
-        r += 2
         FieldI (l,r,c,   lab="Flap Group", width=50, step=1, lim=(0, 20),  colSpan=2, specialText="-",
                 obj=self._wingSection, prop=WingSection.flap_group)
 
-        l.setColumnMinimumWidth (0,70)
-        l.setColumnMinimumWidth (2,10)
-        l.setColumnMinimumWidth (3,50)
-        l.setColumnMinimumWidth (5,40)
-        l.setColumnMinimumWidth (7,70)
+        l.setColumnMinimumWidth (c  ,70)
+        l.setColumnMinimumWidth (c+2,10)
+        l.setColumnMinimumWidth (c+3,50)
 
-        l.setColumnStretch (8,4)
+        # ----------
+
+        l.setColumnStretch (12,4)
+
         return l 
 
 
@@ -539,7 +561,9 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
     def _section_info (self) -> str:
         """ info text about section"""
-        if self._wingSection().defines_cn:
+        if self._wingSection().is_for_panels:
+            text = "Section is only for paneling support"
+        elif self._wingSection().defines_cn:
             text = "Section defines the planform"
         elif self._wingSection().is_xn_fix:
             text = "Section is at fixed span position"

@@ -83,7 +83,7 @@ class Wing:
             logger.info ('No input data - a default wing will be created')
         else: 
             parm_version = fromDict (dataDict, "pc2_version", 1)
-            logger.info (f"Reading wing parameters from '{parm_filePath}' - parameter version {parm_version}")
+            logger.info (f"Reading wing parameters from '{parm_filePath}' (file version: {parm_version})")
 
             if parm_version == 1:
                 dataDict = self._convert_parm_file_v2 (dataDict)
@@ -132,7 +132,7 @@ class Wing:
 
         # miscellaneous parms
 
-        self._airfoil_nick_prefix = fromDict (dataDict, "airfoil_nick_prefix", "JX-")
+        self._airfoil_nick_prefix = fromDict (dataDict, "airfoil_nick_prefix", "PC2-")
         self._airfoil_nick_base   = fromDict (dataDict, "airfoil_nick_base", 100)
 
         # if new wing save initial dataDict for change detection on save 
@@ -146,7 +146,7 @@ class Wing:
 
     def __repr__(self) -> str:
         # overwrite to get a nice print string 
-        return f"{type(self).__name__} \'{self.name}\'"
+        return f"<{type(self).__name__} {self.name}>"
 
 
     def _save (self) -> dict:
@@ -463,7 +463,8 @@ class Wing:
 
 
     @property
-    def airfoil_nick_prefix(self): return self._airfoil_nick_prefix
+    def airfoil_nick_prefix(self): 
+        return self._airfoil_nick_prefix if self._airfoil_nick_prefix else 'PC2-'
     def set_airfoil_nick_prefix(self, newStr): self._airfoil_nick_prefix = newStr
 
     @property
@@ -763,21 +764,13 @@ class N_Chord_Reference:
 
     def bezier_from_jpoints (self, jpoints : list[JPoint]): 
         """ 
-        set chord referenc eBezier control points from JPoints which  
+        set chord referenc Bezier control points from JPoints   
         """
 
         px, py = [], []
         for jpoint in jpoints:
             px.append(jpoint.x )
             py.append(jpoint.y)
-
-        # check if banana point was moved 
-        # bez_px1 = round (self._cr_bezier.points_x[1], 3)               # avoid numerical issues 
-        # bez_py1 = round (self._cr_bezier.points_y[1], 3)
-        # set_no_banana = False
-        # if not self.is_banana :
-        #     if bez_px1 == round(px[1],3) and bez_py1 == round(py[1],3):
-        #         set_no_banana = True 
 
         # update bezier 
         self._cr_bezier.set_points (px, py)
@@ -816,7 +809,7 @@ class N_Reference_Line:
         px = [0.0, 1.0]
         py = [0.0, 0.0]                                       
 
-        # handle banana
+        # Compatibility 3.0.0: handle banana (only 1 additional control point)
 
         banana_p1y = fromDict (dataDict, "banana_p1y", None)  
         banana_p1x = fromDict (dataDict, "banana_p1x", 0.0)
@@ -824,19 +817,23 @@ class N_Reference_Line:
             px.insert(1, banana_p1x)
             py.insert(1, banana_p1y)
 
-        # create Bezier for chord reference function
+        # from dict control coordinates of Bezier
+
+        px    = fromDict (dataDict, "px", px)              
+        py    = fromDict (dataDict, "py", py)
+
+        # create Bezier for reference line
 
         self._ref_bezier  : Bezier = Bezier (px, py)
-        self._ref_bezier_u = np.linspace(0.0, 1.0, num=20)             # default Bezier u parameter (for polyline)
+        self._ref_bezier_u = np.linspace(0.0, 1.0, num=50)             # default Bezier u parameter (for polyline)
 
 
     def _as_dict (self) -> dict:
         """ returns a data dict with the paramters of self"""
 
         d = {}
-        if self.is_banana:
-            toDict (d, "banana_p1x",        self._ref_bezier.points_x[1])
-            toDict (d, "banana_p1y",        self._ref_bezier.points_y[1])
+        toDict (d, "px", self._ref_bezier.points_x)
+        toDict (d, "py", self._ref_bezier.points_y)
         return d
 
 
@@ -871,35 +868,37 @@ class N_Reference_Line:
             px = self._ref_bezier.points_x
             py = self._ref_bezier.points_y
 
-            # check if the middle bezier point is on line between the two others
-            py_1_interpol = interpolate (px[0], px[2], py[0], py[2], px[1])
-            delta_y = abs (py_1_interpol - py[1])
-            return round (delta_y,2) == 0.0 
+            # check if the middle bezier points is on line between the two outer
+            for i, px_i in enumerate (px [1:-1]):
+                py_i = py[i]
+                py_i_interpol = interpolate (px[0], px[-1], py[0], py[-1], px_i)
+                if not isclose (py_i, py_i_interpol, abs_tol=0.005):
+                    return False  
+            return True
 
 
     @property
     def is_banana (self) -> bool:
         """ 
-        True if chord reference is not linear but a curve meaning 
+        True if reference line is not a straight line but a curve meaning 
         banana function 
         """ 
-
         return self._ref_bezier.npoints > 2
 
 
     def set_is_banana (self, aBool):
         """ 
-        set the reference function to a Bezier curve and not a straight line
-          meaning banana function (Bezier is n=2) 
+        set the reference line to a Bezier curve and not a straight line
+          meaning banana function (Bezier is n>2) 
         """ 
         px = self._ref_bezier.points_x
         py = self._ref_bezier.points_y
 
-        if len(px) == 3 and aBool == False:
+        if len(px) > 2 and aBool == False:
 
             # remove control point in the middle -> straight line 
-            del px [1]
-            del py [1]
+            px = [px[0], px[-1]]
+            py = [py[0], py[-1]]
 
             self._ref_bezier.set_points (px, py)
 
@@ -915,7 +914,7 @@ class N_Reference_Line:
 
     def polyline (self) -> tuple [Array, Array]:
         """
-        chord reference as polyline of cr 
+        reference line as polyline of cr 
         """
 
         if self.is_banana:
@@ -929,7 +928,7 @@ class N_Reference_Line:
 
     def bezier_as_jpoints (self)  -> list[JPoint]:
         """ 
-        chord reference Bezier control points as JPoints with limits and fixed property
+        reference line Bezier control points as JPoints with limits and fixed property
             - in normed coordinates 
         """
         jpoints = []
@@ -945,10 +944,10 @@ class N_Reference_Line:
             elif i == (n-1):                                    
                 jpoint.set_fixed (True)
                 jpoint.set_name ('Tip')
-            elif i == 1:                                     
+            else:                                     
                 jpoint.set_x_limits ((0,1))
                 jpoint.set_y_limits ((-2,2))
-                jpoint.set_name ("Banana")
+                jpoint.set_name (f"Banana {i}")
             jpoints.append(jpoint)
 
         return jpoints
@@ -964,20 +963,8 @@ class N_Reference_Line:
             px.append(jpoint.x )
             py.append(jpoint.y)
 
-        # check if banana point was moved 
-        bez_px1 = round (self._ref_bezier.points_x[1], 3)               # avoid numerical issues 
-        bez_py1 = round (self._ref_bezier.points_y[1], 3)
-        set_no_banana = False
-        if not self.is_banana :
-            if bez_px1 == round(px[1],3) and bez_py1 == round(py[1],3):
-                set_no_banana = True 
-
-        # update bezier 
         self._ref_bezier.set_points (px, py)
 
-        # remain in no_banana if banana point wasn't moved
-        if set_no_banana:
-            self.set_is_banana (False)
 
 
 
@@ -1056,6 +1043,12 @@ class N_Distrib_Abstract:
     def at_tip (self, ) -> float:
         """ returns normalized chord at tip """
         return self.at (1.0)
+
+
+    def set_cn_tip (self, aVal : float):
+        """ set normed chord at tip (only for Bezier chord distribution) """   
+        # to be overridden if it is supported by subclass
+        pass      
 
 
     def polyline (self) -> Polyline:
@@ -1184,6 +1177,21 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
 
         return xn
 
+    @override
+    def set_cn_tip (self, aVal : float):
+        """ set normed chord at tip via Bezier curve """   
+
+        # set Bezier tip control point 
+        px, _ = self._bezier.points[-1]
+        py    = clip (aVal,0.01,0.9)
+        self._bezier.set_point (-1, px, py)
+
+        # ensure y tip tangent control point is > y tip 
+        tx, ty = self._bezier.points[-2]
+        if ty < py:
+            ty = py * 1.01
+            self._bezier.set_point (-2, tx, ty)
+
 
     def polyline (self) -> Polyline:
         """ 
@@ -1252,7 +1260,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
                 jpoint.set_name ('End Tangent') 
             elif i == n-1:                                  # tip
                 jpoint.set_x_limits ((1,1))
-                jpoint.set_y_limits ((0.01,0.5))
+                jpoint.set_y_limits ((0.01,0.9))
                 jpoint.set_name ('Tip Chord') 
             else:
                 jpoint.set_x_limits ((-0.5,1.5))
@@ -1805,11 +1813,13 @@ class WingSection :
     def set_cn (self, aVal):
         """ set new chord - will switch self defined 'by chord' """
 
-        if self.is_root: 
-            return
+        if self.is_root: return                                     # root is always 1.0 
+
         if aVal is None:
             self._cn = None
-        else:  
+        elif self.is_tip and not self.defines_cn:                   # set tip chord via Bezier
+            self._planform.set_cn_tip (aVal)
+        else:                                                       # normal case
             aVal = clip (aVal, 0.0, 1.0)
             self._cn = round(aVal,10)
 
@@ -1883,7 +1893,7 @@ class WingSection :
         if self.is_root:
             return False                                                # chord at root always 1.0 
         elif self.is_tip:
-            return self._planform.chord_defined_by_sections             # for trapezoid yes 
+            return True # self._planform.chord_defined_by_sections             # for trapezoid yes 
         else: 
             return True
 
@@ -2114,7 +2124,12 @@ class WingSections (list [WingSection]):
         # final sanity
         self.check_n_repair ()
 
-        logger.info (" %d Wing sections added" % len(sections))
+        logger.info (f"{self} added")
+
+
+    def __repr__(self) -> str:
+        # overwrite to get a nice print string 
+        return f"<{type(self).__name__} n={len(self)}>"
 
 
     @property
@@ -2607,6 +2622,18 @@ class Flap:
         return x, y 
 
 
+    def depth_left (self) -> tuple[float]:
+        """ 
+        flap depth absolut e.g. 35mm and relative e.g. 0.27 at left side        
+        """
+        return self._flaps.flap_depth_at (self.x_from)
+
+    def depth_right (self) -> tuple[float]:
+        """ 
+        flap depth absolut e.g. 35mm and relative e.g. 0.27 at right side        
+        """
+        return self._flaps.flap_depth_at (self.x_to)
+
 
 
 class Flaps:
@@ -2709,7 +2736,10 @@ class Flaps:
         start_section  = None
         section : WingSection
 
-        for section in self._wingSections:
+        # exclude sections for panelling
+        real_sections = [section for section in self._wingSections if not section.is_for_panels]
+
+        for section in real_sections:
 
             if start_section is None and section.flap_group > 0:
                 start_section = section
@@ -2869,7 +2899,7 @@ class Flaps:
 
 
 
-    def flap_depth_at (self, x : float, hinge_y : float = None) -> float:
+    def flap_depth_at (self, x : float, hinge_y : float = None) -> tuple[float]:
         """ 
         flap depth absolut e.g. 35mm and relative e.g. 0.27 at position x 
             if hinge_y is omitted it is calculated from current hinge line 
@@ -3080,7 +3110,10 @@ class Planform:
         # init reference line either new from dataDict or as argument of self
 
         if ref_line is None:
-            self._n_ref_line = N_Reference_Line (dataDict=fromDict(dataDict, "reference_line", {}))
+            if chord_style == N_Distrib_Bezier.name:                # only Distrib_Bezier may have Banana
+                self._n_ref_line = N_Reference_Line (dataDict=fromDict(dataDict, "reference_line", {}))
+            else: 
+                self._n_ref_line = N_Reference_Line (dataDict={})
         else: 
             self._n_ref_line = ref_line 
 
@@ -3154,6 +3187,11 @@ class Planform:
         """ set chord at root """
         aVal = max ( 0.01, aVal)
         self._chord_root = aVal 
+
+
+    def set_cn_tip (self, aVal : float):
+        """ set normed chord at tip (only for Bezier chord distribution) """        
+        self.n_distrib.set_cn_tip (aVal) 
 
 
     @property
@@ -3443,7 +3481,7 @@ class Planform:
     def ref_polyline (self, normed=False) -> Polyline:
         """
         reference within a planform  which is normally a straight line
-        except Banana (Bezier quadratic) is applied
+        except Banana (Bezier) is applied
 
         Args:
             normed: True - x value is normed xn value
@@ -4256,19 +4294,4 @@ class Image_Definition:
         return self._point_te
     def set_point_te (self, xy : tuple):
         self._point_te = xy
-
-
-
-
-
-
-#-------------------------------------------------------------------------------
-
-# Main program for testing 
-if __name__ == "__main__":
-
-    print ("Current directory: ",os.getcwd())
-    filename = "..\\examples\\Amokka-JX\\Amokka-JX.json"
-    # filename = ""
-    myWing = Wing (filename)
 

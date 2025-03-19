@@ -19,7 +19,7 @@ rem to show missing imports: 			--debug imports ^
 rem also look in modules for imports!: 	--paths modules ^
 rem more infos during build:		 	--log-level=INFO
 rem suppress console  					--noconsole    ^
-pyinstaller --noconfirm --log-level=INFO  --onedir   ^
+pyinstaller --noconfirm --log-level=INFO  --onedir  --noconsole ^
 	--icon=./modules/PC2_ico.ico ^
 	--paths="modules" ^
 	--paths="modules/wing_model" ^
