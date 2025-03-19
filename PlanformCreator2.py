@@ -56,13 +56,13 @@ from pc2_dialogs            import *
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.WARNING)
 
 
 #------------------------------------------------
 
 APP_NAME            = "PlanformCreator2"
-APP_VERSION         = "3.0.1 beta 2"
+APP_VERSION         = "3.1"
 WORKER_MIN_VERSION  = '1.0.5'
 
 TEMPLATE_DIR        = "templates"
@@ -578,7 +578,7 @@ class App_Main (QMainWindow):
 if __name__ == "__main__":
 
 
-    dev_mode = True
+    dev_mode = False
 
     # init logging  
 

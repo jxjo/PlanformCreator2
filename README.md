@@ -282,17 +282,42 @@ Plots in `Diagrams` are handled by `Artists` where each of them viszualizes cert
 * Application - `App_Main` and view `Panels` to handle presentation and user interaction 
 
 
-##  Install
+##  Installation
 
-A pre-build Windows-Exe of the app is available in the releases section https://github.com/jxjo/PlanformCreator2/releases  
+#### Windows only
+A pre-build Windows App is available in the releases section https://github.com/jxjo/PlanformCreator2/releases  
 
-or 
+#### Windows and Linux 
 
-Download python sources from https://github.com/jxjoPlanformCreator2/releases or Clone the repository 
+Download python sources from https://github.com/jxjoPlanformCreator2/releases or Clone the repository, 
 
-and Install 
+Install 
 
 ```
+pip3 install pyqt6
+pip3 install numpy
+pip3 install pyqtgraph 
+pip3 install termcolor
+pip3 install ezdxf
+```
+
+and Run
+
+```
+python3 PlanformCreator2.py
+```
+
+
+#### Windows and Linux using a virtual environment
+
+If you are are running other python applications on your PC, it is recommended to create a virtual environment for the PlanformCreator2 not to influence the other installations with the additional PC2 modules.
+
+Install
+
+```
+# change to the PC2 directory
+python3 -m venv venv                        # create virtual environment, the second 'venv' is the directory name
+. venv/bin/activate                         # for Windows: 'venv\bin\activate' for Windows 
 pip3 install pyqt6
 pip3 install numpy
 pip3 install pyqtgraph 
@@ -301,7 +326,15 @@ pip3 install ezdxf
 
 ```
 
+and Run
 
-Have fun!
+```
+. venv/bin/activate                         # for Windows: venv\bin\activate  
+python3 PlanformCreator2.py
+. venv/bin/deactivate                       # for Windows: venv\bin\deactivate' 
+```
+
+---
+Have fun! ;-)
 
 jochen@jxjo.de

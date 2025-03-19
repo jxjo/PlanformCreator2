@@ -83,7 +83,7 @@ class Wing:
             logger.info ('No input data - a default wing will be created')
         else: 
             parm_version = fromDict (dataDict, "pc2_version", 1)
-            logger.info (f"Reading wing parameters from '{parm_filePath}' - parameter version {parm_version}")
+            logger.info (f"Reading wing parameters from '{parm_filePath}' (file version: {parm_version})")
 
             if parm_version == 1:
                 dataDict = self._convert_parm_file_v2 (dataDict)
@@ -146,7 +146,7 @@ class Wing:
 
     def __repr__(self) -> str:
         # overwrite to get a nice print string 
-        return f"{type(self).__name__} \'{self.name}\'"
+        return f"<{type(self).__name__} {self.name}>"
 
 
     def _save (self) -> dict:
@@ -2124,7 +2124,12 @@ class WingSections (list [WingSection]):
         # final sanity
         self.check_n_repair ()
 
-        logger.info (" %d Wing sections added" % len(sections))
+        logger.info (f"{self} added")
+
+
+    def __repr__(self) -> str:
+        # overwrite to get a nice print string 
+        return f"<{type(self).__name__} n={len(self)}>"
 
 
     @property

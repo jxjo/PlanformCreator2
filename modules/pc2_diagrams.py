@@ -11,27 +11,22 @@ import logging
 
 from base.widgets           import * 
 from base.diagram           import * 
-from base.panels            import Container_Panel, MessageBox
+from base.panels            import Container_Panel
 
 from PyQt6.QtWidgets        import QFileDialog, QGraphicsLayoutItem
-
-# from model.airfoil          import Airfoil
 
 from model.airfoil          import Airfoil
 from model.polar_set        import *
 from model.xo2_driver       import Worker
-
-from airfoil_ui_panels      import Panel_Polar_Defs
-
-from pc2_artists            import *
-from pc2_dialogs            import Dialog_Edit_Image, Dialog_Edit_Paneling
 from wing                   import Wing, Planform, Planform_Paneled
-
 from VLM_wing               import VLM_OpPoint, OpPoint_Var, v_from_re
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from airfoil_ui_panels      import Panel_Polar_Defs
+from pc2_artists            import *
+from pc2_dialogs            import Dialog_Edit_Image, Dialog_Edit_Paneling
 
+logger = logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG)
 
 
 #-------------------------------------------------------------------------------
