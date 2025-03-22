@@ -78,12 +78,10 @@ class Airfoil:
 
         self._pathFileName = None
         if workingDir is not None:
-            self.workingDir = os.path.normpath (workingDir)
+            self._workingDir = os.path.normpath (workingDir)
         else: 
-            self.workingDir   = ''
+            self._workingDir = ''
         self._name          = name if name is not None else ''
-        self._name_org      = None                 # will hold original name for modification label
-        self._fileName_org  = None                 # will hold original fileName 
 
         if not x is None: x = x if isinstance(x,np.ndarray) else np.asarray (x)
         self._x     = x
@@ -92,28 +90,28 @@ class Airfoil:
 
         self._isModified     = False
         self._isEdited       = False 
-        self._isBlendAirfoil = False             # is self blended from two other airfoils 
+        self._isBlendAirfoil = False                        # is self blended from two other airfoils 
 
         if geometry is None: 
-            self._geometry_class  = GEO_SPLINE          # geometry startegy 
+            self._geometry_class  = GEO_SPLINE              # geometry startegy 
         else:
-            self._geometry_class  = geometry          # geometry startegy 
-        self._geo            = None              # selfs instance of geometry
+            self._geometry_class  = geometry                # geometry startegy 
+        self._geo            = None                         # selfs instance of geometry
 
-        self._nPanelsNew     = None              # repanel: no of panels - init via default
-        self._le_bunch       = None              # repanel: panel bunch at leading edge
-        self._te_bunch       = None   	         # repanel: panel bunch at trailing edge
+        self._nPanelsNew     = None                         # repanel: no of panels - init via default
+        self._le_bunch       = None                         # repanel: panel bunch at leading edge
+        self._te_bunch       = None   	                    # repanel: panel bunch at trailing edge
 
-        self._polarSet       = None              # polarSet which is defined from outside 
+        self._polarSet       = None                         # polarSet which is defined from outside 
 
-        self._usedAs         = usedAs.NORMAL     # usage type of airfoil used by app <- AIRFOIL_TYPES
-        self._propertyDict   = {}                # multi purpose extra properties for an AIirfoil
+        self._usedAs         = usedAs.NORMAL                # usage type of airfoil used by app <- AIRFOIL_TYPES
+        self._propertyDict   = {}                           # multi purpose extra properties for an AIirfoil
 
 
         # pathFileName must exist if no coordinates were given 
 
         if (pathFileName is not None) and  (x is None or y is None): 
-            pathFileName = os.path.normpath(pathFileName)       # make all slashes to double back
+            pathFileName = os.path.normpath(pathFileName)   # ensure correct format
             if os.path.isabs (pathFileName):
                 checkPath = pathFileName
             else:
@@ -123,13 +121,16 @@ class Airfoil:
                 raise ValueError ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
             else:
                 self._pathFileName = pathFileName
-                self._name = self.fileName_stem                     # load will get the real name
+                self._name = self.fileName_stem             # load will get the real name
 
         elif (pathFileName is not None) : 
                 self._pathFileName = pathFileName
 
         elif (not name):
             self._name = "-- ? --"
+
+        self._name_org      = self._name                    # original name for modification label
+        self._fileName_org  = None                          # will hold original fileName 
 
 
     @classmethod
@@ -212,7 +213,7 @@ class Airfoil:
             modifications = geo.modification_dict
 
         # set new name
-        if self._name_org is None: 
+        if not self._name_org: 
             self._name_org = self.name
 
         self.set_name (f"{self._name_org}_mods:{str(modifications)}")
@@ -266,6 +267,15 @@ class Airfoil:
 
 
     @property
+    def workingDir (self) -> str: 
+        """ working directory which is added to pathFileName"""
+        return self._workingDir 
+    
+    def set_workingDir (self, aDir : str):
+        self._workingDir = aDir
+
+
+    @property
     def name (self) -> str: 
         """ name of airfoil"""
 
@@ -294,7 +304,7 @@ class Airfoil:
         """
         self._name = newName
 
-        if self._name_org is None or reset_original: 
+        if not self._name_org or reset_original: 
             self._name_org = self.name
 
         self.set_isModified (True)
@@ -487,8 +497,18 @@ class Airfoil:
         absolute directory pathname of airfoil like '\\root\\myAirfoils\\'
         """
         if not self.pathFileName is None: 
-            return os.path.dirname(os.path.abspath(self.pathFileName))
+            if os.path.isabs (self.pathFileName):
+                # current path is already abs 
+                return os.path.dirname(self.pathFileName)
+            else: 
+                # take working dir if exists to build path 
+                if self.workingDir:
+                    join_path = os.path.join (self.workingDir, self.pathFileName)
+                    return os.path.dirname(os.path.abspath(join_path))
+                else: 
+                    return os.path.dirname(os.path.abspath(self.pathFileName))
         else:
+            # fallback - current python working dir
             return os.path.dirname(os.getcwd())
 
 
@@ -684,21 +704,40 @@ class Airfoil:
         # ensure extension .dat (in case of Bezier) 
         pathFileName =  os.path.splitext(self.pathFileName)[0] + Airfoil.Extension
 
-        with open(pathFileName, 'w+') as file:
+        if not os.path.isabs (pathFileName) and self.workingDir:
+            abs_pathFileName = os.path.join(self.workingDir, self.pathFileName)
+        else:
+            abs_pathFileName = self.pathFileName 
+
+        with open(abs_pathFileName, 'w+') as file:
             file.write("%s\n" % self.name)
             for i in range (len(self.x)):
                 file.write("%.7f %.7f\n" %(self.x[i], self.y[i]))
             file.close()
 
 
-    def normalize (self, just_basic=False):
+    def normalize (self, 
+                   just_basic=False, 
+                   mod_string=None):
         """
         Shift, rotate, scale airfoil so LE is at 0,0 and TE is symmetric at 1,y
         Returns True/False if normalization was done 
 
-        'just_basic' will only normalize coordinates - not based on spline 
+        Args:
+            just_basic: will only normalize coordinates - not based on spline 
+            mod_string: alternate modification identifier for fileName and name 
         """
-        return self.geo.normalize(just_basic=just_basic)  
+        normalize_done = self.geo.normalize(just_basic=just_basic)
+
+        if normalize_done: 
+
+            if mod_string:
+                fileName_stem = os.path.splitext(self._fileName_org)[0]
+                fileName_ext  = os.path.splitext(self._fileName_org)[1]
+                self.set_fileName (fileName_stem + mod_string + fileName_ext)  
+                self.set_name     (f"{self._name_org}")
+
+        return normalize_done  
 
 
     def do_blend (self, 
