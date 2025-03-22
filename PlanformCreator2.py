@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------
 
 APP_NAME            = "PlanformCreator2"
-APP_VERSION         = "3.1"
+APP_VERSION         = "3.1.1"
 WORKER_MIN_VERSION  = '1.0.5'
 
 TEMPLATE_DIR        = "templates"
@@ -442,8 +442,10 @@ class App_Main (QMainWindow):
     def open (self):
         """ open a new wing definition json and load it"""
 
-        filters  = "PlanformCreator2 files (*.pc2)"
-        newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters)
+        filters    = "PlanformCreator2 files (*.pc2)"
+        workingDir = self.wing().workingDir
+
+        newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters, directory=workingDir)
 
         if newPathFilename:                     
 

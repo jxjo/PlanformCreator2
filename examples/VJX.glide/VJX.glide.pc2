@@ -6,11 +6,24 @@
   "airfoil_nick_prefix":"JX-",
   "airfoil_nick_base":100,
   "background_image":{},
+  "polar_definitions":[],
   "halfspan":1470.0,
   "chord_root":230.0,
   "sweep_angle":-0.7,
   "chord_distribution":{
     "chord_style":"Bezier",
+    "px":[
+      0.0,
+      0.856495,
+      1.0,
+      1.0
+    ],
+    "py":[
+      1.0,
+      0.958047,
+      0.395571,
+      0.013043
+    ],
     "p1x":0.856495,
     "p1y":0.958047,
     "p2y":0.395571,
@@ -20,7 +33,16 @@
     "p0y":0.72,
     "p1y":0.73
   },
-  "reference_line":{},
+  "reference_line":{
+    "px":[
+      0.0,
+      1.0
+    ],
+    "py":[
+      0.0,
+      0.0
+    ]
+  },
   "wingSections":[
     {
       "xn":0.0,
