@@ -10,10 +10,11 @@ UI panels
 import logging
 
 from PyQt6.QtWidgets        import QDialog
-from PyQt6.QtWidgets        import QTabWidget
+from PyQt6.QtWidgets        import QTabWidget, QMessageBox
 
 from base.widgets           import * 
-from base.panels            import Edit_Panel, Container_Panel
+from base.panels            import Edit_Panel, Container_Panel, MessageBox
+from model.airfoil          import Airfoil, GEO_BASIC 
 
 from airfoil_widgets        import Airfoil_Open_Widget
 
@@ -406,6 +407,12 @@ class Panel_WingSection (Panel_Planform_Abstract):
     name = 'Wing Section'
     _width  = (680, None)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # ensure header is not disabled (for section is_for_paneling)
+        for w in self.header_widgets:
+            w.refresh (False)
 
     @override
     @property
@@ -470,7 +477,9 @@ class Panel_WingSection (Panel_Planform_Abstract):
         Field  (l_foil,0,0,   lab="Airfoil", # width=130,  
                 get=lambda: self._wingSection().airfoil.name)
 
-        Airfoil_Open_Widget (l_foil,0,2, asIcon=True, obj=self._wingSection, prop=WingSection.airfoil, signal=True)
+        Airfoil_Open_Widget (l_foil,0,2, asIcon=True, 
+                             get=lambda: self._wingSection().airfoil, 
+                             set=self._set_airfoil, signal=True)
 
         ToolButton (l_foil,0,3, icon=Icon.DELETE, set=self._remove_airfoil,
                     toolTip="Remove airfoil - airfoil at section will be blended", 
@@ -574,31 +583,60 @@ class Panel_WingSection (Panel_Planform_Abstract):
         return text 
 
 
-    def _remove_airfoil (self):
-        """ remove airfoil from section"""
-        self._wingSection().set_airfoil (None) 
-        self._on_widget_changed (None)
-
-
-    def _edit_airfoil (self):
+    def _edit_airfoil (self, airfoil : Airfoil = None):
         """ edit airfoil with AirfoilEditor"""
 
-        airfoil = self._wingSection().airfoil
+        if airfoil is None: 
+            airfoil = self._wingSection().airfoil
+
         ae = App_Main (os.path.join(airfoil.workingDir, airfoil.pathFileName), parent=self.myApp)
         ae.sig_closing.connect (self._on_edit_finished) 
 
         ae.show()
 
 
+    def _set_airfoil (self, airfoil : Airfoil | None):
+        """ set airfoil for section"""
+
+        if airfoil and not airfoil.isNormalized:
+
+            text = f"The airfoil '{airfoil.fileName}' is not normalized,\n" +\
+                   f"but this is needed for blending (strak).\n\n" + \
+                   f"It will be normalized and saved as a temporary copy."
+
+            msg = MessageBox (self, "Airfoil not normalized", text, Icon (Icon.INFO), min_width=350)
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok | MessageBox.StandardButton.Cancel)
+            button = msg.exec()
+
+            if button == QMessageBox.StandardButton.Cancel:
+                return
+
+        self.wingSections().set_airfoil_for (self._wingSection(), airfoil)
+
+        self._on_widget_changed (None)
+
+
+    def _remove_airfoil (self):
+        """ remove airfoil from section"""
+        self.wingSections().set_airfoil_for (self._wingSection(), None)
+        self._on_widget_changed (None)
+
+
     def _on_edit_finished (self, pathFilename : str):
         """ slot - AirfoilEditor finished with airfoil pathFilename"""
 
-        self._wingSection().set_airfoil_by_path (pathFilename)
-        self._on_widget_changed (None)
+        # create temp Airfoil to check within _set
+        try: 
+            airfoil = Airfoil (pathFileName=pathFilename, geometry=GEO_BASIC)
+            airfoil.load()
+        except:
+            return
+
+        self._set_airfoil (airfoil) 
 
 
     @override
     def _on_widget_changed (self, widget):
         """ user changed data in widget"""
-        logger.debug (f"{self} {widget} wing section widget changed slot")
+        logger.debug (f"{self} {widget} wing section widget changed")
         self.myApp.sig_wingSection_changed.emit()

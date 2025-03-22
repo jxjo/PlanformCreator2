@@ -434,9 +434,6 @@ class Wing:
 
         if self._vlm_wing is None: 
  
-            # ensure all wingSections have straked airfoils
-            self.planform.wingSections.do_strak ()
-
             # ensure all wingSections have a polar with the current re
             self.planform.wingSections.refresh_polar_sets (ensure=False)
 
@@ -548,7 +545,11 @@ class Wing:
         else:
             tmp_dir = Path(self.parm_filePath).stem + TEMP_DIR_POSTFIX 
 
-        return os.path.join (self.workingDir, tmp_dir)
+        tmp_dir = os.path.join (self.workingDir, tmp_dir)
+        if not os.path.isdir (tmp_dir):
+                os.mkdir(tmp_dir)
+
+        return tmp_dir
 
 
     # ---Methods --------------------- 
@@ -1622,6 +1623,8 @@ class WingSection :
 
         # create airfoil and load coordinates if exist 
 
+        self._airfoil_pathFileName_org = None                               # keep for save to dict
+
         self._airfoil = self._get_airfoil (pathFileName = fromDict (dataDict, "airfoil", None), workingDir=self.workingDir)
 
         self._strak_info = None                                             # keep info of strak 
@@ -1650,7 +1653,7 @@ class WingSection :
         if self.is_for_panels:
             toDict (d, "is_for_panels", self.is_for_panels)
         if not self.airfoil.isBlendAirfoil:
-            toDict (d, "airfoil",    self.airfoil.pathFileName)
+            toDict (d, "airfoil",    self._airfoil_pathFileName_org)
         return d
 
 
@@ -1660,25 +1663,40 @@ class WingSection :
        return self._planform.workingDir 
 
 
-    def _get_airfoil (self, dataDict = None, pathFileName = None, workingDir=None) -> Airfoil:
+    def _get_airfoil (self, pathFileName = None, workingDir=None) -> Airfoil:
         """read and create airfoil for section """
- 
-        # read data for airfoil either from dict of parameter file 
-        #  or get filepath from user selection 
- 
-        try: 
-            if dataDict: 
-                airfoil = Airfoil.onDict (dataDict, geometry=GEO_BASIC,
-                                          workingDir= self.workingDir)
-            else: 
-                airfoil = Airfoil (pathFileName= pathFileName, geometry=GEO_BASIC,
-                                   workingDir=workingDir)
-        except:
-            airfoil = None
 
-        if airfoil is not None and airfoil.isExisting:
+        tmp_dir = self._planform._wing.wing_tmp_dir
+        airfoil = None
+
+        if pathFileName:
+            try: 
+                # ensure relative path to working dir
+                rel_pathFileName = PathHandler (workingDir=self.workingDir).relFilePath (pathFileName)
+                airfoil = Airfoil (pathFileName= rel_pathFileName, geometry=GEO_BASIC,
+                                    workingDir=workingDir)
+            except:
+                airfoil = None
+
+        if airfoil is not None:
+
             airfoil.load()
+
+            self._airfoil_pathFileName_org = airfoil.pathFileName
+
+            # ensure airfoil is normalized (for strak) - if not create tmp airfoil 
+            if not airfoil.isNormalized:
+                airfoil.normalize(mod_string='_norm')
+                airfoil.set_workingDir (tmp_dir)
+                airfoil.set_pathName ('')
+                airfoil.save ()
+
+                logger.debug (f"{self} save normalized airfoil {airfoil.fileName} to {tmp_dir}")
+
         else:
+
+            self._airfoil_pathFileName_org = None
+
             if self.is_root: 
                 airfoil = Root_Example()
             elif self.is_tip:
@@ -1686,6 +1704,12 @@ class WingSection :
             else:
                 airfoil = Airfoil(name="<strak>", geometry=GEO_BASIC)
                 airfoil.set_isBlendAirfoil (True)
+
+            # save to tmp_dir 
+            airfoil.set_workingDir (tmp_dir)
+            airfoil.set_pathName ('')
+            if not airfoil.isBlendAirfoil:
+                airfoil.save()
 
         return airfoil
 
@@ -1695,44 +1719,20 @@ class WingSection :
         """ airfoil of wing section"""
         return self._airfoil
     
-    def set_airfoil (self, airfoil : Airfoil | str | None):
-        """ 
-        set new airfoil - 'airfoil' can be 
-            - an Airfoil object 
-            - None - current airfoil will by a strak airfoil
-        """
-        if isinstance (airfoil, Airfoil):
-
-            # ensure airfoils path is relative to workingDir - if possible 
-            rel_pathFileName = PathHandler(workingDir=self.workingDir).relFilePath (airfoil.pathFileName)
-            airfoil.workingDir = self.workingDir
-            airfoil.set_pathFileName (rel_pathFileName)
-
-            # init polar set of airfoil 
-
-            polar_defs = self._planform.wing.polar_definitions
-            airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=self.cn))
-
-            self._airfoil = airfoil
-
-        elif airfoil is None:
-            # remove existing (set as strak airfoil) 
-            self._airfoil = self._get_airfoil (pathFileName=None) 
-
 
     def set_airfoil_by_path (self, pathFileName : str | None):
         """ 
         set new airfoil by an airfoils pathFileName 
-            - if None - current airfoil will by a strak airfoil
+            - if None - current airfoil will be a strak airfoil
         """
-        if os.path.isfile (pathFileName):
+        if  pathFileName is None:
+            # remove airfoil - set as strak 
+            self._airfoil = self._get_airfoil (pathFileName=None) 
+        elif os.path.isfile (pathFileName):
             # ensure relative path to working dir
             rel_pathFileName = PathHandler(workingDir=self.workingDir).relFilePath (pathFileName)
             self._airfoil = self._get_airfoil (workingDir = self.workingDir, 
                                                pathFileName =rel_pathFileName) 
-        elif  pathFileName is None:
-            # remove airfoil - set as strak 
-            self._airfoil = self._get_airfoil (pathFileName=None) 
 
 
     @property
@@ -2179,7 +2179,7 @@ class WingSections (list [WingSection]):
                                         "is_for_panels" : is_for_panels})
             self.insert (self.index(aSection) + 1, new_section)
 
-            self._strak_done = False
+            self.reset_strak()
 
         return new_section
 
@@ -2215,7 +2215,7 @@ class WingSections (list [WingSection]):
         left_sec, _ = self.neighbours_of (new_section) 
         new_section.set_flap_group (left_sec.flap_group)
 
-        self._strak_done = False
+        self.reset_strak()
 
         return new_section
 
@@ -2228,12 +2228,35 @@ class WingSections (list [WingSection]):
                 index = self.index (aSection)
                 self.remove (aSection)
 
-                self._strak_done = False
+                self.reset_strak()
 
                 return self[index-1] 
             except: 
                 pass
         return None  
+
+
+    def set_airfoil_for (self, section: WingSection, airfoil : Airfoil | str | None):
+        """ 
+        set airfoil for section - here to reset strak 
+
+        Args: 
+            section: WingSection to set
+            airfoil: either Airfoil or pathfileName 
+        """
+
+        if isinstance (airfoil, Airfoil):
+            pathFileName = airfoil.pathFileName
+        else: 
+            pathFileName = airfoil 
+
+        section.set_airfoil_by_path (pathFileName)
+
+        polar_defs = self._planform.wing.polar_definitions
+        airfoil = section.airfoil
+        airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
+
+        self.reset_strak ()
 
 
     def do_strak (self, geometry_class  = None): 
@@ -2290,14 +2313,31 @@ class WingSections (list [WingSection]):
                     airfoil.set_name     (name, reset_original=True)  
 
                     fileName = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}_{right.fileName_stem}.dat"    
-                    airfoil.set_fileName (fileName)
-                    airfoil.set_pathName (strak_dir, noCheck=True) 
+                    airfoil.set_fileName   (fileName)
+                    airfoil.set_workingDir (strak_dir) 
+                    airfoil.set_pathName   ('') 
                     airfoil.set_isModified (False)       # avoid save and polar generation if file alreday exists
 
                     airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
 
                     self._strak_done = True 
                     section._strak_info = strak_info
+
+
+
+    def reset_strak (self): 
+        """
+        reset all straked airfoil e.g. after airfoil for a section selected
+            or section removed
+        """
+
+        for section in self:
+            if section.airfoil.isBlendAirfoil: 
+
+                section.set_airfoil_by_path (None)
+ 
+                self._strak_done    = False 
+                section._strak_info = None
 
 
     @property
@@ -2806,6 +2846,17 @@ class Flaps:
             if sec.defines_hinge and not (not tip_sec.defines_hinge and i == (len(sections) -2)) :
                 if left_sec.flap_group == sec.flap_group:
                     sec.set_flap_group (left_sec.flap_group+1)
+
+        # helper sections for paneling have the same flap group like real left wingSection
+
+        flap_group = sections[0].flap_group
+
+        for section in sections[:-1]:
+            if section.is_for_panels:
+                section.set_flap_group (flap_group)
+            else: 
+                flap_group = section.flap_group
+
 
 
     def hinge_cn_at (self, xn : float) -> float:

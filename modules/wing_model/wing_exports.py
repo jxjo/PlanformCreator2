@@ -471,7 +471,11 @@ class Export_FLZ:
 
         # ensure all airfoils are up to date and splined (quality) 
 
-        self._planform.wingSections.do_strak (geometry_class=GEO_SPLINE)          
+        self._planform.wingSections.do_strak (geometry_class=GEO_SPLINE) 
+
+        # ensure flap consistency
+        
+        self._planform.flaps.check_and_correct ()         
 
         # if necessary create directory 
 

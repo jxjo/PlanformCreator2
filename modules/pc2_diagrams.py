@@ -26,7 +26,7 @@ from pc2_artists            import *
 from pc2_dialogs            import Dialog_Edit_Image, Dialog_Edit_Paneling
 
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 
 
 #-------------------------------------------------------------------------------
@@ -2052,6 +2052,23 @@ class Diagram_Airfoils (Diagram_Abstract):
 
 
     # -------------
+
+    @override
+    def refresh(self, also_viewRange=True): 
+        """ 
+        override to reset autoRange of polars 
+        """
+
+        if self.isVisible() and also_viewRange:
+
+            item : Item_Polars
+            for item in self._get_items (Item_Polars):
+                item._autoRange_not_set = True
+
+            logger.debug (f"{str(self)} reset autorange for item_polars")
+
+        super().refresh(also_viewRange=also_viewRange)
+
 
 
     def polar_defs (self) -> list [Polar_Definition]:
