@@ -415,6 +415,15 @@ class Panel_WingSection (Panel_Planform_Abstract):
             w.refresh (False)
 
     @override
+    def refresh (self, **kwargs):
+        super().refresh(**kwargs)
+
+        # ensure header is not disabled (for section is_for_paneling)
+        for w in self.header_widgets:
+            w.refresh (False)
+
+
+    @override
     @property
     def _isDisabled (self) -> bool:
         """ overloaded: disabled if section is just for paneling """
