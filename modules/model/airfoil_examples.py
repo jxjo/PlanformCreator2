@@ -198,7 +198,7 @@ class Root_Example (Airfoil_Example_Abstract):
     """ An example airfoil for root - JX-GT-15v2"""
 
     name        = 'Root_Example'
-    fileName    = 'Root_Example.Dat'                 # for ease of use as class variable
+    fileName    = 'Root_Example.dat'                 # for ease of use as class variable
 
     def _getCoordinates (self):
         """ returns the coordinates of example as a list of lines"""
@@ -418,7 +418,7 @@ class Tip_Example (Airfoil_Example_Abstract):
     """ An example airfoil for tip - JX-GT-05v2"""
 
     name        = 'Tip_Example'
-    fileName    = 'Tip_Example.Dat'                 # for ease of use as class variable
+    fileName    = 'Tip_Example.dat'                 # for ease of use as class variable
 
     def _getCoordinates (self):
         """ returns the coordinates of example as a list of lines"""
