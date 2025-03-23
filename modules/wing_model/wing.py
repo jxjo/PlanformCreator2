@@ -2150,6 +2150,12 @@ class WingSections (list [WingSection]):
 
         return section_list
 
+    def without_for_panels (self) -> list[WingSection]:
+        """ return self without extra sections for paneling"""
+
+        return [section for section in self if not section.is_for_panels]
+
+
 
     def create_after (self, aSection: 'WingSection'=None, index=None, is_for_panels=False) -> 'WingSection' : 
         """
@@ -2776,10 +2782,7 @@ class Flaps:
         start_section  = None
         section : WingSection
 
-        # exclude sections for panelling
-        real_sections = [section for section in self._wingSections if not section.is_for_panels]
-
-        for section in real_sections:
+        for section in self._wingSections.without_for_panels():
 
             if start_section is None and section.flap_group > 0:
                 start_section = section

@@ -271,12 +271,12 @@ class App_Main (QMainWindow):
 
         # handle first time or not existing 
         if self._cur_wingSection is None: 
-            normed_sections = self.wing().planform.wingSections
+            real_sections = self.wing().planform.wingSections.without_for_panels()
 
-            if len (normed_sections) > 2:
-                self._cur_wingSection = normed_sections[1]              # set second section as initial
+            if len (real_sections) > 2:
+                self._cur_wingSection = real_sections[1]              # set second section as initial
             else:        
-                self._cur_wingSection = normed_sections[0]              # take root
+                self._cur_wingSection = real_sections[0]              # take root
 
 
         return self._cur_wingSection 
