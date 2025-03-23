@@ -83,21 +83,19 @@ class Export_Airfoils:
     def set_te_gap_mm(self, aVal): 
         self._te_gap_mm = aVal
 
-    @property
-    def n_airfoils (self) -> int:
-        """ nuber of airfoils being exported"""
-        return len (self._wingSections)
-    
 
-
-    def do_it (self, toDir : str = None, use_nick_name = None): 
+    def do_it (self, toDir : str = None, 
+               use_nick_name : bool | None= None,
+               without_for_panels = True): 
         """ 
-        main entry: start the export to the file defined in self parameters.
+        Export to the file defined in self parameters.
         
         Args:
             toDir: alternate target directory
+            use_nick_name : use nick name of airfoil as filename 
+            without_for_panels:  only 'real' sections (not the one for paneling) will be taken 
         Returns:
-            list of airfoil fieNames 
+            n_airfoils: number of airfoil which were exported  
         """
 
         if toDir is None:
@@ -114,10 +112,12 @@ class Export_Airfoils:
 
         # save airfoils of all sections  
 
-        fileNames  = []
+        path_set = set()
         section : WingSection
 
-        for section in self._wingSections:
+        sections = self._wingSections.without_for_panels() if without_for_panels else self._wingSections
+
+        for section in sections:
 
             if use_nick_name and section.airfoil_nick_name: 
                 newName = section.airfoil_nick_name
@@ -131,12 +131,13 @@ class Export_Airfoils:
         
             pathFileName = section.airfoil.save_copyAs (dir=targetDir, destName = newName, te_gap = te_gap)
 
-            fileNames.append (os.path.basename(pathFileName) )
+            path_set.add (pathFileName) 
 
+        n_airfoils = len (path_set)
 
-        logger.info (f"{self.n_airfoils} Airfoils written to '{targetDir}'") 
+        logger.info (f"{n_airfoils} Airfoils written to '{targetDir}'") 
 
-        return 
+        return n_airfoils
 
 
 
@@ -193,21 +194,19 @@ class Export_Xflr5:
 
     @property
     def filename(self): 
-        return self._wing.name.strip() +  '_wing.xml'
+        return self._wing.parm_fileName_stem + '_wing.xml'
 
     @property
     def use_nick_name (self) -> bool: return self._planform_paneled.use_nick_name
-
-    @property
-    def n_airfoils (self) -> int:
-        """ nuber of airfoils being exported"""
-        return self._wing.export_airfoils.n_airfoils
     
 
     def do_it (self): 
         """ 
         Main entry: start the export to the file defined in paramters.
         Airfoils will also be copied into the xflr5 directory
+
+        Returns:
+            n_airfoils : number of airfoils written 
         """
 
         # if necessary create directory 
@@ -218,7 +217,9 @@ class Export_Xflr5:
 
         # first export airfoils to ensure actual airfoil names 
 
-        self._wing.export_airfoils.do_it (toDir = targetDir, use_nick_name=self.use_nick_name)
+        n_airfoils = self._wing.export_airfoils.do_it (toDir = targetDir, 
+                                                       use_nick_name=self.use_nick_name,
+                                                       without_for_panels=False)
 
         # export wing 
 
@@ -226,7 +227,7 @@ class Export_Xflr5:
 
         logger.info ("Xflr5 wing data written to %s." % pathFileName)
 
-        return 
+        return n_airfoils
 
 
     def export_wing (self, pathFileName):
@@ -251,7 +252,7 @@ class Export_Xflr5:
         for nameXml in wingXml.iter('Name'):
             nameXml.text = self._wing.name
         for descriptionXml in wingXml.iter('Description'):
-            descriptionXml.text = "by Planform Creator 2"
+            descriptionXml.text = "by PlanformCreator2"
 
         # find sections-data-template
         for sectionsTemplateXml in wingXml.iter('Sections'):
@@ -303,17 +304,16 @@ class Export_Xflr5:
                 y_panel_distribution.text = str(xflr5_dist)
 
             for yPosition in newSectionXml.iter('y_position'):
-                yPosition.text = str(section_x)
+                yPosition.text = f"{section_x:.2f}"
 
             for chord in newSectionXml.iter('Chord'):
-                chord.text = str(section_c)
+                chord.text = f"{section_c:.2f}" 
 
             for xOffset in newSectionXml.iter('xOffset'):
-                xOffset.text = str(section_le)
+                xOffset.text = f"{section_le:.2f}"  
 
             for dihedral in newSectionXml.iter('Dihedral'):
-                # tbd
-                dihedral.text = str(0)
+                dihedral.text = f"0.0"
 
             # airfoil - use nick name? 
             if self.use_nick_name:
@@ -377,7 +377,7 @@ class Export_Xflr5:
                     <Chord>  0.220000</Chord>
                     <xOffset>  0.000000</xOffset>
                     <Dihedral>  3.000000</Dihedral>
-                    <Twist>  0.000</Twist>
+                    <Twist>  0.0</Twist>
                     <x_number_of_panels>13</x_number_of_panels>
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>2</y_number_of_panels>
@@ -451,16 +451,10 @@ class Export_FLZ:
 
     @property
     def filename(self): 
-        return self._wing.name.strip() +  '_wing.flz'
+        return self._wing.parm_fileName_stem + '_wing.flz'
 
     @property
     def use_nick_name (self) -> bool: return self._planform_paneled.use_nick_name
-
-    @property
-    def n_airfoils (self) -> int:
-        """ nuber of airfoils being exported"""
-        return self._wing.export_airfoils.n_airfoils
-
 
 
     def do_it (self): 
@@ -474,7 +468,7 @@ class Export_FLZ:
         self._planform.wingSections.do_strak (geometry_class=GEO_SPLINE) 
 
         # ensure flap consistency
-        
+
         self._planform.flaps.check_and_correct ()         
 
         # if necessary create directory 
@@ -877,14 +871,10 @@ class Export_Dxf:
     @property
     def export_airfoils(self) -> bool: return self._export_airfoils
     def set_export_airfoils(self, aBool): self._export_airfoils = aBool
-
-    @property
-    def n_airfoils (self) -> int:
-        return self._wing.export_airfoils.n_airfoils
     
     @property
     def filename(self): 
-        return self._wing.name.strip() +  '_wing.dxf'
+        return self._wing.parm_fileName_stem + '_wing.dxf'
 
 
     def do_it (self): 
@@ -920,11 +910,13 @@ class Export_Dxf:
         # export airfoils 
 
         if self.export_airfoils:
-            self._wing.export_airfoils.do_it (toDir = targetDir)
+            n_airfoils = self._wing.export_airfoils.do_it (toDir = targetDir)
+        else: 
+            n_airfoils = 0 
 
         logger.info ("DXF file " + self.filename + " written to " + targetDir) 
 
-        return 
+        return n_airfoils
 
 
 
@@ -1101,7 +1093,7 @@ class Export_Dxf:
 
             y_m = y_m - 20 
             fontsize = (self._planform.chord_root / 230.0) * 6.0
-            self.msp.add_text("Generated by Planform Creator 2", height = fontsize).set_placement(
+            self.msp.add_text("Generated by PlanformCreator2", height = fontsize).set_placement(
                                 (x_m, y_m), align=enums.TextEntityAlignment.TOP_LEFT)
 
 

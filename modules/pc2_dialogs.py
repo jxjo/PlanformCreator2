@@ -36,7 +36,7 @@ class Dialog_Export_Airfoil (Dialog):
     """
 
     _width  = 480
-    _height = 280
+    _height = 240
 
     name = "Export Airfoils"
 
@@ -66,12 +66,6 @@ class Dialog_Export_Airfoil (Dialog):
 
         l = QGridLayout()
         r = 0 
-        SpaceR (l, r, stretch=0, height=5) 
-        r += 1
-        Label  (l,r,0, colSpan=5, height=60,
-                get="Export the airfoils of all wing sections to a subdirectory. The trailing edge thickness\n" + 
-                    "may be modified to achieve a common thickness of all airfoils in real coordinates.\n")
-        r += 1
         SpaceR (l, r, stretch=0, height=10) 
         r += 1 
         Field  (l,r,0, width=250, colSpan=1, lab= "To Directory", get=lambda:self.export_airfoils.export_dir)
@@ -87,8 +81,10 @@ class Dialog_Export_Airfoil (Dialog):
         FieldF (l,r,4, width=70, unit="mm", step=0.1, lim=(0, 5), dec=1,
                   obj=self.export_airfoils, prop=Export_Airfoils.te_gap_mm,
                   disable=lambda: not self.export_airfoils.adapt_te_gap)
-                # obj=self, prop=Panel_WingSection.x, 
-                # disable=lambda: self._wingSection().is_root_or_tip)
+        r += 1
+        Label  (l,r,1, colSpan=5, height=50, style=style.COMMENT,
+                get="       The common thickness will be achieved, when the airfoils\n" +
+                    "       will be scaled to their chord length in CAD.\n")
 
         r += 1
         SpaceR (l, r, height=5) 
@@ -111,12 +107,14 @@ class Dialog_Export_Airfoil (Dialog):
     def _export_airfoils (self, *_):
         """ do export airfoils"""
 
-        self.export_airfoils.do_it ()
+        n_airfoils = self.export_airfoils.do_it ()
         
         self.close()
 
+        text = f"{n_airfoils} airfoils" if n_airfoils > 1 else  f"{n_airfoils} airfoil"
+
         MessageBox.success (self,"Export Airfoils", 
-                            f"{self.export_airfoils.n_airfoils} Airfoils exported to directory\n\n{self.export_airfoils.export_dir}")
+                            f"{text} exported to directory\n\n{self.export_airfoils.export_dir}")
 
 
     @override
@@ -150,9 +148,9 @@ class Dialog_Export_Dxf (Dialog):
     """
 
     _width  = 480
-    _height = 320
+    _height = 300
 
-    name = "Export Planform as Dxf"
+    name = "Export Planform as dxf File"
 
     def __init__ (self, *args, **kwargs): 
 
@@ -185,21 +183,17 @@ class Dialog_Export_Dxf (Dialog):
 
         l = QGridLayout()
         r = 0 
-        # SpaceR (l, r, stretch=0, height=2) 
-        # r += 1
-        Label  (l,r,0, colSpan=5, height=80, 
-                get="Export the planform as a dxf file to a subdirectory. Optionally, the airfoils can\n" + 
-                    "be exported to the same directory.\n" + 
-                    "Please be aware that the planform is exported as a polyline - not as a spline.")
+        Label  (l,r,0, colSpan=5, style=style.COMMENT,
+                get="The planform will be exported as a polyline - not as a spline.")
         r += 1
-        SpaceR (l, r, stretch=1, height=10) 
+        SpaceR (l, r, height=10) 
         r += 1 
         Field  (l,r,0, width=250, colSpan=1, lab= "To Directory", get=lambda:self.export_dxf.export_dir)
         Button (l,r,4, width=70, text= "Select", set=self._select_directory)
         r += 1
         SpaceR (l, r, stretch=0, height=10) 
         r += 1
-        CheckBox (l,r,0, colSpan=2, text= "Export the airfoils as well",
+        CheckBox (l,r,0, colSpan=2, text= "Export airfoils as well",
                   obj=self.export_dxf, prop=Export_Dxf.export_airfoils)
         r += 1
         CheckBox (l,r,1, colSpan=2, text= "Use airfoils nick name",
@@ -212,7 +206,10 @@ class Dialog_Export_Dxf (Dialog):
         FieldF (l,r,4, width=70, unit="mm", step=0.1, lim=(0, 5), dec=1,
                   obj=self.export_airfoils, prop=Export_Airfoils.te_gap_mm,
                   disable=lambda: not self.export_dxf.adapt_te_gap)
-
+        r += 1
+        Label  (l,r,1, colSpan=5, height=50, style=style.COMMENT,
+                get="       The common thickness will be achieved, when the airfoils\n" +
+                    "       will be scaled to their chord length in CAD.\n")
         r += 1
         SpaceR (l, r, height=5) 
         l.setColumnMinimumWidth (0,80)
@@ -234,12 +231,12 @@ class Dialog_Export_Dxf (Dialog):
     def _export_airfoils (self, *_):
         """ do export airfoils"""
 
-        self.export_dxf.do_it ()
+        n_airfoils = self.export_dxf.do_it ()
         
         self.close()
 
         if self.export_dxf.export_airfoils:
-            msg = f"Planform '{self.export_dxf.filename}' and {self.export_dxf.n_airfoils} Airfoils \n\nexported to directory '{self.export_dxf.export_dir}'"
+            msg = f"Planform '{self.export_dxf.filename}' and {n_airfoils} Airfoils \n\nexported to directory '{self.export_dxf.export_dir}'"
         else: 
             msg = f"Planform '{self.export_dxf.filename}' \n\nexported to directory '{self.export_dxf.export_dir}'"
 

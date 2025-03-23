@@ -530,6 +530,18 @@ class Wing:
 
 
     @property
+    def parm_fileName (self):
+        """ filename of the paramter file like 'VJX.pc2' """
+        return os.path.basename(self.parm_filePath) if self.parm_filePath else ''
+
+
+    @property
+    def parm_fileName_stem (self):
+        """ stem of fileName like 'VJX' """
+        return Path(self.parm_fileName).stem if self.parm_fileName else ''
+
+
+    @property
     def workingDir(self): 
         """directory of the paramter file"""
         return self.pathHandler.workingDir
@@ -1672,7 +1684,7 @@ class WingSection :
         if pathFileName:
             try: 
                 # ensure relative path to working dir
-                rel_pathFileName = PathHandler (workingDir=self.workingDir).relFilePath (pathFileName)
+                rel_pathFileName = PathHandler (workingDir=workingDir).relFilePath (pathFileName)
                 airfoil = Airfoil (pathFileName= rel_pathFileName, geometry=GEO_BASIC,
                                     workingDir=workingDir)
             except:
@@ -1728,11 +1740,30 @@ class WingSection :
         if  pathFileName is None:
             # remove airfoil - set as strak 
             self._airfoil = self._get_airfoil (pathFileName=None) 
-        elif os.path.isfile (pathFileName):
+        else:
             # ensure relative path to working dir
             rel_pathFileName = PathHandler(workingDir=self.workingDir).relFilePath (pathFileName)
-            self._airfoil = self._get_airfoil (workingDir = self.workingDir, 
-                                               pathFileName =rel_pathFileName) 
+
+            if os.path.isfile (os.path.join(self.workingDir, rel_pathFileName)):
+                self._airfoil = self._get_airfoil (workingDir = self.workingDir, 
+                                                   pathFileName = rel_pathFileName) 
+
+
+    def set_airfoil_by_airfoil (self, airfoil : Airfoil | None):
+        """ 
+        set new airfoil by another airfoil
+            - if None - current airfoil will be a strak airfoil
+        """
+        if  airfoil is None:
+            # remove airfoil - set as strak 
+            self._airfoil = self._get_airfoil (pathFileName=None) 
+        else:
+            pathFileName = airfoil.pathFileName
+            workingDir   = airfoil.workingDir
+
+            if os.path.isfile (os.path.join(workingDir, pathFileName)):
+                self._airfoil = self._get_airfoil (workingDir   = workingDir, 
+                                                   pathFileName = pathFileName) 
 
 
     @property
@@ -1740,8 +1771,8 @@ class WingSection :
         """ short nick name of airfoil"""
         prefix = self._planform.wing.airfoil_nick_prefix
         base   = self._planform.wing.airfoil_nick_base
-        my_num = int(base * self.cn)
-        return f"{prefix}{my_num}"
+        my_num = round(base * self.cn, 0)
+        return f"{prefix}{int(my_num)}"
 
     @property
     def is_root (self) -> bool:
@@ -2311,18 +2342,23 @@ class WingSections (list [WingSection]):
 
                 if section._strak_info != strak_info:
 
-                    airfoil.do_blend (left, right, blendBy, geometry_class)
+                    if blendBy > 0.0:
 
-                    # build long but hopefully unique name  
+                        airfoil.do_blend (left, right, blendBy, geometry_class)
 
-                    name = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}"
-                    airfoil.set_name     (name, reset_original=True)  
+                        name = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}" # build long unique name  
+                        airfoil.set_name     (name, reset_original=True)  
 
-                    fileName = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}_{right.fileName_stem}.dat"    
-                    airfoil.set_fileName   (fileName)
-                    airfoil.set_workingDir (strak_dir) 
-                    airfoil.set_pathName   ('') 
-                    airfoil.set_isModified (False)       # avoid save and polar generation if file alreday exists
+                        fileName = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}_{right.fileName_stem}.dat"    
+                        airfoil.set_fileName   (fileName)
+                        airfoil.set_workingDir (strak_dir) 
+                        airfoil.set_pathName   ('') 
+                        airfoil.set_isModified (False)           # avoid save and polar generation if file already exists
+
+                    else:
+
+                        section.set_airfoil_by_airfoil (left)    # no blend - take left airfoil
+                        section.airfoil.set_isBlendAirfoil (True)
 
                     airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
 

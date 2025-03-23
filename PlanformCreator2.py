@@ -519,22 +519,24 @@ class App_Main (QMainWindow):
         """ export wing to xflr5"""
 
         directory = QFileDialog.getExistingDirectory(self,caption="Select directory for export",
-                                                     directory=self.wing().export_xflr5.export_dir)
+                                                     directory=self.wing().export_xflr5.base_and_export_dir)
         if directory: 
 
             self.wing().export_xflr5.set_export_dir (directory)   
-            self.wing().export_xflr5.do_it () 
-            n_airfoils = self.wing().export_xflr5.n_airfoils
+            
+            n_airfoils = self.wing().export_xflr5.do_it () 
 
             filename   = self.wing().export_xflr5.filename
-            MessageBox.success (self,"Export FLZ", f"'{filename}' and \n{n_airfoils} arfoils exported." )
+            text = f"{n_airfoils} airfoils" if n_airfoils > 1 else  f"{n_airfoils} airfoil"
+
+            MessageBox.success (self,"Export Xflr5", f"'{filename}' and \n{text} exported." )
 
 
     def export_flz (self): 
         """ export wing to FLZ"""
 
         directory = QFileDialog.getExistingDirectory(self,caption="Select directory for export",
-                                                     directory=self.wing().export_flz.export_dir)
+                                                     directory=self.wing().export_flz.base_and_export_dir)
         if directory: 
 
             self.wing().export_flz.set_export_dir (directory)   
