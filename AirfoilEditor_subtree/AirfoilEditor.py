@@ -673,6 +673,11 @@ class Polar_Watchdog (QThread):
                 n_new_polars += task.load_polars()
                 if task.isCompleted():
                     task.finalize()
+                else:
+                    # this ensures, that polars are returned in the order tasks were generated
+                    #   and not randomly by worker execution time 
+                    #   -> more consistent diagram updates
+                    break
 
             # if new polars loaded signal 
 
