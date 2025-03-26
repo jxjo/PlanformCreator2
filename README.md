@@ -287,11 +287,13 @@ Plots in `Diagrams` are handled by `Artists` where each of them viszualizes cert
 #### Windows only
 A pre-build Windows App is available in the releases section https://github.com/jxjo/PlanformCreator2/releases  
 
-#### Windows and Linux 
+#### Windows and Linux without a Python virtual environment
+
+Make sure that you have installed the latest Python version. 
 
 Download python sources from https://github.com/jxjo/PlanformCreator2/releases or Clone the repository, 
 
-Install 
+Install the additional modules needed.
 
 ```
 pip3 install pyqt6
@@ -300,15 +302,19 @@ pip3 install pyqtgraph
 pip3 install termcolor
 pip3 install ezdxf
 ```
-and Run
+and Run the app
 
 ```
 python3 PlanformCreator2.py
 ```
 
-#### Windows and Linux using a virtual environment
+#### Windows and Linux using a Python virtual environment
 
 If you are are running other python applications on your PC, it is recommended to create a virtual environment for the PlanformCreator2 not to influence the other installations with the additional PC2 modules.
+
+Make sure that you have installed the latest Python version.
+
+Download python sources from https://github.com/jxjo/PlanformCreator2/releases or Clone the repository, 
 
 Install
 
@@ -321,7 +327,6 @@ pip3 install numpy
 pip3 install pyqtgraph 
 pip3 install termcolor
 pip3 install ezdxf
-
 ```
 
 and Run
