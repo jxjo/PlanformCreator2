@@ -289,7 +289,7 @@ A pre-build Windows App is available in the releases section https://github.com/
 
 #### Windows and Linux 
 
-Download python sources from https://github.com/jxjoPlanformCreator2/releases or Clone the repository, 
+Download python sources from https://github.com/jxjo/PlanformCreator2/releases or Clone the repository, 
 
 Install 
 
