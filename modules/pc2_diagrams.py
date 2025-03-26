@@ -212,8 +212,6 @@ class Item_Planform (Diagram_Item):
     title       = "Planform"                 
     subtitle    = "dynamic"                                 # will be set dynamically 
 
-    sig_planform_changed        = pyqtSignal()              # planform data changed in a diagram 
-
 
     def __init__(self, *args, wingSection_fn = None, **kwargs):
 
@@ -337,8 +335,6 @@ class Item_Chord (Diagram_Item):
     title       = "Chord Distribution"                 
     subtitle    = ""                                 
 
-    sig_planform_changed        = pyqtSignal()              # planform data changed in a diagram 
-
 
     def __init__(self, *args, wingSection_fn = None, **kwargs):
 
@@ -406,8 +402,6 @@ class Item_Chord_Reference (Diagram_Item):
     name        = "View Chord Reference"                    # used for link and section header 
     title       = "Chord Reference"                 
     subtitle    = ""                                 
-
-    sig_planform_changed        = pyqtSignal()              # planform data changed in a diagram 
 
 
     def __init__(self, *args, wingSection_fn = None, **kwargs):
@@ -2650,8 +2644,6 @@ class Item_Making_Of_Abstract (Diagram_Item):
 
     min_width   = 200                                   # min size needed - see below 
     min_height  = 100 
-
-    sig_planform_changed        = pyqtSignal()              
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
