@@ -284,16 +284,17 @@ Plots in `Diagrams` are handled by `Artists` where each of them viszualizes cert
 
 ##  Installation
 
-#### Windows only
-A pre-build Windows App is available in the releases section https://github.com/jxjo/PlanformCreator2/releases  
+### Windows only
 
-#### Windows and Linux without a Python virtual environment
+A pre-build Windows App is available in the [releases section](https://github.com/jxjo/PlanformCreator2/releases), which can be downloaded, unzipped and run.   
+
+### Windows and Linux without a Python virtual environment
 
 Make sure that you have installed the latest Python version. 
 
-Download python sources from https://github.com/jxjo/PlanformCreator2/releases or Clone the repository, 
+Download python sources from the [releases section](https://github.com/jxjo/PlanformCreator2/releases) or clone the repository. 
 
-Install the additional modules needed.
+Install the additional modules needed:
 
 ```
 pip3 install pyqt6
@@ -302,21 +303,21 @@ pip3 install pyqtgraph
 pip3 install termcolor
 pip3 install ezdxf
 ```
-and Run the app
+Run the app:
 
 ```
 python3 PlanformCreator2.py
 ```
 
-#### Windows and Linux using a Python virtual environment
+### Windows and Linux using a Python virtual environment
 
 If you are are running other python applications on your PC, it is recommended to create a virtual environment for the PlanformCreator2 not to influence the other installations with the additional PC2 modules.
 
 Make sure that you have installed the latest Python version.
 
-Download python sources from https://github.com/jxjo/PlanformCreator2/releases or Clone the repository, 
+Download python sources from the [releases section](https://github.com/jxjo/PlanformCreator2/releases) or clone the repository. 
 
-Install
+Install the additional modules needed.
 
 ```
 # change to the PC2 directory
@@ -328,8 +329,7 @@ pip3 install pyqtgraph
 pip3 install termcolor
 pip3 install ezdxf
 ```
-
-and Run
+Run the app:
 
 ```
 . venv/bin/activate                         # for Windows: venv\bin\activate  
