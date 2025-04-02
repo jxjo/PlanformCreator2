@@ -7,6 +7,7 @@
 """
 import os
 import ast
+from datetime               import datetime, timedelta
 from copy                   import copy
 from typing                 import Type, override
 from enum                   import StrEnum
@@ -36,6 +37,7 @@ class usedAs (StrEnum):
     REF         = "Reference" 
     DESIGN      = "Design"
     TARGET      = "Target"
+    SECOND      = "Airfoil 2"
     FINAL       = "Final"
 
 # geometry specification 
@@ -105,7 +107,8 @@ class Airfoil:
         self._polarSet       = None                         # polarSet which is defined from outside 
 
         self._usedAs         = usedAs.NORMAL                # usage type of airfoil used by app <- AIRFOIL_TYPES
-        self._propertyDict   = {}                           # multi purpose extra properties for an AIirfoil
+        self._propertyDict   = {}                           # multi purpose extra properties for an Airfoil
+        self._file_datetime  = None                         # modification datetime of file 
 
 
         # pathFileName must exist if no coordinates were given 
@@ -115,7 +118,7 @@ class Airfoil:
             if os.path.isabs (pathFileName):
                 checkPath = pathFileName
             else:
-                checkPath = os.path.join (self.workingDir, pathFileName)
+                checkPath = os.path.join(self.workingDir, pathFileName)
             if not os.path.isfile(checkPath):
                 self._name = "-- Error --"
                 raise ValueError ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
@@ -190,7 +193,7 @@ class Airfoil:
 
     def __repr__(self) -> str:
         # overwritten to get a nice print string 
-        info = f"'{self.name}'"
+        info = f"'{self.fileName}'" if self.fileName else self.name
         return f"<{type(self).__name__} {info}>"
 
 
@@ -285,7 +288,7 @@ class Airfoil:
     def name_to_show (self) -> str: 
         """ name of airfoil - for DESIGN use a modified name"""
 
-        if self.name.find("_mods:") != -1:
+        if self.name.find("_mods:") != -1 or self.usedAsDesign:
             # for DESIGN airfoil build name string 
             if self.usedAsDesign:
                 name = self._name_org
@@ -325,56 +328,73 @@ class Airfoil:
 
 
     @property
-    def isEdited (self): return self._isModified
-    """ True if airfoil is being edited, modified, ..."""
-        # currently equals to isModified ...
+    def isEdited (self) -> bool: 
+        """ True if airfoil is being edited, modified, ..."""
+        return self._isModified
     def set_isEdited (self, aBool): 
         self.set_isModified (aBool) 
 
 
     @property
-    def isModified (self): return self._isModified
-    """ True if airfoil is being modifiied, ..."""
+    def isModified (self) -> bool: 
+        """ True if airfoil is being modifiied, ..."""
+        return self._isModified
     def set_isModified (self, aBool): 
         self._isModified = aBool 
 
     @property
-    def isExisting (self):
+    def isExisting (self) -> bool:
         return not self.pathFileName is None
 
 
     @property
-    def isLoaded (self):
+    def isLoaded (self) -> bool:
         return self._x is not None and len(self._x) > 10
     
     @property
-    def isNormalized (self):
+    def isNormalized (self) -> bool:
         """ is LE at 0,0 and TE at 1,.. ?"""
         return self.geo.isNormalized
     
     @property
-    def isBlendAirfoil (self):
+    def isBlendAirfoil (self) -> bool:
         """ is self blended out of two other airfoils"""
         return self._isBlendAirfoil
     def set_isBlendAirfoil (self, aBool): 
         self._isBlendAirfoil = aBool
     
     @property
-    def nPanels (self): 
+    def nPanels (self) -> int: 
         """ number of panels """
         return self.geo.nPanels
       
     @property
-    def nPoints (self): 
+    def nPoints (self) -> int: 
         """ number of coordinate points"""
         return self.geo.nPoints 
 
         
     @property
-    def isSymmetrical(self):
+    def isSymmetrical(self) -> bool:
         """ true if max camber is 0.0 - so it's a symmetric airfoil"""
         return self.geo.isSymmetrical
     
+        
+    @property
+    def isUpToDate (self) -> bool:
+        """ true if the loaded airfoil is up to date with its file - none if no answer"""
+
+        if os.path.isfile (self.pathFileName_abs) and self._file_datetime is not None:
+            ts = os.path.getmtime(self.pathFileName_abs)                       # file modification timestamp of a file
+            file_datetime = datetime.fromtimestamp(ts)                  # convert timestamp into DateTime object
+
+            # add safety seconds (async stuff?) 
+            if (self._file_datetime >= (file_datetime - timedelta(seconds=1))):
+                return True
+            else: 
+                return False
+        return None  
+
 
     @property
     def usedAs (self):
@@ -435,10 +455,19 @@ class Airfoil:
             self._pathFileName = pathfileName
         elif os.path.isfile(pathfileName):
             self._pathFileName = pathfileName
-        elif self.workingDir and os.path.isfile(os.path.join(self.workingDir, pathfileName)):
+        elif self.workingDir and os.path.isfile(self.pathFileName_abs):
             self._pathFileName = pathfileName
         else:
             raise ValueError (f"Airfoil {pathfileName} does not exist. Couldn\'t be set")
+
+    @property
+    def pathFileName_abs (self) -> str:
+        """ path including working dir and filename of airfoil like '/root/examples/JX-GT-15.dat' """
+
+        if self.workingDir:
+            return os.path.join(self.workingDir, self.pathFileName)
+        else: 
+            return self._pathFileName
 
 
     def set_pathName (self, aDir : str, noCheck=False):
@@ -501,12 +530,7 @@ class Airfoil:
                 # current path is already abs 
                 return os.path.dirname(self.pathFileName)
             else: 
-                # take working dir if exists to build path 
-                if self.workingDir:
-                    join_path = os.path.join (self.workingDir, self.pathFileName)
-                    return os.path.dirname(os.path.abspath(join_path))
-                else: 
-                    return os.path.dirname(os.path.abspath(self.pathFileName))
+                return os.path.dirname(os.path.abspath(self.pathFileName_abs))
         else:
             # fallback - current python working dir
             return os.path.dirname(os.getcwd())
@@ -519,24 +543,37 @@ class Airfoil:
         Load doesn't change self pathFileName
         """    
 
-        if fromPath and os.path.isfile (fromPath):
+        if fromPath:
             sourcePathFile = fromPath
-        elif self.isExisting and not self.isLoaded: 
-            sourcePathFile = os.path.join(self.workingDir, self.pathFileName)
         else:
-            sourcePathFile = None 
+            sourcePathFile = self.pathFileName_abs
 
-        if sourcePathFile:
-            f = open(sourcePathFile, 'r')
-            file_lines = f.readlines()
-            f.close()
-            self._name, self._x, self._y = self._loadLines(file_lines)
+        if os.path.isfile (sourcePathFile):
+
+            try:
+                # read airfoil file into x,y 
+
+                f = open(sourcePathFile, 'r')
+                file_lines = f.readlines()
+                f.close()
+                self._name, self._x, self._y = self._loadLines(file_lines)
+
+                self._geo = None                                            # reset geometry 
+
+                # get modfication datetime of file 
+
+                ts = os.path.getmtime(sourcePathFile)                       # file modification timestamp of a file
+                self._file_datetime = datetime.fromtimestamp(ts)            # convert timestamp into DateTime object
+
+            except ValueError:
+                pass
 
 
     def _loadLines (self, file_lines):
 
         # returns the name and x,y (np array) of the airfoil file 
 
+        name = ''
         x = []
         y = []
         xvalPrev = -9999.9
@@ -559,6 +596,9 @@ class Airfoil:
                     yvalPrev = yval 
             else: 
                 name = line.strip()
+        
+        if not name or not x or not y:
+            raise ValueError ("Invalid .dat file")
 
         return name, np.asarray (x), np.asarray (y)
 
@@ -707,7 +747,7 @@ class Airfoil:
         if not os.path.isabs (pathFileName) and self.workingDir:
             abs_pathFileName = os.path.join(self.workingDir, self.pathFileName)
         else:
-            abs_pathFileName = self.pathFileName 
+            abs_pathFileName = pathFileName 
 
         with open(abs_pathFileName, 'w+') as file:
             file.write("%s\n" % self.name)
@@ -813,7 +853,7 @@ class Airfoil_Bezier(Airfoil):
             if os.path.isabs (pathFileName):
                 checkPath = pathFileName
             else:
-                checkPath = os.path.join (self.workingDir, pathFileName)
+                checkPath = self.pathFileName_abs
             if not os.path.isfile(checkPath):
                 raise ValueError ("Airfoil file '%s' does not exist. Couldn't create Airfoil" % checkPath)
  
@@ -904,13 +944,14 @@ class Airfoil_Bezier(Airfoil):
         Overloaded: Loads bezier definition instead of .dat from file" 
         """    
 
-        if self.isExisting and not self.isLoaded: 
-            sourcePathFile = os.path.join(self.workingDir, self.pathFileName)
-        else:
-            sourcePathFile = None 
+        if os.path.isfile (self.pathFileName_abs):
 
-        return self.load_bezier(fromPath=sourcePathFile)
-    
+            self.load_bezier(fromPath=self.pathFileName_abs)
+        
+            # get modfication datetime of file 
+
+            ts = os.path.getmtime(self.pathFileName_abs)                # file modification timestamp of a file
+            self._file_datetime = datetime.fromtimestamp(ts)            # convert timestamp into DateTime object
 
 
     def load_bezier (self, fromPath=None):
@@ -919,9 +960,6 @@ class Airfoil_Bezier(Airfoil):
         pathFileName must be set before or fromPath must be defined.
         Load doesn't change self pathFileName
         """    
-
-        if fromPath is None: 
-            fromPath = self.pathFileName
 
         with open(fromPath, 'r') as file:            
 
@@ -937,7 +975,9 @@ class Airfoil_Bezier(Airfoil):
         # Bottom Start
         # ...
         # Bottom End
-        new_name = 'Bezier_Airfoil'                         # defalut name 
+
+        new_name = 'Bezier_Airfoil'                             # default name 
+        self._geo = None                                        # reset geometry 
 
         try: 
             px, py = [], []
@@ -966,14 +1006,14 @@ class Airfoil_Bezier(Airfoil):
                             py.append (float(splitline[1].strip()))
         except ValueError as e:
             logging.error ("While reading Bezier file '%s': %s " %(fromPath,e )) 
-            return 0 
+            return  
          
         self._name = new_name
         self._isLoaded = True 
 
         logging.debug (f"Bezier definition for {self.name} loaded")
 
-        return True  
+        return   
 
 
     @override
@@ -1124,21 +1164,20 @@ class Airfoil_Hicks_Henne(Airfoil):
         Overloaded: Loads hicks henne definition instead of .dat from file" 
         """    
 
-        if self.isExisting and not self.isLoaded: 
-            sourcePathFile = os.path.join(self.workingDir, self.pathFileName)
-        else:
-            sourcePathFile = None 
+        if os.path.isfile (self.pathFileName_abs):
 
-        return self.load_hh(fromPath=sourcePathFile)
+            self.load_hh(fromPath=self.pathFileName_abs)
+
+            # get modfication datetime of file 
+
+            ts = os.path.getmtime(self.pathFileName_abs)                       # file modification timestamp of a file
+            self._file_datetime = datetime.fromtimestamp(ts)            # convert timestamp into DateTime object
 
 
     def load_hh (self, fromPath=None):
         """
         Loads hicks henne definition from file. 
         """    
-
-        if fromPath is None: 
-            fromPath = self.pathFileName
 
         name, seed_name, seed_x, seed_y, top_hhs, bot_hhs = self._read_hh_file (fromPath)
 

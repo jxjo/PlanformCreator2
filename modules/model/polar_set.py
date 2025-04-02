@@ -328,7 +328,6 @@ class Polar_Set:
         self._re_scale = clip (re_scale, 0.001, 10)
 
         self._polar_worker_tasks = []                       # polar generation tasks for worker 
-        self._polar_tasks_created = False
         self._worker_polar_sets = {}                        # polar generation job list for worker  
 
         self._add_polar_defs (polar_def, only_active=only_active)  # add initial polar def 
@@ -349,7 +348,7 @@ class Polar_Set:
         airfoil = polar_set.airfoil
         for p in cls.instances [:]:
             if p.airfoil == airfoil:
-                logger.warning (f"-- removing {airfoil} from polat_set instances")
+                logger.warning (f"-- removing {airfoil} from polar_set instances")
                 cls.instances.remove (airfoil) 
 
         cls.instances.append (polar_set)
@@ -417,6 +416,19 @@ class Polar_Set:
         return not self.has_polars_not_loaded
 
 
+    def set_polars_not_loaded (self):
+        """ set all polars to not_loaded - so they will be refreshed with next acceess"""
+
+        for i, polar in enumerate (self.polars[:]):
+            
+            self.polars[i] = Polar (self, polar, re_scale=polar.re_scale)
+
+            # clean up old polar  
+            polar.polar_set_detach ()
+            Polar_Task.terminate_task_of_polar (polar) 
+        
+
+
     #---------------------------------------------------------------
 
     def _add_polar_defs (self, polar_defs, 
@@ -480,29 +492,30 @@ class Polar_Set:
 
         # polars missing - if not already done, create polar_task for Worker to generate polar 
 
-        if self.has_polars_not_loaded and not self._polar_tasks_created:
+        if self.has_polars_not_loaded:
 
             self.airfoil_ensure_being_saved ()                                  # a real airfoil file needed
+
+            all_polars_of_tasks = Polar_Task.get_polars_of_tasks ()
     
             # build polar tasks bundled for same ncrit, type, ... 
 
-            polar_tasks : list [Polar_Task] = []
+            new_tasks : list [Polar_Task] = []
 
             for polar in self.polars_not_loaded: 
-                taken_over = False
-                for task in polar_tasks:
-                    taken_over =  task.add_polar (polar)
-                    if taken_over: break
-                if not taken_over:
-                    # create polar task 
-                    polar_tasks.append(Polar_Task(polar))   
+
+                if not polar in all_polars_of_tasks:                            # ensure polar isn't already in any task 
+                    taken_over = False
+                    for task in new_tasks:
+                        taken_over =  task.add_polar (polar)                    # try to add to existing task (same ncrit etc) 
+                        if taken_over: break
+                    if not taken_over:                                          # new task needed 
+                        new_tasks.append(Polar_Task(polar))   
 
             # run all worker tasks - class Polar_Task and WatchDog will take care 
 
-            for task in polar_tasks:
+            for task in new_tasks:
                 task.run ()
-
-            self._polar_tasks_created = True
 
         return 
 
@@ -608,16 +621,16 @@ class Polar (Polar_Definition):
         """ detaches self from its polar set"""
         self._polar_set = None
 
+    @property
+    def re_scale (self) -> float:
+        """ scale value for reynolds number """
+        return self._re_scale
 
     @property
     def opPoints (self) -> list:
         """ returns the sorted list of opPoints of self """
         return self._opPoints
-    
-    def set_opPoints (self, opPoints_new: list):
-        """ set list of opPoints of self """
-        self._opPoints = opPoints_new 
-    
+        
     @property
     def isLoaded (self) -> bool: 
         """ is polar data loaded from file (for async polar generation)"""
@@ -712,7 +725,6 @@ class Polar (Polar_Definition):
             return None
 
 
-
     @property
     def glide_max (self) -> float:
         if np.any(self.glide):
@@ -743,6 +755,7 @@ class Polar (Polar_Definition):
                 y = y[i:]
         return x,y 
 
+    # -----------------------
 
     def _ofVar (self, polar_var: var):
 
@@ -766,6 +779,7 @@ class Polar (Polar_Definition):
         else:
             raise ValueError ("Unkown polar variable: %s" % polar_var)
         return vals
+    
 
     def _get_values_forVar (self, var) -> np.ndarray:
         """ copy values of var from op points to array"""
@@ -907,7 +921,7 @@ class Polar (Polar_Definition):
 
         if len(opPoints) > 0: 
 
-            self.set_opPoints (opPoints)
+            self._opPoints = opPoints
 
         else: 
             logger.error (f"{self} - import from {polarPathFileName} failed")
@@ -989,6 +1003,26 @@ class Polar_Task (Polar_Definition):
             logger.debug (f"-- {cls.__name__} {len (cls.instances)} instances, {n_running} running,  {n_finalized} finalized")
 
         return cls.instances
+
+
+    @classmethod
+    def get_polars_of_tasks (cls) -> list ['Polar']:
+        """ list of all polars which are currently in tasks"""
+
+        polars = []
+
+        for task in cls.get_instances():
+            polars.extend (task._polars)
+        return polars
+
+
+    @classmethod
+    def terminate_task_of_polar (cls, polar : Polar) -> 'Polar_Task':
+        """ if polar is in a Task, terminate Task"""
+
+        for task in cls.get_instances():
+            if polar in task._polars:
+                task.terminate()
 
 
     @classmethod
@@ -1327,9 +1361,6 @@ class Polar_Splined (Polar_Definition):
         """ returns the sorted list of opPoints of self """
         return self._opPoints
     
-    def set_opPoints (self, opPoints_new: list):
-        """ set list of opPoints of self """
-        self._opPoints = opPoints_new
     
     @property
     def isLoaded (self) -> bool: 

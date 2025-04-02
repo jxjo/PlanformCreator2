@@ -10,14 +10,15 @@ Higher level ui components / widgets like Edit_Panel, Diagram
 from copy               import copy
 from typing             import override
 
-from PyQt6.QtCore       import Qt
-from PyQt6.QtCore       import QSize, QMargins 
-from PyQt6.QtWidgets    import QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, QGraphicsGridLayout
-from PyQt6.QtWidgets    import QMainWindow, QWidget, QDialog, QDialogButtonBox, QLabel, QMessageBox
-from PyQt6.QtGui        import QGuiApplication, QScreen, QColor
+from PyQt6.QtCore       import Qt, QEvent, QPoint, QRectF
+from PyQt6.QtCore       import QSize, QMargins, QTimer, QPropertyAnimation, QAbstractAnimation
+from PyQt6.QtWidgets    import QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, QSizePolicy
+from PyQt6.QtWidgets    import QMainWindow, QWidget, QDialog, QDialogButtonBox, QLabel, QMessageBox, QFrame
+from PyQt6.QtWidgets    import QGraphicsOpacityEffect
+from PyQt6.QtGui        import QGuiApplication, QScreen, QColor, QPalette, QPainterPath, QRegion, QTransform
 from PyQt6              import sip
 
-from base.widgets       import set_background
+from base.widgets       import set_background, style
 from base.widgets       import Widget, Label, CheckBox, size, Button, FieldI, SpaceR, Icon
 
 import logging
@@ -525,7 +526,213 @@ class MessageBox (QMessageBox):
         msg.setDefaultButton  (QMessageBox.StandardButton.Save)
 
         return msg.exec()
-    
+
+
+
+# ------------ Toaster  -----------------------------------
+
+
+class Toaster (QFrame):
+
+    """ 
+    Show a little notfication toaster 
+
+    based on https://stackoverflow.com/questions/59251823/is-there-an-equivalent-of-toastr-for-pyqt
+    """
+
+    def __init__(self, *args, **kwargs):
+
+        super (Toaster, self).__init__(*args, **kwargs)
+        QHBoxLayout(self)
+
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+
+        #                 border: 1px solid blue;
+        # background: palette(window);
+
+        # self.setStyleSheet('''
+        #     QToaster {
+        #         border-radius: 2px; 
+        #     }
+        # ''')
+        # alternatively:
+
+        self.setAutoFillBackground(True)
+        # self.setFrameShape(self.Box)
+
+        self.timer = QTimer(singleShot=True, timeout=self.hide)
+
+        if self.parent():
+            self.opacityEffect = QGraphicsOpacityEffect(opacity=0)
+            self.setGraphicsEffect (self.opacityEffect)
+            self.opacityAni = QPropertyAnimation (self.opacityEffect, b'opacity')
+            # we have a parent, install an eventFilter so that when it's resized
+            # the notification will be correctly moved to the right corner
+            self.parent().installEventFilter(self)
+        else:
+            # there's no parent, use the window opacity property, assuming that
+            # the window manager supports it; if it doesn't, this won'd do
+            # anything (besides making the hiding a bit longer by half a second)
+            self.opacityAni = QPropertyAnimation(self, b'windowOpacity')
+        self.opacityAni.setStartValue(0.)
+        self.opacityAni.setEndValue(1.)
+        self.opacityAni.setDuration(100)
+        self.opacityAni.finished.connect(self.checkClosed)
+
+        self.corner = Qt.Corner.TopLeftCorner
+        self.margin = 10
+
+    def checkClosed(self):
+        # if we have been fading out, we're closing the notification
+        if self.opacityAni.direction() == QAbstractAnimation.Direction.Backward:
+            self.close()
+
+    def restore(self):
+        # this is a "helper function", that can be called from mouseEnterEvent
+        # and when the parent widget is resized. We will not close the
+        # notification if the mouse is in or the parent is resized
+        self.timer.stop()
+        # also, stop the animation if it's fading out...
+        self.opacityAni.stop()
+        # ...and restore the opacity
+        if self.parent():
+            self.opacityEffect.setOpacity(1)
+        else:
+            self.setWindowOpacity(1)
+
+    def hide(self):
+        # start hiding
+        self.opacityAni.setDirection(QAbstractAnimation.Direction.Backward)
+        self.opacityAni.setDuration(300)
+        self.opacityAni.start()
+
+    def eventFilter(self, source, event : QEvent):
+        if source == self.parent() and event.type() == QEvent.Type.Resize:
+            self.opacityAni.stop()
+            parentRect : QRectF = self.parent().rect()
+            geo = self.geometry()
+            if self.corner == Qt.Corner.TopLeftCorner:
+                geo.moveTopLeft(
+                    parentRect.topLeft() + QPoint(self.margin, self.margin))
+            elif self.corner == Qt.Corner.TopRightCorner:
+                geo.moveTopRight(
+                    parentRect.topRight() + QPoint(-self.margin, self.margin))
+            elif self.corner == Qt.Corner.BottomRightCorner:
+                geo.moveBottomRight(
+                    parentRect.bottomRight() + QPoint(-self.margin, -self.margin))
+            else:
+                geo.moveBottomLeft(
+                    parentRect.bottomLeft() + QPoint(self.margin, -self.margin))
+            self.setGeometry(geo)
+            self.restore()
+            self.timer.start()
+        return super(Toaster, self).eventFilter(source, event)
+
+    def enterEvent(self, event):
+        self.restore()
+
+    def leaveEvent(self, event):
+        self.timer.start()
+
+    def closeEvent(self, event):
+        # we don't need the notification anymore, delete it!
+        self.deleteLater()
+
+    def resizeEvent(self, event):
+        super(Toaster, self).resizeEvent(event)
+        # if you don't set a stylesheet, you don't need any of the following!
+        if not self.parent():
+            # there's no parent, so we need to update the mask
+            path = QPainterPath()
+            path.addRoundedRect(QRectF (self.rect()).translated(-.5, -.5), 4, 4)
+            self.setMask(QRegion(path.toFillPolygon(QTransform()).toPolygon()))
+        else:
+            self.clearMask()
+
+    @staticmethod
+    def showMessage(parent, message, 
+                    corner=Qt.Corner.BottomLeftCorner, 
+                    margin=QMargins(10, 10, 10, 10), 
+                    style = style.HINT,
+                    duration=2000, parentWindow=False):
+        """
+        show a toaster for a while
+
+        Args:
+            parent : parent Toasters position is relative 
+            message: message to show 
+            corner : position in parents window 
+            margin : offset of position
+            style : color style 
+            duration: duration of message 
+            parentWindow : take parent window of parent
+        """
+
+        if parent and parentWindow:
+            parent = parent.window()
+
+        if isinstance (margin, int):
+            margin = QMargins(margin, margin, margin, margin)
+
+        self = Toaster(parent)
+        parentRect : QRectF = parent.rect()
+
+        self.timer.setInterval(duration)
+
+        self.label = QLabel(message)
+        self.layout().addWidget(self.label)
+        self.layout().setContentsMargins (QMargins(10, 5, 10, 5))
+
+        # set background style 
+
+        if style in [style.WARNING, style.ERROR, style.COMMENT, style.GOOD, style.HINT]:
+
+            palette : QPalette = self.palette()
+            if Widget.light_mode:
+                index = Widget.LIGHT_INDEX
+            else: 
+                index = Widget.DARK_INDEX
+            color = QColor (style.value[index])
+
+            color.setAlphaF (0.3)
+
+            # palette.setColor(self.backgroundRole(), color)
+            palette.setColor(QPalette.ColorRole.Window, color)
+            self.setPalette(palette)
+
+        # start hide timer 
+
+        self.timer.start()
+
+        # raise the widget and adjust its size to the minimum
+
+        self.raise_()
+        self.adjustSize()
+
+        self.corner = corner
+        self.margin = margin
+
+        geo = self.geometry()
+
+        # now the widget should have the correct size hints, let's move it to the right place
+        
+        if corner == Qt.Corner.TopLeftCorner:
+            geo.moveTopLeft(
+                parentRect.topLeft() + QPoint(margin.left(), margin.top()))
+        elif corner == Qt.Corner.TopRightCorner:
+            geo.moveTopRight(
+                parentRect.topRight() + QPoint(-margin.right(), margin.top()))
+        elif corner == Qt.Corner.BottomRightCorner:
+            geo.moveBottomRight(
+                parentRect.bottomRight() + QPoint(-margin.right(), -margin.bottom()))
+        else:
+            geo.moveBottomLeft(
+                parentRect.bottomLeft() + QPoint(margin.left(), -margin.bottom()))
+
+        self.setGeometry(geo)
+        self.show()
+        self.opacityAni.start()
+
 
 
 # ------------ Dialog  -----------------------------------

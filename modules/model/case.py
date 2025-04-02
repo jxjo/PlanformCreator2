@@ -79,7 +79,9 @@ class Case_Direct_Design (Case_Abstract):
     def airfoil_designs (self) -> list[Airfoil]: 
         """ list of airfoil designs"""
         if self._airfoil_designs is None: 
-            self._airfoil_designs = Reader_Airfoil_Designs(self.design_dir).read_all(prefix=self.DESIGN_NAME_BASE)
+            reader = Reader_Airfoil_Designs(self.design_dir)
+            self._airfoil_designs = reader.read_all(prefix=self.DESIGN_NAME_BASE,
+                                                    extension=self.airfoil_seed.fileName_ext)
         return self._airfoil_designs 
       
 
@@ -223,7 +225,7 @@ class Case_Direct_Design (Case_Abstract):
 
         airfoil.set_name     (airfoil_org.name + name_ext)
         airfoil.set_pathName (airfoil_org.pathName)
-        airfoil.set_fileName (airfoil_org.fileName_stem + name_ext + airfoil_org.fileName_ext)
+        airfoil.set_fileName (airfoil_org.fileName_stem + name_ext + airfoil_design.fileName_ext)
 
         return airfoil
 
@@ -263,7 +265,7 @@ class Reader_Airfoil_Designs:
         self._directory = directory if directory else '.'
 
 
-    def read_all(self, prefix : str = None):
+    def read_all(self, prefix : str = None, extension=".dat"):
         """ read all airfoils satisfying 'filter'
 
         Args:
@@ -272,19 +274,17 @@ class Reader_Airfoil_Designs:
 
         airfoils = []
 
-        if not os.path.isdir (self._directory): airfoils
+        if not os.path.isdir (self._directory): 
+            return airfoils
 
         # read all file names in dir and filter 
 
         all_files = os.listdir(self._directory)                             # all files in dir
 
-        dat_files = fnmatch.filter(all_files, f'{prefix}*.dat')             # filter 
-        bez_files = fnmatch.filter(all_files, f'{prefix}*.bez')
-        hh_files  = fnmatch.filter(all_files, f'{prefix}*.hicks')
+        airfoil_files = fnmatch.filter(all_files, f'{prefix}*{extension}')      # filter 
 
         # built pathFileName and sort 
 
-        airfoil_files = dat_files + bez_files + hh_files                
         airfoil_files = [os.path.normpath(os.path.join(self._directory, f)) \
                             for f in airfoil_files if os.path.isfile(os.path.join(self._directory, f))]
         airfoil_files = sorted (airfoil_files, key=str.casefold)

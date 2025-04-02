@@ -69,15 +69,15 @@ class CustomFormatter(logging.Formatter):
 # Dictonary handling
 #------------------------------------------------------------------------------
 
-def fromDict(dict : dict, key, default='no default'):
+def fromDict(aDict : dict, key, default='no default'):
     """
     returns a value from dict. If ky is not in the dict and there is no default value an error
     will be raised 
 
     Args:
-        :dict: the dictonary to look in \n
-        :key: the key to look for       \n
-        :default: the value if key is missing
+        dict: the dictonary to look in 
+        key: the key to look for       
+        default: the value if key is missing
     """
     preferedType = None
 
@@ -89,15 +89,15 @@ def fromDict(dict : dict, key, default='no default'):
         elif isinstance (default, int):
             preferedType = int
 
-    try:
-        value = dict[key]
+    if key in aDict:
+        value = aDict[key]
         if preferedType == float:
             value = float(value)
         elif preferedType == int:
             value = int(value)
         elif preferedType == bool:
             value = bool(value)
-    except:
+    else:
         if default == 'no default':
             value = None
             logger.error ('Mandatory parameter \'%s\' not specified'  % key)
@@ -108,7 +108,7 @@ def fromDict(dict : dict, key, default='no default'):
     return value
 
 
-def toDict(dict : dict, key, value):
+def toDict(aDict : dict, key, value):
     """
     writes t0 the parameter dictionary. If 'value' is None the key is not written 
     """
@@ -116,10 +116,10 @@ def toDict(dict : dict, key, value):
         # limit decimals in file 
         if isinstance  (value, float):
             value = round (value,6)
-        dict [key] = value
+        aDict [key] = value
     else: 
         # remove key from dictionary  - so default values will be used 
-        dict.pop(key, None)
+        aDict.pop(key, None)
 
         
 #------------------------------------------------------------------------------

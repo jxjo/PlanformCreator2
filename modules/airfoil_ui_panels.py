@@ -120,13 +120,13 @@ class Panel_File_View (Panel_Airfoil_Abstract):
         r += 1
         SpaceR (l,r, height=5)
         r += 1
-        Button (l,r,c, text="&Modify Airfoil", width=100, 
+        Button (l,r,c, text="&Modify", width=100, 
                 set=self.myApp.modify_airfoil, toolTip="Modify geometry, Normalize, Repanel",
                 button_style=button_style.PRIMARY)
         r += 1
         SpaceR (l,r, height=2, stretch=0)
         r += 1
-        Button (l,r,c, text="&New as Bezier", width=100, 
+        Button (l,r,c, text="&As Bezier", width=100, 
                 set=self.myApp.new_as_Bezier, disable=lambda: self.airfoil().isBezierBased,
                 toolTip="Create new Bezier airfoil based on current airfoil")
         r += 1
@@ -570,7 +570,7 @@ class Panel_Bezier_Match (Panel_Airfoil_Abstract):
 
     @property
     def target_airfoil (self) -> Airfoil:
-        return self.myApp.airfoil_target
+        return self.myApp.airfoil_org
 
     @property
     def target_upper (self) -> Line:
@@ -595,31 +595,15 @@ class Panel_Bezier_Match (Panel_Airfoil_Abstract):
     def norm2_upper (self): 
         """ norm2 deviation of airfoil to target - upper side """
         if self._norm2_upper is None: 
-            self._norm2_upper = Matcher.norm2_deviation_to (self.upper.bezier, self.target_upper) 
+            self._norm2_upper = Line.norm2_deviation_to (self.upper.bezier, self.target_upper) 
         return  self._norm2_upper    
 
 
     def norm2_lower (self): 
         """ norm2 deviation of airfoil to target  - upper side """
         if self._norm2_lower is None: 
-            self._norm2_lower = Matcher.norm2_deviation_to (self.lower.bezier, self.target_lower)  
+            self._norm2_lower = Line.norm2_deviation_to (self.lower.bezier, self.target_lower)  
         return self._norm2_lower
-
-
-    # def _add_to_header_layout(self, l_head: QHBoxLayout):
-    #     """ add Widgets to header layout"""
-
-    #     l_head.addSpacing (20)
-  
-    #     Airfoil_Select_Open_Widget (l_head, width=(100,200),
-    #                 get=lambda: self.myApp.airfoil_target, set=self.myApp.set_airfoil_target,
-    #                 initialDir=self.airfoil(), addEmpty=True)
-
-
-    # def __init__ (self,*args, **kwargs):
-    #     super().__init__(*args,**kwargs)
-
-    #     self.myApp.sig_airfoil_target_changed.connect(self._on_airfoil_target_changed)
 
 
     def _init_layout (self):
@@ -694,19 +678,19 @@ class Panel_Bezier_Match (Panel_Airfoil_Abstract):
                             target_curv_le: float, max_curv_te : float  ): 
         """ run match bezier (dialog) """ 
 
-        matcher = Match_Bezier (self, aSide, aTarget_line,
-                                target_curv_le = target_curv_le,
-                                max_curv_te = max_curv_te,
-                                dx=-150, dy=-350)
+        match_bezier = Match_Bezier (self, aSide, aTarget_line,
+                                    target_curv_le = target_curv_le,
+                                    max_curv_te = max_curv_te,
+                                    dx=-150, dy=-350)
 
-        matcher.sig_new_bezier.connect     (self.myApp.sig_bezier_changed.emit)
-        matcher.sig_match_finished.connect (self._on_match_finished)
+        match_bezier.sig_new_bezier.connect     (self.myApp.sig_bezier_changed.emit)
+        match_bezier.sig_pass_finished.connect  (self.myApp.sig_airfoil_changed.emit)
+        match_bezier.sig_match_finished.connect (self._on_match_finished)
 
         # leave button press callback 
         timer = QTimer()                                
-        timer.singleShot(10, lambda: matcher.exec())     # delayed emit 
+        timer.singleShot(10, lambda: match_bezier.exec())     # delayed emit 
        
-
 
     def _on_match_finished (self, aSide : Side_Airfoil_Bezier):
         """ slot for match Bezier finished - reset airfoil"""
@@ -716,11 +700,6 @@ class Panel_Bezier_Match (Panel_Airfoil_Abstract):
 
         self.myApp.sig_airfoil_changed.emit()
 
-
-    # def _on_airfoil_target_changed (self,refresh):
-    #     """ slot for changed target airfoil"""  
-    #     if refresh:      
-    #         self.refresh(reinit_layout=True)              # refresh will also set new layout 
 
     @override
     def refresh (self, reinit_layout=False):
@@ -917,12 +896,6 @@ class Panel_Airfoils (Edit_Panel):
 
             #https://docs.python.org/3.4/faq/programming.html#why-do-lambdas-defined-in-a-loop-with-different-values-all-return-the-same-result
 
-            # if airfoil.usedAs == usedAs.DESIGN :
-            #     CheckBox    (l,r,c  , width=20, get=self.show_airfoil, set=self.set_show_airfoil, id=iair,
-            #                  disable=True)
-            #     Field       (l,r,c+1, width=155, get=lambda :self.airfoil(iair).fileName,  
-            #                  toolTip=f"Design airfoil {airfoil.name}")
-            #     r += 1
 
             if airfoil.usedAs == usedAs.NORMAL :
                 CheckBox    (l,r,c  , width=20, get=self.show_airfoil, set=self.set_show_airfoil, id=iair,
@@ -931,7 +904,7 @@ class Panel_Airfoils (Edit_Panel):
                              toolTip=f"Original airfoil {airfoil.name}")
                 r += 1
 
-            if airfoil.usedAs == usedAs.TARGET:
+            if airfoil.usedAs == usedAs.SECOND:
                 CheckBox    (l,r,c  , width=20, get=self.show_airfoil, set=self.set_show_airfoil, id=iair)
                 Field       (l,r,c+1, width=155, get=lambda i=iair:self.airfoil(i).fileName, 
                              toolTip=f"Target airfoil {airfoil.name}")

@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 COLOR_EDITABLE      = QColor('orange') 
 COLOR_HOVER         = QColor('deepskyblue')
 COLOR_ERROR         = QColor('red').darker(120)
+COLOR_WARNING       = QColor('gold')
 
 
 # -------- common methodes ------------------------
