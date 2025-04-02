@@ -1349,21 +1349,97 @@ class Item_Polars (Diagram_Item):
     title       = None 
     subtitle    = None                                  # optional subtitle 
 
+    sig_xyVars_changed           = pyqtSignal()         # airfoil data changed in a diagram 
 
     def __init__(self, *args, iItem= 1, xyVars=None, **kwargs):
 
         self._iItem  = iItem
+        self._xyVars = None
+        self._xyVars_show_dict = {}                     # dict of xyVars shown up to now 
         self.set_xyVars (xyVars)                        # polar vars for x,y axis 
 
         self._title_item2 = None                        # a second 'title' for x-axis 
         self._autoRange_not_set = True                  # to handle initial no polars to autoRange 
+        self._next_btn    = None
+        self._prev_btn    = None 
 
         self.name = f"{self.name} {iItem}"
 
         super().__init__(*args, **kwargs)
 
+        # buttons for prev/next diagram 
+
+        ico = Icon (Icon.COLLAPSE,light_mode = False)
+        self._prev_btn = pg.ButtonItem(pixmap=ico.pixmap(QSize(52,52)), width=26, parentItem=self)
+        self._prev_btn.mode = 'auto'
+        self._prev_btn.clicked.connect(self._prev_btn_clicked)  
+
+        ico = Icon (Icon.EXPAND,light_mode = False)
+        self._next_btn = pg.ButtonItem(pixmap=ico.pixmap(QSize(52,52)), width=26, parentItem=self)
+        self._next_btn.mode = 'auto'
+        self._next_btn.clicked.connect(self._next_btn_clicked)       
+
+        self._refresh_prev_next_btn ()
+
         # set margins (inset) of self 
         self.setContentsMargins ( 0,10,10,20)
+
+    @property 
+    def has_reset_button (self) -> bool:
+        """ reset view button in the lower left corner"""
+        # to be overridden
+        return False 
+
+    @override
+    def resizeEvent(self, ev):
+
+        # update position next/prev button 
+        if self._next_btn is not None:  
+            item_height = self.size().height()
+            item_width  = self.size().width()
+
+            btn_rect = self.mapRectFromItem(self._next_btn, self._next_btn.boundingRect())
+            x = item_width / 2
+            y = item_height - btn_rect.height() + 3
+            self._next_btn.setPos(x, y)             
+
+            y = 5
+            self._prev_btn.setPos(x, y)             
+
+        super().resizeEvent (ev)
+
+
+    def _handle_prev_next (self, step = 0):
+        """ activates prev or next xy view defined by step"""
+
+        try:
+            # save current view Range
+            self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
+
+            # get index of current and set new 
+            l = list (self._xyVars_show_dict.keys())
+            i = l.index(self._xyVars) + step
+            if i >= 0 :
+                self._xyVars = l[i]
+                viewRect = self._xyVars_show_dict [self._xyVars]
+                self.setup_viewRange (rect=viewRect)                # restore view Range
+                self._refresh_artist ()                             # draw new polar
+                self.sig_xyVars_changed.emit()                      # update view panel 
+            self._refresh_prev_next_btn ()                          # update vsibility of buttons
+        except :
+            pass
+
+
+    def _prev_btn_clicked (self):
+        """ previous diagram button clicked"""
+        # leave scene clicked event as plot items will be removed with new xy vars 
+        QTimer.singleShot (10, lambda: self._handle_prev_next (step=-1))
+
+
+    def _next_btn_clicked (self):
+        """ next diagram button clicked"""
+        # leave scene clicked event as plot items will be removed with new xy vars 
+        QTimer.singleShot (10, lambda: self._handle_prev_next (step=1))
 
 
     @override
@@ -1392,11 +1468,51 @@ class Item_Polars (Diagram_Item):
         p.setZValue(5)
         self._title_item2 = p
 
+
     def wing (self) -> Wing: 
         return self._getter()
 
+
     def planform (self) -> Wing: 
         return self.wing()._planform
+
+
+    def _add_xyVars_to_show_dict (self):
+        """ add actual xyVars and viewRange to the dict of already shown combinations"""
+        try:
+            self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
+            self._refresh_prev_next_btn ()
+        except:
+            pass
+
+
+    def _refresh_prev_next_btn (self):
+        """ hide/show previous / next buttons"""
+
+        l = list (self._xyVars_show_dict.keys())
+
+        if self._xyVars in l:
+            i = l.index(self._xyVars)
+            if i == 0:
+                self._prev_btn.hide()
+            else:
+                self._prev_btn.show()
+            if i >= (len (self._xyVars_show_dict) - 1):
+                self._next_btn.hide()
+            else:
+                self._next_btn.show()
+        else: 
+            self._prev_btn.hide()
+            self._next_btn.hide()
+
+
+    def _refresh_artist (self): 
+        """ refresh plar artist with new diagram variables"""
+
+        artist : Polar_Artist = self._artists [0]
+        artist.set_xyVars (self._xyVars)
+
+        self.plot_title()
 
    
 
@@ -1405,28 +1521,37 @@ class Item_Polars (Diagram_Item):
         return self._xyVars[0]
 
     def set_xVar (self, varType : var):
+        """ set x diagram variable"""
+
+        # save current state - here: only if it is already in dict or first time
+        if self._xyVars in self._xyVars_show_dict or not self._xyVars_show_dict:
+            self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
+
         self._xyVars = (varType, self._xyVars[1])
+        # wait a little until user is sure for new xyVars (prev/next buttons)
+        QTimer.singleShot (3000, self._add_xyVars_to_show_dict)
 
-        artist : Polar_Artist = self._artists [0]
-        artist.set_xyVars (self._xyVars)
-
+        self._refresh_artist ()
         self.setup_viewRange ()
-
-        self.plot_title()
 
 
     @property
     def yVar (self) -> var:
         return self._xyVars[1]
+    
     def set_yVar (self, varType: var):
+        """ set y diagram variable"""
+
+        # save current state - here: only if it is already in dict or first time
+        if self._xyVars in self._xyVars_show_dict or not self._xyVars_show_dict:
+            self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
+
         self._xyVars = (self._xyVars[0], varType)
+        # wait a little until user is sure for new xyVars (prev/next buttons)
+        QTimer.singleShot (3000, self._add_xyVars_to_show_dict)
 
-        artist : Polar_Artist = self._artists [0]
-        artist.set_xyVars (self._xyVars)
-
+        self._refresh_artist ()
         self.setup_viewRange ()
-
-        self.plot_title ()
 
 
     def set_xyVars (self, xyVars : list[str]):
@@ -1467,20 +1592,24 @@ class Item_Polars (Diagram_Item):
 
 
     @override
-    def setup_viewRange (self):
+    def setup_viewRange (self, rect=None):
         """ define view range of this plotItem"""
 
-        self.viewBox.autoRange (padding=0.05)                           # ensure best range x,y 
+        self.viewBox.setDefaultPadding(0.05)
 
-        # it could be that there are initially no polars, so autoRange wouldn't set a range, retry at next refresh
-        if  self.viewBox.childrenBounds() != [None,None] and self._autoRange_not_set:
-            self._autoRange_not_set = False 
+        if rect is None: 
+            self.viewBox.autoRange ()                           # ensure best range x,y 
 
-        self.viewBox.enableAutoRange(enable=False)
+            # it could be that there are initially no polars, so autoRange wouldn't set a range, retry at next refresh
+            if  self.viewBox.childrenBounds() != [None,None] and self._autoRange_not_set:
+                self._autoRange_not_set = False 
+            self.viewBox.enableAutoRange(enable=False)
 
-        self.showGrid(x=True, y=True)
+            self.showGrid(x=True, y=True)
+        else: 
+            self.viewBox.setRange (rect=rect, padding=0.0)      # restore view Range
 
-        self._set_legend_position ()                         # find nice legend position 
+        self._set_legend_position ()                            # find nice legend position 
 
 
     def _set_legend_position (self):
@@ -2101,12 +2230,14 @@ class Diagram_Airfoils (Diagram_Abstract):
             xyVars = dataDict ["xyVars"]
 
             item = Item_Polars (self, iItem=1, getter=self.wing, xyVars=xyVars, show=False)
+            item.sig_xyVars_changed.connect (self._on_xyVars_changed)
             self._add_item (item, r, 0)
 
             dataDict = self._diagram_settings[1] if len(self._diagram_settings) > 1 else {"xyVars" : (var.CL,var.GLIDE)}
             xyVars = dataDict ["xyVars"]
 
             item = Item_Polars (self, iItem=2, getter=self.wing, xyVars=xyVars, show=False)
+            item.sig_xyVars_changed.connect (self._on_xyVars_changed)
             self._add_item (item, r, 1)
  
 
@@ -2338,6 +2469,14 @@ class Diagram_Airfoils (Diagram_Abstract):
 
         for item in self._get_items (Item_Polars):
             item.setVisible (aBool)
+
+
+    def _on_xyVars_changed (self):
+        """ slot to handle change of xyVars made in diagram """
+
+        logger.debug (f"{str(self)} on xyVars changed in diagram")
+
+        self.polar_panel.refresh()
 
 
 
