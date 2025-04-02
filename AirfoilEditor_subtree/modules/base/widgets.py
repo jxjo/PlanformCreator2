@@ -16,7 +16,7 @@ import types
 from typing             import override
 from enum               import Enum, StrEnum
 
-from PyQt6.QtCore       import QEvent, QSize, Qt, QMargins, pyqtSignal, QTimer
+from PyQt6.QtCore       import QSize, Qt, QMargins, pyqtSignal, QTimer
 
 from PyQt6.QtWidgets    import QLayout, QFormLayout, QGridLayout, QVBoxLayout, QHBoxLayout, QWIDGETSIZE_MAX
 from PyQt6.QtWidgets    import (
@@ -91,6 +91,7 @@ class Icon (QIcon):
 
     SETTINGS   = "settings" 
     COLLAPSE   = "collapse" 
+    EXPAND     = "expand" 
     OPEN       = "open"     
     EDIT       = "edit"            # https://icons8.com/icon/set/edit/family-windows--static
     DELETE     = "delete"          # https://icons8.com/icon/set/delete/family-windows--static

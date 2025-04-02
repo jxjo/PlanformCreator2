@@ -14,7 +14,7 @@ from base.common_utils          import *
 from base.spline                import Bezier
 
 from model.airfoil              import Airfoil, Airfoil_Bezier, usedAs, Geometry
-from model.airfoil_geometry     import Line, Side_Airfoil_Bezier
+from model.airfoil_geometry     import Line, Side_Airfoil_Bezier, Geometry_Bezier
 from model.polar_set            import * 
 
 from PyQt6.QtGui                import QColor, QBrush, QPen
@@ -49,7 +49,8 @@ def _color_airfoil (airfoils : list[Airfoil], airfoil: Airfoil) -> QColor:
         alpha = 0.9
     elif airfoil_type == usedAs.TARGET:
         color = 'cornflowerblue'
-        alpha = 1.0
+    elif airfoil_type == usedAs.SECOND:
+        color = 'cornflowerblue'
     else:
         color = 'gray'
     qcolor =  QColor (color) 
@@ -84,7 +85,7 @@ def _label_airfoil (airfoils : list[Airfoil], airfoil: Airfoil) -> str:
             if a == airfoil: iRef = nRef 
             if a.usedAs == usedAs.REF: nRef += 1
         use = f"Ref {iRef+1}: "
-    elif airfoil.usedAs == usedAs.DESIGN or not airfoil.usedAs: # no prefix 
+    elif airfoil.usedAs == usedAs.DESIGN or airfoil.usedAs == usedAs.NORMAL or airfoil.usedAs is None: # no prefix 
         use = ""
     else: 
         use = f"{airfoil.usedAs}: " 
@@ -522,10 +523,10 @@ class Airfoil_Artist (Artist):
                         antialias = True
                         zValue = 3
                     elif airfoil.usedAs != usedAs.NORMAL:
-                        color = QColor (color).darker (130)
+                        color = QColor (color).darker (110)
                 elif airfoil.usedAs == usedAs.NORMAL:
-                        width = 2
-                        antialias = True
+                    width = 2
+                    antialias = True
 
                 pen = pg.mkPen(color, width=width)
 
@@ -644,6 +645,73 @@ class Bezier_Artist (Artist):
     #             p = _plot_side_title (self.ax, side)
     #             self._add(p)
 
+
+
+
+class Bezier_Deviation_Artist (Artist):
+    """Plot deviation of Bezier curves to target airfoil """
+
+    @property
+    def airfoils (self) -> list [Airfoil]: return self.data_list
+
+
+    def _plot (self): 
+    
+        from airfoil_dialogs    import Matcher
+
+        # check - is there a design airfoil and a target (normal) airfoil 
+
+        geo_from   : Geometry = None 
+        geo_target : Geometry = None 
+
+        for airfoil in self.airfoils:
+            if airfoil.usedAsDesign:
+                geo_from = airfoil.geo 
+            elif airfoil.usedAs == usedAs.NORMAL:
+                geo_target = airfoil.geo
+
+        if not geo_from or not geo_target: return 
+
+        # plot difference as thick lines at deviation check coordinates 
+
+        label = "Deviation x 10"
+        color = COLOR_WARNING  
+        color.setAlphaF (0.6)
+
+        for side in [Line.Type.UPPER, Line.Type.LOWER]:     
+
+            if side == Line.Type.UPPER:
+                from_line   = geo_from.upper  
+                target_line = geo_target.upper
+            else:
+                from_line   = geo_from.lower  
+                target_line = geo_target.lower
+
+            # get deviation from Matcher 
+
+            x, y, devi = Line.deviation_to (from_line, target_line, reduce_points=False, fast=True)
+
+            # build array of coordinate pairs for fast plot -> connect='pairs'
+
+            x_dbl = np.zeros ((len(x)-2)*2)
+            y_dbl = np.zeros ((len(x)-2)*2)
+
+            j = 0 
+            for i in range (1, len(x)-1):
+                if abs(devi[i]) > 1e-6:                     # avoid pyqtgraph artefacts
+                    x_dbl[j] = x[i]
+                    y_dbl[j] = y[i]
+                    j += 1
+                    x_dbl[j] = x[i]
+                    y_dbl[j] = y[i] - (devi[i] * 10) 
+                    j += 1
+
+            x_dbl = x_dbl [:j]
+            y_dbl = y_dbl [:j]
+
+            if len(x_dbl):
+                self._plot_dataItem  (x_dbl, y_dbl, pen=pg.mkPen(color, width=3), name=label, 
+                                        antialias=False, zValue=1, connect='pairs')    
 
 
 

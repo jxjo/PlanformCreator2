@@ -311,15 +311,17 @@ class Diagram_Item (pg.PlotItem):
         self._help_messages_shown   = {}                # all help messages shown up to now 
         self._help_message_items    = {}
 
-        # setup additional control button to reset range 
+        # setup additional, optional button to reset view range 
 
         self._vb_state_changed = False 
-        ico = Icon (Icon.RESETVIEW,light_mode = False)
-        self._resetBtn = pg.ButtonItem(pixmap=ico.pixmap(QSize(52,52)), width=16, parentItem=self)
-        self._resetBtn.mode = 'auto'
-        self._resetBtn.clicked.connect(self._resetBtn_clicked)
-        timer = QTimer()                                
-        timer.singleShot(50, self._reset_prepare)           # delayed when all initial drawing done 
+        self._resetBtn = None
+        if self.has_reset_button:
+            ico = Icon (Icon.RESETVIEW,light_mode = False)
+            self._resetBtn = pg.ButtonItem(pixmap=ico.pixmap(QSize(52,52)), width=16, parentItem=self)
+            self._resetBtn.mode = 'auto'
+            self._resetBtn.clicked.connect(self._resetBtn_clicked)
+            timer = QTimer()                                
+            timer.singleShot(50, self._reset_prepare)           # delayed when all initial drawing done 
 
         # setup item to print coordinates 
 
@@ -465,9 +467,11 @@ class Diagram_Item (pg.PlotItem):
     @override
     def close (self):
         # PlotItem override to remove button
-        self._resetBtn.setParent (None) 
-        self._resetBtn = None
+        if self._resetBtn is not None:
+            self._resetBtn.setParent (None) 
+            self._resetBtn = None
         super().close()
+
 
     @override
     def hoverEvent(self, ev):
@@ -514,17 +518,22 @@ class Diagram_Item (pg.PlotItem):
 
     @override
     def resizeEvent(self, ev):
-        # PlotItem override to remove button
-        if self._resetBtn is None:  ## already closed down
-            return
-        
-        # position reset button 
-        btnRect = self.mapRectFromItem(self._resetBtn, self._resetBtn.boundingRect())
-        y = self.size().height() - btnRect.height()
-        self._resetBtn.setPos(20, y+3)            # right aside autoBtn
+
+        # update position reset button 
+        if self._resetBtn is not None:                  # item could be already closed 
+            btnRect = self.mapRectFromItem(self._resetBtn, self._resetBtn.boundingRect())
+            y = self.size().height() - btnRect.height()
+            self._resetBtn.setPos(20, y+3)              # right aside autoBtn
 
         super().resizeEvent (ev)
 
+
+    @property 
+    def has_reset_button (self) -> bool:
+        """ reset view button in the lower left corner"""
+        # to be overridden
+        return True 
+    
 
     @override
     def updateButtons(self):
@@ -532,10 +541,12 @@ class Diagram_Item (pg.PlotItem):
         super().updateButtons ()
         try:
             if self.mouseHovering and not self.buttonsHidden and self._vb_state_changed: #  and not all(self.vb.autoRangeEnabled()):
-                self._resetBtn.show()
+                if self._resetBtn is not None: 
+                    self._resetBtn.show()
                 self._coordItem.show()
             else:
-                self._resetBtn.hide()
+                if self._resetBtn is not None: 
+                    self._resetBtn.hide()
                 self._coordItem.hide()
         except RuntimeError:
             pass  # this can happen if the plot has been deleted.

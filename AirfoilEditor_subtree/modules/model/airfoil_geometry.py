@@ -639,12 +639,100 @@ class Line:
     isBezier        = False
     isHicksHenne    = False
 
+    # --------------- static methods also for external use 
+
+    @staticmethod
+    def _reduce_target_points (target_line: 'Line') -> 'Line':
+        """ 
+        Returns a new target Line with a reduced number of points 
+        to increase speed of deviation evaluation
+
+        The reduction tries to get best points which represent an airfoil side 
+        """
+        # based on delta x
+        # we do not take every coordinate point - define different areas of point intensity 
+        x1  = 0.02 # 0.03                               # a le le curvature is master 
+        dx1 = 0.020 # 0.025                              # now lower density at nose area
+        x2  = 0.25 
+        dx2 = 0.04
+        x3  = 0.8                                       # no higher density at te
+        dx3 = 0.03 # 0.03                               # to handle reflexed or rear loading
+
+        targ_x = []
+        targ_y = []
+        x = x1
+        while x < 1.0: 
+            i = find_closest_index (target_line.x, x)
+            targ_x.append(float(target_line.x[i]))
+            targ_y.append(float(target_line.y[i]))
+            if x > x3:
+                x += dx3
+            elif x > x2:                             
+                x += dx2
+            else: 
+                x += dx1
+
+        return Line(targ_x, targ_y)
+
+
+    @staticmethod
+    def deviation_to (from_line :  'Line', target_line : 'Line', reduce_points=True, fast=False) \
+                     -> tuple [np.ndarray, np.ndarray, np.ndarray]:
+        """
+        calculate deviation between bezier or a line to a target line (which will optionally be reduced)
+        
+        Returns: 
+            x,y:    coordinates on bezier curve used for deviation
+            devi:   +- deviations of bezier to a target_line
+        """
+
+        if not isinstance (from_line, Line) and not isinstance (from_line, Bezier): 
+            raise ValueError ("from line is not a Line or a Bezier object")
+        if not isinstance (target_line, Line): 
+            raise ValueError ("target is not a Line object")
+
+        if isinstance (from_line, Bezier):
+            bezier = from_line
+        else: 
+            bezier = None 
+
+        # reduce no of coordinates to speed up evaluation 
+        if reduce_points:
+            reduced_target = Line._reduce_target_points (target_line)
+        else: 
+            reduced_target = target_line 
+
+        # evaluate the new y values on Bezier for the target x-coordinate  
+
+        x = reduced_target.x 
+        y = np.zeros (len(reduced_target.y))
+        for i, xi in enumerate(reduced_target.x) :
+            if bezier:
+                y[i] = bezier.eval_y_on_x (xi, fast=fast, epsilon=1e-7)
+            else:
+                y[i] = from_line.yFn (xi)
+
+        # calculate difference between bezier y and target y
+        devi = (y - reduced_target.y)
+        return x, y, devi
+
+
+    @staticmethod
+    def norm2_deviation_to (bezier : Bezier, target_line : 'Line', reduce_points=True)  -> float:
+        """returns norm2 deviation of bezier to a target_line"""
+
+        _, _, devi = Line.deviation_to (bezier, target_line, reduce_points=reduce_points)
+        return np.linalg.norm (np.abs(devi))
+
+
+    # ----------------------------------------------
+
     def __init__ (self, x,y, 
                   linetype : Type |None = None, 
                   name : str|None = None):
 
-        self._x         = x
-        self._y         = y
+        self._x         = np.array(x)
+        self._y         = np.array(y)
         self._type      = linetype 
         self._name      = name 
         self._threshold = 0.1                   # threshold for reversal dectection 
@@ -1670,7 +1758,10 @@ class Geometry ():
         """ 
         Leading edge radius which is the reciprocal of curvature at le 
         """
-        return  1.0 / self.curvature.at_le
+        if self.curvature.at_le:
+            return 1.0 / self.curvature.at_le
+        else: 
+            return 0.0 
 
     def _le_radius (self, moving=False): 
         """ when 'moving' the radius of a temporary curvature based on _x,_y is returned"""
@@ -1678,7 +1769,6 @@ class Geometry ():
             curv = Curvature_of_xy (self._x, self._y) 
         else: 
             curv = self.curvature
-        print (1.0 / curv.at_le)
         return  1.0 / curv.at_le
 
 

@@ -42,6 +42,10 @@ class Diagram_Item_Airfoil (Diagram_Item):
 
 
     def __init__(self, *args, **kwargs):
+
+        self._stretch_y         = False                 # show y stretched 
+        self._stretch_y_factor  = 3                     # factor to stretch 
+
         super().__init__(*args, **kwargs)
 
         # set margins (inset) of self 
@@ -50,13 +54,23 @@ class Diagram_Item_Airfoil (Diagram_Item):
 
     def airfoils (self) -> list[Airfoil]: 
         return self._getter()
-    
-    def _one_is_bezier_based (self) -> bool: 
+
+
+    def _is_one_airfoil_bezier (self) -> bool: 
         """ is one of airfoils Bezier based? """
         a : Airfoil
         for a in self.airfoils():
             if a.isBezierBased: return True
         return False 
+
+
+    def _is_one_design (self) -> bool: 
+        """ is one airfoil used as design ?"""
+
+        for a in self.airfoils():
+            if a.usedAsDesign:
+                return True 
+        return False
 
 
     def _on_enter_panelling (self):
@@ -77,6 +91,26 @@ class Diagram_Item_Airfoil (Diagram_Item):
         self.section_panel.refresh()
 
         logger.debug (f"{str(self)} _on_blend_airfoil")
+
+
+    @property
+    def stretch_y (self) -> bool:
+        """ show y axis stretched"""
+        return self._stretch_y
+    
+    def set_stretch_y (self, aBool : bool):
+        self._stretch_y = aBool
+        self.section_panel.refresh()                    # show / hide stretch factor field
+        self.setup_viewRange ()
+
+    @property
+    def stretch_y_factor (self) -> int:
+        """ y axis stretche factor"""
+        return self._stretch_y_factor
+    
+    def set_stretch_y_factor (self, aVal : int):
+        self._stretch_y_factor = clip (aVal, 1, 50)
+        self.setup_viewRange ()
 
 
     @override
@@ -111,6 +145,8 @@ class Diagram_Item_Airfoil (Diagram_Item):
         self.bezier_artist = Bezier_Artist (self, self.airfoils)
         self.bezier_artist.sig_bezier_changed.connect (self.sig_geometry_changed.emit)
 
+        self.bezier_devi_artist = Bezier_Deviation_Artist (self, self.airfoils, show=False, show_legend=True)
+
 
     @override
     def setup_viewRange (self):
@@ -118,12 +154,15 @@ class Diagram_Item_Airfoil (Diagram_Item):
 
         self.viewBox.setDefaultPadding(0.05)
 
+        if self.stretch_y:
+            self.viewBox.setAspectLocked(ratio= (1 / self.stretch_y_factor))
+        else: 
+            self.viewBox.setAspectLocked(ratio= 1)
+
         self.viewBox.autoRange ()               # first ensure best range x,y 
         self.viewBox.setXRange( 0, 1)           # then set x-Range
 
-        self.viewBox.setAspectLocked()
-
-        self.viewBox.enableAutoRange(axis=pg.ViewBox.YAxis, enable=False)
+        # self.viewBox.enableAutoRange(axis=pg.ViewBox.YAxis, enable=False)
 
         self.showGrid(x=True, y=True)
 
@@ -132,6 +171,12 @@ class Diagram_Item_Airfoil (Diagram_Item):
     def refresh_artists (self):
         self.airfoil_artist.refresh() 
         self.line_artist.refresh() 
+
+        # switch off deviation artist if not design
+        if not self._is_one_design():
+            self.bezier_devi_artist.set_show(False)
+        else: 
+            self.bezier_devi_artist.refresh()
 
         # show Bezier shape function when current airfoil is Design and Bezier 
         cur_airfoil : Airfoil = self.airfoils()[0]
@@ -147,19 +192,33 @@ class Diagram_Item_Airfoil (Diagram_Item):
         if self._section_panel is None:    
             l = QGridLayout()
             r,c = 0, 0 
-            CheckBox (l,r,c, text="Coordinate points", 
+            CheckBox (l,r,c, text="Coordinate points", colSpan=2,
                     get=lambda: self.airfoil_artist.show_points,
                     set=self.airfoil_artist.set_show_points) 
             r += 1
-            CheckBox (l,r,c, text="Thickness && Camber", 
+            CheckBox (l,r,c, text="Thickness && Camber", colSpan=2,
                     get=lambda: self.line_artist.show,
                     set=self.line_artist.set_show) 
             r += 1
-            CheckBox (l,r,c, text="Shape function (Bezier)", 
+            CheckBox (l,r,c, text="Stretch y axis", 
+                    get=lambda: self.stretch_y,
+                    set=self.set_stretch_y) 
+            FieldF (l,r,c+1, lab="by factor", dec=0, step=1, lim=(1,50), width=40,
+                    get=lambda: self.stretch_y_factor,
+                    set=self.set_stretch_y_factor,
+                    hide=lambda: not self.stretch_y) 
+            r += 1
+            CheckBox (l,r,c, text="Bezier control points", colSpan=2,
                     get=lambda: self.bezier_artist.show,
                     set=self.bezier_artist.set_show,
-                    hide=lambda : not self._one_is_bezier_based()) 
+                    hide=lambda : not self._is_one_airfoil_bezier()) 
             r += 1
+            CheckBox (l,r,c, text="Deviation of Design", colSpan=2,
+                    get=lambda: self.bezier_devi_artist.show,
+                    set=self.bezier_devi_artist.set_show,
+                    hide=lambda : not self._is_one_design()) 
+            r += 1
+            l.setColumnMinimumWidth (1,55)
             l.setColumnStretch (3,2)
             l.setRowStretch    (r,2)
 
@@ -363,24 +422,99 @@ class Diagram_Item_Polars (Diagram_Item):
     title       = None 
     subtitle    = None                                  # optional subtitle 
 
-
-    sig_geometry_changed         = pyqtSignal()          # airfoil data changed in a diagram 
+    sig_xyVars_changed           = pyqtSignal()         # airfoil data changed in a diagram 
 
 
     def __init__(self, *args, iItem= 1, xyVars=None | tuple, **kwargs):
 
         self._iItem  = iItem
+        self._xyVars = None
+        self._xyVars_show_dict = {}                     # dict of xyVars shown up to now 
         self.set_xyVars (xyVars)                        # polar vars for x,y axis 
+
 
         self._title_item2 = None                        # a second 'title' for x-axis 
         self._autoRange_not_set = True                  # to handle initial no polars to autoRange 
+        self._next_btn    = None
+        self._prev_btn    = None 
 
         self.name = f"{self.name} {iItem}"
 
         super().__init__(*args, **kwargs)
 
+        # buttons for prev/next diagram 
+
+        ico = Icon (Icon.COLLAPSE,light_mode = False)
+        self._prev_btn = pg.ButtonItem(pixmap=ico.pixmap(QSize(52,52)), width=26, parentItem=self)
+        self._prev_btn.mode = 'auto'
+        self._prev_btn.clicked.connect(self._prev_btn_clicked)  
+
+        ico = Icon (Icon.EXPAND,light_mode = False)
+        self._next_btn = pg.ButtonItem(pixmap=ico.pixmap(QSize(52,52)), width=26, parentItem=self)
+        self._next_btn.mode = 'auto'
+        self._next_btn.clicked.connect(self._next_btn_clicked)       
+
+        self._refresh_prev_next_btn ()
+
         # set margins (inset) of self 
         self.setContentsMargins ( 0,10,10,20)
+
+    @property 
+    def has_reset_button (self) -> bool:
+        """ reset view button in the lower left corner"""
+        # to be overridden
+        return False 
+
+    @override
+    def resizeEvent(self, ev):
+
+        # update position next/prev button 
+        if self._next_btn is not None:  
+            item_height = self.size().height()
+            item_width  = self.size().width()
+
+            btn_rect = self.mapRectFromItem(self._next_btn, self._next_btn.boundingRect())
+            x = item_width / 2
+            y = item_height - btn_rect.height() + 3
+            self._next_btn.setPos(x, y)             
+
+            y = 5
+            self._prev_btn.setPos(x, y)             
+
+        super().resizeEvent (ev)
+
+
+    def _handle_prev_next (self, step = 0):
+        """ activates prev or next xy view defined by step"""
+
+        try:
+            # save current view Range
+            self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
+
+            # get index of current and set new 
+            l = list (self._xyVars_show_dict.keys())
+            i = l.index(self._xyVars) + step
+            if i >= 0 :
+                self._xyVars = l[i]
+                viewRect = self._xyVars_show_dict [self._xyVars]
+                self.setup_viewRange (rect=viewRect)                # restore view Range
+                self._refresh_artist ()                             # draw new polar
+                self.sig_xyVars_changed.emit()                      # update view panel 
+            self._refresh_prev_next_btn ()                          # update vsibility of buttons
+        except :
+            pass
+
+
+    def _prev_btn_clicked (self):
+        """ previous diagram button clicked"""
+        # leave scene clicked event as plot items will be removed with new xy vars 
+        QTimer.singleShot (10, lambda: self._handle_prev_next (step=-1))
+
+
+    def _next_btn_clicked (self):
+        """ next diagram button clicked"""
+        # leave scene clicked event as plot items will be removed with new xy vars 
+        QTimer.singleShot (10, lambda: self._handle_prev_next (step=1))
 
 
     @override
@@ -414,33 +548,80 @@ class Diagram_Item_Polars (Diagram_Item):
         return self._getter()
     
 
-    @property
-    def xVar (self) -> var:
-        return self._xyVars[0]
+    def _add_xyVars_to_show_dict (self):
+        """ add actual xyVars and viewRange to the dict of already shown combinations"""
+        try:
+            self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
+            self._refresh_prev_next_btn ()
+        except:
+            pass
 
-    def set_xVar (self, varType : var):
-        self._xyVars = (varType, self._xyVars[1])
+
+    def _refresh_prev_next_btn (self):
+        """ hide/show previous / next buttons"""
+
+        l = list (self._xyVars_show_dict.keys())
+
+        if self._xyVars in l:
+            i = l.index(self._xyVars)
+            if i == 0:
+                self._prev_btn.hide()
+            else:
+                self._prev_btn.show()
+            if i >= (len (self._xyVars_show_dict) - 1):
+                self._next_btn.hide()
+            else:
+                self._next_btn.show()
+        else: 
+            self._prev_btn.hide()
+            self._next_btn.hide()
+
+
+    def _refresh_artist (self): 
+        """ refresh plar artist with new diagram variables"""
 
         artist : Polar_Artist = self._artists [0]
         artist.set_xyVars (self._xyVars)
-
-        self.setup_viewRange ()
 
         self.plot_title()
 
 
     @property
-    def yVar (self) -> var:
-        return self._xyVars[1]
-    def set_yVar (self, varType: var):
-        self._xyVars = (self._xyVars[0], varType)
+    def xVar (self) -> var:
+        return self._xyVars[0]
 
-        artist : Polar_Artist = self._artists [0]
-        artist.set_xyVars (self._xyVars)
+    def set_xVar (self, varType : var):
+        """ set x diagram variable"""
 
+        # save current state - here: only if it is already in dict or first time
+        if self._xyVars in self._xyVars_show_dict or not self._xyVars_show_dict:
+            self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
+
+        self._xyVars = (varType, self._xyVars[1])
+        # wait a little until user is sure for new xyVars (prev/next buttons)
+        QTimer.singleShot (3000, self._add_xyVars_to_show_dict)
+
+        self._refresh_artist ()
         self.setup_viewRange ()
 
-        self.plot_title ()
+
+    @property
+    def yVar (self) -> var:
+        return self._xyVars[1]
+
+    def set_yVar (self, varType: var):
+        """ set y diagram variable"""
+
+        # save current state - here: only if it is already in dict or first time
+        if self._xyVars in self._xyVars_show_dict or not self._xyVars_show_dict:
+            self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
+
+        self._xyVars = (self._xyVars[0], varType)
+        # wait a little until user is sure for new xyVars (prev/next buttons)
+        QTimer.singleShot (3000, self._add_xyVars_to_show_dict)
+
+        self._refresh_artist ()
+        self.setup_viewRange ()
 
 
     def set_xyVars (self, xyVars : list[str]):
@@ -481,22 +662,24 @@ class Diagram_Item_Polars (Diagram_Item):
 
 
     @override
-    def setup_viewRange (self):
+    def setup_viewRange (self, rect=None):
         """ define view range of this plotItem"""
 
         self.viewBox.setDefaultPadding(0.05)
 
-        self.viewBox.autoRange ()                           # ensure best range x,y 
+        if rect is None: 
+            self.viewBox.autoRange ()                           # ensure best range x,y 
 
-        # it could be that there are initially no polars, so autoRange wouldn't set a range, retry at next refresh
-        if  self.viewBox.childrenBounds() != [None,None] and self._autoRange_not_set:
-            self._autoRange_not_set = False 
+            # it could be that there are initially no polars, so autoRange wouldn't set a range, retry at next refresh
+            if  self.viewBox.childrenBounds() != [None,None] and self._autoRange_not_set:
+                self._autoRange_not_set = False 
+            self.viewBox.enableAutoRange(enable=False)
 
-        self.viewBox.enableAutoRange(enable=False)
+            self.showGrid(x=True, y=True)
+        else: 
+            self.viewBox.setRange (rect=rect, padding=0.0)      # restore view Range
 
-        self.showGrid(x=True, y=True)
-
-        self._set_legend_position ()                         # find nice legend position 
+        self._set_legend_position ()                            # find nice legend position 
 
 
     def _set_legend_position (self):
@@ -549,7 +732,7 @@ class Diagram_Airfoil_Polar (Diagram):
         self._polar_defs_fn = polar_defs_fn 
         self._diagram_settings = diagram_settings
 
-        self._show_operating_points = False             # show polars operating points 
+        self._show_polar_points = False             # show polars operating points 
 
         super().__init__(*args, **kwargs)
 
@@ -665,12 +848,14 @@ class Diagram_Airfoil_Polar (Diagram):
             xyVars = dataDict ["xyVars"]
 
             item = Diagram_Item_Polars (self, iItem=1, getter=self.airfoils, xyVars=xyVars, show=False)
+            item.sig_xyVars_changed.connect (self._on_xyVars_changed)
             self._add_item (item, r, 0)
 
             dataDict = self._diagram_settings[1] if len(self._diagram_settings) > 1 else {"xyVars" : (var.CL,var.GLIDE)}
             xyVars = dataDict ["xyVars"]
 
             item = Diagram_Item_Polars (self, iItem=2, getter=self.airfoils, xyVars=xyVars, show=False)
+            item.sig_xyVars_changed.connect (self._on_xyVars_changed)
             self._add_item (item, r, 1)
  
 
@@ -728,12 +913,12 @@ class Diagram_Airfoil_Polar (Diagram):
 
 
     @property 
-    def show_operating_points (self) -> bool:
+    def show_polar_points (self) -> bool:
         """ show polar operatins points """
-        return self._show_operating_points
+        return self._show_polar_points
 
-    def set_show_operating_points (self, aBool : bool):
-        self._show_operating_points = aBool
+    def set_show_polar_points (self, aBool : bool):
+        self._show_polar_points = aBool
 
         artist : Polar_Artist
         for artist in self._get_artist (Polar_Artist):
@@ -761,6 +946,11 @@ class Diagram_Airfoil_Polar (Diagram):
             l.addWidget (p, r, c, 1, 6)
             l.setRowStretch (r,1)
 
+            SpaceR (l,r, height=10, stretch=0) 
+            r += 1
+            CheckBox (l,r,c, text="Polar points", colSpan=4,
+                            get=lambda: self.show_polar_points, set=self.set_show_polar_points) 
+
             # polar diagrams variables setting 
 
             r += 1
@@ -779,10 +969,6 @@ class Diagram_Airfoil_Polar (Diagram):
                     SpaceC      (l,c+5)
                     r += 1
 
-                SpaceR (l,r, height=10, stretch=0) 
-                r += 1
-                CheckBox (l,r,c, text="Operating points", colSpan=4,
-                                get=lambda: self.show_operating_points, set=self.set_show_operating_points) 
                 r += 1
                 SpaceR (l,r, height=10, stretch=1)
                 r += 1
@@ -858,7 +1044,7 @@ class Diagram_Airfoil_Polar (Diagram):
         logger.debug (f"{str(self)} on_blend_airfoil")
 
 
-    def on_target_changed (self):
+    def on_airfoil_2_changed (self):
         """ slot to handle airfoil target changed signal """
 
         logger.debug (f"{str(self)} on airfoil target changed")
@@ -894,8 +1080,7 @@ class Diagram_Airfoil_Polar (Diagram):
 
         logger.debug (f"{str(self)} on geometry changed in diagram")
     
-        # self.refresh()                          # refresh other diagram items 
-        self.sig_airfoil_changed.emit()         # refresh app
+        self.sig_airfoil_changed.emit()             # refresh app
 
 
 
@@ -927,3 +1112,12 @@ class Diagram_Airfoil_Polar (Diagram):
         for item in self.diagram_items:
             if item.isVisible(): 
                 item.refresh()
+
+    def _on_xyVars_changed (self):
+        """ slot to handle change of xyVars made in diagram """
+
+        logger.debug (f"{str(self)} on xyVars changed in diagram")
+
+        self.polar_panel.refresh()
+
+

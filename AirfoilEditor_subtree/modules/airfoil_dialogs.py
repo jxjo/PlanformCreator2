@@ -179,7 +179,7 @@ class Blend_Airfoil (Dialog):
     name = "Blend Airfoil with ..."
 
     sig_blend_changed      = pyqtSignal ()
-    sig_airfoil2_changed   = pyqtSignal (Airfoil)
+    sig_airfoil_2_changed  = pyqtSignal (Airfoil)
 
 
     def __init__ (self, parent : QWidget, 
@@ -254,7 +254,7 @@ class Blend_Airfoil (Dialog):
         """ set new 2nd airfoil - do blend - signal change"""
         self._airfoil2 = aAirfoil
         self.refresh()
-        self.sig_airfoil2_changed.emit (aAirfoil)
+        self.sig_airfoil_2_changed.emit (aAirfoil)
 
         # first blend with new airfoil - use copy as airfoil2 could be normalized
 
@@ -401,8 +401,9 @@ class Match_Bezier (Dialog):
 
     name = "Match Bezier"
 
-    sig_new_bezier = pyqtSignal (Line.Type)
-    sig_match_finished = pyqtSignal (Side_Airfoil_Bezier)
+    sig_new_bezier      = pyqtSignal (Line.Type)
+    sig_pass_finished   = pyqtSignal ()
+    sig_match_finished  = pyqtSignal (Side_Airfoil_Bezier)
 
     MAX_PASS = 4                                            # max passes for match Bezier with increased weighting
     INITIAL_WEIGHTING = 0.25                                # initial weighting of le curvature 
@@ -464,7 +465,7 @@ class Match_Bezier (Dialog):
         self._target_curv_le = target_curv_le
         self._max_curv_te = max_curv_te
 
-        self._norm2 = Matcher.norm2_deviation_to (side_bezier.bezier, target_line) 
+        self._norm2 = Line.norm2_deviation_to (side_bezier.bezier, target_line) 
         self._nevals = 0
 
         self._target_curv_le_weighting = self.INITIAL_WEIGHTING
@@ -549,20 +550,25 @@ class Match_Bezier (Dialog):
     def _on_finished(self):
         """ slot for thread finished """
 
-        if self._ipass < self.MAX_PASS: 
-            # further passes to go?
+        if self._matcher.is_interrupted:
+            # user stop request - no more loops 
+            finished = True
 
+        elif self._ipass < self.MAX_PASS: 
+            # further passes to go?
             finished = self._result_is_good_enough ()
             if not finished:
+                self.sig_pass_finished.emit ()                          # intermediate update
+
                 # start next pass after this thread has really finished 
                 timer = QTimer()                                
-                timer.singleShot(10, self._start_matcher)
+                timer.singleShot(20, self._start_matcher)
         else: 
             finished = True 
 
         if finished:      
             # we really finished
-            self._norm2 = Matcher.norm2_deviation_to (self._side_bezier.bezier, self._target_line)
+            self._norm2 = Line.norm2_deviation_to (self._side_bezier.bezier, self._target_line)
 
             self._ipass = 0                                             # reset pass counter 
             self._target_curv_le_weighting = self.INITIAL_WEIGHTING     # reset weighing 
@@ -739,8 +745,6 @@ class Matcher (QThread):
             return cls.result_quality.GOOD
 
 
-
-
     @classmethod
     def result_deviation (cls, norm2 : float) -> result_quality:
         """ returns enum result_quality depending of deviation"""
@@ -767,70 +771,15 @@ class Matcher (QThread):
             return cls.result_quality.GOOD
 
 
-
-    @staticmethod
-    def _reduce_target_points (target_line: Line) -> Line:
-        """ 
-        Returns a new target Line with a reduced number of points 
-        to increase speed of deviation evaluation
-
-        The reduction tries to get best points which represent an aifoil side 
-        """
-        # based on delta x
-        # we do not take every coordinate point - define different areas of point intensity 
-        x1  = 0.02 # 0.03                               # a le le curvature is master 
-        dx1 = 0.020 # 0.025                              # now lower density at nose area
-        x2  = 0.25 
-        dx2 = 0.04
-        x3  = 0.8                                       # no higher density at te
-        dx3 = 0.03 # 0.03                               # to handle reflexed or rear loading
-
-        targ_x = []
-        targ_y = []
-        x = x1
-        while x < 1.0: 
-            i = find_closest_index (target_line.x, x)
-            targ_x.append(float(target_line.x[i]))
-            targ_y.append(float(target_line.y[i]))
-            if x > x3:
-                x += dx3
-            elif x > x2:                             
-                x += dx2
-            else: 
-                x += dx1
-
-        return Line(targ_x, targ_y)
-
-
-    @staticmethod
-    def norm2_deviation_to (bezier : Bezier, target_line : 'Line', isReduced=False)  -> float:
-        """returns norm2 deviation of self to a target_line"""
-
-        if not isinstance (target_line, Line): return 0.0 
-
-        # reduce no of coordinates to speed up evaluation 
-        if not isReduced:
-            reduced_target = Matcher._reduce_target_points (target_line)
-        else: 
-            reduced_target = target_line 
-
-        # evaluate the new y values on Bezier for the target x-coordinate   
-        y_new = np.zeros (len(reduced_target.y))
-        for i, x in enumerate(reduced_target.x) :
-            y_new[i] = bezier.eval_y_on_x (x, fast=False, epsilon=1e-7)
-
-        # calculate abs difference between bezier y and target y
-        devi = np.abs((y_new - reduced_target.y))
-        return np.linalg.norm (devi)
-
     # ------------------
 
     def __init__ (self, parent = None):
-        """ use .set_initial(...) to put data into thread 
+        """ use .set_match(...) to put data into thread 
         """
         super().__init__(parent)
 
         self._exiting = False 
+        self._is_interrupted = False 
 
         # nelder mead results 
         self._niter      = 0                        # number of iterations needed
@@ -859,7 +808,7 @@ class Matcher (QThread):
 
         # selected target points for objective function
 
-        self._target_line  = Matcher._reduce_target_points (target_line)
+        self._target_line  = Line._reduce_target_points (target_line)
         self._target_y_te = target_line.y[-1]        
 
         # curvature targets  
@@ -922,7 +871,15 @@ class Matcher (QThread):
         self._niter      = niter
         self._evals      = 0 
 
+        if self.isInterruptionRequested():
+            self._is_interrupted = True 
+
         return 
+
+    @property
+    def is_interrupted (self) -> bool:
+        """ True if thread has finished and was interrupted"""
+        return self._is_interrupted
 
 
     # --------------------
@@ -1008,7 +965,7 @@ class Matcher (QThread):
         # print (' '.join(f'{p:8.4f}' for p in self._bezier.points_y))   
           
         # norm2 of deviations to target
-        norm2 = Matcher.norm2_deviation_to (self._bezier, self._target_line, isReduced=True)
+        norm2 = Line.norm2_deviation_to (self._bezier, self._target_line, reduce_points=False)
         obj_norm2 = norm2 * 1000                                # 1.0   is ok, 0.2 is good 
 
         # --- LE curvature 
