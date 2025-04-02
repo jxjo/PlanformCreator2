@@ -89,7 +89,7 @@ def fromDict(aDict : dict, key, default='no default'):
         elif isinstance (default, int):
             preferedType = int
 
-    if key in aDict:
+    if aDict and key in aDict:
         value = aDict[key]
         if preferedType == float:
             value = float(value)
@@ -112,14 +112,15 @@ def toDict(aDict : dict, key, value):
     """
     writes t0 the parameter dictionary. If 'value' is None the key is not written 
     """
-    if not value is None: 
-        # limit decimals in file 
-        if isinstance  (value, float):
-            value = round (value,6)
-        aDict [key] = value
-    else: 
-        # remove key from dictionary  - so default values will be used 
-        aDict.pop(key, None)
+    if isinstance (aDict,dict):
+        if not value is None: 
+            # limit decimals in file 
+            if isinstance  (value, float):
+                value = round (value,6)
+            aDict [key] = value
+        else: 
+            # remove key from dictionary  - so default values will be used 
+            aDict.pop(key, None)
 
         
 #------------------------------------------------------------------------------
