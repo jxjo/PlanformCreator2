@@ -15,6 +15,7 @@ test_VLM/*
 images/~*.pptx					# tmp ppt 
 doc/rcn
 
+.VSCodeCounter*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -2358,7 +2358,8 @@ class WingSections (list [WingSection]):
                     else:
 
                         section.set_airfoil_by_airfoil (left)    # no blend - take left airfoil
-                        section.airfoil.set_isBlendAirfoil (True)
+                        airfoil = section.airfoil
+                        airfoil.set_isBlendAirfoil (True)
 
                     airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
 
@@ -4211,6 +4212,9 @@ class Planform_Paneled (Planform):
             if self._cn_diff_max:
                 self._optimize_cn_diff ()
 
+                # new sections need polarSets
+
+                self.wingSections.refresh_polar_sets()
 
 
     def _optimize_cn_diff (self):

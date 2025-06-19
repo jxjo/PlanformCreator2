@@ -779,9 +779,14 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
     def _plot_panels (self):
         """ plot all panels using PColorMeshItem """
 
+        # strak airfoils if needed to have polars
+
+        if self.opPoint and not self.wingSections.strak_done:
+            self.wingSections.do_strak (geometry_class=GEO_BASIC)
+
+        # prepare coloring 
+
         panels = self.wing.vlm_wing.panels_right
-        nx = self.wing.vlm_wing.nx_panels
-        ny = self.wing.vlm_wing.ny_panels
 
         if self.show_colorBar and self.opPoint:
             z_panel    = self.opPoint.Cp_viscous_panels
@@ -796,8 +801,6 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
             colorMap   = pg.colormap.get ('CET-L13')
             edgecolors = pg.mkPen (COLOR_BOX)
 
-
-
         # build 2d mesh array for PColorMeshItem
         # 
         #   x,y  (nx+1, ny+1)       Mesh coordinates 
@@ -808,6 +811,9 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         #                 | z[i, j] |
         #                 +---------+
         #   (x[i, j], y[i, j])           (x[i, j+1], y[i, j+1])
+
+        nx = self.wing.vlm_wing.nx_panels
+        ny = self.wing.vlm_wing.ny_panels
 
         x = []
         y = []
@@ -1009,6 +1015,11 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
 
     def _plot (self): 
+
+        # strak airfoils if needed to have polars
+
+        if not self.wingSections.strak_done:
+            self.wingSections.do_strak (geometry_class=GEO_BASIC)
 
         # is polar ready to show results?
 

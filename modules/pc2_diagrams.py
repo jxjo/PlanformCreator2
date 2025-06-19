@@ -716,20 +716,26 @@ class Item_VLM_Result (Diagram_Item):
         polar_defs = self.wing().polar_definitions
 
         for polar_def in polar_defs:
-            if polar_def.name == self._polar_def_name: 
+            if self._format_polar_def (polar_def) == self._polar_def_name: 
                 return polar_def
         return polar_defs[0]
 
 
     @property
     def polar_def_name (self) -> str:
-        return self.polar_def.name
+        """ display name of the current polar definition """
+        polar_defs = self.wing().polar_definitions
+        if self._polar_def_name is None and polar_defs:                 # take first as initial 
+           self._polar_def_name = self._format_polar_def (polar_defs[0])  
+
+        return self._polar_def_name
         
-    def set_polar_def_name (self, polar_def_name): 
+    def set_polar_def_name (self, new_polar_def_name): 
 
         for polar_def in self.wing().polar_definitions:
-            if polar_def.name == polar_def_name: 
-                self._polar_def_name = polar_def_name
+            polar_def_name = self._format_polar_def (polar_def)
+            if polar_def_name == new_polar_def_name: 
+                self._polar_def_name = new_polar_def_name
 
                 # set to new max of this polar 
                 self.set_opPoint_fixed_to_alpha_max (self.opPoint_fixed_to_alpha_max, refresh=False)

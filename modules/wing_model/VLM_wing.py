@@ -641,11 +641,18 @@ class VLM_Polar:
             section_y  = section.x / 1000
             section_re = re_from_v (self.vtas, section.c / 1000, round_to=RE_SCALE_ROUND_TO)
             airfoil_polarSet : Polar_Set = section.airfoil.polarSet
+
+            if airfoil_polarSet is None: 
+                msg = f"{self} section {section} airfoil {section.airfoil} has no polarSet"
+                logger.error (msg)
+                self._error_reason.append (msg)
+                continue
+
             airfoil_polarSet.load_or_generate_polars()
 
             for polar in airfoil_polarSet.polars:
 
-                if isclose (polar.re, section_re, rel_tol=0.05):
+                if isclose (polar.re, section_re, abs_tol=RE_SCALE_ROUND_TO):
                     if polar.isLoaded:
 
                         # there is a polar that fits to Re of wingSection
@@ -659,8 +666,9 @@ class VLM_Polar:
                             self._generating_airfoil_polars = True 
                     break
 
-            if not isclose (polar.re, section_re, rel_tol=0.05):
-                msg = f"No polar with Re = {section_re} in Polarset of {section}" 
+            if not isclose (polar.re, section_re, abs_tol=RE_SCALE_ROUND_TO): 
+                polars_re = [p.re for p in airfoil_polarSet.polars]
+                msg = f"No polar with Re = {section_re} in Polarset of {section} with polars: {polars_re}" 
                 logger.error (msg)
                 self._error_reason.append (msg)
                  
@@ -670,7 +678,7 @@ class VLM_Polar:
         if self._error_reason or self._generating_airfoil_polars: 
             self._airfoil_polars = {}
             if self._error_reason:
-                logger.warning (f"{self} couldn't load polars: {"\n".join(self._error_reason)}")
+                logger.warning (f"{self} couldn't load polars - resetting airfoil polars")
                  
         return  
 
