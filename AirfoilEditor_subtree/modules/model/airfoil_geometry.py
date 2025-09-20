@@ -2231,54 +2231,57 @@ class Geometry ():
     def _blend (self, geo1_in : 'Geometry', geo2_in : 'Geometry', blendBy, ensure_fast=False):
         """ blends (blends) self out of two geometries depending on the blendBy factor"""
 
-        geo1 = geo1_in
-        geo2 = geo2_in
+        moving = ensure_fast
 
-        # with ensure_fast use just Geometry basic 
-        if ensure_fast:
-            if geo1_in.__class__ != Geometry:
-                geo1 = Geometry (np.copy(geo1_in.x), np.copy(geo1_in.y))
-            if geo2_in.__class__ != Geometry:
-                geo2 = Geometry (np.copy(geo2_in.x), np.copy(geo2_in.y))
+        # Bug - Quick fix from 4.0 - Basic Geometry is accidently taken for blend > 0.5
+        
+        # ensure geo1 is normalized - to this on a copy 
+        
+        if not geo1_in._isNormalized():
+            geo1 = self.__class__(np.copy(geo1_in.x), np.copy(geo1_in.y))
+            geo1.normalize()
+        else: 
+            geo1 = geo1_in
 
-        if not geo1._isNormalized(): geo1.normalize()
-        if not geo2._isNormalized(): geo2.normalize()
+        # prepare geo2 Geometry to have linear or splined interpolation for blending
+
+        if moving and geo2_in.__class__ != Geometry:
+            # ensure geo2 is basic Geometry to have linear interpolation for blending
+            geo2 = Geometry (np.copy(geo2_in.x), np.copy(geo2_in.y))
+        elif not moving and  geo2_in.__class__ not in [Geometry_Splined, Geometry_Bezier]:
+            # ensure geo2 hase the same Geometry as geo1 to have linear or splined interpolation for blending
+            geo2 = Geometry_Splined (np.copy(geo2_in.x), np.copy(geo2_in.y))  
+        else: 
+            geo2 = geo2_in
+
+        # ensure geo2 is normalized - to this on a copy 
+
+        if not geo2._isNormalized():
+            geo2 = self.__class__(np.copy(geo2.x), np.copy(geo2.y))
+            geo2.normalize()
+        
+        # blend - optimze edge cases 
 
         blendBy = max (0.0, blendBy)
         blendBy = min (1.0, blendBy)
 
-        # optimze edge cases 
-
         if blendBy == 0:
-            self._x = np.copy(geo1.x)
+            self._x = np.copy(geo1.x)                       # take 1st arifoil
             self._y = np.copy(geo1.y)
             return
         elif blendBy == 1.0:
-            self._x = np.copy(geo2.x)
+            self._x = np.copy(geo2.x)                       # take 2nd airfoil
             self._y = np.copy(geo2.y)
             return
       
-        # the leading airfoil is the one with higher share
+        upper1  = geo1.upper
+        lower1  = geo1.lower
+        x_upper = geo1.upper.x
+        x_lower = geo1.lower.x
 
-        if blendBy <= 0.5:                      # the closer airfoil provides x-coordinates
- 
-            upper1 = geo1.upper
-            lower1 = geo1.lower
-            upper2 = geo2.upper_new_x (geo1.upper.x)
-            lower2 = geo2.lower_new_x (geo1.lower.x)
+        upper2 = geo2.upper_new_x (x_upper)
+        lower2 = geo2.lower_new_x (x_lower)
 
-            x_upper  = geo1.upper.x
-            x_lower  = geo1.lower.x
-
-        else:
-
-            upper1 = geo1.upper_new_x (geo2.upper.x)
-            lower1 = geo1.lower_new_x (geo2.lower.x)
-            upper2 = geo2.upper
-            lower2 = geo2.lower
-
-            x_upper  = geo2.upper.x
-            x_lower  = geo2.lower.x
 
         # now blend upper and lower of both airfoils 
         y_upper = (1 - blendBy) * upper1.y + blendBy * upper2.y
@@ -2286,6 +2289,62 @@ class Geometry ():
         
         # rebuild x,y coordinates 
         self._rebuild_from (x_upper, y_upper, x_lower, y_lower)
+
+        # geo1 = geo1_in
+        # geo2 = geo2_in
+
+        # # with ensure_fast use just Geometry basic 
+        # if ensure_fast:
+        #     if geo1_in.__class__ != Geometry:
+        #         geo1 = Geometry (np.copy(geo1_in.x), np.copy(geo1_in.y))
+        #     if geo2_in.__class__ != Geometry:
+        #         geo2 = Geometry (np.copy(geo2_in.x), np.copy(geo2_in.y))
+
+        # if not geo1._isNormalized(): geo1.normalize()
+        # if not geo2._isNormalized(): geo2.normalize()
+
+        # blendBy = max (0.0, blendBy)
+        # blendBy = min (1.0, blendBy)
+
+        # # optimze edge cases 
+
+        # if blendBy == 0:
+        #     self._x = np.copy(geo1.x)
+        #     self._y = np.copy(geo1.y)
+        #     return
+        # elif blendBy == 1.0:
+        #     self._x = np.copy(geo2.x)
+        #     self._y = np.copy(geo2.y)
+        #     return
+      
+        # # the leading airfoil is the one with higher share
+
+        # if blendBy <= 0.5:                      # the closer airfoil provides x-coordinates
+ 
+        #     upper1 = geo1.upper
+        #     lower1 = geo1.lower
+        #     upper2 = geo2.upper_new_x (geo1.upper.x)
+        #     lower2 = geo2.lower_new_x (geo1.lower.x)
+
+        #     x_upper  = geo1.upper.x
+        #     x_lower  = geo1.lower.x
+
+        # else:
+
+        #     upper1 = geo1.upper_new_x (geo2.upper.x)
+        #     lower1 = geo1.lower_new_x (geo2.lower.x)
+        #     upper2 = geo2.upper
+        #     lower2 = geo2.lower
+
+        #     x_upper  = geo2.upper.x
+        #     x_lower  = geo2.lower.x
+
+        # # now blend upper and lower of both airfoils 
+        # y_upper = (1 - blendBy) * upper1.y + blendBy * upper2.y
+        # y_lower = (1 - blendBy) * lower1.y + blendBy * lower2.y
+        
+        # # rebuild x,y coordinates 
+        # self._rebuild_from (x_upper, y_upper, x_lower, y_lower)
 
 
 

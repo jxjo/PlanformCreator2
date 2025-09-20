@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------
 
 APP_NAME            = "PlanformCreator2"
-APP_VERSION         = "3.1.1"
+APP_VERSION         = "3.1.2"
 WORKER_MIN_VERSION  = '1.0.5'
 
 TEMPLATE_DIR        = "templates"
