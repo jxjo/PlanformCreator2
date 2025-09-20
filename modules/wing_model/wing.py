@@ -78,19 +78,28 @@ class Wing:
         Init wing from parameters in parm_filePath
         """
 
-        dataDict = Parameters (parm_filePath).get_dataDict()
-        if not dataDict:
-            logger.info ('No input data - a default wing will be created')
-        else: 
-            parm_version = fromDict (dataDict, "pc2_version", 1)
-            logger.info (f"Reading wing parameters from '{parm_filePath}' (file version: {parm_version})")
+        if parm_filePath and not os.path.isfile(parm_filePath):
+            # non existing pc2 file
+            logger.error (f".pc2 file '{parm_filePath}' does not exist (anymore) - creating default wing")
+            self.pathHandler   = PathHandler ()
+            self.parm_filePath = None
+            dataDict = {}
 
-            if parm_version == 1:
-                dataDict = self._convert_parm_file_v2 (dataDict)
+        else:
 
-        # handler for the realtive path to the paramter file (working directory)
-        self.pathHandler = PathHandler (onFile=parm_filePath)
-        self.parm_filePath = parm_filePath
+            dataDict = Parameters (parm_filePath).get_dataDict()
+            if not dataDict:
+                logger.info ('No input data - a default wing will be created')
+            else: 
+                parm_version = fromDict (dataDict, "pc2_version", 1)
+                logger.info (f"Reading wing parameters from '{parm_filePath}' (file version: {parm_version})")
+
+                if parm_version == 1:
+                    dataDict = self._convert_parm_file_v2 (dataDict)
+
+            # handler for the realtive path to the paramter file (working directory)
+            self.pathHandler = PathHandler (onFile=parm_filePath)
+            self.parm_filePath = parm_filePath
 
         self.dataDict = dataDict
 
@@ -408,8 +417,9 @@ class Wing:
         return self._reference_pc2_file
 
     def set_reference_pc2_file (self, pathFilename : str) -> str:
-        self._reference_pc2_file = pathFilename
-        self._planform_ref_pc2   = None                         # reset current ref planform 
+        if pathFilename is None or os.path.isfile (pathFilename):
+            self._reference_pc2_file = pathFilename
+            self._planform_ref_pc2   = None                         # reset current ref planform 
 
 
     @property
