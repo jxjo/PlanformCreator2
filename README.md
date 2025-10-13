@@ -37,7 +37,7 @@ Within the early design process of a wing **PlanformCreator2** is the master of 
 Further analysis and performance assessments are made with external apps. 
 
 
-When the results are satisfying the planform and the envolved airfoils are exported as dxf to a CAD program to continue with the final 3D design e.g. for a mold of the wing. 
+When the results are satisfying the planform and the involved airfoils are exported as dxf to a CAD program to continue with the final 3D design e.g. for a mold of the wing. 
 
 In contrast to a "paint program", the planform is defined by parameters such as 'span', 'root depth' or "sweep angle". The chord distribution along the span is controlled by a mathematical function via parameters.
 The advantage is that the parameters can be changed independently of each other, allowing a quick approach to the desired wing planform.
@@ -79,9 +79,9 @@ The following diagram shows the impact of different chord references while keepi
 
 
 #### Everything banana?
-A little speciality is the so called "banana function". It allows to bent the wing in spanwise direction like a banana without changing chord distribution and reference. The result can be a planform like the popular 'bow-style' flying wings. 
+A little specialty is the so called "banana function". It allows to bent the wing in spanwise direction like a banana without changing chord distribution and reference. The result can be a planform like the popular 'bow-style' flying wings. 
 
-Another use case for applying the 'banana function' is to finetune the flap depth alogn the wing span. As the flap hinge line (see further below) is a straight line, benting the planform will directly influence the flap depth. 
+Another use case for applying the 'banana function' is to finetune the flap depth along the wing span. As the flap hinge line (see further below) is a straight line, bending the planform will directly influence the flap depth. 
 
 <img src="./images/planform_banana.png" width="800" />
 
@@ -209,7 +209,7 @@ As for airfoil polar generation, panel generation is ‘lazy’: A new mesh is i
 
 #### Export to Xflr5
 
-When using PC2 together with Xlfr5 the major faciliation beside the definition of wing segements, is the automatic generation of all intermediate airfoils needed in Xflr5 at all wing sections. No further geometric work has to be done for wing definition and airfoils. 
+When using PC2 together with Xflr5 the major facilitation beside the definition of wing segments, is the automatic generation of all intermediate airfoils needed in Xflr5 at all wing sections. No further geometric work has to be done for wing definition and airfoils. 
 
 Please read [the short description](doc/PC2_export_to_Xflr5.md) of how it works.
 
@@ -277,7 +277,7 @@ The main building blocks of the app are
 * VLM - for calculation of the lift distribution the Python VLM implementation [Panel Aero](https://github.com/DLR-AE/PanelAero) is used as the core module - thanks to Arne Voß (DLR)   
 
 * UI-Framework - base classes and a little framework to ease the implementation of forms based on `Widgets` and `Diagrams`.
-Plots in `Diagrams` are handled by `Artists` where each of them viszualizes certain data aspects of a planform. The base classes are imported from the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) project as a Git subtree
+Plots in `Diagrams` are handled by `Artists` where each of them visualizes certain data aspects of a planform. The base classes are imported from the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) project as a Git subtree
 
 * Application - `App_Main` and view `Panels` to handle presentation and user interaction 
 

@@ -20,27 +20,26 @@
                 |--Planform_Paneled     - Planform which is paneled in x,y direction 
 """
 
+import fnmatch
 import os
 import numpy as np
 import bisect
-import sys
 import shutil
 from typing                 import override
 from pathlib                import Path
 from math                   import isclose
 
+from base.math_util           import * 
+from base.spline              import * 
+from base.common_utils        import *
 
-# let python find the other modules in the dir of self  
-sys.path.append(Path(__file__).parent)
-from base.common_utils      import * 
-from base.math_util         import * 
-from base.spline            import Bezier
-from model.airfoil          import Airfoil, GEO_BASIC
-from model.polar_set        import Polar_Definition, Polar_Set
-from model.airfoil_examples import Root_Example, Tip_Example
-from model.xo2_driver       import Worker
+from model.airfoil            import Airfoil, GEO_BASIC
+from model.polar_set          import Polar_Definition, Polar_Set
+from model.airfoil_examples   import Root_Example, Tip_Example
+from model.xo2_driver         import Worker
 
-from VLM_wing               import VLM_Wing
+from VLM_wing                 import VLM_Wing
+
 
 import logging
 logger = logging.getLogger(__name__)
@@ -55,14 +54,11 @@ type Polylines  = tuple[Array, Array, Array]
 
 # ---- Model --------------------------------------
 
+AIRFOILS_DIR_POSFIX     = "_airfoils"
+TEMP_STRAK_DIR          = "strak_temp"
+FILENAME_NEW            = "new-planform.pc2"
 
-#------------------------------------------------
-
-
-TEMP_DIR_FALLBACK       = "airfoil_straks"
-TEMP_DIR_POSTFIX        = "_tmp"
-
-
+STRAK_AIRFOIL_NAME      = "<strak>"
 
 
 class Wing:
@@ -73,23 +69,30 @@ class Wing:
     """
     unit = 'mm'
 
-    def __init__(self, parm_filePath):
+    def __init__(self, parm_filePath : str|None, defaultDir : str|None):
         """
         Init wing from parameters in parm_filePath
+
+        Args:
+            parm_filePath (str): Path to the parameter file
+            defaultDir (str): Default directory if parm_filePath is None or not valid
         """
 
         if parm_filePath and not os.path.isfile(parm_filePath):
             # non existing pc2 file
             logger.error (f".pc2 file '{parm_filePath}' does not exist (anymore) - creating default wing")
-            self.pathHandler   = PathHandler ()
-            self.parm_filePath = None
+            self.pathHandler   = PathHandler (workingDir=defaultDir)
+            self._parm_pathFileName = FILENAME_NEW
             dataDict = {}
 
         else:
 
             dataDict = Parameters (parm_filePath).get_dataDict()
             if not dataDict:
-                logger.info ('No input data - a default wing will be created')
+                logger.info (f'No input data - a default wing will be created in: {defaultDir}')
+                # handler for the relative path to the parameter file (working directory)
+                self.pathHandler   = PathHandler (workingDir=defaultDir)
+                self._parm_pathFileName = FILENAME_NEW
             else: 
                 parm_version = fromDict (dataDict, "pc2_version", 1)
                 logger.info (f"Reading wing parameters from '{parm_filePath}' (file version: {parm_version})")
@@ -97,9 +100,9 @@ class Wing:
                 if parm_version == 1:
                     dataDict = self._convert_parm_file_v2 (dataDict)
 
-            # handler for the realtive path to the paramter file (working directory)
-            self.pathHandler = PathHandler (onFile=parm_filePath)
-            self.parm_filePath = parm_filePath
+                # handler for the relative path to the parameter file (working directory)
+                self.pathHandler = PathHandler (onFile=parm_filePath)
+                self._parm_pathFileName = parm_filePath
 
         self.dataDict = dataDict
 
@@ -190,7 +193,7 @@ class Wing:
         if self._export_flz: 
             toDict (dataDict, "flz",            self._export_flz._as_dict()) 
         if self._export_airfoils: 
-            toDict (dataDict, "airfoils",       self._export_airfoils._as_dict()) 
+            toDict (dataDict, "airfoils_export",self._export_airfoils._as_dict()) 
         if self._export_dxf: 
             toDict (dataDict, "dxf",            self._export_dxf._as_dict()) 
 
@@ -198,7 +201,7 @@ class Wing:
 
 
     def _convert_parm_file_v2 (self, dataDict :dict) -> dict:
-        """ convert paramter file from version 1 to version 2"""
+        """ convert parameter file from version 1 to version 2"""
 
         logger.info (f"Converting parameters to version 2.0")
 
@@ -374,7 +377,7 @@ class Wing:
         
         Returns:
             area: total wing area including fuselage
-            ar: spect_ratio including fuselage
+            ar: aspect_ratio including fuselage
             mac: mean aerodynamic chord
             np_x: geometric neutral point in chord direction
         """
@@ -444,6 +447,10 @@ class Wing:
 
         if self._vlm_wing is None: 
  
+            # esnure all wing sections have straked airfoils
+            if not self.planform.wingSections.strak_done:
+                self.planform.wingSections.do_strak (geometry_class=GEO_BASIC)
+
             # ensure all wingSections have a polar with the current re
             self.planform.wingSections.refresh_polar_sets (ensure=False)
 
@@ -501,7 +508,7 @@ class Wing:
         from wing_exports       import Export_Xflr5             # here - otherwise circular errors
 
         if self._export_xflr5 is None:                          # init exporter with parameters in sub dictionary
-            xflr5_dict         = fromDict (self.dataDict, "xlfr5", "")
+            xflr5_dict         = fromDict (self.dataDict, "xflr5", "")
             self._export_xflr5 = Export_Xflr5 (self, self.planform_paneled, xflr5_dict) 
         return self._export_xflr5     
 
@@ -534,15 +541,19 @@ class Wing:
         from wing_exports  import Export_Airfoils               # here - otherwise circular errors
 
         if self._export_airfoils is None:                       # init exporter with parameters in sub dictionary
-            airfoilsDict          = fromDict (self.dataDict, "airfoils", "")
+            airfoilsDict          = fromDict (self.dataDict, "airfoils_export", "")
             self._export_airfoils = Export_Airfoils (self, airfoilsDict) 
         return self._export_airfoils     
 
+    @property
+    def parm_pathFileName (self):
+        """ path and filename of the parameter file like './mydir/VJX.pc2' relative to working dir"""
+        return self._parm_pathFileName 
 
     @property
     def parm_fileName (self):
-        """ filename of the paramter file like 'VJX.pc2' """
-        return os.path.basename(self.parm_filePath) if self.parm_filePath else ''
+        """ filename of the parameter file like 'VJX.pc2' """
+        return os.path.basename(self._parm_pathFileName) if self._parm_pathFileName else ''
 
 
     @property
@@ -552,64 +563,166 @@ class Wing:
 
 
     @property
+    def parm_pathFileName_abs (self):
+        """ absolute path and filename of the parameter file like 'c:/mydir/VJX.pc2' """
+        if self.workingDir:
+            pathFileName_abs =  os.path.join(self.workingDir, self.parm_pathFileName)
+        else: 
+            pathFileName_abs =  self.parm_pathFileName
+        
+        if not os.path.isabs (pathFileName_abs):
+            pathFileName_abs = os.path.abspath(pathFileName_abs)       # will insert cwd 
+        return pathFileName_abs
+
+
+    @property
     def workingDir(self): 
-        """directory of the paramter file"""
+        """directory of the parameter file"""
         return self.pathHandler.workingDir
 
 
     @property
-    def wing_tmp_dir (self): 
-        """directory within working dir for tmp files like straked airfoils and polars """
+    def tmp_dir (self) -> str: 
+        """
+        directory within wing_airfoils_dir for tmp files like blended airfoils and polars
+            returns absolute path e.g. <workingDir>/VJX_airfoils/strak_temp
+        """
 
-        # initially there could be no parm_file
-        if self.parm_filePath is None: 
-            tmp_dir = TEMP_DIR_FALLBACK + TEMP_DIR_POSTFIX 
-        else:
-            tmp_dir = Path(self.parm_filePath).stem + TEMP_DIR_POSTFIX 
-
-        tmp_dir = os.path.join (self.workingDir, tmp_dir)
-        if not os.path.isdir (tmp_dir):
-                os.mkdir(tmp_dir)
-
+        tmp_dir = os.path.join (self.airfoils_dir, TEMP_STRAK_DIR)
         return tmp_dir
 
 
+    @property
+    def airfoils_dir_rel (self) -> str: 
+        """ 
+        directory within working dir for airfoils of this wing 
+            returns relative path e.g. ./VJX_airfoils
+        """
+
+        if self._parm_pathFileName is None: 
+            airfoils_dir = Path(FILENAME_NEW).stem + AIRFOILS_DIR_POSFIX
+        else:
+            airfoils_dir = Path(self._parm_pathFileName).stem + AIRFOILS_DIR_POSFIX 
+        return airfoils_dir
+    
+
+    @property
+    def airfoils_dir (self) -> str: 
+        """ 
+        directory within working dir for airfoils of this wing 
+            returns absolute path e.g. <workingDir>/VJX_airfoils
+        """
+
+        airfoils_dir = os.path.join (self.workingDir, self.airfoils_dir_rel)
+        return airfoils_dir
+
+
     # ---Methods --------------------- 
+
+    def copy_airfoils_dir (self, newDir : str) -> bool:
+        """ copy the airfoils dir of this wing to newDir without polars and tmp files
+        Args:
+            newDir: absolute or relative path of the new directory 
+        Returns:
+            True if succeeded, False if failed
+        """
+
+        if not os.path.isdir (self.airfoils_dir):
+            logger.error (f"Cannot copy airfoils - source dir '{self.airfoils_dir}' does not exist")
+            return False 
+
+        if not os.path.isabs (newDir):
+            newDir = os.path.join (self.workingDir, newDir)
+
+        try:
+            if os.path.isdir (newDir):
+                shutil.rmtree(newDir, ignore_errors=True)
+            os.mkdir (newDir)
+
+            # copy all airfoil files except polars and tmp dir
+            dat_files = fnmatch.filter(os.listdir(self.airfoils_dir), '*.dat')
+            bez_files = fnmatch.filter(os.listdir(self.airfoils_dir), '*.bez')
+            hh_files  = fnmatch.filter(os.listdir(self.airfoils_dir), '*.hicks')
+            airfoil_files = dat_files + bez_files + hh_files
+
+            for fname in airfoil_files:
+                shutil.copy2(os.path.join(self.airfoils_dir,fname), newDir)
+            return True 
+
+        except Exception as e:
+            logger.error (f"Copying airfoils dir '{self.airfoils_dir}' to '{newDir}' failed: {e}")
+            return False
+
+
+    def create_tmp_dir (self): 
+        """ create temporary files made during session"""
+
+        # create tmp dir of strak airfoils 
+        if not os.path.isdir(self.tmp_dir):
+            os.makedirs (self.tmp_dir, exist_ok=True)
+
+
+    def remove_airfoils_dir (self): 
+        """ remove airfoils dir of this wing including polars and tmp files"""
+
+        if os.path.isdir(self.airfoils_dir):
+            shutil.rmtree(self.airfoils_dir, ignore_errors=True)
 
 
     def remove_tmp (self): 
         """ remove temporary files made during session"""
 
         # remove tmp dir of strak airfoils 
-        if os.path.isdir(self.wing_tmp_dir):
-            shutil.rmtree(self.wing_tmp_dir, ignore_errors=True)
+        if os.path.isdir(self.tmp_dir):
+            shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
         # remove persisted example airfoil its polar dir 
         for section in self.planform.wingSections:
             if section.airfoil.isExample:
-                if os.path.isfile (section.airfoil.pathFileName):
-                    os.remove (section.airfoil.pathFileName)
+                if os.path.isfile (section.airfoil.pathFileName_abs):
+                    os.remove (section.airfoil.pathFileName_abs)
 
-                polarDir = str(Path(section.airfoil.pathFileName).with_suffix('')) + '_polars'
-                Worker.remove_polarDir (section.airfoil.pathFileName, polarDir) 
+                polarDir = str(Path(section.airfoil.pathFileName_abs).with_suffix('')) + '_polars'
+                Worker.remove_polarDir (section.airfoil.pathFileName_abs, polarDir) 
 
 
-    def save (self, pathFileName):
-        """ store data dict to file pathFileName        
-        :Returns: 
-            True : if succeded, False if failed"""
+    def save (self, newPathFilename : str | None = None) -> bool:
+        """ store data dict to file pathFileName
+        Args:
+            newPathFilename: optional path and filename of the parameter file absolute or relative to working dir   
 
+        Returns: 
+            True : if succeeded, False if failed
+        """
         currentDict = self._save()
 
-        saveOk = Parameters (pathFileName).write_dataDict(currentDict)
+        # save dict to new file
+        if newPathFilename is None:
+            pathFileName_abs = self.parm_pathFileName_abs
+        else:
+            pathFileName_abs = newPathFilename if os.path.isabs(newPathFilename) else os.path.join (self.workingDir, newPathFilename)
 
-        if saveOk:
+        save_ok = Parameters (pathFileName_abs).write_dataDict(currentDict)
+
+        if save_ok:
             # keep dataDict for later change detection 
             self.dataDict = currentDict  
-            # set the current working Dir to the dir of the new saved parameter file            
-            self.pathHandler.set_workingDirFromFile (pathFileName)
-            self.parm_filePath = pathFileName
-        return saveOk
+
+            # copy airfoils to new airfoils dir if file name changed
+            if newPathFilename:
+                new_airfoils_dir = os.path.join (os.path.dirname(pathFileName_abs), 
+                                                Path(newPathFilename).stem + AIRFOILS_DIR_POSFIX)
+                copy_ok = self.copy_airfoils_dir (new_airfoils_dir)
+
+                if not copy_ok:
+                    logger.error (f"Saving wing parameters succeeded but copying airfoils to new dir '{new_airfoils_dir}' failed")
+                    save_ok = False
+                else:
+                    # set the current working Dir to the dir of the new saved parameter file            
+                    self.pathHandler.set_workingDirFromFile (pathFileName_abs)
+                    self._parm_pathFileName = os.path.basename(pathFileName_abs)  # only the file name relative to working dir
+
+        return save_ok
 
 
     def has_changed (self):
@@ -707,7 +820,7 @@ class N_Chord_Reference:
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         toDict (d, "p0y",        self._cr_bezier.points_y[0])
@@ -787,7 +900,7 @@ class N_Chord_Reference:
 
     def bezier_from_jpoints (self, jpoints : list[JPoint]): 
         """ 
-        set chord referenc Bezier control points from JPoints   
+        set chord reference Bezier control points from JPoints   
         """
 
         px, py = [], []
@@ -813,7 +926,7 @@ class N_Reference_Line:
     The reference line is in normed coordinates a horizontal line at yn=0
     The coord distribution is applied at that line according to chord reference. 
 
-    Optionally the referecne line can be a Bezier curve (banana function) which will 
+    Optionally the reference line can be a Bezier curve (banana function) which will 
     curve the planform like a bow 
  
     Wing
@@ -852,7 +965,7 @@ class N_Reference_Line:
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         toDict (d, "px", self._ref_bezier.points_x)
@@ -862,7 +975,7 @@ class N_Reference_Line:
 
     def at (self, xn: float | np.ndarray, fast=True) -> float:
         """ 
-        reference line yn at xn  (noramlly = 0.0 except if Banana-Bezier)
+        reference line yn at xn  (normally = 0.0 except if Banana-Bezier)
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
         if isinstance (xn, float) or isinstance (xn, int):
@@ -927,7 +1040,7 @@ class N_Reference_Line:
 
         elif len(px) == 2 and aBool == True:
 
-            # add cotrol point in the middle 
+            # add control point in the middle 
             px_new = 0.5
             py_new = interpolate (px[0], px[1], py[0], py[1], px_new)
             points = self._ref_bezier.points
@@ -998,7 +1111,7 @@ class N_Reference_Line:
 
 class N_Distrib_Abstract: 
     """ 
-    Abstract super class - defines the normalized chord distribition  
+    Abstract super class - defines the normalized chord distribution  
 
     Wing
         |-- Planform
@@ -1029,7 +1142,7 @@ class N_Distrib_Abstract:
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         toDict (d, "chord_style", self.__class__.name)
@@ -1045,7 +1158,7 @@ class N_Distrib_Abstract:
 
 
     def at (self, xn: float) -> float:
-        """ main chord function - to be overriden
+        """ main chord function - to be overridden
 
         Args:
             xn: normalized x position
@@ -1057,7 +1170,7 @@ class N_Distrib_Abstract:
 
     def xn_at (self, cn: float) -> float:
         """ 
-        returns xn at normed chord xn - to be overriden
+        returns xn at normed chord xn - to be overridden
         """
         raise NotImplementedError
 
@@ -1089,7 +1202,7 @@ class N_Distrib_Abstract:
 
 class N_Distrib_Bezier (N_Distrib_Abstract): 
     """ 
-    Bezier based normalized chord distribition allowing > 4 control points 
+    Bezier based normalized chord distribution allowing > 4 control points 
         and straight line chord distribution at root  
     """
 
@@ -1111,7 +1224,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
 
         Args:       
             myWing: parent self belongs to 
-            dataDict: data dict having paramters for self . Defaults to None.
+            dataDict: data dict having parameters for self . Defaults to None.
         """
 
         # init Cubic Bezier for chord distribution 
@@ -1137,17 +1250,11 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = super()._as_dict()
         toDict (d, "px", self._bezier.points_x)
         toDict (d, "py", self._bezier.points_y)
-
-        # Compatibility 2.0 
-        toDict (d, "p1x",       self._bezier.points_x[1])
-        toDict (d, "p1y",       self._bezier.points_y[1])
-        toDict (d, "p2y",       self._bezier.points_y[-2])
-        toDict (d, "p3y",       self._bezier.points_y[-1])
 
         return d
 
@@ -1155,7 +1262,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
     def at (self, xn: float, fast=True) -> float:
         """ 
         Main chord function - returns cn at xn
-            Normally a linear interpolation is done for fast evaulation (fast=True). 
+            Normally a linear interpolation is done for fast evaluation (fast=True). 
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
 
@@ -1175,7 +1282,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
     def xn_at (self, cn: float, fast=True) -> float:
         """ 
         returns xn at normed chord cn
-            Normally a linear interpolation is done for fast evaulation (fast=True). 
+            Normally a linear interpolation is done for fast evaluation (fast=True). 
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
 
@@ -1331,7 +1438,7 @@ class N_Distrib_Trapezoid (N_Distrib_Abstract):
     isTrapezoidal   = True
 
     description     = "Chord defined by its wing sections,\n" + \
-                      "which have the attribut 'Defines planform'" 
+                      "which have the attribute 'Defines planform'" 
 
     # is the chord defined by wing section or vice versa - overwrite 
     chord_defined_by_sections = True          # e.g trapezoid
@@ -1553,7 +1660,7 @@ class N_Distrib_Elliptical (N_Distrib_Abstract):
 
     def polyline (self) -> Polyline:
         """ 
-        Normalized polyline of ellipticalchord along xn
+        Normalized polyline of elliptical chord along xn
             At root it is: cn [0]  = 1.0  
             At tip  it is: cn [-1] = 0.0  
 
@@ -1585,14 +1692,13 @@ class WingSection :
         - a fixed chord cn    
     """
 
-
     def __init__(self, planform : 'Planform', dataDict: dict = None):
         super().__init__()
         """
         Main constructor
 
         Args:       
-            dataDict: data dict having paramters for self . Defaults to None.
+            dataDict: data dict having parameters for self . Defaults to None.
         """
 
         self._planform    = planform
@@ -1645,8 +1751,6 @@ class WingSection :
 
         # create airfoil and load coordinates if exist 
 
-        self._airfoil_pathFileName_org = None                               # keep for save to dict
-
         self._airfoil = self._get_airfoil (pathFileName = fromDict (dataDict, "airfoil", None), workingDir=self.workingDir)
 
         self._strak_info = None                                             # keep info of strak 
@@ -1664,7 +1768,7 @@ class WingSection :
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         toDict (d, "xn",            self._xn)
@@ -1674,8 +1778,8 @@ class WingSection :
         toDict (d, "flap_group",    self.flap_group)
         if self.is_for_panels:
             toDict (d, "is_for_panels", self.is_for_panels)
-        if not self.airfoil.isBlendAirfoil:
-            toDict (d, "airfoil",    self._airfoil_pathFileName_org)
+        if not self.airfoil.isBlendAirfoil and not self.airfoil.isExample:
+            toDict (d, "airfoil",    self.airfoil.pathFileName)
         return d
 
 
@@ -1688,7 +1792,7 @@ class WingSection :
     def _get_airfoil (self, pathFileName = None, workingDir=None) -> Airfoil:
         """read and create airfoil for section """
 
-        tmp_dir = self._planform._wing.wing_tmp_dir
+        tmp_dir = self._planform._wing.tmp_dir
         airfoil = None
 
         if pathFileName:
@@ -1704,34 +1808,22 @@ class WingSection :
 
             airfoil.load()
 
-            self._airfoil_pathFileName_org = airfoil.pathFileName
-
-            # ensure airfoil is normalized (for strak) - if not create tmp airfoil 
-            if not airfoil.isNormalized:
-                airfoil.normalize(mod_string='_norm')
-                airfoil.set_workingDir (tmp_dir)
-                airfoil.set_pathName ('')
-                airfoil.save ()
-
-                logger.debug (f"{self} save normalized airfoil {airfoil.fileName} to {tmp_dir}")
-
         else:
 
-            self._airfoil_pathFileName_org = None
+            self._planform._wing.create_tmp_dir ()
 
             if self.is_root: 
-                airfoil = Root_Example()
+                airfoil = Root_Example (workingDir=tmp_dir)
             elif self.is_tip:
-                airfoil = Tip_Example()
+                airfoil = Tip_Example (workingDir=tmp_dir)
             else:
-                airfoil = Airfoil(name="<strak>", geometry=GEO_BASIC)
+                airfoil = Airfoil (name=STRAK_AIRFOIL_NAME, geometry=GEO_BASIC, workingDir=tmp_dir)
                 airfoil.set_isBlendAirfoil (True)
 
             # save to tmp_dir 
-            airfoil.set_workingDir (tmp_dir)
-            airfoil.set_pathName ('')
             if not airfoil.isBlendAirfoil:
                 airfoil.save()
+                logger.debug (f"{self} save airfoil {airfoil.fileName} to {tmp_dir}")
 
         return airfoil
 
@@ -1742,38 +1834,38 @@ class WingSection :
         return self._airfoil
     
 
-    def set_airfoil_by_path (self, pathFileName : str | None):
+    def set_airfoil (self, airfoil : Airfoil | None, in_airfoils_dir = True):
         """ 
-        set new airfoil by an airfoils pathFileName 
+        set new airfoil by another airfoil, normalize it and copy it to airfoils dir of wing
             - if None - current airfoil will be a strak airfoil
+
+        Args:
+            airfoil:    the new airfoil to be set
+            in_airfoils_dir: if True the airfoil will be copied in the airfoils dir of the wing
         """
-        if  pathFileName is None:
-            # remove airfoil - set as strak 
+        if  airfoil is None:                                                # remove airfoil - set as strak 
             self._airfoil = self._get_airfoil (pathFileName=None) 
+
         else:
-            # ensure relative path to working dir
-            rel_pathFileName = PathHandler(workingDir=self.workingDir).relFilePath (pathFileName)
 
-            if os.path.isfile (os.path.join(self.workingDir, rel_pathFileName)):
-                self._airfoil = self._get_airfoil (workingDir = self.workingDir, 
-                                                   pathFileName = rel_pathFileName) 
+            # ensure airfoil is normalized (for strak) - if not create tmp airfoil 
+            if not airfoil.isNormalized:
+                airfoil.normalize(mod_string='_norm')
+                logger.debug (f"{self} normalize airfoil {airfoil.fileName}")
+                already_copied  = False
+                in_airfoils_dir = True
+            else:
+                already_copied = os.path.samefile (airfoil.pathName_abs, self._planform.wing.airfoils_dir)
 
+            # copy airfoil in airfoils dir of wing
+            if not already_copied and in_airfoils_dir:
+                airfoil.saveAs (dir=self._planform.wing.airfoils_dir)    
+                logger.debug (f"{self} save airfoil {airfoil.fileName} to {self._planform.wing.airfoils_dir}")
 
-    def set_airfoil_by_airfoil (self, airfoil : Airfoil | None):
-        """ 
-        set new airfoil by another airfoil
-            - if None - current airfoil will be a strak airfoil
-        """
-        if  airfoil is None:
-            # remove airfoil - set as strak 
-            self._airfoil = self._get_airfoil (pathFileName=None) 
-        else:
-            pathFileName = airfoil.pathFileName
-            workingDir   = airfoil.workingDir
-
-            if os.path.isfile (os.path.join(workingDir, pathFileName)):
-                self._airfoil = self._get_airfoil (workingDir   = workingDir, 
-                                                   pathFileName = pathFileName) 
+            # re-read airfoil from airfoils dir of wing to ensure correct path
+            if os.path.isfile (airfoil.pathFileName_abs):
+                self._airfoil = self._get_airfoil (workingDir   = self.workingDir, 
+                                                   pathFileName = airfoil.pathFileName_abs) 
 
 
     @property
@@ -1822,7 +1914,7 @@ class WingSection :
 
         if not self.defines_cn and self.is_xn_fix:                  # reset cn 
             self._cn = None 
-        else:                                                       # tapezoid must have both
+        else:                                                       # trapezoid must have both
             if self._xn is None: self._xn = round(self.xn,10)           
             if self._cn is None: self._cn = round(self.cn,10) 
 
@@ -1867,7 +1959,7 @@ class WingSection :
         if not self.defines_cn: 
             if self.is_cn_fix:                                      # reset xn 
                 self._xn = None 
-        else:                                                       # tapezoid must have both
+        else:                                                       # trapezoid must have both
             if self._xn is None: self._xn = round(self.xn,10)           
             if self._cn is None: self._cn = round(self.cn,10) 
 
@@ -1955,22 +2047,45 @@ class WingSection :
             index = 1
         return index  
 
+    @property
+    def id (self) -> str:
+        """ 
+        unique id of self within planform which is 1,2,3.. for normal sections
+        and 1.1, 1.2.. for additional sections for paneling
+        """
+        # find how many additional sections before self 
+        n_main = -1
+        n_add = 0
+        for sec in self._planform.wingSections: 
+            if not sec.is_for_panels:
+                n_main += 1 
+                n_add   = 0
+            else:
+                n_add += 1
+            if sec == self:
+                break
+
+        if not self.is_for_panels:
+            return f"{n_main}"  
+        else:
+            return f"{n_main}.{n_add}"
+        
 
     def xn_limits (self) -> tuple:
-         """ xn limits as tuple of self before touching the neighbour section """
+         """ xn limits as tuple of self before touching the neighbor section """
          return self._planform.wingSections.xn_cn_limits_of (self) [0]
 
     def x_limits (self) -> tuple:
-         """ x limits as tuple of self before touching the neighbour section """
+         """ x limits as tuple of self before touching the neighbor section """
          xn_limits = self.xn_limits()
          return xn_limits[0] * self._planform.span, xn_limits[1] * self._planform.span
 
     def cn_limits (self) -> tuple:
-         """ cn limits as tuple of self before touching the neighbour section """
+         """ cn limits as tuple of self before touching the neighbor section """
          return self._planform.wingSections.xn_cn_limits_of (self) [1]
 
     def c_limits (self) -> tuple:
-         """ c chord limits as tuple of self before touching the neighbour section """
+         """ c chord limits as tuple of self before touching the neighbor section """
          cn_limits = self.cn_limits()
          return cn_limits[0] * self._planform.chord_root, cn_limits[1] * self._planform.chord_root
 
@@ -1983,7 +2098,7 @@ class WingSection :
         elif self.is_tip:
             info = "Tip"
         else:
-            info = f"{self.index()}"
+            info = self.id
         return info
 
 
@@ -1997,7 +2112,7 @@ class WingSection :
     def hinge_cn (self) -> float:
         """ 
         relative hinge chord position cn of self
-            - if no hinge positionen is defined, the calculated value from hingle line is taken
+            - if no hinge position is defined, the calculated value from hinge line is taken
         """
         if self.defines_hinge and not self.hinge_equal_ref_line:
             return self._hinge_cn
@@ -2106,7 +2221,7 @@ class WingSection :
 
 
     def line (self) -> Polyline:
-        """ self as a poyline x,y within planform"""
+        """ self as a polyline x,y within planform"""
 
         x          = self.x
         le_y, te_y = self.le_te ()
@@ -2114,14 +2229,14 @@ class WingSection :
 
 
     def line_in_chord (self) -> Polyline:
-        """ self as a poyline xn,yn within normed chord """
+        """ self as a polyline xn,yn within normed chord """
 
         xn          = self.xn
         return np.array([xn, xn]), np.array([self.cn, 0.0])
 
 
     def line_in_chord_ref (self) -> Polyline:
-        """ self as a poyline xn,yn within chord reference which is just y[1]=1"""
+        """ self as a polyline xn,yn within chord reference which is just y[1]=1"""
 
         xn          = self.xn
         return np.array([xn, xn]), np.array([0.0, 1.0])
@@ -2180,7 +2295,7 @@ class WingSections (list [WingSection]):
    
 
     def _as_list_of_dict (self) -> list[dict]:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         self.check_n_repair ()
 
@@ -2191,6 +2306,7 @@ class WingSections (list [WingSection]):
 
         return section_list
 
+    @property
     def without_for_panels (self) -> list[WingSection]:
         """ return self without extra sections for paneling"""
 
@@ -2201,7 +2317,7 @@ class WingSections (list [WingSection]):
     def create_after (self, aSection: 'WingSection'=None, index=None, is_for_panels=False) -> 'WingSection' : 
         """
         creates and inserts a new wing section after aSection 
-            with a chord in the middle to the next neighbour 
+            with a chord in the middle to the next neighbor 
             'is_for_panels' indicates an extra section created just for paneling
 
         Return: 
@@ -2215,7 +2331,7 @@ class WingSections (list [WingSection]):
 
         if isinstance(aSection, WingSection) and not aSection.is_tip :
 
-            _, right_sec = self.neighbours_of (aSection)
+            _, right_sec = self.neighbors_of (aSection)
 
             new_cn = (aSection.cn + right_sec.cn) / 2
             new_flap_group = aSection.flap_group 
@@ -2258,8 +2374,8 @@ class WingSections (list [WingSection]):
 
         self.check_n_repair ()                                          # re-sort
 
-        # set flap group of new to the left neighbour 
-        left_sec, _ = self.neighbours_of (new_section) 
+        # set flap group of new to the left neighbor 
+        left_sec, _ = self.neighbors_of (new_section) 
         new_section.set_flap_group (left_sec.flap_group)
 
         self.reset_strak()
@@ -2283,25 +2399,24 @@ class WingSections (list [WingSection]):
         return None  
 
 
-    def set_airfoil_for (self, section: WingSection, airfoil : Airfoil | str | None):
+    def set_airfoil_for (self, section: WingSection,
+                         airfoil : Airfoil | None,
+                         in_airfoils_dir = True):
         """ 
         set airfoil for section - here to reset strak 
 
         Args: 
             section: WingSection to set
-            airfoil: either Airfoil or pathfileName 
+            airfoil: either Airfoil or None to remove airfoil and set strak 
+            in_airfoils_dir: if True - airfoil will be copied to airfoils dir of planform
         """
 
-        if isinstance (airfoil, Airfoil):
-            pathFileName = airfoil.pathFileName
-        else: 
-            pathFileName = airfoil 
-
-        section.set_airfoil_by_path (pathFileName)
+        section.set_airfoil (airfoil, in_airfoils_dir = in_airfoils_dir)
 
         polar_defs = self._planform.wing.polar_definitions
-        airfoil = section.airfoil
-        airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
+        airfoil_adjusted = section.airfoil
+        airfoil_adjusted.set_polarSet (Polar_Set (airfoil_adjusted, polar_def=polar_defs, 
+                                                  re_scale=section.cn))
 
         self.reset_strak ()
 
@@ -2309,15 +2424,16 @@ class WingSections (list [WingSection]):
     def do_strak (self, geometry_class  = None): 
         """
         straks the airfoil of all wing sections having a Strak-Airfoil which is 
-        created by blending with its real neighbours
+        created by blending with its real neighbors
 
         Args: 
             geometry: optional - the desired geometry of the new straked airfoils 
                                  either GEO_BASIC or GEO_SPLINE
         """
 
-        strak_dir = self._planform._wing.wing_tmp_dir
+        strak_dir = self._planform._wing.tmp_dir
         polar_defs = self._planform.wing.polar_definitions
+        n_straked = 0 
 
         if not os.path.isdir (strak_dir):
             os.mkdir(strak_dir)
@@ -2327,9 +2443,9 @@ class WingSections (list [WingSection]):
             airfoil = section.airfoil
             if airfoil.isBlendAirfoil: 
 
-                # get the neighbour wing sections  with real airfoils 
+                # get the neighbor wing sections  with real airfoils 
 
-                left_sec, right_sec = self.neighbours_having_airfoil(section) 
+                left_sec, right_sec = self.neighbors_having_airfoil(section) 
                 left, right = left_sec.airfoil, right_sec.airfoil
 
                 if left_sec.airfoil.name == right_sec.airfoil.name:
@@ -2356,10 +2472,13 @@ class WingSections (list [WingSection]):
 
                         airfoil.do_blend (left, right, blendBy, geometry_class)
 
-                        name = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}" # build long unique name  
+                        mods = airfoil.geo.modifications_as_label
+                        n_straked += 1
+
+                        name = f"{STRAK_AIRFOIL_NAME} {left.fileName_stem}{mods}" # build long unique name  
                         airfoil.set_name     (name, reset_original=True)  
 
-                        fileName = f"{left.fileName_stem}{airfoil.geo.modifications_as_label}_{right.fileName_stem}.dat"    
+                        fileName = f"{left.fileName_stem}{mods}_{right.fileName_stem}.dat"    
                         airfoil.set_fileName   (fileName)
                         airfoil.set_workingDir (strak_dir) 
                         airfoil.set_pathName   ('') 
@@ -2367,7 +2486,7 @@ class WingSections (list [WingSection]):
 
                     else:
 
-                        section.set_airfoil_by_airfoil (left)    # no blend - take left airfoil
+                        section.set_airfoil (left)    # no blend - take left airfoil
                         airfoil = section.airfoil
                         airfoil.set_isBlendAirfoil (True)
 
@@ -2376,6 +2495,8 @@ class WingSections (list [WingSection]):
                     self._strak_done = True 
                     section._strak_info = strak_info
 
+        if n_straked > 0:
+            logger.info (f"{self} straked {n_straked} airfoils in {strak_dir}")
 
 
     def reset_strak (self): 
@@ -2387,7 +2508,7 @@ class WingSections (list [WingSection]):
         for section in self:
             if section.airfoil.isBlendAirfoil: 
 
-                section.set_airfoil_by_path (None)
+                section.set_airfoil (None)
  
                 self._strak_done    = False 
                 section._strak_info = None
@@ -2418,12 +2539,12 @@ class WingSections (list [WingSection]):
 
         # there must be root and tip 
         if not self[0].is_root or not self[-1].is_tip:
-            raise ValueError ("Wingsections data corrupted")
+            raise ValueError ("Wingsection data corrupted")
 
 
-    def neighbours_of (self, aSection: WingSection) -> tuple [WingSection, WingSection]:
+    def neighbors_of (self, aSection: WingSection) -> tuple [WingSection, WingSection]:
         """
-        returns the neighbour before and after a wingSection - if no neighbour return None 
+        returns the neighbor before and after a wingSection - if no neighbor return None 
         """
         try:
             index = self.index (aSection) 
@@ -2443,18 +2564,18 @@ class WingSections (list [WingSection]):
 
     def xn_cn_limits_of (self, aSection: WingSection) -> tuple [tuple,tuple]: 
         """ 
-        xn position and cn chord limits as tuple of self before touching the neighbour section
+        xn position and cn chord limits as tuple of self before touching the neighbor section
         """
         xn = aSection.xn
         cn = aSection.cn
 
         if aSection.is_tip and aSection.defines_cn:                             # special case trapezoid - tip section defines chord 
-            left_sec, right_sec = self.neighbours_of (aSection)     
+            left_sec, right_sec = self.neighbors_of (aSection)     
             return (xn,xn), (0.01, left_sec.cn) 
         if aSection.is_root_or_tip:                                             # normally root and tip fixed 
             return (xn,xn), (cn,cn) 
         else:
-            left_sec, right_sec = self.neighbours_of (aSection)                 # keep a safety distance to next section
+            left_sec, right_sec = self.neighbors_of (aSection)                 # keep a safety distance to next section
             safety = self[-1].xn / 500.0 
             if left_sec: 
                 left_xn = left_sec.xn
@@ -2476,10 +2597,10 @@ class WingSections (list [WingSection]):
 
 
 
-    def neighbours_having_airfoil (self, aSection: 'WingSection') -> tuple [WingSection, WingSection]:
+    def neighbors_having_airfoil (self, aSection: 'WingSection') -> tuple [WingSection, WingSection]:
         """
-        returns the neighbour before and after a wingSection, which are not blendAirfoil
-        Needed for 'strak'  - if no neighbour return None 
+        returns the neighbor before and after a wingSection, which are not blendAirfoil
+        Needed for 'strak'  - if no neighbor return None 
         """
 
         try:
@@ -2487,7 +2608,7 @@ class WingSections (list [WingSection]):
         except: 
             return None, None
 
-        #left neighbour 
+        #left neighbor 
         if aSection.is_root: 
             left_sec = None
         else: 
@@ -2496,7 +2617,7 @@ class WingSections (list [WingSection]):
                     left_sec = sec
                     break 
 
-        #right neighbour 
+        #right neighbor 
         if aSection.is_tip: 
             right_sec = None
         else: 
@@ -2717,13 +2838,13 @@ class Flap:
 
     def depth_left (self) -> tuple[float]:
         """ 
-        flap depth absolut e.g. 35mm and relative e.g. 0.27 at left side        
+        flap depth absolute e.g. 35mm and relative e.g. 0.27 at left side        
         """
         return self._flaps.flap_depth_at (self.x_from)
 
     def depth_right (self) -> tuple[float]:
         """ 
-        flap depth absolut e.g. 35mm and relative e.g. 0.27 at right side        
+        flap depth absolute e.g. 35mm and relative e.g. 0.27 at right side        
         """
         return self._flaps.flap_depth_at (self.x_to)
 
@@ -2749,7 +2870,7 @@ class Flaps:
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         toDict (d, "hinge_equal_ref_line",  self._hinge_equal_ref_line) 
@@ -2829,7 +2950,7 @@ class Flaps:
         start_section  = None
         section : WingSection
 
-        for section in self._wingSections.without_for_panels():
+        for section in self._wingSections.without_for_panels:
 
             if start_section is None and section.flap_group > 0:
                 start_section = section
@@ -3002,7 +3123,7 @@ class Flaps:
 
     def flap_depth_at (self, x : float, hinge_y : float = None) -> tuple[float]:
         """ 
-        flap depth absolut e.g. 35mm and relative e.g. 0.27 at position x 
+        flap depth absolute e.g. 35mm and relative e.g. 0.27 at position x 
             if hinge_y is omitted it is calculated from current hinge line 
         
         """
@@ -3020,10 +3141,10 @@ class Flaps:
 
     def flap_cn_polyline  (self) -> tuple [Array, Array]:
         """
-        relative flap depth e.g. 0.27 (hinge positio) within chord reference    
+        relative flap depth e.g. 0.27 (hinge position) within chord reference    
         """
 
-        # as the relative flap depth e.g. 0.27 is not a striaght line if the chord reference 
+        # as the relative flap depth e.g. 0.27 is not a straight line if the chord reference 
         # is defined by a curve, the relative flap depth has to be interpolated for each point 
 
         hinge_x, hinge_y = self.hinge_polyline ()
@@ -3329,7 +3450,7 @@ class Planform:
 
     @property
     def n_ref_line (self) -> N_Reference_Line:
-        """ normalized refrence line object """
+        """ normalized reference line object """
         return self._n_ref_line
 
     @property
@@ -3354,7 +3475,7 @@ class Planform:
 
         Args:
             x:      either x or xn position 
-            fast:   True - only a linear interplation is made with low precision
+            fast:   True - only a linear interpolation is made with low precision
             normed: True - x value is normed xn value
         Returns:
             cn:     normalized chord
@@ -3391,7 +3512,7 @@ class Planform:
  
         Args:
             cn:     a normalized chord value 
-            fast:   True - only a linear interplation is made with low precision
+            fast:   True - only a linear interpolation is made with low precision
         Returns:
             xn:     normalized x position
         """
@@ -3404,7 +3525,7 @@ class Planform:
  
         Args:
             cn:     a normalized chord value 
-            fast:   True - only a linear interplation is made with low precision
+            fast:   True - only a linear interpolation is made with low precision
         Returns:
             x:      x position 
         """
@@ -3434,7 +3555,7 @@ class Planform:
 
         Args:
             x:      x position 
-            fast:   True - only a linear interplation is made with low precision
+            fast:   True - only a linear interpolation is made with low precision
         Returns:
             c:      chord
         """
@@ -3476,7 +3597,7 @@ class Planform:
 
     def _polygon (self, x : np.ndarray, le_y : np.ndarray, te_y : np.ndarray) -> Polyline:
         """ 
-        polygon of the planform starting at le_root clockwise based on le, te poyline 
+        polygon of the planform starting at le_root clockwise based on le, te polyline 
         """
         x = np.append (x, np.flip (x))
         x = np.append (x, x[0:1])
@@ -3605,8 +3726,8 @@ class Planform:
                                cn : float|Array|list|None  =None) -> ...:
         """
         Transforms chord coordinates into normalized planform coordinates
-            - by shiftung yn value dependand chord reference at xn  
-        In normalized planform coordinates the reference line will be at yn=0, le_y poitive, te_y negative
+            - by shifting yn value dependant chord reference at xn  
+        In normalized planform coordinates the reference line will be at yn=0, le_y positive, te_y negative
 
         Args:
             xcn: xn normalized, either float, list or Array to transform 
@@ -3857,11 +3978,11 @@ class Planform:
 class Planform_Paneled (Planform): 
     """ 
 
-    Subclass of Planform reperesenting a paneled version of a (parent) planform 
+    Subclass of Planform representing a paneled version of a (parent) planform 
 
     The chord distribution is a polyline of the wing sections le and te of the parent 
 
-    Panelling is defined by the panel definition paramters 
+    Panelling is defined by the panel definition parameters 
 
     """
 
@@ -3887,7 +4008,7 @@ class Planform_Paneled (Planform):
         self._wingSections  = self._parent_planform.wingSections
         self._flaps         = self._parent_planform.flaps
 
-        # get panel paramters - x,y are in wing coordinate system (wy is along span)
+        # get panel parameters - x,y are in wing coordinate system (wy is along span)
 
         self._wy_panels      = fromDict (dataDict, "wy_panels", 8)
         self._wy_dist        = fromDict (dataDict, "wy_distribution", "uniform")
@@ -3921,7 +4042,7 @@ class Planform_Paneled (Planform):
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
         d = {}
         toDict (d, "wy_panels",         self._wy_panels)
         toDict (d, "wy_distribution",   self._wy_dist)
@@ -4116,7 +4237,7 @@ class Planform_Paneled (Planform):
 
         # walk along span by section and add x stations 
 
-        xn_sec = self.n_distrib.polyline()[0]                   # take poyline as it can be already reduced
+        xn_sec = self.n_distrib.polyline()[0]                   # take polyline as it can be already reduced
 
         xn_rel_stations = self._xn_rel_stations()
         xn_stations = np.array ([0.0])
@@ -4301,7 +4422,7 @@ class Image_Definition:
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         if self.pathFilename:
@@ -4324,7 +4445,7 @@ class Image_Definition:
 
     @property
     def exists (self) -> bool:
-        """ this is a valid iamge definition"""
+        """ this is a valid image definition"""
         return self.pathFilename is not None
     
     @property

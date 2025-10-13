@@ -87,17 +87,20 @@ class Abstract_Artist_Planform (Artist):
     """
 
     sig_planform_changed     = pyqtSignal ()                    # planform data changed 
-    sig_wingSection_selected = pyqtSignal (WingSection)       # new current wingSection 
-    sig_wingSection_new      = pyqtSignal (WingSection)       # new wingsection inserted 
+    sig_wingSection_selected = pyqtSignal (WingSection)         # new current wingSection 
+    sig_wingSection_new      = pyqtSignal (WingSection)         # new wingsection inserted 
     sig_wingSection_changed  = pyqtSignal ()                    # wingsection data changed 
     sig_flaps_changed        = pyqtSignal ()                    # flaps hinge line changed
 
 
     def __init__ (self, *args, 
                   mode = mode.DEFAULT,                          # coordinate system shall work 
+                  show_all_sections = False,                    # show also extra sections for paneling
                   **kwargs):
 
         self._mode  = mode
+        self._show_all_sections = show_all_sections             # show also extra sections for paneling
+
 
         super().__init__ (*args, **kwargs)
 
@@ -145,6 +148,19 @@ class Abstract_Artist_Planform (Artist):
     def wingSections (self) -> WingSections:
         return self.planform.wingSections
 
+    @property
+    def show_all_sections (self) -> bool:
+        """ show all wingSections including extra sections for paneling"""
+        return self._show_all_sections
+
+    @property
+    def wingSections_to_show (self) -> list[WingSection]:
+        """ the wingSections to plot - without extra sections for paneling"""
+
+        if self.show_all_sections:
+            return self.planform.wingSections
+        else:   
+            return self.planform.wingSections.without_for_panels
 
 # -------- concrete sub classes ------------------------
 
@@ -706,28 +722,40 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
                   show_strak=False, 
                   **kwargs):
         
-        self._opPointFn     = opPoint_fn                                    # bound method to get current opPoint
+        self._opPointFn     = opPoint_fn                                # bound method to get current opPoint
 
-        self._colorBar        = None 
-        self._show_colorBar   = False 
-        self._show_chord_diff = False 
+        self._colorBar          = None 
+        self._show_cp_in_panels = False 
+        self._show_chord_diff   = False 
 
         super().__init__ (*args, **kwargs)
 
+
+    @property
+    def polar (self) -> VLM_Polar:
+        """ current wing polar """
+        return self.opPoint.polar if self.opPoint else None
 
     @property
     def opPoint (self) -> VLM_OpPoint:
         """ current opPoint to show (e.g. cp value of panel)"""
         return self._opPointFn() if callable (self._opPointFn) else None
 
+    @property
+    def is_ready_for_opPoint (self) -> bool:
+        """ is opPoint ready to show results?"""
+        return self.opPoint is not None and self.polar is not None and self.polar.is_ready_for_op_point
+
+
     @property 
-    def show_colorBar (self) -> bool:
-        """ show color bar for Cp"""
-        return self._show_colorBar
-    
-    def set_show_colorBar (self, aBool: bool):
-        self._show_colorBar = aBool == True 
+    def show_cp_in_panels (self) -> bool:
+        """ show colored cp value in panels """
+        return self._show_cp_in_panels
+
+    def set_show_cp_in_panels (self, aBool: bool):
+        self._show_cp_in_panels = aBool == True
         self.refresh()
+
 
     @property 
     def show_chord_diff (self) -> bool:
@@ -779,21 +807,22 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
     def _plot_panels (self):
         """ plot all panels using PColorMeshItem """
 
-        # strak airfoils if needed to have polars
-
-        if self.opPoint and not self.wingSections.strak_done:
-            self.wingSections.do_strak (geometry_class=GEO_BASIC)
-
         # prepare coloring 
 
         panels = self.wing.vlm_wing.panels_right
 
-        if self.show_colorBar and self.opPoint:
+        if self.show_cp_in_panels and self.is_ready_for_opPoint:
+
+            # strak airfoils if needed to have polars
+            if not self.wingSections.strak_done:
+                self.wingSections.do_strak (geometry_class=GEO_BASIC)
+
+            # get cp value of panels
             z_panel    = self.opPoint.Cp_viscous_panels
             colorMap   = pg.colormap.get ('viridis')
             edgecolors = pg.mkPen(COLOR_BOX)
         else: 
-            if self.opPoint:
+            if self.is_ready_for_opPoint and self.opPoint:
                 z_panel = self._get_z_critical_panels (len(panels))
             else:
                 z_panel = np.zeros (len(panels))
@@ -861,7 +890,7 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
 
         self._add (p)
 
-        if self.show_colorBar:
+        if self.show_cp_in_panels:
             self._add_colorBar (p)
         else: 
             self._remove_colorBar ()
@@ -984,7 +1013,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
     """    
 
     def __init__ (self, *args, 
-                  polar_fn = None, 
+                  polar_fn = None,
                   opPoint_fn = None, 
                   opPoint_var = OpPoint_Var.CL, 
                   **kwargs):
@@ -996,14 +1025,19 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
 
     @property
-    def polar (self) -> VLM_Polar:
-        """ current wing polar """
-        return self._polar_fn()
-
-    @property
     def opPoint (self) -> VLM_OpPoint:
         """ current opPoint to show (e.g. cp value of panel)"""
-        return self._opPoint_fn()
+        return self._opPoint_fn() if callable(self._opPoint_fn) else None
+
+    @property
+    def is_ready_for_opPoint (self) -> bool:
+        """ is opPoint ready to show results?"""
+        return self.polar is not None and self.polar.is_ready_for_op_point
+    
+    @property
+    def polar (self) -> VLM_Polar:
+        """ current wing polar """
+        return self._polar_fn() if callable(self._polar_fn) else None
 
     @property
     def opPoint_var (self) -> OpPoint_Var:
@@ -1016,20 +1050,24 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
     def _plot (self): 
 
+        # sanity VLM polar needed
+        
+        if self.polar is None:  
+            self._plot_text (f"No VLM-Polar available", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
+            return
+
         # strak airfoils if needed to have polars
 
         if not self.wingSections.strak_done:
             self.wingSections.do_strak (geometry_class=GEO_BASIC)
 
-        # is polar ready to show results?
+        # is polar ready to show results - all airfoil polars generated and loaded?
 
-        if not self.polar.is_ready ():
+        if not self.polar.get_ready_for_op_point():
             if self.polar.is_generating_airfoil_polars:
                 self._plot_text (f"Generating polars", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
             else:
-                text = 'huhu'.join (self.polar.error_reason)  
-                text = text.replace ("<", "'").replace (">", "'").replace ("huhu", "<br>") 
-                self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
+                logger.debug (f"Polar not ready for opPoint - this should not happen")
             return   
 
         # get dict with results of aero calculation - values per y position
@@ -1449,7 +1487,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
         section : WingSection
 
-        for section in self.wingSections:
+        for section in self.wingSections_to_show:
 
             if   m == mode.NORM_NORM or m == mode.NORM_TO_SPAN:
                 x,y = section.line_in_chord ()
@@ -1565,8 +1603,12 @@ class WingSections_Artist (Abstract_Artist_Planform):
         found = False
         for section in self.wingSections:
             if isclose (section.x, x, rel_tol=0.005): 
-                found = True
-                break 
+                if not section.is_for_panels:                                       # skip paneling sections  
+                    found = True
+                    break 
+                else:
+                    logger.debug (f"{section} may not be selected - is for paneling")
+                    return
 
         # sanity 
         if not found:
@@ -2227,7 +2269,7 @@ class Airfoil_Artist (Abstract_Artist_Planform):
 
         # create a nice color row depending on n wing sections  
 
-        colors = random_colors (len(self.wingSections), h_start=0.4)
+        colors = random_colors (len(self.wingSections_to_show), h_start=0.4)
 
         # strak airfoils if needed
 
@@ -2236,7 +2278,7 @@ class Airfoil_Artist (Abstract_Artist_Planform):
 
         section : WingSection
 
-        for i, section in enumerate (self.wingSections):
+        for i, section in enumerate (self.wingSections_to_show):
 
             airfoil = section.airfoil
             if (airfoil.isLoaded) and not (not self.show_strak and airfoil.isBlendAirfoil):
@@ -2336,7 +2378,7 @@ class Airfoil_Name_Artist (Abstract_Artist_Planform):
 
         # plot airfoil of wing Sections 
 
-        colors = random_colors (len(self.wingSections), h_start=0.4)
+        colors = random_colors (len(self.wingSections_to_show), h_start=0.4)
 
         # transformation function
 
@@ -2351,7 +2393,7 @@ class Airfoil_Name_Artist (Abstract_Artist_Planform):
 
         section : WingSection
 
-        for isec, section in enumerate (self.wingSections):
+        for isec, section in enumerate (self.wingSections_to_show):
 
             if self.show_strak or (not self.show_strak and not section.airfoil.isBlendAirfoil ):
 
@@ -2695,7 +2737,7 @@ class Polar_Artist (Abstract_Artist_Planform):
 
         # get airfoil colors - same as Airfoil_Artist
 
-        colors = random_colors (len(self.wingSections), h_start=0.4)
+        colors = random_colors (len(self.wingSections_to_show), h_start=0.4)
 
         # plot polars of airfoils
 
@@ -2705,7 +2747,7 @@ class Polar_Artist (Abstract_Artist_Planform):
 
         section : WingSection
 
-        for i, section in enumerate (self.wingSections):
+        for i, section in enumerate (self.wingSections_to_show):
 
             airfoil = section.airfoil
             if (airfoil.isLoaded) and not (not self.show_strak and airfoil.isBlendAirfoil):
@@ -2727,10 +2769,11 @@ class Polar_Artist (Abstract_Artist_Planform):
                     color = color_in_series (color_airfoil, iPolar, len(polars_to_plot), delta_hue=0.1)
 
                     # legend entry only for first polar of an airfoil 
-                    if iPolar == 0:
-                        label_airfoil =  f"{airfoil.name} @ {section.name_short}" 
-                    else: 
-                        label_airfoil = None 
+                    # if iPolar == 0:
+                    #     label_airfoil =  f"{airfoil.name} @ {section.name_short}" 
+                    # else: 
+                    #     label_airfoil = None 
+                    label_airfoil =  f"{airfoil.name} @ {section.name_short}" 
 
                     self._plot_polar (airfoil.isBlendAirfoil, label_airfoil, polar, color)
 
@@ -2784,5 +2827,3 @@ class Polar_Artist (Abstract_Artist_Planform):
         self._plot_dataItem  (x, y, name=label, pen = pen, 
                                 symbol=None, antialias = True, zValue=1)
 
-        # print (f"{polar}  cl_max {polar.cl_max}  cd_min={polar.cd_min}  glide_max={polar.glide_max} \
-        #                   alpha_0={polar.alpha_cl0} alpha_0_inv={polar.alpha_cl0_inviscid}")

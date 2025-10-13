@@ -23,7 +23,7 @@ from base.artist            import Artist
 from pc2_artists            import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
 
 from wing                   import Wing, Planform, Image_Definition, Planform_Paneled, WingSections
-from wing_exports           import Export_Airfoils, Export_Dxf
+from wing_exports           import Export_Airfoils, Export_Dxf, Export_Xflr5, Export_FLZ
 
 import logging
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class Dialog_Export_Airfoil (Dialog):
     Dialog to export airfoils to a subdirectory
     """
 
-    _width  = 480
+    _width  = 450
     _height = 240
 
     name = "Export Airfoils"
@@ -43,12 +43,12 @@ class Dialog_Export_Airfoil (Dialog):
     def __init__ (self, *args, **kwargs): 
 
         self._export_btn : QPushButton = None
-        self._close_btn  : QPushButton = None 
+        self._cancel_btn : QPushButton = None 
 
         super().__init__ ( *args, **kwargs)
 
         # connect dialog buttons
-        self._close_btn.clicked.connect  (self.close)
+        self._cancel_btn.clicked.connect  (self.close)
         self._export_btn.clicked.connect (self._export_airfoils)
 
 
@@ -68,22 +68,22 @@ class Dialog_Export_Airfoil (Dialog):
         r = 0 
         SpaceR (l, r, stretch=0, height=10) 
         r += 1 
-        Field  (l,r,0, width=250, colSpan=1, lab= "To Directory", get=lambda:self.export_airfoils.export_dir)
+        Field  (l,r,0, width=230, colSpan=1, lab= "To Directory", get=lambda:self.export_airfoils.export_dir)
         Button (l,r,4, width=70, text= "Select", set=self._select_directory)
         r += 1
         SpaceR (l, r, stretch=0, height=10) 
         r += 1
-        CheckBox (l,r,1, colSpan=2, text= "Use airfoils nick name",
+        CheckBox (l,r,0, colSpan=3, text= "Use airfoils nick name",
                   obj=self.export_airfoils, prop=Export_Airfoils.use_nick_name)
         r += 1
-        CheckBox (l,r,1, colSpan=2, text= "Set a common trailing edge thickness of",
+        CheckBox (l,r,0, colSpan=2, text= "Set a common trailing edge thickness of",
                   obj=self.export_airfoils, prop=Export_Airfoils.adapt_te_gap)
-        FieldF (l,r,4, width=70, unit="mm", step=0.1, lim=(0, 5), dec=1,
+        FieldF (l,r,2, width=70, unit="mm", step=0.1, lim=(0, 5), dec=1,
                   obj=self.export_airfoils, prop=Export_Airfoils.te_gap_mm,
                   disable=lambda: not self.export_airfoils.adapt_te_gap)
         r += 1
-        Label  (l,r,1, colSpan=5, height=50, style=style.COMMENT,
-                get="       The common thickness will be achieved, when the airfoils\n" +
+        Label  (l,r,0, colSpan=5, height=50, style=style.COMMENT,
+                get="       The common thickness will be achieved, when the exported airfoils\n" +
                     "       will be scaled to their chord length in CAD.\n")
 
         r += 1
@@ -114,7 +114,7 @@ class Dialog_Export_Airfoil (Dialog):
         text = f"{n_airfoils} airfoils" if n_airfoils > 1 else  f"{n_airfoils} airfoil"
 
         MessageBox.success (self,"Export Airfoils", 
-                            f"{text} exported to directory\n\n{self.export_airfoils.export_dir}")
+                            f"{text} exported to directory<br><br><b>{self.export_airfoils.export_dir}</b>")
 
 
     @override
@@ -130,7 +130,7 @@ class Dialog_Export_Airfoil (Dialog):
         buttons = QDialogButtonBox.StandardButton.Cancel
         buttonBox = QDialogButtonBox(buttons)
 
-        self._close_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
+        self._cancel_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
 
         self._export_btn = QPushButton ("&Export", parent=self)
         self._export_btn.setFixedWidth (80)
@@ -147,7 +147,7 @@ class Dialog_Export_Dxf (Dialog):
     Dialog to export dxf including airfoils to a subdirectory
     """
 
-    _width  = 480
+    _width  = 460
     _height = 300
 
     name = "Export Planform as dxf File"
@@ -155,12 +155,12 @@ class Dialog_Export_Dxf (Dialog):
     def __init__ (self, *args, **kwargs): 
 
         self._export_btn : QPushButton = None
-        self._close_btn  : QPushButton = None 
+        self._cancel_btn : QPushButton = None 
 
         super().__init__ ( *args, **kwargs)
 
         # connect dialog buttons
-        self._close_btn.clicked.connect  (self.close)
+        self._cancel_btn.clicked.connect  (self.close)
         self._export_btn.clicked.connect (self._export_airfoils)
 
 
@@ -193,23 +193,21 @@ class Dialog_Export_Dxf (Dialog):
         r += 1
         SpaceR (l, r, stretch=0, height=10) 
         r += 1
-        CheckBox (l,r,0, colSpan=2, text= "Export airfoils as well",
+        CheckBox (l,r,0, colSpan=3, text= "Export airfoils as well into this directory",
                   obj=self.export_dxf, prop=Export_Dxf.export_airfoils)
         r += 1
-        CheckBox (l,r,1, colSpan=2, text= "Use airfoils nick name",
-                  obj=self.export_airfoils, prop=Export_Airfoils.use_nick_name,
-                  disable=lambda: not self.export_dxf.export_airfoils)
+        CheckBox (l,r,0, colSpan=3, text= "Use airfoils nick name",
+                  obj=self.export_airfoils, prop=Export_Airfoils.use_nick_name)
         r += 1
-        CheckBox (l,r,1, colSpan=2, text= "Set a common trailing edge thickness of",
-                  obj=self.export_airfoils, prop=Export_Airfoils.adapt_te_gap,
-                  disable=lambda: not self.export_dxf.export_airfoils)
-        FieldF (l,r,4, width=70, unit="mm", step=0.1, lim=(0, 5), dec=1,
+        CheckBox (l,r,0, colSpan=2, text= "Set a common trailing edge thickness of",
+                  obj=self.export_airfoils, prop=Export_Airfoils.adapt_te_gap)
+        FieldF (l,r,3, width=70, unit="mm", step=0.1, lim=(0, 5), dec=1,
                   obj=self.export_airfoils, prop=Export_Airfoils.te_gap_mm,
                   disable=lambda: not self.export_dxf.adapt_te_gap)
         r += 1
-        Label  (l,r,1, colSpan=5, height=50, style=style.COMMENT,
-                get="       The common thickness will be achieved, when the airfoils\n" +
-                    "       will be scaled to their chord length in CAD.\n")
+        Label  (l,r,0, colSpan=5, height=50, style=style.COMMENT,
+                get="      The common thickness will be achieved, when the exported airfoils\n" +
+                    "      will be scaled to their chord length in CAD.\n")
         r += 1
         SpaceR (l, r, height=5) 
         l.setColumnMinimumWidth (0,80)
@@ -236,9 +234,9 @@ class Dialog_Export_Dxf (Dialog):
         self.close()
 
         if self.export_dxf.export_airfoils:
-            msg = f"Planform '{self.export_dxf.filename}' and {n_airfoils} Airfoils \n\nexported to directory '{self.export_dxf.export_dir}'"
+            msg = f"Planform {self.export_dxf.dxf_filename} and {n_airfoils} airfoils exported to<br><br><b>{self.export_dxf.export_dir}</b>"
         else: 
-            msg = f"Planform '{self.export_dxf.filename}' \n\nexported to directory '{self.export_dxf.export_dir}'"
+            msg = f"Planform {self.export_dxf.dxf_filename} exported to <br><br><b>{self.export_dxf.export_dir}</b>"
 
         MessageBox.success (self,"Export dxf", msg, min_width=300)
 
@@ -256,7 +254,207 @@ class Dialog_Export_Dxf (Dialog):
         buttons = QDialogButtonBox.StandardButton.Cancel
         buttonBox = QDialogButtonBox(buttons)
 
-        self._close_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
+        self._cancel_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
+
+        self._export_btn = QPushButton ("&Export", parent=self)
+        self._export_btn.setFixedWidth (80)
+
+        buttonBox.addButton (self._export_btn, QDialogButtonBox.ButtonRole.ActionRole)
+
+        return buttonBox 
+    
+
+
+
+class Dialog_Export_Xflr5 (Dialog):
+    """ 
+    Dialog to export xflr5 xml including airfoils to a subdirectory
+    """
+
+    _width  = 450
+    _height = 180
+
+    name = "Export Paneled Planform as Xflr5 XML File"
+
+    def __init__ (self, *args, **kwargs): 
+
+        self._export_btn : QPushButton = None
+        self._cancel_btn : QPushButton = None 
+
+        super().__init__ ( *args, **kwargs)
+
+        # connect dialog buttons
+        self._cancel_btn.clicked.connect  (self.close)
+        self._export_btn.clicked.connect (self._export_xflr5)
+
+
+    @property
+    def wing (self) -> Wing:
+        return self.dataObject
+    
+    @property
+    def export_xflr5 (self) -> Export_Xflr5:
+        """ the model xflr5 exporter"""
+        return self.wing.export_xflr5
+
+
+    def _init_layout(self) -> QLayout:
+
+        l = QGridLayout()
+        r = 0 
+        Label  (l,r,0, colSpan=5, style=style.COMMENT, height=40,
+                get="A Xflr5 XML based wing definition file is created from the paneled planform.<br>" +
+                    "The involved airfoils will be exported as well into the same directory.")
+        r += 1
+        SpaceR (l, r, height=5) 
+        r += 1 
+        Field  (l,r,0, width=230, colSpan=1, lab= "To Directory", get=lambda:self.export_xflr5.export_dir)
+        Button (l,r,4, width=70, text= "Select", set=self._select_directory)
+        r += 1
+        SpaceR (l, r, height=5, stretch=2) 
+        l.setColumnMinimumWidth (0,80)
+        l.setColumnStretch (5,2)
+
+        return l
+
+
+    def _select_directory (self):
+        """ select directory for export"""
+
+        directory = QFileDialog.getExistingDirectory(self, caption="Select directory for export",
+                                                     directory=self.wing.workingDir)
+
+        if directory: 
+            self.export_xflr5.set_export_dir (directory)                    
+            self.refresh()
+
+
+    def _export_xflr5 (self, *_):
+        """ do export xflr5"""
+
+        n_airfoils = self.export_xflr5.do_it ()
+        
+        self.close()
+
+        msg = f"Planform {self.export_xflr5.xflr5_filename} and {n_airfoils} Airfoils <br><br>" + \
+              f"exported to <b>{self.export_xflr5.export_dir}</b>"
+
+        MessageBox.success (self,"Export xflr5", msg, min_width=300)
+
+
+    @override
+    def _on_widget_changed (self):
+        """ slot a input field changed - repanel and refresh"""
+        self.refresh()
+
+
+    @override
+    def _button_box (self):
+        """ returns the QButtonBox with the buttons of self"""
+
+        buttons = QDialogButtonBox.StandardButton.Cancel
+        buttonBox = QDialogButtonBox(buttons)
+
+        self._cancel_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
+
+        self._export_btn = QPushButton ("&Export", parent=self)
+        self._export_btn.setFixedWidth (80)
+
+        buttonBox.addButton (self._export_btn, QDialogButtonBox.ButtonRole.ActionRole)
+
+        return buttonBox 
+    
+
+
+
+class Dialog_Export_FLZ (Dialog):
+    """ 
+    Dialog to export FLZ vortex file to a subdirectory
+    """
+
+    _width  = 450
+    _height = 180
+
+    name = "Export Paneled Planform as FLZ vortex File"
+
+    def __init__ (self, *args, **kwargs): 
+
+        self._export_btn : QPushButton = None
+        self._cancel_btn : QPushButton = None 
+
+        super().__init__ ( *args, **kwargs)
+
+        # connect dialog buttons
+        self._cancel_btn.clicked.connect  (self.close)
+        self._export_btn.clicked.connect (self._export_flz)
+
+
+    @property
+    def wing (self) -> Wing:
+        return self.dataObject
+    
+    @property
+    def export_flz (self) -> Export_FLZ:
+        """ the model flz exporter"""
+        return self.wing.export_flz
+
+
+    def _init_layout(self) -> QLayout:
+
+        l = QGridLayout()
+        r = 0 
+        Label  (l,r,0, colSpan=5, style=style.COMMENT, height=40,
+                get="A FLZ vortex project definition file is created from the paneled planform.<br>"+
+                    "The involved airfoils are part of the project file.")
+        r += 1
+        SpaceR (l, r, height=5) 
+        r += 1 
+        Field  (l,r,0, width=230, colSpan=1, lab= "To Directory", get=lambda:self.export_flz.export_dir)
+        Button (l,r,4, width=70, text= "Select", set=self._select_directory)
+        r += 1
+        SpaceR (l, r, height=5, stretch=2) 
+        l.setColumnMinimumWidth (0,80)
+        l.setColumnStretch (5,2)
+
+        return l
+
+
+    def _select_directory (self):
+        """ select directory for export"""
+
+        directory = QFileDialog.getExistingDirectory(self, caption="Select directory for export",
+                                                     directory=self.wing.workingDir)
+        if directory: 
+            self.export_flz.set_export_dir (directory)                    
+            self.refresh()
+
+
+    def _export_flz (self, *_):
+        """ do export flz"""
+
+        self.export_flz.do_it ()
+
+        self.close()
+
+        msg = f"Paneled Planform exported as {self.export_flz.flz_filename} to directory<br><br>" + \
+              f"<b>{self.export_flz.export_dir}</b>"
+        MessageBox.success (self,"Export FLZ", msg, min_width=300)
+
+
+    @override
+    def _on_widget_changed (self):
+        """ slot a input field changed"""
+        self.refresh()
+
+
+    @override
+    def _button_box (self):
+        """ returns the QButtonBox with the buttons of self"""
+
+        buttons = QDialogButtonBox.StandardButton.Cancel
+        buttonBox = QDialogButtonBox(buttons)
+
+        self._cancel_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
 
         self._export_btn = QPushButton ("&Export", parent=self)
         self._export_btn.setFixedWidth (80)
@@ -660,7 +858,7 @@ class Dialog_Select_Template (Dialog):
 
     def _on_wing_selected (self, aWing: Wing):
 
-        self._template_file_selected = aWing.parm_filePath
+        self._template_file_selected = aWing._parm_pathFileName
         self.close()
 
 

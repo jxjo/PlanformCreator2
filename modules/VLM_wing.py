@@ -26,10 +26,11 @@ from typing                     import NamedTuple
 from math                       import isclose, degrees, radians
 
 from VLM                        import calc_Qjj
+from model.polar_set            import Polar_Set, RE_SCALE_ROUND_TO, re_from_v
 
 import logging
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 
 
 #-------------------------------------------------------------------------------
@@ -69,31 +70,31 @@ class Point_3D (NamedTuple):
     y : float
     z : float 
 
-AIR_RHO     = 1.225             # density air 
-AIR_NY      = 0.0000182         # kinematic viscosity
+# AIR_RHO     = 1.225             # density air 
+# AIR_NY      = 0.0000182         # kinematic viscosity
 
 
-def re_from_v (v : float, chord : float, round_to = 1000) -> float:
-    """ calc Re number from v (velocity)"""
+# def re_from_v (v : float, chord : float, round_to = 1000) -> float:
+#     """ calc Re number from v (velocity)"""
 
-    re = round (v * chord * AIR_RHO / AIR_NY,0)
+#     re = round (v * chord * AIR_RHO / AIR_NY,0)
 
-    if isinstance (round_to, int) and round_to:
-        re = round (re / round_to, 0)
-        re = re * round_to
+#     if isinstance (round_to, int) and round_to:
+#         re = round (re / round_to, 0)
+#         re = re * round_to
 
-    return re
+#     return re
 
 
-def v_from_re (re : float, chord : float, round_dec = 1) -> float:
-    """ calc v (velocity) from Renumber"""
+# def v_from_re (re : float, chord : float, round_dec = 2) -> float:
+#     """ calc v (velocity) from Renumber"""
 
-    v = re * AIR_NY / (chord * AIR_RHO)
+#     v = re * AIR_NY / (chord * AIR_RHO)
 
-    if isinstance (round_dec, int):
-        v = round (v, round_dec)
+#     if isinstance (round_dec, int):
+#         v = round (v, round_dec)
 
-    return v
+#     return v
 
 
 #-------------------------------------------------------------------------------
@@ -223,15 +224,6 @@ class VLM_Wing:
 
         self._polars        = {}                    # dict of polars
 
-        # strak airfoils if needed to get the generated airfoil names
-
-        from wing               import WingSections
-        from model.airfoil      import GEO_BASIC
-
-        wingSections : WingSections = self._planform.wingSections
-        if not wingSections.strak_done:
-            wingSections.do_strak (geometry_class=GEO_BASIC)
-
 
     def __repr__(self) -> str:
         # overwrite to get a nice print string
@@ -336,9 +328,12 @@ class VLM_Wing:
     def polar_at (self, vtas: float) -> 'VLM_Polar':
         """ returns polar for air speed vtas"""
 
+        if not isinstance (vtas, (int, float)) or vtas <= 0.0:
+            return None
+
         v = round (vtas, 1)                         #  ensure clean key for dict
 
-        polar = self._polars.get (v, None)         # already exisiting 
+        polar = self._polars.get (v, None)          # already exisiting 
         
         if not polar:
             polar = VLM_Polar (self, v)             # calculate new opPOint 
@@ -521,9 +516,7 @@ class VLM_Polar:
         self._generating_airfoil_polars = False         # airfoil polars are currently generated 
         self._use_viscous_loop          = True          # in opPoint calculation
 
-        self._alpha0_stripes= None                      # alpha0 per stripe interpolated from airfoil polat 
-
-        self._load_airfoil_polars ()                    # get airfoil poalrs from wingSections
+        self._alpha0_stripes= None                      # alpha0 per stripe interpolated from airfoil polar
 
         logger.debug (f"{self} created")
 
@@ -564,6 +557,21 @@ class VLM_Polar:
         """ airfoil polars are currently generated """  
         return self._generating_airfoil_polars 
 
+    @property
+    def is_ready_for_op_point (self) -> bool: 
+        """ True if airfoil polas are completly loaded for opPoint calculation """
+        return bool(self.airfoil_polars) 
+
+    def get_ready_for_op_point (self) -> bool: 
+        """ load all airfoil polars for opPoint calculation - return True if ready """
+        if self.is_ready_for_op_point:
+            return True
+        else: 
+            # try to load polars 
+            self._load_airfoil_polars ()
+            return self.is_ready_for_op_point
+
+
     def is_ready (self) -> bool: 
         """ True if airfoil polas are complete for opPoint calculation """
         if self.airfoil_polars:
@@ -587,7 +595,7 @@ class VLM_Polar:
     def opPoint_at (self, alpha: float) -> 'VLM_OpPoint':
         """ returns opPoint at alpha - or None if airfoil polars are not ready"""
 
-        if self.is_ready ():
+        if self.get_ready_for_op_point ():
             a = round (alpha, 1)                        # ensure clean key for dict
             try:
                 opPoint = self._opPoints[a]             # already exisiting
@@ -601,10 +609,10 @@ class VLM_Polar:
     def opPoint_at_alpha_max (self) -> 'VLM_OpPoint':
         """ returns opPoint at alpha max - or None if airfoil polars are not ready"""
 
-        if self.is_ready ():
+        if self.get_ready_for_op_point ():
             return self._find_alpha_max ()
         else: 
-            logger.warning (f"{self} opPoint_at_alpha_max")
+            # e.g. airfoil polars not loaded up to now
             return None
         
 
@@ -626,17 +634,26 @@ class VLM_Polar:
     def _load_airfoil_polars (self):
         """ loads for all wingSections polar of airfoil"""
 
-        from wing               import WingSection, Planform
-        from model.polar_set    import Polar_Set, RE_SCALE_ROUND_TO
+        from wing               import WingSection, Planform                # avoid circular import
 
+        self._airfoil_polars = {}                                           # reset
         self._error_reason  = []
         self._generating_airfoil_polars = False
 
+
+        # get airfoil polars for all wingSections
+        airfoil_polars = {}
         planform : Planform = self.vlm_wing._planform
         planform_paneled = planform.wing.planform_paneled 
         section  : WingSection
 
         for section in planform_paneled.wingSections_reduced():
+
+            if not section.airfoil.isLoaded: 
+                msg = f"{self} section {section} airfoil {section.airfoil} not loaded"
+                logger.debug (msg)
+                self._error_reason.append (msg)
+                break
 
             section_y  = section.x / 1000
             section_re = re_from_v (self.vtas, section.c / 1000, round_to=RE_SCALE_ROUND_TO)
@@ -646,7 +663,7 @@ class VLM_Polar:
                 msg = f"{self} section {section} airfoil {section.airfoil} has no polarSet"
                 logger.error (msg)
                 self._error_reason.append (msg)
-                continue
+                break
 
             airfoil_polarSet.load_or_generate_polars()
 
@@ -656,8 +673,7 @@ class VLM_Polar:
                     if polar.isLoaded:
 
                         # there is a polar that fits to Re of wingSection
-
-                        self._airfoil_polars[section_y] = polar
+                        airfoil_polars[section_y] = polar
 
                     else: 
                         if polar.error_occurred: 
@@ -667,19 +683,19 @@ class VLM_Polar:
                     break
 
             if not isclose (polar.re, section_re, abs_tol=RE_SCALE_ROUND_TO): 
-                polars_re = [p.re for p in airfoil_polarSet.polars]
-                msg = f"No polar with Re = {section_re} in Polarset of {section} with polars: {polars_re}" 
+                polars_re_list = [f"{p.re:.0f}" for p in airfoil_polarSet.polars]
+                msg = f"No polar with Re = {section_re:.0f} in Polarset of {section} with polars: {polars_re_list}" 
                 logger.error (msg)
                 self._error_reason.append (msg)
                  
 
         # if polar couldn't be loaded or error occured, reset airfoil polars 
 
-        if self._error_reason or self._generating_airfoil_polars: 
-            self._airfoil_polars = {}
-            if self._error_reason:
-                logger.warning (f"{self} couldn't load polars - resetting airfoil polars")
-                 
+        if self._error_reason : 
+            logger.warning (f"{self} couldn't load polars - resetting airfoil polars")
+        elif not self._generating_airfoil_polars:
+            self._airfoil_polars = airfoil_polars 
+            logger.debug (f"{self} loaded {len(self._airfoil_polars)} airfoil polars")       
         return  
 
 
@@ -1223,7 +1239,8 @@ class VLM_OpPoint:
         airfoil_polar : Polar
 
         for section_y, airfoil_polar in self.airfoil_polars.items():
-            sections_cl_max.append(airfoil_polar.cl_max)
+            cl_max = airfoil_polar.max_cl.cl if airfoil_polar.max_cl else 0.0
+            sections_cl_max.append(cl_max)
             sections_y.append(section_y)
 
         # alpha0 of stripe by interpolation of section alpha0 
@@ -1247,8 +1264,7 @@ class VLM_OpPoint:
         airfoil_polar : Polar
         
         for section_y, airfoil_polar in self.airfoil_polars.items():
-            cl_max = airfoil_polar.cl_max
-            alpha_max = np.interp(cl_max, airfoil_polar.cl, airfoil_polar.alpha)
+            alpha_max = airfoil_polar.max_cl.alpha if airfoil_polar.max_cl else 0.0
             sections_alpha_max.append(alpha_max)
             sections_y.append(section_y)
 

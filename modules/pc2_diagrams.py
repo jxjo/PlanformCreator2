@@ -9,21 +9,23 @@ Diagram (items) for airfoil
 
 import logging
 
-from base.widgets           import * 
-from base.diagram           import * 
-from base.panels            import Container_Panel
-
 from PyQt6.QtWidgets        import QFileDialog, QGraphicsLayoutItem
 
-from model.airfoil          import Airfoil
-from model.polar_set        import *
-from model.xo2_driver       import Worker
-from wing                   import Wing, Planform, Planform_Paneled
-from VLM_wing               import VLM_OpPoint, OpPoint_Var, v_from_re
+from base.widgets         import * 
+from base.diagram         import * 
+from base.panels          import Container_Panel, MessageBox
+from airfoil_diagrams     import Panel_Polar_Defs
 
-from airfoil_ui_panels      import Panel_Polar_Defs
+from model.airfoil        import Airfoil
+from model.polar_set      import *
+from model.xo2_driver     import Worker
+
+from wing                   import Wing, Planform, Planform_Paneled
+from VLM_wing               import VLM_OpPoint, OpPoint_Var
+
 from pc2_artists            import *
-from pc2_dialogs            import Dialog_Edit_Image, Dialog_Edit_Paneling
+from pc2_dialogs            import (Dialog_Edit_Image, Dialog_Edit_Paneling, Dialog_Export_Xflr5,
+                                    Dialog_Export_FLZ, Dialog_Export_Airfoil, Dialog_Export_Dxf)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -52,12 +54,6 @@ class Diagram_Abstract (Diagram):
     sig_polar_def_changed       = pyqtSignal()              # polar definition changed  
     sig_panel_def_changed       = pyqtSignal()              # paneling definition changed
 
-    sig_export_airfoils         = pyqtSignal()              # export airfoils button pressed  
-    sig_export_xflr5            = pyqtSignal()              # export xflr5 button pressed  
-    sig_export_flz              = pyqtSignal()              # export FLZ button pressed  
-    sig_launch_flz              = pyqtSignal()              # launch FLZ button pressed  
-    sig_export_dxf              = pyqtSignal()              # export dxf button pressed  
-
 
     def __init__(self, parent, wing_fn, wingSection_fn : WingSection = None,  **kwargs):
 
@@ -65,12 +61,12 @@ class Diagram_Abstract (Diagram):
 
         super().__init__(parent, wing_fn, **kwargs)
 
-        self._viewPanel.setMinimumWidth(240)
-        self._viewPanel.setMaximumWidth(240)
+        self._viewPanel.setMinimumWidth(250)
+        self._viewPanel.setMaximumWidth(250)
 
         # set spacing between the two items
         self.graph_layout.setContentsMargins (20,10,20,10)  # default margins
-        self.graph_layout.setVerticalSpacing (20)
+        self.graph_layout.setVerticalSpacing (10)
 
 
     def _as_dict_list (self) -> list:
@@ -504,6 +500,7 @@ class Item_VLM_Panels (Diagram_Item):
         
         self._add_artist (VLM_Panels_Artist     (self, self.planform, opPoint_fn=self.opPoint, show_legend=True))
         self._add_artist (WingSections_Artist   (self, self.planform, show=True, show_legend=True,
+                                                       show_all_sections=True,
                                                        wingSection_fn=self._wingSection_fn))  
         self._add_artist (Airfoil_Name_Artist   (self, self.planform, show=False, show_legend=False))
 
@@ -524,14 +521,20 @@ class Item_VLM_Panels (Diagram_Item):
 
 
     @property 
-    def show_colorBar (self) -> bool:
-        """ show color bar for Cp"""
-        artists = self._get_artist (VLM_Panels_Artist)
-        return artists[0].show_colorBar if artists else False
+    def show_cp_in_panels (self) -> bool:
+        """ show colored Cp value in panels """
+        artists= self._get_artist (VLM_Panels_Artist)
+        if artists:
+            artist : VLM_Panels_Artist = artists[0]
+            return artist.show_cp_in_panels 
+        else:
+            return False
     
-    def set_show_colorBar (self, aBool: bool):
-        artist : VLM_Panels_Artist = self._get_artist (VLM_Panels_Artist)[0]
-        return artist.set_show_colorBar (aBool)
+    def set_show_cp_in_panels (self, aBool: bool):
+        artists= self._get_artist (VLM_Panels_Artist)
+        if artists:
+            artist : VLM_Panels_Artist = artists[0]
+            artist.set_show_cp_in_panels (aBool)
 
 
     @property
@@ -548,7 +551,7 @@ class Item_VLM_Panels (Diagram_Item):
             SpaceR   (l,r, height=5)
             r += 1
             CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
-                        obj=self, prop=Item_VLM_Panels.show_colorBar,
+                        obj=self, prop=Item_VLM_Panels.show_cp_in_panels,
                         disable=lambda: self.opPoint() is None)
             l.setRowStretch (r+1,3)
 
@@ -600,7 +603,7 @@ class Item_VLM_Result (Diagram_Item):
         self._opPoint_var       = OpPoint_Var.CL
         self._vtas              = None                      # true air speed
         self._opPoint_alpha     = None
-        self._polar_def_name    = None
+        self._polar_def         = None                      # current polar definition of wingSection at root
         self._opPoint_fixed_to_alpha_max = False            # opPoint is fixed at alpha_max 
 
         super().__init__(*args, **kwargs)
@@ -623,7 +626,7 @@ class Item_VLM_Result (Diagram_Item):
 
     def opPoint (self) -> VLM_OpPoint:
         """ current selected opPoint based on vta and aplha"""
-        return self.polar().opPoint_at (self.opPoint_alpha) if self.isVisible() else None
+        return self.polar().opPoint_at (self.opPoint_alpha) if self.isVisible() and self.polar()else None
 
 
     @override
@@ -638,13 +641,19 @@ class Item_VLM_Result (Diagram_Item):
         """ create and setup the artists of self"""
         
         self._add_artist (VLM_Result_Artist     (self, self.planform, show_legend=True,
-                                                        polar_fn=self.polar, 
+                                                        polar_fn=self.polar,
                                                         opPoint_fn=self.opPoint))
 
     @override
     def refresh (self):
 
-        if self.isVisible(): super().refresh()
+        if self.isVisible(): 
+            
+            # ensure current polar def is in existing polar definitions
+            if self.polar_def is None or self.polar_def not in self.polar_definitions:
+                self._polar_def = self.polar_definitions[0] if self.polar_definitions else None
+                self.sig_opPoint_changed.emit()
+            super().refresh()
 
 
     @override
@@ -692,16 +701,19 @@ class Item_VLM_Result (Diagram_Item):
     @property
     def vtas (self) -> float:
         """ true air speed"""
-        chord  = self.wing().planform.chord_root / 1000
-        return v_from_re (self.polar_def.re, chord)
+        chord = self.wing().planform.chord_root / 1000
+        vtas  = v_from_re (self.polar_def.re, chord) if self.polar_def is not None else 0
+        return vtas
 
 
     def _format_polar_def (self, polar_def : Polar_Definition) -> str:
         """ format a polar definition for combobox like '400k N7 | 14,6m/s'"""
-        chord  = self.wing().planform.chord_root / 1000
-        v      = v_from_re (polar_def.re, chord)
-        # ncrit  = f"N{polar_def.ncrit:.2f}".rstrip('0').rstrip('.') 
-        return f"Re {polar_def.re_asK}k  |  {v}m/s"
+        return polar_def.name_with_v (self.wing().planform.chord_root)
+
+    @property
+    def polar_definitions (self) -> list[Polar_Definition]:
+        """ polar definitions of wing - only Polar Type 1 is supported"""
+        return [polar_def for polar_def in self.wing().polar_definitions if polar_def.type == polarType.T1]
 
 
     @property
@@ -713,34 +725,39 @@ class Item_VLM_Result (Diagram_Item):
     @property
     def polar_def (self) -> Polar_Definition:
         """ polar definition of wingSection at root"""
-        polar_defs = self.wing().polar_definitions
 
-        for polar_def in polar_defs:
-            if self._format_polar_def (polar_def) == self._polar_def_name: 
-                return polar_def
-        return polar_defs[0]
+        if self._polar_def is None:
+
+             if self.polar_definitions:
+                self._polar_def = self.polar_definitions[0] 
+
+        return self._polar_def
+
+    def set_polar_def (self, polar_def : Polar_Definition):
+        """ set polar definition of wingSection at root"""
+
+        if polar_def in self.polar_definitions:
+            self._polar_def = polar_def
+
+            # set to new max of this polar 
+            self.set_opPoint_fixed_to_alpha_max (self.opPoint_fixed_to_alpha_max, refresh=False)
+            self.refresh()
 
 
     @property
     def polar_def_name (self) -> str:
         """ display name of the current polar definition """
-        polar_defs = self.wing().polar_definitions
-        if self._polar_def_name is None and polar_defs:                 # take first as initial 
-           self._polar_def_name = self._format_polar_def (polar_defs[0])  
-
-        return self._polar_def_name
+      
+        return self._format_polar_def (self.polar_def) if self.polar_def is not None else None
+    
         
     def set_polar_def_name (self, new_polar_def_name): 
-
-        for polar_def in self.wing().polar_definitions:
+        """ set polar definition of wingSection at root by name"""
+        for polar_def in self.polar_definitions:
             polar_def_name = self._format_polar_def (polar_def)
             if polar_def_name == new_polar_def_name: 
-                self._polar_def_name = new_polar_def_name
+                self.set_polar_def (polar_def)
 
-                # set to new max of this polar 
-                self.set_opPoint_fixed_to_alpha_max (self.opPoint_fixed_to_alpha_max, refresh=False)
-
-                self.refresh()
 
     @property
     def opPoint_alpha (self) -> float:
@@ -819,22 +836,25 @@ class Item_VLM_Result (Diagram_Item):
 
             l = QGridLayout()
             r,c = 0, 0
-            Label    (l,r,c, colSpan=4, get=f"Choose airfoil polar of root", style=style.COMMENT)
+            Label    (l,r,c, colSpan=4, get=f"Choose airfoil T1 polar of root", style=style.COMMENT)
             r += 1
-            # Label    (l,r,c,   width=60, get="Polar")
-            ComboBox (l,r,c, width=130, obj=self, prop=Item_VLM_Result.polar_def_name, colSpan=4,
+            ComboBox (l,r,c, width=180, obj=self, prop=Item_VLM_Result.polar_def_name, colSpan=4,
                          options=lambda: self.polar_def_list)
+            # ToolButton (l,r,c+4, icon=Icon.EDIT, set=self.edit_polar_def,      # global refresh needed!
+            #                 toolTip="Change the settings of this polar definition")                              
             r += 1
             SpaceR   (l,r, height=10,stretch=0)
             r += 1
             Label    (l,r,c, colSpan=4, get=f"Define operating point", style=style.COMMENT)
             r += 1
             CheckBox (l,r,c, text="Set close to Alpha max", colSpan=4,
-                        obj=self, prop=Item_VLM_Result.opPoint_fixed_to_alpha_max)
+                        obj=self, prop=Item_VLM_Result.opPoint_fixed_to_alpha_max,
+                        disable=lambda: self.polar() is None,
+                        toolTip="Operating point of wing is set to alpha_max of current polar")
             r +=1
             FieldF   (l,r,c, lab="Alpha", lim=(-20,20), step=0.5, width=60, unit="°", dec=1, 
                         obj=self, prop=Item_VLM_Result.opPoint_alpha,
-                        disable=lambda: self.opPoint_fixed_to_alpha_max) 
+                        disable=lambda: self.opPoint_fixed_to_alpha_max or self.polar() is None) 
             r += 1
             SpaceR   (l,r, height=10,stretch=0)
             r += 1
@@ -843,7 +863,9 @@ class Item_VLM_Result (Diagram_Item):
             Label    (l,r,c,   width=60, get="Variable")
 
             ComboBox (l,r,c+1, width=60, obj=self, prop=Item_VLM_Result.opPoint_var, 
-                         options=self.opPoint_var_list)
+                         options=self.opPoint_var_list, colSpan=3,
+                         disable=lambda: self.polar() is None,
+                         toolTip="Choose variable to show along span in diagram")
             r += 1
             SpaceR   (l,r, height=10, stretch=3)
 
@@ -895,11 +917,27 @@ class Item_VLM_Result (Diagram_Item):
         self._opPoint_var   = OpPoint_Var.CL
         self._vtas          = None                          # true air speed
         self._opPoint_alpha = None
-        self._polar_def_name    = None
+        self._polar_def     = None
         self._opPoint_fixed_to_alpha_max = False            # opPoint is fixed at alpha_max 
 
         artist : VLM_Result_Artist = self._get_artist (VLM_Result_Artist)[0]
         artist.set_opPoint_var (self._opPoint_var)
+
+
+    # def edit_polar_def (self):
+    #     """ edit current polar definition"""
+
+    #     ---  needs global refresh ---
+    #     from airfoil_dialogs import Polar_Definition_Dialog
+
+    #     chord = self.wing().planform.chord_root
+
+    #     diag = Polar_Definition_Dialog (self.section_panel, self.polar_def, dx=260, dy=-150, 
+    #                                     polar_type_fixed=True,
+    #                                     fixed_chord=chord)
+    #     diag.exec()
+
+    #     self.refresh()
 
 
     def _export_polar_opPoint (self):
@@ -1664,10 +1702,6 @@ class Diagram_Planform (Diagram_Abstract):
 
         super().__init__(*args,  **kwargs)
 
-        # set spacing between the two items
-        self.graph_layout.setContentsMargins (20,10,20,10)  # default margins
-        self.graph_layout.setVerticalSpacing (10)
-
 
     @property
     def show_wingSections (self) -> bool: 
@@ -1779,6 +1813,7 @@ class Diagram_Planform (Diagram_Abstract):
         layout : QVBoxLayout = self._viewPanel.layout()
 
         layout.insertWidget (0, self.general_panel, stretch=0)          # general at top
+        layout.addStretch   (3)
         layout.addWidget    (self.export_panel, stretch=0)              # export at bottom
 
 
@@ -1885,15 +1920,24 @@ class Diagram_Planform (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 1
-            Button  (l,r,c, text="Export Dxf", width=100, set=self.sig_export_dxf.emit)
+            Button  (l,r,c, text="Export Dxf", width=100, set=self.export_dxf)
+            r += 1
+            SpaceR      (l,r,10,1)
 
-            l.setColumnMinimumWidth (0,10)
+            l.setColumnMinimumWidth (0,20)
             l.setColumnStretch (2,2)
-            l.setRowStretch (r+1,3)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(80,None),
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
                                               switchable=False, switched_on=True)
         return self._export_panel 
+
+
+    def export_dxf (self):
+        """open export planform to dxf dialog """
+
+        dialog = Dialog_Export_Dxf (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
+        dialog.exec()     
+
 
 
     def _open_planform_ref_pc2 (self):
@@ -1969,10 +2013,6 @@ class Diagram_Making_Of (Diagram_Abstract):
 
         self.graph_layout.setContentsMargins (10,30,20,10)     # default margins
         self.graph_layout.setHorizontalSpacing (20)
-        self.graph_layout.setVerticalSpacing (20)
-
-        self._viewPanel.setMinimumWidth(240)
-        self._viewPanel.setMaximumWidth(240)
 
 
     @override
@@ -2143,12 +2183,6 @@ class Diagram_Airfoils (Diagram_Abstract):
 
         super().__init__(*args, **kwargs)
 
-        self._viewPanel.setMinimumWidth(240)
-        self._viewPanel.setMaximumWidth(240)
- 
-         # set spacing between the two items
-        self.graph_layout.setVerticalSpacing (0)
-
     # --- save --------------------- 
 
     def _as_dict_list (self) -> list:
@@ -2162,22 +2196,6 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             l.append (item_dict)
         return l
-
-
-    def _get_items (self, item_classes : Type[Diagram_Item] | list[type[Diagram_Item]]) -> list[Diagram_Item]:
-        """get Diagram Items of self having class name(s)
-
-        Args:
-            items: class or list of class of Diagram Items to retrieve
-        Returns:
-            List of Item with this classes
-        """
-        look_for = [item_classes] if not isinstance (item_classes,list) else item_classes
-        result = []
-        for item in self.diagram_items:
-            if item.__class__ in look_for:
-                result.append(item)
-        return result 
 
 
     # -------------
@@ -2204,22 +2222,13 @@ class Diagram_Airfoils (Diagram_Abstract):
         """ actual polar definitions"""
         return self.wing().polar_definitions
 
-
-    def airfoils (self) -> list[Airfoil]: 
-        """ the airfoil(s) off all wing sections"""
-
-        airfoils = []
-        section : WingSection
-
-        for section in self.planform().wingSections:
-
-            airfoil = section.airfoil
-            if airfoil.isLoaded and not airfoil.isBlendAirfoil:
-                airfoils.append (airfoil)
-        
-        return airfoils
+    @property
+    def chord_root (self) -> float:
+        """ chord at root section"""
+        return self.wing().planform.chord_root
 
 
+    @override
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
 
@@ -2265,7 +2274,6 @@ class Diagram_Airfoils (Diagram_Abstract):
         # export panel at bottom 
 
         layout.addStretch   (3)
-
         layout.addWidget    (self.export_panel, stretch=0)
 
 
@@ -2357,7 +2365,7 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             # helper panel for polar definitions 
 
-            p = Panel_Polar_Defs (self, self.polar_defs, height=(None,None),)
+            p = Panel_Polar_Defs (self, self.polar_defs, height=(None,None), width=(None,250),chord_fn=lambda: self.chord_root)
 
             p.sig_polar_def_changed.connect (self.sig_polar_def_changed.emit)
 
@@ -2426,11 +2434,11 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 1
-            Button      (l,r,c, text="Export Airfoils", width=100, set=self.sig_export_airfoils.emit)
+            Button      (l,r,c, text="Export Airfoils", width=100, set=self.export_airfoils)
             r += 1
             SpaceR      (l,r,10,1)
 
-            l.setColumnMinimumWidth (0,10)
+            l.setColumnMinimumWidth (0,20)
             l.setColumnStretch (2,2)
 
             self._export_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
@@ -2438,6 +2446,12 @@ class Diagram_Airfoils (Diagram_Abstract):
         return self._export_panel 
 
 
+
+    def export_airfoils (self):
+        """open export airfoils of wing dialog """
+
+        dialog = Dialog_Export_Airfoil (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
+        dialog.exec()    
 
 
     # --- public slots ---------------------------------------------------
@@ -2501,10 +2515,6 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
         super().__init__(*args, **kwargs)
 
-        # set spacing between the two items
-        self.graph_layout.setContentsMargins (20,10,20,10)  # default margins
-        self.graph_layout.setVerticalSpacing (10)
-
 
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
@@ -2563,8 +2573,6 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
         layout.addWidget (self.export_panel)                            # export xflr5 panel 
 
         self._viewPanel = Container_Panel()
-        self._viewPanel.setMinimumWidth(180)
-        self._viewPanel.setMaximumWidth(250)
         self._viewPanel.setLayout (layout)
 
 
@@ -2633,21 +2641,20 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 1
-            Button      (l,r,c, text="Export Xflr5", width=100, set=self.sig_export_xflr5.emit)
+            Button      (l,r,c, text="Export Xflr5", width=100, set=self.export_xflr5)
             r += 1
             SpaceR (l,r, height=2, stretch=0)
             r += 1
-            Button      (l,r,c, text="Export FLZ", width=100, set=self.sig_export_flz.emit)
-            r += 1
-            SpaceR (l,r, height=2, stretch=0)
-            r += 1
-            Button      (l,r,c, text="Launch FLZ", width=100, set=self.sig_launch_flz.emit,
+            Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz,
                                 hide= not os.name == 'nt')                                  # only Windows
             r += 1
-            l.setRowMinimumHeight (r,10)
-            l.setRowStretch (r,3)
-
-            l.setColumnMinimumWidth (0,10)
+            SpaceR (l,r, height=2, stretch=0)
+            r += 1
+            Button      (l,r,c, text="Launch FLZ", width=100, set=self.launch_flz,
+                                hide= not os.name == 'nt')                                  # only Windows
+            r += 1
+            SpaceR      (l,r,10,1)
+            l.setColumnMinimumWidth (0,20)
             l.setColumnStretch (2,2)
 
             self._export_panel = Edit_Panel (title="Export", layout=l, height=(120,None),
@@ -2746,6 +2753,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
 
 
+
     # --- private slots ---------------------------------------------------
 
     @override
@@ -2777,6 +2785,36 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
     
         # do not refresh as panelling will also change and refresh 
         self.sig_wingSection_changed.emit()         # refresh app
+
+
+    def export_xflr5 (self): 
+        """ export wing to xflr5"""
+
+        dialog = Dialog_Export_Xflr5 (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
+        dialog.exec()     
+
+
+    def export_flz (self): 
+        """ export wing to flz"""
+
+        dialog = Dialog_Export_FLZ (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
+        dialog.exec()     
+
+
+    def launch_flz (self): 
+        """ export wing to FLZ and launch """
+
+        self.wing().export_flz.do_it ()
+
+        pathFileName = os.path.join (self.wing().export_flz.export_dir_abs, self.wing().export_flz.flz_filename) 
+        try: 
+            os.startfile(pathFileName, 'open')
+        except: 
+            message = "Could not launch FLZ_vortex on exported file: <br><br>" + \
+                    pathFileName + \
+                    "<br><br> Is FLZ_vortex neatly installed and associated with file extension '.flz'?"
+            MessageBox.error (self,"Export FLZ", str(message))
+
 
 
 # -------- Diagram Items -------------------------------------------------

@@ -14,8 +14,13 @@ import numpy as np
 
 from copy                   import deepcopy
 from typing                 import TextIO
-from datetime               import datetime 
+from datetime               import datetime, date
 from math                   import atan, pi
+
+
+import xml.etree.ElementTree as ET                              # Xflr5 xml handling
+import ezdxf                                                    # dxf handling
+from ezdxf import enums
 
 from base.common_utils      import * 
 from wing                   import Wing, Planform, Planform_Paneled
@@ -26,18 +31,66 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class Export_Airfoils:
+class Export_Abstract:  
+    """ 
+    Abstract base class for export classes 
+    """
+
+    EXPORT_DIR_SUFFIX = "_exported"
+
+
+    def __init__(self, wing : Wing):
+ 
+        self._wing          = wing
+        self._working_dir   = wing.workingDir
+        self._export_dir    = None
+
+
+    @property
+    def wing (self) -> Wing:
+        return self._wing
+
+    @property
+    def planform (self) -> Planform: 
+        return self.wing.planform
+
+    @property
+    def export_dir(self):
+        """the directory for self export - path is relativ to current or absolute """
+
+        if self._export_dir is None or self._export_dir.strip() == "":
+            return self.wing.parm_fileName_stem  + self.EXPORT_DIR_SUFFIX
+        else:
+            return self._export_dir
+    
+    def set_export_dir(self, newStr): 
+        self._export_dir = PathHandler (workingDir=self._working_dir).relFilePath (newStr)
+
+
+    @property
+    def export_dir_abs(self):
+        """the directory for dxf export including current dir """
+        return PathHandler (workingDir=self._working_dir).fullFilePath (self.export_dir)
+
+
+# -----------------------------------------------------------------------------------
+
+
+class Export_Airfoils (Export_Abstract):
     """ 
     Handle export of the current airfoils of wing to a subdirectory
     """
+
+    EXPORT_DIR_SUFFIX = "_airfoils_exported"
+
     def __init__(self, wing : Wing, myDict: dict = None):
+        super().__init__(wing)
  
-        self._wing       = wing
-        self._working_dir = wing.workingDir       
-        self._export_dir         = fromDict (myDict, "export_dir", "airfoils")
-        self._use_nick_name      = fromDict (myDict, "use_nick_name", True)
-        self._adapt_te_gap       = fromDict (myDict, "adapt_te_gap", False)
-        self._te_gap_mm          = fromDict (myDict, "te_gap_mm", 0.5)
+        self._export_dir        = fromDict (myDict, "export_dir", None)
+        self._use_nick_name     = fromDict (myDict, "use_nick_name", True)
+        self._adapt_te_gap      = fromDict (myDict, "adapt_te_gap", False)
+        self._te_gap_mm         = fromDict (myDict, "te_gap_mm", 0.5)
+
 
     def _as_dict (self) -> dict:
         """ returns a data dict with the paramters of self"""
@@ -51,24 +104,7 @@ class Export_Airfoils:
 
     @property
     def _chord_root (self) -> float: 
-        return self._wing.planform.chord_root
-
-    @property
-    def _wingSections (self) -> WingSections: 
-        return self._wing.planform.wingSections
-
-    @property
-    def export_dir(self):
-        """the directory for airfoils export - path is relativ to current or absolute """
-        return self._export_dir
-    
-    def set_export_dir(self, newStr): 
-        self._export_dir = PathHandler (workingDir=self._working_dir).relFilePath (newStr) # ensure a valid, relativ path 
-
-    @property
-    def base_and_export_dir(self):
-        """the directory for airfoil export including current dir """
-        return PathHandler (workingDir=self._working_dir).fullFilePath (self.export_dir)
+        return self.planform.chord_root
 
     @property
     def use_nick_name(self) -> bool: return self._use_nick_name
@@ -99,7 +135,7 @@ class Export_Airfoils:
         """
 
         if toDir is None:
-            targetDir = self.base_and_export_dir
+            targetDir = self.export_dir_abs
         else: 
             targetDir = toDir
 
@@ -108,30 +144,30 @@ class Export_Airfoils:
 
         # ensure all airfoils are up to date and splined (quality) 
 
-        self._wingSections.do_strak (geometry_class=GEO_SPLINE)          
+        self.planform.wingSections.do_strak (geometry_class=GEO_SPLINE)          
 
         # save airfoils of all sections  
 
         path_set = set()
         section : WingSection
 
-        sections = self._wingSections.without_for_panels() if without_for_panels else self._wingSections
+        sections = self.planform.wingSections.without_for_panels if without_for_panels else self.planform.wingSections
 
         for section in sections:
 
             if use_nick_name and section.airfoil_nick_name: 
-                newName = section.airfoil_nick_name
+                new_fileName = section.airfoil_nick_name + section.airfoil.fileName_ext
             else: 
-                newName = None
+                new_fileName = None
             
             if self.adapt_te_gap:                                       # te gap in mm? if yes scale it to normed
                 te_gap = self.te_gap_mm / (section.cn * self._chord_root)
             else: 
                 te_gap = None 
         
-            pathFileName = section.airfoil.save_copyAs (dir=targetDir, destName = newName, te_gap = te_gap)
+            pathFileName_abs = section.airfoil.save_copyAs (pathName = targetDir, fileName = new_fileName, te_gap = te_gap)
 
-            path_set.add (pathFileName) 
+            path_set.add (pathFileName_abs) 
 
         n_airfoils = len (path_set)
 
@@ -141,13 +177,13 @@ class Export_Airfoils:
 
 
 
-import xml.etree.ElementTree as ET
 
-
-class Export_Xflr5:
+class Export_Xflr5 (Export_Abstract):
     """ 
     Handle export of a paneled planform to an Xflr5 xml file   
     """
+
+    EXPORT_DIR_SUFFIX = "_xflr5"
 
     distrib_name_map ={}
     distrib_name_map ["uniform"] = "UNIFORM"
@@ -156,12 +192,10 @@ class Export_Xflr5:
     distrib_name_map ["cosine"]  = "COSINE"
 
     def __init__(self, wing: Wing, planform_paneled : Planform_Paneled, myDict: dict = None): 
+        super().__init__(wing)
 
-        self._wing        = wing
-        self._working_dir  = wing.workingDir  
         self._planform_paneled  = planform_paneled
-
-        self._export_dir = fromDict (myDict, "export_dir", "xflr5")
+        self._export_dir        = fromDict (myDict, "export_dir", None)
 
 
     def _as_dict (self) -> dict:
@@ -171,29 +205,13 @@ class Export_Xflr5:
         toDict (d, "export_dir", self._export_dir) 
         return d
     
-    @property
-    def _planform (self) -> Planform:
-        return self._wing.planform
 
     @property
-    def _wingSections (self) -> list[WingSection]:
+    def _wingSections_reduced (self) -> list[WingSection]:
         return self._planform_paneled.wingSections_reduced()
-    
-    @property
-    def export_dir(self):
-        """the directory for xflr5 export - path is relativ to current or absolute """
-        return self._export_dir
-    
-    def set_export_dir(self, newStr): 
-        self._export_dir = PathHandler (workingDir=self._working_dir).relFilePath (newStr)
 
     @property
-    def base_and_export_dir(self):
-        """the directory for flz export including current dir """
-        return PathHandler (workingDir=self._working_dir).fullFilePath (self.export_dir)
-
-    @property
-    def filename(self): 
+    def xflr5_filename(self): 
         return self._wing.parm_fileName_stem + '_wing.xml'
 
     @property
@@ -211,13 +229,13 @@ class Export_Xflr5:
 
         # if necessary create directory 
 
-        targetDir = self.base_and_export_dir
+        targetDir = self.export_dir_abs
         if not os.path.exists(targetDir): os.makedirs(targetDir)
-        pathFileName = os.path.join (targetDir, self.filename)
+        pathFileName = os.path.join (targetDir, self.xflr5_filename)
 
         # first export airfoils to ensure actual airfoil names 
 
-        n_airfoils = self._wing.export_airfoils.do_it (toDir = targetDir, 
+        n_airfoils = self.wing.export_airfoils.do_it (toDir = targetDir, 
                                                        use_nick_name=self.use_nick_name,
                                                        without_for_panels=False)
 
@@ -277,7 +295,7 @@ class Export_Xflr5:
         # ! x and y are swapped !
         #
 
-        for iSec, section in enumerate(self._wingSections):
+        for iSec, section in enumerate(self._wingSections_reduced):
             # copy the template
             newSectionXml = deepcopy(sectionTemplateXml)
 
@@ -395,10 +413,12 @@ class Export_Xflr5:
 
 
 
-class Export_FLZ:
+class Export_FLZ (Export_Abstract):
     """ 
     Handle export of a paneled planform to an FLZ file  
     """
+
+    EXPORT_DIR_SUFFIX = "_flz"
 
     # FLZ panel distribution names to self names
     distrib_name_map ={}
@@ -409,12 +429,10 @@ class Export_FLZ:
 
 
     def __init__(self, wing : Wing, planform_paneled : Planform_Paneled, myDict: dict = None):
- 
-        self._wing        = wing
-        self._working_dir  = wing.workingDir  
-        self._planform_paneled  = planform_paneled
+        super().__init__(wing)
 
-        self._export_dir = fromDict (myDict, "export_dir", "flz")
+        self._planform_paneled  = planform_paneled
+        self._export_dir        = fromDict (myDict, "export_dir", None)
 
 
     def _as_dict (self) -> dict:
@@ -424,34 +442,18 @@ class Export_FLZ:
         toDict (d, "export_dir", self._export_dir) 
         return d
 
-    @property
-    def _planform (self) -> Planform:
-        return self._wing.planform
 
     @property
-    def _wingSections (self) -> list[WingSection]:
+    def _wingSections_reduced (self) -> list[WingSection]:
         return self._planform_paneled.wingSections_reduced()
-
-    @property
-    def export_dir(self):
-        """the directory for xflr5 export - path is relativ to current or absolute """
-        return self._export_dir
-    
-    def set_export_dir(self, newStr): 
-        self._export_dir = PathHandler (workingDir=self._working_dir).relFilePath (newStr)
-
-    @property
-    def base_and_export_dir(self):
-        """the directory for flz export including current dir """
-        return PathHandler (workingDir=self._working_dir).fullFilePath (self.export_dir)
 
     @property
     def use_nick(self) -> bool: return self._use_nick
     def set_use_nick(self, aBool): self._use_nick = aBool
 
     @property
-    def filename(self): 
-        return self._wing.parm_fileName_stem + '_wing.flz'
+    def flz_filename(self): 
+        return self.wing.parm_fileName_stem + '_wing.flz'
 
     @property
     def use_nick_name (self) -> bool: return self._planform_paneled.use_nick_name
@@ -465,17 +467,17 @@ class Export_FLZ:
 
         # ensure all airfoils are up to date and splined (quality) 
 
-        self._planform.wingSections.do_strak (geometry_class=GEO_SPLINE) 
+        self.planform.wingSections.do_strak (geometry_class=GEO_SPLINE) 
 
         # ensure flap consistency
 
-        self._planform.flaps.check_and_correct ()         
+        self.planform.flaps.check_and_correct ()         
 
         # if necessary create directory 
 
-        targetDir = self.base_and_export_dir
+        targetDir = self.export_dir_abs
         if not os.path.exists(targetDir): os.makedirs(targetDir)
-        pathFileName = os.path.join (targetDir, self.filename)
+        pathFileName = os.path.join (targetDir, self.flz_filename)
 
         # let FLUGZEUG write to stream all the data 
         
@@ -548,6 +550,7 @@ class Export_FLZ:
             pass
 
 
+
     class FLUGZEUG (FLZ_Element): 
         def __init__(self, *args):
             super().__init__(*args)
@@ -599,6 +602,7 @@ class Export_FLZ:
 
             self.schalter.write(aStream)
             self.einstellungen.write(aStream)
+
 
 
     class FLAECHE (FLZ_Element):
@@ -741,6 +745,7 @@ class Export_FLZ:
             self._write (aStream, self.end_tag)
 
 
+
     class PROFIL (FLZ_Element):
         def __init__(self, wing, planform_paneled, section: WingSection):
             super().__init__ (wing, planform_paneled)
@@ -800,6 +805,7 @@ class Export_FLZ:
             self._write (aStream, self.end_tag)
 
 
+
     class EINSTELLUNGEN (FLZ_Element):
         def __init__(self):
 
@@ -814,22 +820,20 @@ class Export_FLZ:
 
 
 
-import ezdxf
-from ezdxf import enums
-
-class Export_Dxf:
+class Export_Dxf (Export_Abstract):
     """ 
 
     Handle export of the planform and airfoils to dxf 
     Additionally export airfoils to file. 
 
     """
-    def __init__(self, wing : Wing, myDict: dict = None):
- 
-        self._wing          = wing
-        self._working_dir   = wing.workingDir  
 
-        self._export_dir         = fromDict (myDict, "export_dir", "dxf")
+    EXPORT_DIR_SUFFIX = "_dxf"
+
+    def __init__(self, wing : Wing, myDict: dict = None):
+        super().__init__(wing)
+ 
+        self._export_dir         = fromDict (myDict, "export_dir", None)
         self._export_airfoils    = fromDict (myDict, "export_airfoils", True)
 
 
@@ -842,38 +846,29 @@ class Export_Dxf:
 
         return d
 
+
     @property
     def _wingSections (self) -> WingSections: 
-        return self._wing.planform.wingSections
-
-    @property
-    def export_dir(self):
-        """the directory for flz export - path is relativ to current or absolute """
-        return self._export_dir
-    
-    def set_export_dir(self, newStr): 
-        # insure a valid, relativ path 
-        self._export_dir = PathHandler (workingDir=self._working_dir).relFilePath (newStr)
-
-    @property
-    def base_and_export_dir(self):
-        """the directory for dxf export including current dir """
-        return PathHandler (workingDir=self._working_dir).fullFilePath (self.export_dir)
+        return self.planform.wingSections.without_for_panels
 
     @property
     def adapt_te_gap(self) -> bool: 
-        return self._wing.export_airfoils.adapt_te_gap
+        return self.wing.export_airfoils.adapt_te_gap
 
     @property
     def te_gap_mm(self) -> float: 
-        return self._wing.export_airfoils.te_gap_mm
+        return self.wing.export_airfoils.te_gap_mm
+
+    @property
+    def use_nick_name(self) -> bool: 
+        return self.wing.export_airfoils.use_nick_name
 
     @property
     def export_airfoils(self) -> bool: return self._export_airfoils
     def set_export_airfoils(self, aBool): self._export_airfoils = aBool
     
     @property
-    def filename(self): 
+    def dxf_filename(self): 
         return self._wing.parm_fileName_stem + '_wing.dxf'
 
 
@@ -887,23 +882,23 @@ class Export_Dxf:
 
         dxf = self.Dxf_Artist(self._wing)
 
+        self.planform.wingSections.do_strak (geometry_class=GEO_SPLINE)               # ensure strak airfoils are uptodate and splined (quality) 
+
         dxf.plot_planform()
         dxf.plot_hingeLine ()
-        dxf.plot_wingSections ()
+        dxf.plot_wingSections (use_nick=self.use_nick_name )
         dxf.plot_flapLines()
         dxf.plot_title ()
         dxf.plot_warning_polyline () 
-
-        self._wingSections.do_strak (geometry_class=GEO_SPLINE)               # ensure strak airfoils are uptodate and splined (quality) 
 
         te_gap_mm = self.te_gap_mm if self.adapt_te_gap else None
         dxf.plot_airfoils (te_gap_mm=te_gap_mm)
 
         # save dxf document  
 
-        targetDir = self.base_and_export_dir
+        targetDir = self.export_dir_abs
         if not os.path.exists(targetDir): os.makedirs(targetDir)
-        pathFileName = os.path.join (targetDir, self.filename)
+        pathFileName = os.path.join (targetDir, self.dxf_filename)
 
         dxf.doc.saveas(pathFileName)  
 
@@ -914,7 +909,7 @@ class Export_Dxf:
         else: 
             n_airfoils = 0 
 
-        logger.info ("DXF file " + self.filename + " written to " + targetDir) 
+        logger.info ("DXF file " + self.dxf_filename + " written to " + targetDir) 
 
         return n_airfoils
 
@@ -934,6 +929,15 @@ class Export_Dxf:
             self.doc = ezdxf.new('R2010')
             self.msp = self.doc.modelspace()
 
+        @property
+        def planform (self) -> Planform:
+            return self._planform
+        
+        @property
+        def wingSections (self) -> WingSections:
+            """ wing sections without helper sections for paneling"""
+            return self.planform.wingSections.without_for_panels
+        
 
         def _arr_to_poly (self, x,y):
             """ converts the two x,y arrays to an array of points (x,y) """
@@ -948,7 +952,7 @@ class Export_Dxf:
             - te point of root will be at 0,0 
             - le point of root will be at 0, rootchord"""
             mirrored_y = np.empty (len(y_arr))
-            y_mirror = self._planform.chord_root / 2               # flip x  around half rootchord
+            y_mirror = self.planform.chord_root / 2               # flip x  around half rootchord
             for i, y in enumerate(y_arr):
                 mirrored_y [i] = y_mirror - (y - y_mirror)
             return mirrored_y
@@ -968,7 +972,7 @@ class Export_Dxf:
 
         def plot_planform (self):
             
-            x, le, te, = self._planform.le_te_polyline()
+            x, le, te, = self.planform.le_te_polyline()
 
             # mirror the lines along span so that root-te will be at 0,0 
             le = self._y_mirror (le)
@@ -990,7 +994,7 @@ class Export_Dxf:
 
         def plot_hingeLine (self):
 
-            x, y = self._planform.flaps.hinge_polyline()
+            x, y = self.planform.flaps.hinge_polyline()
 
             # mirror the lines along span so that root-te will be at 0,0 
             y = self._y_mirror (y)
@@ -1000,7 +1004,7 @@ class Export_Dxf:
 
         def plot_flapLines (self):
 
-            flaps = self._planform.flaps.get()
+            flaps = self.planform.flaps.get()
 
             flap : Flap
             for i, flap in enumerate (flaps):
@@ -1012,14 +1016,14 @@ class Export_Dxf:
                     self._plot_line_fromArray (x, y)
 
 
-        def plot_wingSections (self):
+        def plot_wingSections (self, use_nick = False):
             # plot a little vertical marker line at wing section station above le 
             #  + airfoil nick name
 
-            fontsize = (self._planform.chord_root / 230.0) * 7.0
+            fontsize = (self.planform.chord_root / 230.0) * 7.0
 
             sec : WingSection
-            for sec in self._planform.wingSections:
+            for sec in self.wingSections:
 
                 _, le_te = sec.line()               # le from sec line - we have to mirror 
                 y_m = self._y_mirror (le_te)[0] + 20  
@@ -1030,7 +1034,7 @@ class Export_Dxf:
                 line = [p1,p2]
                 self._plot_line_fromPoints (line)
 
-                if sec.airfoil_nick_name:
+                if use_nick and sec.airfoil_nick_name:
                     self.msp.add_text(f"'{sec.airfoil_nick_name}'", height = fontsize).set_placement(
                                         (x_m, y_m+35), align=enums.TextEntityAlignment.CENTER)
 
@@ -1046,7 +1050,7 @@ class Export_Dxf:
 
             airfoil: Airfoil
             sec : WingSection
-            for sec in self._planform.wingSections:
+            for sec in self.wingSections:
 
                 te_gap = None 
 
@@ -1079,30 +1083,34 @@ class Export_Dxf:
                     y_m = y[0] + 20 
                     x_m = x[0]
                     fontsize = 4 
-                    self.msp.add_text(f"Te gap = {te_gap_mm:.1f} mm", height = fontsize).set_placement(
+                    self.msp.add_text(f"TE gap  {te_gap_mm:.1f}mm", height = fontsize).set_placement(
                                     (x_m, y_m), align=enums.TextEntityAlignment.CENTER)
 
 
         def plot_title (self):
             # plot wing name at the bottom
-            y_m = - self._planform.chord_root * 0.2
+            y_m = - self.planform.chord_root * 0.2
             x_m = 0.0
-            fontsize = (self._planform.chord_root / 230.0) * 10.0
+            fontsize = (self.planform.chord_root / 230.0) * 10.0
             self.msp.add_text(self._wing.name, height = fontsize).set_placement(
                                 (x_m, y_m), align=enums.TextEntityAlignment.TOP_LEFT)
 
             y_m = y_m - 20 
-            fontsize = (self._planform.chord_root / 230.0) * 6.0
+            fontsize = (self.planform.chord_root / 230.0) * 5.0
             self.msp.add_text("Generated by PlanformCreator2", height = fontsize).set_placement(
                                 (x_m, y_m), align=enums.TextEntityAlignment.TOP_LEFT)
 
+            today = date.today().isoformat()
+            y_m = y_m - fontsize - 5 
+            self.msp.add_text(f"{today}", height = fontsize).set_placement(
+                                (x_m, y_m), align=enums.TextEntityAlignment.TOP_LEFT)
 
         def plot_warning_polyline (self):
             # plot warning that the planform is idealized as polyline
-            y_m = self._planform.chord_root * 0.5
-            x_m = self._planform.span * 0.4
+            y_m = self.planform.chord_root * 0.5
+            x_m = self.planform.span * 0.4
 
-            fontsize = (self._planform.chord_root / 230.0) * 5.0
+            fontsize = (self.planform.chord_root / 230.0) * 5.0
             msg  = "The planform is idealized as a polyline. Convert to a spline for further processing."
             self.msp.add_text(msg, height = fontsize).set_placement(
                                 (x_m, y_m), align=enums.TextEntityAlignment.MIDDLE_CENTER)
