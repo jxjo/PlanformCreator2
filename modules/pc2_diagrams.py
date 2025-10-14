@@ -365,6 +365,10 @@ class Item_Chord (Diagram_Item):
         """ define view range of this plotItem"""
 
         self.viewBox.setDefaultPadding(0.05)
+
+        if not self.xLinked:
+            self.viewBox.autoRange()
+
         self.viewBox.setYRange( 0, 1.1, padding=0.08)  
 
         y_axis : pg.AxisItem = self.getAxis ("left")
@@ -430,6 +434,9 @@ class Item_Chord_Reference (Diagram_Item):
         """ define view range of this plotItem"""
 
         self.viewBox.setDefaultPadding(0.05)
+
+        if not self.xLinked:
+            self.viewBox.autoRange()
         self.viewBox.setYRange( -0.1, 1.0, padding=0.08)       # then set y-Range
 
         y_axis : pg.AxisItem = self.getAxis ("left")
@@ -667,6 +674,10 @@ class Item_VLM_Result (Diagram_Item):
     @override
     def setup_viewRange (self):
         """ define view range of this plotItem"""
+
+
+        if not self.xLinked:
+            self.viewBox.autoRange()
 
         self._set_yRange ()
 
@@ -1781,11 +1792,13 @@ class Diagram_Planform (Diagram_Abstract):
 
         i = Item_Chord    (self, getter=self.wing, wingSection_fn = self._wingSection_fn, show=False)
         self._add_item (i, 1, 0)
-        i.viewBox.setXLink (Item_Planform.name)
+        i.set_desired_xLink_name (Item_Planform.name)
+        i.set_xLinked (True)
 
         i = Item_Chord_Reference  (self, getter=self.wing, wingSection_fn = self._wingSection_fn, show=False)
         self._add_item (i, 2, 0)
-        i.viewBox.setXLink (Item_Planform.name)
+        i.set_desired_xLink_name (Item_Planform.name)
+        i.set_xLinked (True)
 
         # generic connect to artist changed signals 
 
@@ -2525,12 +2538,14 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
         i = Item_Chord (self, getter=self.wing, wingSection_fn = self._wingSection_fn, show=False)
         self._add_item (i, 1, 0)
-        i.viewBox.setXLink (Item_VLM_Panels.name)
+        i.set_desired_xLink_name (Item_VLM_Panels.name)
+        i.set_xLinked (True)
 
         i = Item_VLM_Result (self, getter=self.wing, show=False,
                              wingSection_fn = self._wingSection_fn, opPoint_fn=self.opPoint)
         self._add_item (i, 2, 0)
-        i.viewBox.setXLink (Item_VLM_Panels.name)
+        i.set_desired_xLink_name (Item_VLM_Panels.name)
+        i.set_xLinked (True)
 
         i.sig_opPoint_changed.connect   (self._on_opPoint_changed)
         i.sig_visible.connect           (self._on_aero_analysis_visible)
