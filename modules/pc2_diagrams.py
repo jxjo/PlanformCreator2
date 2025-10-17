@@ -1932,12 +1932,10 @@ class Diagram_Planform (Diagram_Abstract):
         if self._export_panel is None:
 
             l = QGridLayout()
-            r,c = 0, 1
+            r,c = 0, 0
             Button  (l,r,c, text="Export Dxf", width=100, set=self.export_dxf)
             r += 1
             SpaceR      (l,r,10,1)
-
-            l.setColumnMinimumWidth (0,20)
             l.setColumnStretch (2,2)
 
             self._export_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
@@ -2446,12 +2444,10 @@ class Diagram_Airfoils (Diagram_Abstract):
         if self._export_panel is None:
 
             l = QGridLayout()
-            r,c = 0, 1
+            r,c = 0, 0
             Button      (l,r,c, text="Export Airfoils", width=100, set=self.export_airfoils)
             r += 1
             SpaceR      (l,r,10,1)
-
-            l.setColumnMinimumWidth (0,20)
             l.setColumnStretch (2,2)
 
             self._export_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
@@ -2655,24 +2651,23 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
         if self._export_panel is None:
 
             l = QGridLayout()
-            r,c = 0, 1
+            r,c = 0, 0
             Button      (l,r,c, text="Export Xflr5", width=100, set=self.export_xflr5)
             r += 1
             SpaceR (l,r, height=2, stretch=0)
             r += 1
             Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz,
                                 hide= not os.name == 'nt')                                  # only Windows
-            r += 1
-            SpaceR (l,r, height=2, stretch=0)
-            r += 1
-            Button      (l,r,c, text="Launch FLZ", width=100, set=self.launch_flz,
+            c += 1
+            SpaceC (l,c, width=20, stretch=0)
+            c += 1
+            Button      (l,r,c, text="Launch FLZ", width=80, set=self.launch_flz,
                                 hide= not os.name == 'nt')                                  # only Windows
             r += 1
             SpaceR      (l,r,10,1)
-            l.setColumnMinimumWidth (0,20)
-            l.setColumnStretch (2,2)
+            l.setColumnStretch (3,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(120,None),
+            self._export_panel = Edit_Panel (title="Export", layout=l, height=(100,None),
                                               switchable=False, switched_on=True)
         return self._export_panel 
 

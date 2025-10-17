@@ -176,11 +176,13 @@ class Main_PC2 (QMainWindow):
         self._panel_data_minimized = Settings().get('panel_data_minimized', False)
 
         l.addWidget (self.panel_diagrams,   0,0)
-        l.addWidget (self.panel_data,       1,0)
         l.addWidget (self.panel_data_small, 1,0)
+        l.addWidget (self.panel_data,       1,0)
 
-        l.setRowStretch (0,1)
-        l.setSpacing (5)
+        l.setRowStretch (0,5)
+        l.setRowStretch (1,1)
+        #l.setRowMinimumHeight (1,70)
+        l.setVerticalSpacing (5)
         l.setContentsMargins (QMargins(5, 5, 5, 5))
 
         main = QWidget()
@@ -257,12 +259,12 @@ class Main_PC2 (QMainWindow):
         if self._panel_data is None: 
 
             l = QHBoxLayout()
-            l.addWidget (Panel_File             (self, self.wing, width=250, height=150))
+            l.addWidget (Panel_File             (self, self.wing, width=250))
             l.addWidget (Panel_Wing             (self, self.wing))
             l.addWidget (Panel_Chord_Reference  (self, self.wing))
             l.addWidget (Panel_WingSection      (self, self.wing))
 
-            self._panel_data = Container_Panel (layout=l, title="Wing Data", 
+            self._panel_data = Container_Panel (layout=l, title="Wing Data", height=150,
                                                 hide=lambda: self._panel_data_minimized,
                                                 doubleClick= self.toggle_data_panel_size)
             # hint will add stretch to layout
@@ -278,12 +280,12 @@ class Main_PC2 (QMainWindow):
         if self._panel_data_small is None: 
 
             l = QHBoxLayout()
-            l.addWidget (Panel_File_Small               (self, self.wing, width=250, height=65, has_head=False))
+            l.addWidget (Panel_File_Small               (self, self.wing, width=250, has_head=False))
             l.addWidget (Panel_Wing_Small               (self, self.wing, has_head=False))
             l.addWidget (Panel_Chord_Reference_Small    (self, self.wing, has_head=False))
             l.addWidget (Panel_WingSection_Small        (self, self.wing, has_head=False))
 
-            self._panel_data_small = Container_Panel (layout=l, title="Wing Data", height=65,
+            self._panel_data_small = Container_Panel (layout=l, title="Wing Data", height=70,
                                                       hide=lambda: not self._panel_data_minimized,
                                                       doubleClick= self.toggle_data_panel_size)
             # hint will add stretch to layout
@@ -311,7 +313,7 @@ class Main_PC2 (QMainWindow):
             tab_panel = Tab_Panel (self)
             for diagram in diagrams:
                 tab_panel.add_tab(diagram)
-            tab_panel.setMinimumHeight(760)
+            tab_panel.setMinimumHeight(500)
             tab_panel.set_tab (current_diagram)
 
             self._panel_diagrams = tab_panel
@@ -711,7 +713,7 @@ class Panel_File (Panel_Planform_Abstract):
                       toolTip='Minimize lower panel -<br>Alternatively, you can double click on the lower panels')
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, panel_margins=(35,0,0,0),**kwargs)
+        super().__init__(*args, panel_margins=(15,0,0,0),**kwargs)
 
 
     def _init_layout (self): 
@@ -721,7 +723,7 @@ class Panel_File (Panel_Planform_Abstract):
         Button (l,r,c, text="&Open", width=100, 
                 set=self.app.open, toolTip="Open new Planform",
                 button_style=button_style.PRIMARY)
-        Button (l,r,c+2, text="&New", width=60, 
+        Button (l,r,c+2, text="&New", width=80, 
                 set=self.app.new, toolTip="Create new Planform")
         
         r += 1
@@ -729,7 +731,7 @@ class Panel_File (Panel_Planform_Abstract):
         r += 1
         Button (l,r,c, text="&Save", width=100, 
                 set=self.app.save, toolTip="Save Planform to parameter file")
-        Button (l,r,c+2, text="Save As", width=60, 
+        Button (l,r,c+2, text="Save As", width=80, 
                 set=self.app.saveAs, toolTip="Save Planform to new parameter file")
         r += 1
         SpaceR (l,r, height=28, stretch=0)
@@ -737,7 +739,7 @@ class Panel_File (Panel_Planform_Abstract):
         Button (l,r,c, text="&Exit", width=100, set=self.app.close)
         r += 1
         SpaceR (l,r, height=5, stretch=2)        
-        l.setColumnMinimumWidth (1,15)
+        l.setColumnMinimumWidth (1,20)
         l.setColumnStretch (3,1)
 
         return l 
@@ -751,7 +753,7 @@ class Panel_File_Small (Panel_Planform_Abstract):
     name = 'File'
     
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, panel_margins=(35,0,0,0),**kwargs)
+        super().__init__(*args, panel_margins=(15,0,0,0),**kwargs)
 
 
     def _init_layout (self): 
@@ -766,6 +768,7 @@ class Panel_File_Small (Panel_Planform_Abstract):
         Button      (l,r+1,c, text="&Exit", width=100, set=self.app.close)
 
         l.setColumnStretch (1,2)
+        l.setRowStretch (2,1)
 
         return l 
  
