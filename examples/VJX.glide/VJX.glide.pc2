@@ -23,11 +23,7 @@
       0.958047,
       0.395571,
       0.013043
-    ],
-    "p1x":0.856495,
-    "p1y":0.958047,
-    "p2y":0.395571,
-    "p3y":0.013043
+    ]
   },
   "chord_reference":{
     "p0y":0.72,
@@ -48,32 +44,52 @@
       "xn":0.0,
       "hinge_cn":0.72,
       "flap_group":1,
-      "airfoil":"JX-G-Root.dat"
+      "airfoil":"VJX.glide_airfoils\\JX-G-Root.dat"
     },
     {
       "xn":0.068027,
       "flap_group":1,
-      "airfoil":"JX-GP-100.dat"
+      "airfoil":"VJX.glide_airfoils\\JX-GP-100.dat"
     },
     {
       "xn":0.408163,
       "flap_group":2
     },
     {
+      "cn":0.832656,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
+      "cn":0.738437,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
       "cn":0.55,
       "flap_group":2,
-      "airfoil":"JX-GP-055.dat"
+      "airfoil":"VJX.glide_airfoils\\JX-GP-055.dat"
+    },
+    {
+      "cn":0.44,
+      "flap_group":2,
+      "is_for_panels":true
     },
     {
       "cn":0.33,
       "flap_group":2,
-      "airfoil":"JX-GP-033.dat"
+      "airfoil":"VJX.glide_airfoils\\JX-GP-033.dat"
+    },
+    {
+      "cn":0.171536,
+      "flap_group":2,
+      "is_for_panels":true
     },
     {
       "xn":1.0,
       "hinge_cn":0.73,
       "flap_group":2,
-      "airfoil":"JX-GP-033.dat"
+      "airfoil":"VJX.glide_airfoils\\JX-GP-033.dat"
     }
   ],
   "flaps":{
