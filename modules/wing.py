@@ -54,6 +54,8 @@ type Polylines  = tuple[Array, Array, Array]
 
 # ---- Model --------------------------------------
 
+VAR_AIRFOILS_DIR        = "${airfoils_dir}"
+
 AIRFOILS_DIR_POSFIX     = "_airfoils"
 TEMP_STRAK_DIR          = "strak_temp"
 FILENAME_NEW            = "new-planform.pc2"
@@ -69,7 +71,7 @@ class Wing:
     """
     unit = 'mm'
 
-    def __init__(self, parm_filePath : str|None, defaultDir : str|None):
+    def __init__(self, parm_filePath : str|None, defaultDir : str|None = None):
         """
         Init wing from parameters in parm_filePath
 
@@ -723,6 +725,48 @@ class Wing:
                     self._parm_pathFileName = os.path.basename(pathFileName_abs)  # only the file name relative to working dir
 
         return save_ok
+
+
+    def set_parm_fileName_new (self, fileName_stem : str):
+        """ set new file name for the parameter file - only the file name relative to working dir
+            used after 'Save As' operation
+        Args:
+            fileName_stem: new file name like 'mywing' with extension '.pc2' added automatically
+        """
+
+        pathFileName_abs = self.parm_pathFileName_abs
+
+        # first rename airfoils dir if existing 
+        new_airfoils_dir = os.path.join (os.path.dirname(pathFileName_abs), 
+                                        fileName_stem + AIRFOILS_DIR_POSFIX)    
+        old_airfoils_dir = self.airfoils_dir
+
+        if os.path.isdir(old_airfoils_dir):
+            try:
+                if os.path.isdir(new_airfoils_dir):
+                    shutil.rmtree(new_airfoils_dir, ignore_errors=True)
+                shutil.move(old_airfoils_dir, new_airfoils_dir)
+            except Exception as e:
+                logger.error(f"Renaming airfoils dir '{old_airfoils_dir}' to '{new_airfoils_dir}' failed: {e}")
+                return
+
+        # rename param file name
+
+        new_pathFileName_abs = os.path.join (os.path.dirname(pathFileName_abs), fileName_stem + ".pc2")
+        if os.path.isfile (pathFileName_abs):
+            try:
+                os.rename (pathFileName_abs, new_pathFileName_abs)
+            except Exception as e:
+                logger.error(f"Renaming parameter file '{pathFileName_abs}' to '{new_pathFileName_abs}' failed: {e}")
+                # rollback airfoils dir rename
+                if os.path.isdir(new_airfoils_dir):
+                    try:
+                        shutil.move(new_airfoils_dir, old_airfoils_dir)
+                    except Exception as e2:
+                        logger.error(f"Rolling back airfoils dir rename from '{new_airfoils_dir}' to '{old_airfoils_dir}' failed: {e2}")
+                return
+
+            self._parm_pathFileName = fileName_stem + ".pc2"
 
 
     def has_changed (self):
@@ -1778,8 +1822,13 @@ class WingSection :
         toDict (d, "flap_group",    self.flap_group)
         if self.is_for_panels:
             toDict (d, "is_for_panels", self.is_for_panels)
+
         if not self.airfoil.isBlendAirfoil and not self.airfoil.isExample:
-            toDict (d, "airfoil",    self.airfoil.pathFileName)
+            # replace airfoils dir variable
+            pathFileName = self.airfoil.pathFileName
+            if self._planform.wing.airfoils_dir_rel in pathFileName:
+                pathFileName = pathFileName.replace (self._planform.wing.airfoils_dir_rel, VAR_AIRFOILS_DIR)
+            toDict (d, "airfoil",    pathFileName)
         return d
 
 
@@ -1789,11 +1838,16 @@ class WingSection :
        return self._planform.workingDir 
 
 
-    def _get_airfoil (self, pathFileName = None, workingDir=None) -> Airfoil:
+    def _get_airfoil (self, pathFileName : str|None= None, workingDir=None) -> Airfoil:
         """read and create airfoil for section """
 
         tmp_dir = self._planform._wing.tmp_dir
         airfoil = None
+
+        # replace VAR_AIRFOILS_DIR variable
+        if pathFileName is not None and VAR_AIRFOILS_DIR  in pathFileName:
+            pathFileName = pathFileName.replace (VAR_AIRFOILS_DIR, self._planform.wing.airfoils_dir)
+
 
         if pathFileName:
             try: 

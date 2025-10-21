@@ -28,10 +28,10 @@ import os
 import sys
 import argparse
 
-from PyQt6.QtCore           import QMargins, QThread
+from PyQt6.QtCore           import QMargins, QThread, QUrl
 from PyQt6.QtWidgets        import (QApplication, QMainWindow, QWidget, QMessageBox, QFileDialog,
                                     QVBoxLayout, QHBoxLayout, QDialog)
-from PyQt6.QtGui            import QCloseEvent, QGuiApplication
+from PyQt6.QtGui            import QCloseEvent, QGuiApplication, QDesktopServices
 
 # For VsCode add airfoileditor package path to the setting "python.analysis.extraPaths" (Pylance)
 
@@ -177,12 +177,10 @@ class Main_PC2 (QMainWindow):
 
         l.addWidget (self.panel_diagrams,   0,0)
         l.addWidget (self.panel_data_small, 1,0)
-        l.addWidget (self.panel_data,       1,0)
+        l.addWidget (self.panel_data,       2,0)
 
-        l.setRowStretch (0,5)
-        l.setRowStretch (1,1)
-        #l.setRowMinimumHeight (1,70)
-        l.setVerticalSpacing (5)
+        l.setRowStretch (0,1)
+        l.setSpacing (5)
         l.setContentsMargins (QMargins(5, 5, 5, 5))
 
         main = QWidget()
@@ -237,7 +235,6 @@ class Main_PC2 (QMainWindow):
         logger.info (f"Ready for action ...")
 
 
-
     def __repr__(self) -> str:
         # overwritten to get a nice print string 
         text = f""  
@@ -248,7 +245,6 @@ class Main_PC2 (QMainWindow):
         """ toggle between full and small data panel"""
 
         self._panel_data_minimized = not self._panel_data_minimized
-
         self.refresh()
 
     
@@ -285,7 +281,7 @@ class Main_PC2 (QMainWindow):
             l.addWidget (Panel_Chord_Reference_Small    (self, self.wing, has_head=False))
             l.addWidget (Panel_WingSection_Small        (self, self.wing, has_head=False))
 
-            self._panel_data_small = Container_Panel (layout=l, title="Wing Data", height=70,
+            self._panel_data_small = Container_Panel (layout=l, title="Wing Data Small", height=62,
                                                       hide=lambda: not self._panel_data_minimized,
                                                       doubleClick= self.toggle_data_panel_size)
             # hint will add stretch to layout
@@ -534,9 +530,9 @@ class Main_PC2 (QMainWindow):
 
         ok = self.wing().save (newPathFilename=newPathFilename)
         if ok:
-            MessageBox.success (self,"Save Planform", f"'{self.wing().parm_fileName}' saved", min_height= 60)
+            MessageBox.success (self,"Save Planform", f"<b>{self.wing().parm_fileName}</b> saved", min_height= 60)
         else:
-            MessageBox.error   (self,"Save Planform", f"'{self.wing().parm_fileName}' couldn't be saved", min_height= 60)
+            MessageBox.error   (self,"Save Planform", f"<b>{self.wing().parm_fileName}</b> couldn't be saved", min_height= 60)
 
 
     def saveAs (self):
@@ -563,6 +559,10 @@ class Main_PC2 (QMainWindow):
 
     def load_wing (self, pathFilename, initial=False): 
         """ creates / loads new wing as current"""
+
+        # reload wing if no path given
+        if pathFilename is None:
+            pathFilename = self.wing().parm_pathFileName_abs if self.wing() else FILENAME_NEW
 
         self._wing = Wing (pathFilename, defaultDir=Settings.user_data_dir (APP_NAME))
         
@@ -712,9 +712,6 @@ class Panel_File (Panel_Planform_Abstract):
         ToolButton   (l_head, icon=Icon.EXPAND, set=self.app.toggle_data_panel_size,
                       toolTip='Minimize lower panel -<br>Alternatively, you can double click on the lower panels')
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, panel_margins=(15,0,0,0),**kwargs)
-
 
     def _init_layout (self): 
 
@@ -727,24 +724,63 @@ class Panel_File (Panel_Planform_Abstract):
                 set=self.app.new, toolTip="Create new Planform")
         
         r += 1
-        SpaceR (l,r, height=2, stretch=0)
-        r += 1
         Button (l,r,c, text="&Save", width=100, 
                 set=self.app.save, toolTip="Save Planform to parameter file")
-        Button (l,r,c+2, text="Save As", width=80, 
-                set=self.app.saveAs, toolTip="Save Planform to new parameter file")
+        MenuButton (l,r,c+2, text="More...", width=80, 
+                menu=self._more_menu(), 
+                toolTip="Choose further actions for this planform")
         r += 1
-        SpaceR (l,r, height=28, stretch=0)
+        SpaceR (l,r, stretch=1)
         r += 1
         Button (l,r,c, text="&Exit", width=100, set=self.app.close)
-        r += 1
-        SpaceR (l,r, height=5, stretch=2)        
         l.setColumnMinimumWidth (1,20)
         l.setColumnStretch (3,1)
 
         return l 
  
+    def _more_menu (self) -> QMenu:
+        """ create and return sub menu for 'more' actions"""
 
+        menue = QMenu ()
+        menue.addAction (MenuAction ("Save as...", self, set=self.app.saveAs,
+                                     toolTip="Create a copy of the current planform with new name and filename"))
+        menue.addAction (MenuAction ("Rename...", self, set=self._rename,
+                                     toolTip="Rename name and/or filename of current planform"))
+        # menue.addAction (MenuAction ("Delete", self, set=self.app.do_delete,
+        #                              toolTip="Delete current planform including all temporary files created by the AirfoilEditor"))
+        # menue.addAction (MenuAction ("Delete temp files", self, set=self.app.do_delete_temp_files,
+        #                              toolTip=f"Delete temporary files created by {APP_NAME} just to have a clean directoy again"))
+        menue.addSeparator ()
+        menue.addAction (MenuAction ("Readme on Github", self, set=self._open_AE_url,
+                                     toolTip=f"Open the Github README file of {APP_NAME} in a browser"))
+        menue.addAction (MenuAction ("Releases on Github", self, set= self._open_releases_url,
+                                     toolTip=f"Open the Github page with the actual release of {APP_NAME}"))
+
+        menue.setToolTipsVisible(True)
+
+        return menue
+
+    def _rename (self):
+        """ rename current planform - both name and filename"""
+
+        dialog = Dialog_Rename (self, self.wing, parentPos=(1.5,-0.5), dialogPos=(0,1))  
+        dialog.exec()   
+
+        self.app.load_wing (None)      # reload wing to apply new name / filename
+
+
+    def _open_releases_url (self):
+        """ open Github versions in Browser"""
+
+        link = "https://github.com/jxjo/PlanformCreator2/releases"
+        QDesktopServices.openUrl(QUrl(link))
+
+
+    def _open_AE_url (self):
+        """ open Github AirfoilEditor repo in Browser"""
+
+        link = "https://github.com/jxjo/PlanformCreator2"
+        QDesktopServices.openUrl(QUrl(link))
 
 
 class Panel_File_Small (Panel_Planform_Abstract):
@@ -752,10 +788,6 @@ class Panel_File_Small (Panel_Planform_Abstract):
 
     name = 'File'
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, panel_margins=(15,0,0,0),**kwargs)
-
-
     def _init_layout (self): 
 
         l = QGridLayout()
@@ -765,11 +797,12 @@ class Panel_File_Small (Panel_Planform_Abstract):
                      button_style=button_style.PRIMARY)
         ToolButton  (l,r,c+2, icon=Icon.COLLAPSE, set=self.app.toggle_data_panel_size,
                     toolTip='Maximize lower panel -<br>Alternatively, you can double click on the lower panels')
-        Button      (l,r+1,c, text="&Exit", width=100, set=self.app.close)
+        r += 1
+        Button      (l,r,c, text="&Exit", width=100, set=self.app.close)
+        r += 1
+        l.setRowStretch (r,1)
 
         l.setColumnStretch (1,2)
-        l.setRowStretch (2,1)
-
         return l 
  
 
@@ -800,7 +833,7 @@ class Panel_Wing (Panel_Planform_Abstract):
         FieldF (l,r,c+3, lab="Sweep Angle", width=75, unit="°", step=0.1, lim=(-45, 45), dec=1,
                 obj=self.planform, prop=Planform.sweep_angle)
         r += 1
-        SpaceR (l,r, height=5, stretch=2)        
+        l.setRowStretch (r,1)
 
         l.setColumnMinimumWidth (0,95)
         l.setColumnMinimumWidth (3,90)
@@ -838,8 +871,9 @@ class Panel_Wing_Small (Panel_Planform_Abstract):
                 obj=self.planform, prop=Planform.chord_root)
         FieldF (l,r,c+3, lab="Sweep Angle", width=75, unit="°", step=0.1, lim=(-45, 45), dec=1,
                 obj=self.planform, prop=Planform.sweep_angle)
+        r += 1
+        l.setRowStretch (r,1)
 
-        l.setRowStretch (2,1)
         l.setColumnMinimumWidth (0,95)
         l.setColumnMinimumWidth (3,90)
         l.setColumnStretch (2,1)
@@ -872,7 +906,7 @@ class Panel_Chord_Reference (Panel_Planform_Abstract):
         CheckBox (l,r,c, text="Flaps hinge line equals Reference line", colSpan=5,  
                   obj=self.flaps, prop=Flaps.hinge_equal_ref_line)     
         r += 1
-        SpaceR (l,r, height=5, stretch=2)        
+        l.setRowStretch (r,1)
 
         l.setColumnMinimumWidth (0,110)
         l.setColumnMinimumWidth (2,15)
@@ -898,8 +932,9 @@ class Panel_Chord_Reference_Small (Panel_Planform_Abstract):
                 obj=self.n_chord_ref, prop=N_Chord_Reference.cr_root)
         FieldF (l,r,c+3, lab="at Tip", width=70, unit="%", step=1, lim=(0,100), dec=1,
                 obj=self.n_chord_ref, prop=N_Chord_Reference.cr_tip)
+        r += 1
+        l.setRowStretch (r,1)
 
-        l.setRowStretch (2,1)
         l.setColumnMinimumWidth (0,110)
         l.setColumnMinimumWidth (2,15)
         l.setColumnMinimumWidth (3,50)
@@ -1041,11 +1076,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
         l.setColumnMinimumWidth (c  ,70)
         l.setColumnMinimumWidth (c+2,10)
         l.setColumnMinimumWidth (c+3,50)
-
-        # ----------
-
         l.setColumnStretch (c+5,2)
-
         return l 
 
 
@@ -1258,13 +1289,13 @@ class Panel_WingSection_Small (Panel_Planform_Abstract):
                 obj=self._wingSection, prop=WingSection.cn, disable=lambda: not self._wingSection().is_set_cn_allowed)
 
         r += 1
+        l.setRowStretch (r,2)
+
         l.setColumnMinimumWidth (3,20)
         l.setColumnMinimumWidth (4,60)
         l.setColumnMinimumWidth (6,20)
         l.setColumnMinimumWidth (7,50)
         l.setColumnStretch (c+7,2)
-        l.setRowStretch (r,2)
-
         return l 
 
 

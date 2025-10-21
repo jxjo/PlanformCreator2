@@ -54,18 +54,28 @@ class Export_Abstract:
     def planform (self) -> Planform: 
         return self.wing.planform
 
+
+    @property
+    def export_dir_default(self):
+        """the default directory for self export - path is relativ to current """
+        return self.wing.parm_fileName_stem  + self.EXPORT_DIR_SUFFIX
+
+
     @property
     def export_dir(self):
         """the directory for self export - path is relativ to current or absolute """
 
         if self._export_dir is None or self._export_dir.strip() == "":
-            return self.wing.parm_fileName_stem  + self.EXPORT_DIR_SUFFIX
+            return self.export_dir_default
         else:
             return self._export_dir
     
     def set_export_dir(self, newStr): 
-        self._export_dir = PathHandler (workingDir=self._working_dir).relFilePath (newStr)
-
+        export_dir = PathHandler (workingDir=self._working_dir).relFilePath (newStr)
+        if export_dir != self.export_dir_default:
+            self._export_dir = export_dir
+        else:
+            self._export_dir = None
 
     @property
     def export_dir_abs(self):

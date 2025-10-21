@@ -313,7 +313,7 @@ class Item_Planform (Diagram_Item):
             l.setColumnStretch (3,5)
             l.setRowStretch    (r+1,2)
                      
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=125, 
+            self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True, 
                                               switchable=True, hide_switched=True, 
                                               switched_on=self._show,
                                               on_switched=self.setVisible)
@@ -384,8 +384,7 @@ class Item_Chord (Diagram_Item):
         """ return section panel within view panel"""
 
         if self._section_panel is None:    
-            l = QGridLayout()
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=40, 
+            self._section_panel = Edit_Panel (title=self.name, 
                                               switchable=True, hide_switched=False, 
                                               switched_on=self._show,
                                               on_switched=self.setVisible)
@@ -452,13 +451,11 @@ class Item_Chord_Reference (Diagram_Item):
         """ return section panel within view panel"""
 
         if self._section_panel is None:    
-            l = QGridLayout()
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=40, 
+            self._section_panel = Edit_Panel (title=self.name, 
                                               switchable=True, hide_switched=False, 
                                               switched_on=self._show,
                                               on_switched=self.setVisible)
         return self._section_panel 
-
 
 
 
@@ -562,7 +559,7 @@ class Item_VLM_Panels (Diagram_Item):
                         disable=lambda: self.opPoint() is None)
             l.setRowStretch (r+1,3)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height =100,
+            self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True,
                                               switched_on=self._show,  
                                               switchable=True, on_switched=self.setVisible)
             
@@ -578,7 +575,8 @@ class Item_VLM_Panels (Diagram_Item):
         panels_artist : VLM_Panels_Artist = self._get_artist(VLM_Panels_Artist)[0]
         panels_artist.set_show_chord_diff (True)
 
-        dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled, dx=50, dy=-50)  
+        dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled, 
+                                       parentPos=(0.9,0.2), dialogPos=(0.0,0.4))  
 
         dialog.sig_paneling_changed.connect (myParent.sig_panel_def_changed.emit)
 
@@ -878,7 +876,7 @@ class Item_VLM_Result (Diagram_Item):
                          disable=lambda: self.polar() is None,
                          toolTip="Choose variable to show along span in diagram")
             r += 1
-            SpaceR   (l,r, height=10, stretch=3)
+            l.setRowStretch (r,1)
 
             # dev mode 
             # r += 1
@@ -887,15 +885,21 @@ class Item_VLM_Result (Diagram_Item):
             # r += 1
             # Button   (l,r,c, text="Export Polar", width=100, set=self._export_polar_opPoint)
 
-            r += 1
-            Label    (l,r,c, colSpan=4, get=f"Powered by Panel Aero", style=style.COMMENT, fontSize=size.SMALL)
             l.setColumnStretch (3,2)
             l.setColumnMinimumWidth (0,50)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height =280,
+            self._section_panel = Edit_Panel (title=self.name, layout=l, height =260,
                                               switched_on=self._show,  
                                               switchable=True, on_switched=self.setVisible)   
-                 
+
+            # patch Panel Aero into head of panel 
+
+            if Worker.ready:
+                l_head = self._section_panel._head.layout()
+                Label  (l_head, get=f"by Panel Aero", style=style.COMMENT, fontSize=size.SMALL,
+                        align=Qt.AlignmentFlag.AlignBottom)
+
+
         elif self._section_panel is None and not Worker.ready:  
 
             l = QGridLayout()
@@ -1128,9 +1132,8 @@ class Item_Wing (Diagram_Item):
             l.setColumnMinimumWidth (0,70)
             l.setColumnMinimumWidth (1,80)
             l.setColumnStretch (3,5)
-            l.setRowStretch    (r,2)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=180, 
+            self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True, 
                                               switchable=False, hide_switched=True, 
                                               on_switched=self.setVisible)
 
@@ -1218,9 +1221,8 @@ class Item_Wing_Airfoils (Diagram_Item):
                         toolTip="Airfoils nick name is defined in diagram 'Airfoils'")
             r += 1
             l.setColumnStretch (3,2)
-            l.setRowStretch    (r,2)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=130, 
+            self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True, 
                                               switchable=False, hide_switched=False, 
                                               on_switched=self.setVisible)
 
@@ -1387,7 +1389,7 @@ class Item_Airfoils (Diagram_Item):
             l.setColumnStretch (3,5)
             l.setRowStretch    (r,2)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height=(180,None),
+            self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True,
                                               switchable=True, hide_switched=True, 
                                               on_switched=self.setVisible)
         return self._section_panel 
@@ -1857,7 +1859,7 @@ class Diagram_Planform (Diagram_Abstract):
             l.setColumnStretch (2,5)
             l.setRowStretch (r+1,3)
 
-            self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
+            self._general_panel = Edit_Panel (title="Common Options", layout=l, auto_height=True,
                                               switchable=False, switched_on=True)
         return self._general_panel 
 
@@ -1876,9 +1878,9 @@ class Diagram_Planform (Diagram_Abstract):
 
             # toggle fields for pc2 reference planform 
             r += 1
-            CheckBox   (l,r,c, text="Another PC2 Planform", colSpan=2,
+            CheckBox   (l,r,c, text="Another PC2 Planform", 
                         hide = lambda: bool(self.wing().reference_pc2_file))
-            Button     (l,r,c+2, colSpan=2, text="Select", width=50, 
+            Button     (l,r,c+1, text="Select", width=50, colSpan=4,
                         set=self._open_planform_ref_pc2, toolTip="Select another PC2 Planform as reference",
                         hide = lambda: bool(self.wing().reference_pc2_file))
 
@@ -1897,7 +1899,7 @@ class Diagram_Planform (Diagram_Abstract):
             r += 1
             CheckBox   (l,r,c, text="Background Image", get=False, 
                         hide = lambda: bool(self.wing().background_image.filename)) 
-            Button     (l,r,c+2, text="Select", width=50, colSpan=2,
+            Button     (l,r,c+1, text="Select", width=50, colSpan=4,
                         set=self._open_background_image, toolTip="Open background image as reference",
                         hide = lambda: bool(self.wing().background_image.filename))
 
@@ -1916,9 +1918,8 @@ class Diagram_Planform (Diagram_Abstract):
                         hide = lambda: not bool(self.wing().background_image.filename))
 
             l.setColumnStretch (0,3)
-            l.setRowStretch (r+1,3)
 
-            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, height=130,
+            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, auto_height=True,
                                               switchable=True, hide_switched=True, switched_on=False, 
                                               on_switched=self.set_show_ref_planforms)
 
@@ -1934,12 +1935,11 @@ class Diagram_Planform (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             Button  (l,r,c, text="Export Dxf", width=100, set=self.export_dxf)
-            r += 1
-            SpaceR      (l,r,10,1)
             l.setColumnStretch (2,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
-                                              switchable=False, switched_on=True)
+            self._export_panel = Edit_Panel (title="Export", layout=l,  
+                                             auto_height=True, main_margins = (10, 5,10, 10),
+                                             switchable=False, switched_on=True)
         return self._export_panel 
 
 
@@ -2126,7 +2126,7 @@ class Diagram_Making_Of (Diagram_Abstract):
             SpaceR   (l,r,2)
             l.setColumnStretch (0,2)
 
-            self._section_panel = Edit_Panel (title="Diagram Options", layout=l, height=(250,None),
+            self._section_panel = Edit_Panel (title="Diagram Options", layout=l, auto_height=True,
                                               switchable=False, switched_on=True)
         return self._section_panel 
 
@@ -2355,9 +2355,8 @@ class Diagram_Airfoils (Diagram_Abstract):
                       get=lambda: self.show_strak, set=self.set_show_strak) 
             r += 1
             l.setColumnStretch (3,2)
-            l.setRowStretch    (r,2)
 
-            self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
+            self._general_panel = Edit_Panel (title="Common Options", layout=l, auto_height=True,
                                               switchable=False, switched_on=True)
         return self._general_panel 
 
@@ -2376,7 +2375,9 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             # helper panel for polar definitions 
 
-            p = Panel_Polar_Defs (self, self.polar_defs, height=(None,None), width=(None,250),chord_fn=lambda: self.chord_root)
+            p = Panel_Polar_Defs (self, self.polar_defs, 
+                                  auto_height=True, width=(None,250),
+                                  chord_fn=lambda: self.chord_root)
 
             p.sig_polar_def_changed.connect (self.sig_polar_def_changed.emit)
 
@@ -2385,8 +2386,6 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             # minimum re rumber to plot 
 
-            r += 1
-            SpaceR      (l,r, height=5, stretch=0) 
             r += 1
             CheckBox    (l,r,c, text="Minimum Re", colSpan=4,
                             obj=self, prop=Diagram_Airfoils.apply_min_re,
@@ -2399,8 +2398,6 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             r += 1
             if Worker.ready:
-                SpaceR (l,r, height=5, stretch=0) 
-                r += 1
                 Label (l,r,c, colSpan=4, get="Diagram variables", style=style.COMMENT) 
                 r += 1
                 for item in self._get_items (Item_Polars):
@@ -2412,11 +2409,8 @@ class Diagram_Airfoils (Diagram_Abstract):
                     ComboBox    (l,r,c+4, width=60, obj=item, prop=Item_Polars.xVar, options=var.values)
                     SpaceC      (l,c+5)
                     r += 1
-
                 r += 1
-                SpaceR (l,r, height=10, stretch=1)
-                r += 1
-                Label  (l,r,c, colSpan=6, get=f"Powered by Worker {Worker.version} using Xfoil", style=style.COMMENT, fontSize=size.SMALL)
+                l.setRowStretch (r,3)
 
             else: 
                 SpaceR (l,r, height=10) 
@@ -2430,10 +2424,20 @@ class Diagram_Airfoils (Diagram_Abstract):
                 lab = Label (l,r,c, colSpan=6, get=Worker.ready_msg, style=style.COMMENT, height=(None,100)) 
                 lab.setWordWrap(True)
                 r += 1
-                SpaceR (l,r, height=10, stretch=3) 
+                l.setRowStretch (r,3)
 
-            self._polar_panel = Edit_Panel (title="View Polars", layout=l, height=(150,None),
-                                              switchable=True, switched_on=False, on_switched=self._on_polars_switched)
+            self._polar_panel = Edit_Panel (title="View Polars", layout=l, 
+                                            auto_height=True,
+                                            switchable=True, switched_on=False, 
+                                            on_switched=self._on_polars_switched)
+
+            # patch Worker version into head of panel 
+
+            if Worker.ready:
+                l_head = self._polar_panel._head.layout()
+                Label  (l_head, get=f"{Worker.NAME} {Worker.version}", style=style.COMMENT, fontSize=size.SMALL,
+                        align=Qt.AlignmentFlag.AlignBottom)
+
         return self._polar_panel 
 
 
@@ -2446,12 +2450,11 @@ class Diagram_Airfoils (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             Button      (l,r,c, text="Export Airfoils", width=100, set=self.export_airfoils)
-            r += 1
-            SpaceR      (l,r,10,1)
             l.setColumnStretch (2,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(60,None),
-                                              switchable=False, switched_on=True)
+            self._export_panel = Edit_Panel (title="Export", layout=l, 
+                                             auto_height=True, main_margins = (10, 5,10, 10),
+                                             switchable=False, switched_on=True)
         return self._export_panel 
 
 
@@ -2577,7 +2580,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
         for item in self.diagram_items:                                 # paneling panel, chord distribution
             if item.section_panel is not None: 
-                layout.addWidget (item.section_panel,stretch=1)
+                layout.addWidget (item.section_panel,stretch=0)
 
         layout.insertWidget (0, self.general_panel, stretch=0)          # common settings
         layout.addStretch (1)
@@ -2636,9 +2639,8 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
             l.setColumnStretch (0,2)
-            l.setRowStretch (r+1,3)
 
-            self._general_panel = Edit_Panel (title="Common Options", layout=l, height=(60,None),
+            self._general_panel = Edit_Panel (title="Common Options", layout=l, auto_height=True,
                                               switchable=False, switched_on=True)
         return self._general_panel 
 
@@ -2654,8 +2656,6 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             r,c = 0, 0
             Button      (l,r,c, text="Export Xflr5", width=100, set=self.export_xflr5)
             r += 1
-            SpaceR (l,r, height=2, stretch=0)
-            r += 1
             Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz,
                                 hide= not os.name == 'nt')                                  # only Windows
             c += 1
@@ -2663,12 +2663,11 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             c += 1
             Button      (l,r,c, text="Launch FLZ", width=80, set=self.launch_flz,
                                 hide= not os.name == 'nt')                                  # only Windows
-            r += 1
-            SpaceR      (l,r,10,1)
             l.setColumnStretch (3,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, height=(100,None),
-                                              switchable=False, switched_on=True)
+            self._export_panel = Edit_Panel (title="Export", layout=l, 
+                                             auto_height=True, main_margins = (10, 5,10, 10),
+                                             switchable=False, switched_on=True)
         return self._export_panel 
 
 

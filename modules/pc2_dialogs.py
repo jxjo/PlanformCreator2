@@ -97,7 +97,7 @@ class Dialog_Export_Airfoil (Dialog):
     def _select_directory (self):
         """ select directory for export"""
 
-        directory = QFileDialog.getExistingDirectory(self)
+        directory = QFileDialog.getExistingDirectory(self, caption="Select Export Directory", directory=self.wing.workingDir)
 
         if directory: 
             self.export_airfoils.set_export_dir (directory)                    
@@ -219,7 +219,7 @@ class Dialog_Export_Dxf (Dialog):
     def _select_directory (self):
         """ select directory for export"""
 
-        directory = QFileDialog.getExistingDirectory(self)
+        directory = QFileDialog.getExistingDirectory(self, caption="Select Export Directory", directory=self.wing.workingDir)
 
         if directory: 
             self.export_dxf.set_export_dir (directory)                    
@@ -463,6 +463,139 @@ class Dialog_Export_FLZ (Dialog):
 
         return buttonBox 
     
+
+
+
+
+class Dialog_Rename (Dialog):
+    """ 
+    Dialog to rename a planform file
+    """
+
+    _width  = 300
+    _height = 120
+
+    name = "Rename Planform"
+
+    def __init__ (self, *args, **kwargs): 
+
+        self._rename_btn : QPushButton = None
+        self._cancel_btn : QPushButton = None 
+
+        self._fileName_new : str = ""
+
+        super().__init__ ( *args, **kwargs)
+
+        # connect dialog buttons
+        self._cancel_btn.clicked.connect  (self.close)
+        self._rename_btn.clicked.connect (self._rename_planform)
+
+
+    @property
+    def wing (self) -> Wing:
+        return self.dataObject
+    
+    @property
+    def fileName_new (self) -> str:
+        return self._fileName_new
+    
+    def set_fileName_new (self, fileName_new : str):
+        self._fileName_new = fileName_new
+
+
+    def _init_layout(self) -> QLayout:
+
+        l = QGridLayout()
+        r = 0 
+        r += 1
+        SpaceR (l, r, height=5) 
+        r += 1 
+        Field  (l,r,0, width=150, lab= "New Name", get=lambda:self.fileName_new, set=self.set_fileName_new)
+        r += 1
+        SpaceR (l, r, height=5, stretch=2) 
+        l.setColumnMinimumWidth (0,80)
+        l.setColumnStretch (3,2)
+
+        return l
+
+    def _check_fileName_new (self, fileName_new : str) -> bool:
+        """ check if new filename is valid"""
+
+        if not fileName_new.strip():
+            MessageBox.error (self, "Rename Planform", "Please enter a valid planform name.")
+            return False
+
+        if fnmatch.fnmatch (fileName_new, "*.pc2") :
+            MessageBox.error (self, "Rename Planform", "Please enter a planform name without file extension '.pc2'.")
+            return False
+
+        if fileName_new.lower() == self.wing.parm_fileName_stem.lower():
+            MessageBox.error(self, "Rename Planform", "The new planform name is identical to the current name.")
+            return False
+
+        if self.wing.workingDir:
+            pathFileName_abs =  os.path.join(self.wing.workingDir, fileName_new + ".pc2")
+        else: 
+            pathFileName_abs =  fileName_new + ".pc2"
+        
+        if not os.path.isabs (pathFileName_abs):
+            pathFileName_abs = os.path.abspath(pathFileName_abs)       # will insert cwd 
+
+        if os.path.isfile (pathFileName_abs):
+            MessageBox.error (self, "Rename Planform", 
+                              f"A planform with name <b>{self.fileName_new}</b> already exists.<br>" +
+                              "Please choose a different name.")
+            return False
+
+        return True
+
+
+    def _rename_planform (self, *_):
+        """ do rename planform"""
+
+        if not self._check_fileName_new (self.fileName_new):
+            return
+        
+        old_name = self.wing.parm_fileName
+        self.wing.set_parm_fileName_new (self.fileName_new)
+
+        if old_name != self.wing.parm_fileName:
+
+            self.close()
+
+            msg = f"Planform renamed from <b>{old_name}</b> to <b>{self.wing.parm_fileName}</b>"
+            MessageBox.success (self,"Rename Planform", msg, min_width=300)
+
+        else:
+            msg = f"Rename planform from <b>{old_name}</b> to <b>{self.wing.parm_fileName}</b> failed."
+            MessageBox.error (self,"Rename Planform", msg, min_width=300)
+            self.close()
+
+
+
+    @override
+    def _on_widget_changed (self):
+        """ slot a input field changed"""
+        self.refresh()
+
+
+    @override
+    def _button_box (self):
+        """ returns the QButtonBox with the buttons of self"""
+
+        buttons = QDialogButtonBox.StandardButton.Cancel
+        buttonBox = QDialogButtonBox(buttons)
+
+        self._cancel_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
+
+        self._rename_btn = QPushButton ("&Rename", parent=self)
+        self._rename_btn.setFixedWidth (80)
+
+        buttonBox.addButton (self._rename_btn, QDialogButtonBox.ButtonRole.ActionRole)
+
+        return buttonBox 
+    
+
 
 
 class Dialog_Edit_Image (Dialog):
