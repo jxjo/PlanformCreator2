@@ -234,7 +234,8 @@ class Dialog_Export_Dxf (Dialog):
         self.close()
 
         if self.export_dxf.export_airfoils:
-            msg = f"Planform {self.export_dxf.dxf_filename} and {n_airfoils} airfoils exported to<br><br><b>{self.export_dxf.export_dir}</b>"
+            plural = "s" if n_airfoils > 1 else ""
+            msg = f"Planform {self.export_dxf.dxf_filename} and {n_airfoils} airfoil{plural} exported to<br><br><b>{self.export_dxf.export_dir}</b>"
         else: 
             msg = f"Planform {self.export_dxf.dxf_filename} exported to <br><br><b>{self.export_dxf.export_dir}</b>"
 
@@ -336,7 +337,8 @@ class Dialog_Export_Xflr5 (Dialog):
         
         self.close()
 
-        msg = f"Planform {self.export_xflr5.xflr5_filename} and {n_airfoils} Airfoils <br><br>" + \
+        plural = "s" if n_airfoils > 1 else ""
+        msg = f"Planform {self.export_xflr5.xflr5_filename} and {n_airfoils} Airfoil{plural} <br><br>" + \
               f"exported to <b>{self.export_xflr5.export_dir}</b>"
 
         MessageBox.success (self,"Export xflr5", msg, min_width=300)
@@ -944,6 +946,15 @@ class Dialog_Select_Template (Dialog):
         self._diagram : Dialog_Select_Template.Diagram_Templates = None
 
         super().__init__ ( *args, **kwargs)
+
+        # sanity - check template wings exist 
+        if self._template_wings() == []:
+            MessageBox.error (None, "Select Template", 
+                              "No template files found in the template directory.<br>" +
+                              "Please copy some .pc2 template files into the template directory:<br><br>" +
+                              f"<b>{self.template_dir}</b>")
+            raise FileNotFoundError ("No template files found.")
+
 
         self._panel.layout().setContentsMargins (QMargins(0, 0, 0, 0))  # no borders in central panel 
 

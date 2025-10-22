@@ -624,20 +624,22 @@ class Item_VLM_Result (Diagram_Item):
         return self.wing()._planform
 
 
-    def polar (self) -> VLM_Polar:
+    def vlm_polar (self) -> VLM_Polar:
         """ current VLM polar """
-        return self.wing().vlm_wing.polar_at (self.vtas)
+        # avoid vlm calculation if not visible
+        return self.wing().vlm_wing.polar_at (self.vtas) if self.isVisible() and self.wing().vlm_wing else None
 
 
-    def opPoint (self) -> VLM_OpPoint:
+    def vlm_opPoint (self) -> VLM_OpPoint:
         """ current selected opPoint based on vta and aplha"""
-        return self.polar().opPoint_at (self.opPoint_alpha) if self.isVisible() and self.polar()else None
+        # avoid vlm calculation if not visible
+        return self.vlm_polar().opPoint_at (self.opPoint_alpha) if self.isVisible() and self.vlm_polar() else None
 
 
     @override
     def plot_title(self, **kwargs):
 
-        opPoint_label = self.opPoint().name if self.opPoint() else ""
+        opPoint_label = self.vlm_opPoint().name if self.vlm_opPoint() else ""
         return super().plot_title(title = f"{self.opPoint_var} along Span", subtitle=opPoint_label, **kwargs)
     
 
@@ -646,8 +648,8 @@ class Item_VLM_Result (Diagram_Item):
         """ create and setup the artists of self"""
         
         self._add_artist (VLM_Result_Artist     (self, self.planform, show_legend=True,
-                                                        polar_fn=self.polar,
-                                                        opPoint_fn=self.opPoint))
+                                                        polar_fn=self.vlm_polar,
+                                                        opPoint_fn=self.vlm_opPoint))
 
     @override
     def refresh (self):
@@ -788,7 +790,7 @@ class Item_VLM_Result (Diagram_Item):
 
     def set_opPoint_fixed_to_alpha_max (self, aBool : bool, refresh=True):
         if aBool: 
-            opPoint = self.polar().opPoint_at_alpha_max ()
+            opPoint = self.vlm_polar().opPoint_at_alpha_max ()
             if opPoint is not None: 
                 self._opPoint_fixed_to_alpha_max = True
                 self.set_opPoint_alpha (opPoint.alpha, refresh=False)               # avoid double refresh
@@ -822,10 +824,10 @@ class Item_VLM_Result (Diagram_Item):
     @property
     def use_viscous_loop (self) -> OpPoint_Var:
         """ viscous loop for aero calculation"""
-        return self.polar().use_viscous_loop
+        return self.vlm_polar().use_viscous_loop
 
     def set_use_viscous_loop (self, aBool : bool):
-        self.polar().set_use_viscous_loop (aBool)
+        self.vlm_polar().set_use_viscous_loop (aBool)
         if self.opPoint_fixed_to_alpha_max:
             self.set_opPoint_fixed_to_alpha_max (True)
         self.refresh()
@@ -858,12 +860,12 @@ class Item_VLM_Result (Diagram_Item):
             r += 1
             CheckBox (l,r,c, text="Set close to Alpha max", colSpan=4,
                         obj=self, prop=Item_VLM_Result.opPoint_fixed_to_alpha_max,
-                        disable=lambda: self.polar() is None,
+                        disable=lambda: self.vlm_polar() is None,
                         toolTip="Operating point of wing is set to alpha_max of current polar")
             r +=1
             FieldF   (l,r,c, lab="Alpha", lim=(-20,20), step=0.5, width=60, unit="°", dec=1, 
                         obj=self, prop=Item_VLM_Result.opPoint_alpha,
-                        disable=lambda: self.opPoint_fixed_to_alpha_max or self.polar() is None) 
+                        disable=lambda: self.opPoint_fixed_to_alpha_max or self.vlm_polar() is None) 
             r += 1
             SpaceR   (l,r, height=10,stretch=0)
             r += 1
@@ -873,7 +875,7 @@ class Item_VLM_Result (Diagram_Item):
 
             ComboBox (l,r,c+1, width=60, obj=self, prop=Item_VLM_Result.opPoint_var, 
                          options=self.opPoint_var_list, colSpan=3,
-                         disable=lambda: self.polar() is None,
+                         disable=lambda: self.vlm_polar() is None,
                          toolTip="Choose variable to show along span in diagram")
             r += 1
             l.setRowStretch (r,1)
@@ -967,7 +969,7 @@ class Item_VLM_Result (Diagram_Item):
         if newPathFilename: 
             polar.export_to_csv (newPathFilename)
 
-        opPoint = self.opPoint()
+        opPoint = self.vlm_opPoint()
         fileName = f"{polar.name} alpha={opPoint.alpha:.1f}.csv"
 
         filters  = "Polar csv files (*.csv)"
@@ -1644,7 +1646,8 @@ class Item_Polars (Diagram_Item):
     def setup_artists (self):
         """ create and setup the artists of self"""
 
-        a = Polar_Artist     (self, self.planform, xyVars=self._xyVars, show_legend=True)
+        a = Polar_Artist     (self, self.planform, xyVars=self._xyVars, 
+                              show_legend=True)
         self._add_artist (a)
 
 
@@ -2190,9 +2193,11 @@ class Diagram_Airfoils (Diagram_Abstract):
         self._show_operating_points = False                 # show polars operating points 
         self._show_strak    = False                         # show blended airfoils
         self._min_re_asK    = 10                            # minimum re number / 1000 to plot 
-        self._apply_min_re  = False                         # activate min re rumber 
+        self._apply_min_re  = True                          # activate min re rumber 
 
         super().__init__(*args, **kwargs)
+
+        self._apply_min_re_to_artists ()
 
     # --- save --------------------- 
 
@@ -2387,7 +2392,7 @@ class Diagram_Airfoils (Diagram_Abstract):
             # minimum re rumber to plot 
 
             r += 1
-            CheckBox    (l,r,c, text="Minimum Re", colSpan=4,
+            CheckBox    (l,r,c, text="Exclude Re less than", colSpan=4,
                             obj=self, prop=Diagram_Airfoils.apply_min_re,
                             toolTip="Apply a minimum Re number for polars in the diagrams")
             FieldF      (l,r,c+4, width=60, step=1, lim=(1, 1000), unit="k", dec=0,
@@ -2619,7 +2624,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
         """ current selected opPoint based on vta and aplha"""
 
         item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
-        return item.opPoint()
+        return item.vlm_opPoint()
 
 
     @property 

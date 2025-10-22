@@ -1795,9 +1795,10 @@ class WingSection :
 
         # create airfoil and load coordinates if exist 
 
-        self._airfoil = self._get_airfoil (pathFileName = fromDict (dataDict, "airfoil", None), workingDir=self.workingDir)
+        airfoil = self._get_airfoil (pathFileName = fromDict (dataDict, "airfoil", None), workingDir=self.workingDir)
+        self.set_airfoil (airfoil)                          # ensure normalized (copied to airfoils dir if needed)
 
-        self._strak_info = None                                             # keep info of strak 
+        self._strak_info = None                             # keep info of strak 
 
 
     def __repr__(self) -> str:
@@ -1841,7 +1842,8 @@ class WingSection :
     def _get_airfoil (self, pathFileName : str|None= None, workingDir=None) -> Airfoil:
         """read and create airfoil for section """
 
-        tmp_dir = self._planform._wing.tmp_dir
+        airfoils_dir = self._planform._wing.airfoils_dir
+        tmp_dir      = self._planform._wing.tmp_dir
         airfoil = None
 
         # replace VAR_AIRFOILS_DIR variable
@@ -1867,9 +1869,9 @@ class WingSection :
             self._planform._wing.create_tmp_dir ()
 
             if self.is_root: 
-                airfoil = Root_Example (workingDir=tmp_dir)
+                airfoil = Root_Example (workingDir=airfoils_dir)
             elif self.is_tip:
-                airfoil = Tip_Example (workingDir=tmp_dir)
+                airfoil = Tip_Example (workingDir=airfoils_dir)
             else:
                 airfoil = Airfoil (name=STRAK_AIRFOIL_NAME, geometry=GEO_BASIC, workingDir=tmp_dir)
                 airfoil.set_isBlendAirfoil (True)
@@ -1877,7 +1879,7 @@ class WingSection :
             # save to tmp_dir 
             if not airfoil.isBlendAirfoil:
                 airfoil.save()
-                logger.debug (f"{self} save airfoil {airfoil.fileName} to {tmp_dir}")
+                logger.debug (f"{self} save airfoil {airfoil.fileName} to {airfoils_dir}")
 
         return airfoil
 
@@ -1897,7 +1899,7 @@ class WingSection :
             airfoil:    the new airfoil to be set
             in_airfoils_dir: if True the airfoil will be copied in the airfoils dir of the wing
         """
-        if  airfoil is None:                                                # remove airfoil - set as strak 
+        if  airfoil is None or airfoil.isBlendAirfoil:                # remove airfoil - set as strak 
             self._airfoil = self._get_airfoil (pathFileName=None) 
 
         else:
@@ -2437,10 +2439,10 @@ class WingSections (list [WingSection]):
         return new_section
 
 
-    def delete (self, aSection: 'WingSection') -> WingSection: 
+    def delete (self, aSection: 'WingSection', protect_root_tip=True) -> WingSection: 
         """  delete wing section - return new current if succeeded"""
 
-        if aSection and not (aSection.is_root_or_tip ):
+        if aSection and not (protect_root_tip and aSection.is_root_or_tip):
             try:
                 index = self.index (aSection)
                 self.remove (aSection)
@@ -2577,13 +2579,19 @@ class WingSections (list [WingSection]):
     def check_n_repair (self):
         """ sanity check of wingSections  - remove dirty ones"""
 
-        cn_tip = self[-1].cn
 
         # sanity check for dirty section with cn smaller than tip 
+        cn_tip = self[-1].cn
         for section in self [:]: 
             if section._cn and section._cn < cn_tip:
                 logger.warning (f"{section} removed - cn {section._cn:.3f} smaller than tip") 
                 self.delete (section)        
+
+        # only one section with xn=0.0 and one with xn=1.0
+        for section in self [1:-1]: 
+            if section.is_root or section.is_tip:
+                logger.warning (f"{section} removed - duplicate root/tip section") 
+                self.delete (section, protect_root_tip=False)
 
         # Re-sort wing sections to an ascending xn pos. 
         # When changing major wing parms sections could become out of sort order when
