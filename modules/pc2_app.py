@@ -131,8 +131,8 @@ class Main_PC2 (QMainWindow):
         # Worker for polar generation ready?
 
         workingDir = Settings.user_data_dir (APP_NAME)                      # temp working dir for Worker and Xoptfoil2  
-        projectDir = os.path.dirname(os.path.abspath(__file__))                
-
+        modulesDir = os.path.dirname(os.path.abspath(__file__))                
+        projectDir = os.path.dirname(modulesDir)
         Worker(workingDir=workingDir).isReady (projectDir, min_version=self.WORKER_MIN_VERSION)
 
 
@@ -493,16 +493,28 @@ class Main_PC2 (QMainWindow):
         """ reset - and start with example definition"""
 
         # select a new template 
+        modulesDir = os.path.dirname(os.path.abspath(__file__))                
+        projectDir = os.path.dirname(modulesDir)
 
-        template_dir  = os.path.join (os.path.dirname (__file__), self.TEMPLATE_DIR)
+        template_dir  = os.path.join (projectDir, self.TEMPLATE_DIR)
 
-        dialog = Dialog_Select_Template (self, template_dir, dx=-750, dy=-300) 
-        dialog.exec()     
+        try:
+            dialog = Dialog_Select_Template (self, template_dir, parentPos=(0.3, 0.8), dialogPos=(0,1))
+            dialog.exec()     
+            template_filePathName = dialog.template_file_selected
+        except:
+            template_filePathName = None
 
-        if dialog.template_file_selected:
+        if template_filePathName and os.path.isfile (template_filePathName):
 
-            #leave button callback and refresh in a few ms 
-            QTimer().singleShot(10, lambda: self.load_wing (dialog.template_file_selected))     # delayed emit 
+            # copy template file to user data dir as new file
+            workingDir = Settings.user_data_dir (APP_NAME)                      # temp working dir for Worker and Xoptfoil2  
+            new_filePathName = os.path.join(workingDir, os.path.basename(template_filePathName))
+            shutil.copy2(template_filePathName, new_filePathName)
+            logger.info (f"New planform from template '{template_filePathName}' copied to '{new_filePathName}'")
+
+            #load new planform from USER dir
+            self.load_wing (new_filePathName)
 
 
 
@@ -559,10 +571,6 @@ class Main_PC2 (QMainWindow):
 
     def load_wing (self, pathFilename, initial=False): 
         """ creates / loads new wing as current"""
-
-        # reload wing if no path given
-        if pathFilename is None:
-            pathFilename = self.wing().parm_pathFileName_abs if self.wing() else FILENAME_NEW
 
         self._wing = Wing (pathFilename, defaultDir=Settings.user_data_dir (APP_NAME))
         
@@ -652,27 +660,28 @@ class Panel_Planform_Abstract (Edit_Panel):
     @property
     def app (self) -> Main_PC2:
         return self._app 
-    
+
+    @property    
     def wing (self) -> Wing: 
         return self.dataObject
-
+    
     def planform (self) -> Planform:
-        return self.wing().planform
+        return self.wing.planform
     
     def n_chord (self) -> N_Distrib_Abstract:
-        return self.wing().planform.n_distrib
+        return self.wing.planform.n_distrib
 
     def n_chord_ref (self) -> N_Chord_Reference:
-        return self.wing().planform.n_chord_ref
+        return self.wing.planform.n_chord_ref
     
     def n_ref_line (self) -> N_Reference_Line:
-        return self.wing().planform.n_ref_line
+        return self.wing.planform.n_ref_line
     
     def flaps (self) -> Flaps:
-        return self.wing().planform.flaps
+        return self.wing.planform.flaps
 
     def wingSections (self) -> WingSections:
-        return self.wing().planform.wingSections
+        return self.wing.planform.wingSections
 
     def wingSections_to_show (self) -> list[WingSection]:
         """ the wingSections to plot - without extra sections for paneling"""
@@ -748,25 +757,44 @@ class Panel_File (Panel_Planform_Abstract):
                                      toolTip="Rename name and/or filename of current planform"))
         # menue.addAction (MenuAction ("Delete", self, set=self.app.do_delete,
         #                              toolTip="Delete current planform including all temporary files created by the AirfoilEditor"))
-        # menue.addAction (MenuAction ("Delete temp files", self, set=self.app.do_delete_temp_files,
-        #                              toolTip=f"Delete temporary files created by {APP_NAME} just to have a clean directoy again"))
+        menue.addAction (MenuAction ("Delete temp files", self, set=self._delete_temp_files,
+                                     toolTip=f"Delete temporary files created by {APP_NAME} just to have a clean directoy again"))
         menue.addSeparator ()
         menue.addAction (MenuAction ("Readme on Github", self, set=self._open_AE_url,
                                      toolTip=f"Open the Github README file of {APP_NAME} in a browser"))
         menue.addAction (MenuAction ("Releases on Github", self, set= self._open_releases_url,
                                      toolTip=f"Open the Github page with the actual release of {APP_NAME}"))
-
         menue.setToolTipsVisible(True)
 
         return menue
 
+
     def _rename (self):
         """ rename current planform - both name and filename"""
 
-        dialog = Dialog_Rename (self, self.wing, parentPos=(1.5,-0.5), dialogPos=(0,1))  
+        dialog = Dialog_Rename (self, lambda: self.wing, parentPos=(1.5,-0.5), dialogPos=(0,1))  
         dialog.exec()   
 
-        self.app.load_wing (None)      # reload wing to apply new name / filename
+        self.app.load_wing (self.wing.parm_pathFileName_abs)      # reload wing to apply new name / filename
+
+
+    def _delete_temp_files (self):
+        """ delete temporary files created by PC2"""
+
+        text = f"Delete temporary files of <b>{self.wing.parm_fileName}</b>.<br><br>" +\
+               f"The planform will be saved and reloaded after this." 
+
+        msg = MessageBox (self, "Delete Temp Files", text, Icon (Icon.INFO), min_width=300)
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok | MessageBox.StandardButton.Cancel)
+        button = msg.exec()
+
+        if button == QMessageBox.StandardButton.Ok:
+      
+            self.wing.save ()                                     # save first to ensure actual data for reload
+            self.wing.remove_tmp ()
+            self.app.load_wing (self.wing.parm_pathFileName_abs)  # reload wing for new strak etc.
+
+            MessageBox.info (self, "Delete Temp Files", "Temporary files removed")
 
 
     def _open_releases_url (self):
@@ -817,13 +845,13 @@ class Panel_Wing (Panel_Planform_Abstract):
         l = QGridLayout()
         r,c = 0, 0 
         Field  (l,r,c, lab="Name", colSpan=3,
-                obj=self.wing, prop=Wing.name)
+                obj=lambda: self.wing, prop=Wing.name)
         Button (l,r,c+4, text="Descr", width=75, set=self._edit_description)
         r += 1
         FieldF (l,r,c, lab="Wing Span", width=85, unit="mm", step=10, lim=(10, 20000), dec=0,
-                obj=self.wing, prop=Wing.wingspan)
+                obj=lambda: self.wing, prop=Wing.wingspan)
         FieldF (l,r,c+3, lab="Fuselage Width", width=75, unit="mm", step=10, lim=(0, 1000), dec=0,
-                obj=self.wing, prop=Wing.fuselage_width)
+                obj=lambda: self.wing, prop=Wing.fuselage_width)
         r += 1
         FieldF (l,r,c, lab="Half Wing Span", width=85, unit="mm", step=10, lim=(10, 10000), dec=0, 
                 obj=self.planform, prop=Planform.span)
@@ -845,11 +873,11 @@ class Panel_Wing (Panel_Planform_Abstract):
     def _edit_description (self):
         """ open little text editor to edit description"""
 
-        dialog = Dialog_TextEdit (self, self.wing().description, title="Description of Wing", dx=200, dy=-250)
+        dialog = Dialog_TextEdit (self, self.wing.description, title="Description of Wing", dx=200, dy=-250)
         dialog.exec () 
 
         if dialog.result() == QDialog.DialogCode.Accepted:
-            self.wing().set_description (dialog.new_text)
+            self.wing.set_description (dialog.new_text)
             self._on_widget_changed (dialog)                   # manual refresh a dialog is not a 'Widget'
 
 
@@ -1025,8 +1053,8 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         p_foil = QWidget()
         l_foil = QGridLayout (p_foil)
-        Field  (l_foil,0,0,   lab="Airfoil", # width=130,  
-                get=lambda: self._wingSection().airfoil.name,           # name as strak fileName can be long
+        Field  (l_foil,0,0,   lab="Airfoil",
+                get=self._airfoil_name,                 # name as strak fileName can be long
                 toolTip=lambda: self._wingSection().airfoil.info_as_html)
 
         ToolButton (l_foil,0,2, icon=Icon.OPEN, set=self._open_airfoil, 
@@ -1129,6 +1157,12 @@ class Panel_WingSection (Panel_Planform_Abstract):
         return text 
 
 
+    def _airfoil_name (self) -> str:
+        """ get airfoil file name or 'strak' at section"""
+        airfoil = self._wingSection().airfoil
+        return STRAK_AIRFOIL_NAME if airfoil.isBlendAirfoil else airfoil.fileName
+
+
     def _open_airfoil (self):
         """ open a new airfoil and load it"""
 
@@ -1136,7 +1170,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         filters   = "Airfoil files (*.dat);;Bezier files (*.bez);;Hicks Henne files (*.hicks)"
         # inital strak airfoil has yet no fileName - use working dir of wing
-        directory = airfoil.pathName_abs if airfoil.fileName else self.wing().workingDir
+        directory = airfoil.pathName_abs if airfoil.fileName else self.wing.workingDir
 
         newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters, directory=directory)
 
@@ -1179,7 +1213,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         if airfoil: 
 
-            already_copied = os.path.samefile (airfoil.pathName_abs, self.wing().airfoils_dir)
+            already_copied = os.path.samefile (airfoil.pathName_abs, self.wing.airfoils_dir)
 
             if not airfoil.isNormalized:
 
@@ -1187,7 +1221,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
                 text = f"The airfoil '{airfoil.fileName}' is not normalized,\n" +\
                     f"but this is needed for blending (strak).\n\n" + \
-                    f"It will be normalized and copied to {self.wing().airfoils_dir_rel}/."
+                    f"It will be normalized and copied to {self.wing.airfoils_dir_rel}/."
 
                 msg = MessageBox (self, "Airfoil not normalized", text, Icon (Icon.INFO), min_width=350)
                 msg.setStandardButtons(QMessageBox.StandardButton.Ok | MessageBox.StandardButton.Cancel)
@@ -1199,7 +1233,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
             elif not already_copied:    
             # 2 normalized -> ask copy
 
-                text = f"The airfoil '{airfoil.fileName}' will be copied to {self.wing().airfoils_dir_rel}/.\n" +\
+                text = f"The airfoil '{airfoil.fileName}' will be copied to {self.wing.airfoils_dir_rel}/.\n" +\
                     f"which is the recommended location for airfoils of this planform\n\n" + \
                     f"Copy airfoil?"
                 msg = MessageBox (self, "Airfoil not normalized", text, Icon (Icon.INFO), min_width=350)
