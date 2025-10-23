@@ -4072,18 +4072,14 @@ class Planform_Paneled (Planform):
 
         # get panel parameters - x,y are in wing coordinate system (wy is along span)
 
-        self._wy_panels      = fromDict (dataDict, "wy_panels", 8)
-        self._wy_dist        = fromDict (dataDict, "wy_distribution", "uniform")
-
-        self._wx_panels      = fromDict (dataDict, "wx_panels", 3)
-        self._wx_dist        = fromDict (dataDict, "wx_distribution", "uniform")
-
-        self._width_min_targ = fromDict (dataDict, "width_min", None)                # target min panel width 1%
-
-        self._n_distrib.set_cn_tip_min (fromDict (dataDict, "cn_tip_min",None))      # min tip chord 10%
-        self._cn_diff_max    = fromDict (dataDict, "cn_diff_max", None)              # max cn difference 5%
-
-        self._use_nick_name  = fromDict (dataDict, "use_nick_name", False)           # use airfoil nick name for export%
+        self._wy_panels      = None                             # number of panels along span
+        self._wy_dist        = None                             # distribution function along span
+        self._wx_panels      = None                             # number of panels along chord
+        self._wx_dist        = None                             # distribution function along chord
+        self._width_min_targ = None                             # target min panel width 1%
+        self._cn_diff_max    = None                             # max cn difference 5%
+        self._use_nick_name  = None
+        self._from_dict (dataDict )
 
         # dict of available panel distribution functions used for x and y  
 
@@ -4115,9 +4111,23 @@ class Planform_Paneled (Planform):
         toDict (d, "cn_tip_min",        self._n_distrib.cn_tip_min)
         toDict (d, "cn_diff_max",       self._cn_diff_max)
         return d
-    
 
-   # ---Properties --------------------- 
+
+    def _from_dict (self, d : dict):
+        """ set parameters from data dict """
+
+        if not d: d={}
+        self._wy_panels      = fromDict (d, "wy_panels", 8)
+        self._wy_dist        = fromDict (d, "wy_distribution", "uniform")
+        self._wx_panels      = fromDict (d, "wx_panels", 4)
+        self._wx_dist        = fromDict (d, "wx_distribution", "uniform")
+        self._width_min_targ = fromDict (d, "width_min", None)                # target min panel width 1%
+        self._n_distrib.set_cn_tip_min (fromDict (d, "cn_tip_min",None))      # min tip chord 10%
+        self._cn_diff_max    = fromDict (d, "cn_diff_max", None)              # max cn difference 5%
+        self._use_nick_name  = fromDict (d, "use_nick_name", False)           # use airfoil nick name for export%
+
+
+    # ---Properties --------------------- 
 
     @override
     @property
@@ -4383,6 +4393,13 @@ class Planform_Paneled (Planform):
                 lines.append ((line_x, line_y))
 
         return lines 
+
+
+    def reset (self):
+        """ reset paneling to default options - remove all helper sections """
+
+        self._from_dict ({})
+        self.optimize ()
 
 
     def optimize (self, recalc_sections=True):

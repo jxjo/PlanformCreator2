@@ -576,7 +576,7 @@ class Item_VLM_Panels (Diagram_Item):
         panels_artist.set_show_chord_diff (True)
 
         dialog = Dialog_Edit_Paneling (self.section_panel, self.wing().planform_paneled, 
-                                       parentPos=(0.9,0.2), dialogPos=(0.0,0.4))  
+                                       parentPos=(0.9,0.2), dialogPos=(0.0,0.5))  
 
         dialog.sig_paneling_changed.connect (myParent.sig_panel_def_changed.emit)
 

@@ -1121,8 +1121,8 @@ class Dialog_Edit_Paneling (Dialog):
     Dialog to edit / define üaneling options of a Paneled Planform
     """
 
-    _width  = 480
-    _height = 350
+    _width  = 460
+    _height = 330
 
     name = "Define Paneling"
 
@@ -1138,6 +1138,7 @@ class Dialog_Edit_Paneling (Dialog):
 
         # connect dialog buttons
         self._close_btn.clicked.connect  (self.close)
+        self._reset_btn.clicked.connect  (self._on_reset)
 
         # connect widgets change to signal parent
         w : Widget
@@ -1170,7 +1171,6 @@ class Dialog_Edit_Paneling (Dialog):
                      style=style.COMMENT)
         r += 1
         c += 1
-
         FieldI      (l,r,c, width=70, lab="x-Panels", step=1, lim=(1, 20),
                         obj=self.planform, prop=Planform_Paneled.wx_panels)
         r += 1
@@ -1178,7 +1178,6 @@ class Dialog_Edit_Paneling (Dialog):
         ComboBox    (l,r,c+1, width=70,
                         obj=self.planform, prop=Planform_Paneled.wx_dist,
                         options=self.planform.wx_distribution_fns_names)
-
         r = 1
         FieldI      (l,r,c+4, width=70, lab="y-Panels", step=1, lim=(2, 20),
                         obj=self.planform, prop=Planform_Paneled.wy_panels)
@@ -1190,19 +1189,16 @@ class Dialog_Edit_Paneling (Dialog):
 
         # optimization settings 
 
-        r,c = 3, 0 
-        SpaceR      (l,r,height=20)
+        c = 0 
         r += 1
-        Label       (l,r,c, height=30, colSpan=5, get="Optimize paneling for an evenly mesh",
+        Label       (l,r,c, height=40, colSpan=5, get="Optimize paneling for an evenly mesh",
                      style=style.COMMENT)            
-
         r += 1
         c += 1
 
         # define max. deviation of chord - only if Bezier etc.
 
         if not self.is_parent_trapezoidal:
-            r += 1
             CheckBox    (l,r,c, text="Minimize deviation of chord", colSpan=4,
                                 obj=self, prop=Dialog_Edit_Paneling.activated_cn_diff_max)
             FieldF      (l,r,c+4, width=70, step=0.5, lim=(0.5, 50), dec=1, unit="%", 
@@ -1238,7 +1234,7 @@ class Dialog_Edit_Paneling (Dialog):
         l.setColumnMinimumWidth (4,40)
         l.setColumnStretch (8,5)
 
-        l.setRowStretch (r+1, 5)
+        l.setRowStretch (r+1, 1)
         
         return l 
 
@@ -1274,6 +1270,15 @@ class Dialog_Edit_Paneling (Dialog):
             self.planform.set_width_min_targ (None)   
 
 
+    def _on_reset (self, *_):
+        """ reset paneling to default values"""
+
+        self.planform.reset ()
+        self.refresh ()
+        self.sig_paneling_changed.emit()                        # refresh diagram
+
+
+    @override
     def _on_field_changed (self, *_):
         """ slot for widget changes"""
         self.refresh ()                                         # have 'soft' refresh when settings are changed
@@ -1287,6 +1292,10 @@ class Dialog_Edit_Paneling (Dialog):
         buttonBox = QDialogButtonBox (QDialogButtonBox.StandardButton.Close) #  | QDialogButtonBox.StandardButton.Cancel)
 
         self._close_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Close)
+
+        self._reset_btn = QPushButton ("&Reset", parent=self)
+        self._reset_btn.setFixedWidth (80)
+        buttonBox.addButton (self._reset_btn, QDialogButtonBox.ButtonRole.ResetRole)
 
         return buttonBox 
     
