@@ -605,8 +605,8 @@ class Dialog_Edit_Image (Dialog):
     Dialog to define image settings for background image
     """
 
-    _width  = 1150
-    _height = 670
+    _width  = (1150, None)
+    _height = (670, None)
 
     name = "Adjust Background Image"
 
@@ -638,7 +638,7 @@ class Dialog_Edit_Image (Dialog):
 
             self._plotItem = pg.PlotItem ()
 
-            self._graph_widget.addItem (self._plotItem, 0, 0, rowspan=1, colspan=1)
+            self._add_item (self._plotItem, 0, 0)
 
             # add the artist
             self._image_artist = Image_Artist (self._plotItem, None, image_def=self.img_def, show=True)
@@ -661,8 +661,14 @@ class Dialog_Edit_Image (Dialog):
         @override
         def refresh(self):
             """ overridden as we do not have Diagram_Items"""
-            self._image_artist.refresh ()
+            self._image_artist.refresh()
             self.setup_viewRange ()
+
+
+        @override
+        def showEvent (self, ev):
+            """ overridden as we do not have Diagram_Items"""
+            self.refresh()
 
 
         @override
@@ -1295,6 +1301,7 @@ class Dialog_Edit_Paneling (Dialog):
 
         self._reset_btn = QPushButton ("&Reset", parent=self)
         self._reset_btn.setFixedWidth (80)
+        self._reset_btn.setToolTip ("Reset paneling to default values")
         buttonBox.addButton (self._reset_btn, QDialogButtonBox.ButtonRole.ResetRole)
 
         return buttonBox 

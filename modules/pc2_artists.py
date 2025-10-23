@@ -2460,14 +2460,18 @@ class Image_Artist (Abstract_Artist_Planform):
 
         super().__init__ (*args, **kwargs)
 
+    @override
+    @property
+    def data_object (self): 
+        # in case of as_background there is no data object, return dummy to enable plotting 
+        return super().data_object if super().data_object is not None else "dummy"
+
 
     @property
     def img_def (self) -> Image_Definition:
         """ the actual image definition"""
-        if self._image_def is not None: 
-            return self._image_def
-        else:
-            return self.wing.background_image
+        return self._image_def() if callable(self._image_def) else self._image_def
+
 
     @property
     def as_background (self) -> bool: 
@@ -2574,7 +2578,7 @@ class Image_Artist (Abstract_Artist_Planform):
         # load file as QImage, convert to ImageItem, apply modifications 
 
         self._qimage = QImage()
-        self._qimage.load (self.img_def.pathFilename)
+        self._qimage.load (self.img_def.pathFilename_abs)
         self._qimage.convertTo (QImage.Format.Format_ARGB32)                    # ensure not an indexed 8bit 
 
         self._create_imageItem ()

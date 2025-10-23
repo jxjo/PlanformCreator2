@@ -4482,22 +4482,12 @@ class Image_Definition:
         self._rotated             = fromDict (myDict, "rotated", False)
         self._invert              = fromDict (myDict, "invert", False)
         self._remove_red          = fromDict (myDict, "remove_red", False)
-
         self._black_level         = fromDict (myDict, "black_level", 40)            # 0..255 - take start value 
-        # self._white_level         = fromDict (myDict, "white_level", 255) 
 
         self._point_le            = tuple(fromDict (myDict, "point_le", ( 20,-20))) 
         self._point_te            = tuple(fromDict (myDict, "point_te", (400,-20)))
 
         self._qimage              = None
-
-        # sanity
-
-        if self._pathFilename:
-            if not os.path.isabs (self._pathFilename):                              # build absolute path
-                self._pathFilename = PathHandler (workingDir= self._working_dir).fullFilePath (self._pathFilename)
-            if not os.path.isfile (self._pathFilename):
-                self._pathFilename = None
 
 
     def _as_dict (self) -> dict:
@@ -4506,10 +4496,13 @@ class Image_Definition:
         d = {}
         if self.pathFilename:
 
-            # get relative path to working dir 
-            relPath = PathHandler(workingDir= self._working_dir).relFilePath(self.pathFilename)
-            toDict (d, "file",                  relPath) 
+            # ensure relative path to working dir 
+            if os.path.isabs (self._pathFilename):
+                relPath = PathHandler(workingDir= self._working_dir).relFilePath(self.pathFilename)
+            else:
+                relPath = self.pathFilename
 
+            toDict (d, "file",                  relPath) 
             toDict (d, "mirrored_horizontal",   self.mirrored_horizontal) 
             toDict (d, "mirrored_vertical",     self.mirrored_vertical) 
             toDict (d, "rotated",               self.rotated) 
@@ -4525,7 +4518,7 @@ class Image_Definition:
     @property
     def exists (self) -> bool:
         """ this is a valid image definition"""
-        return self.pathFilename is not None
+        return os.path.isfile (self.pathFilename_abs) if self._pathFilename is not None else False
     
     @property
     def filename (self) -> str: 
@@ -4540,6 +4533,17 @@ class Image_Definition:
     def set_pathFilename (self, aPath : str):
         self._pathFilename = aPath
         self._qimage = None
+
+
+    @property
+    def pathFilename_abs (self) -> str: 
+        """ absolute pathFilename of an image e.g. jpg"""
+        if self._pathFilename is None:
+            return None
+        elif os.path.isabs (self._pathFilename):
+            return self._pathFilename
+        else:
+            return PathHandler(workingDir= self._working_dir).fullFilePath(self._pathFilename)
 
 
     @property

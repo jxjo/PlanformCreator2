@@ -516,6 +516,11 @@ class Main_PC2 (QMainWindow):
             #load new planform from USER dir
             self.load_wing (new_filePathName)
 
+            # copy background image if existing
+            if self.wing().background_image.pathFilename:
+                image_pathFileName     = os.path.join(template_dir, self.wing().background_image.pathFilename)
+                new_image_pathFileName = os.path.join(workingDir,   self.wing().background_image.pathFilename)
+                shutil.copy2(image_pathFileName, new_image_pathFileName)
 
 
     def open (self):
@@ -873,7 +878,8 @@ class Panel_Wing (Panel_Planform_Abstract):
     def _edit_description (self):
         """ open little text editor to edit description"""
 
-        dialog = Dialog_TextEdit (self, self.wing.description, title="Description of Wing", dx=200, dy=-250)
+        dialog = Dialog_TextEdit (self, self.wing.description, title="Description of Wing", 
+                                  parentPos=(0.9,0.0), dialogPos=(0.0,1.0))
         dialog.exec () 
 
         if dialog.result() == QDialog.DialogCode.Accepted:

@@ -242,7 +242,9 @@ class Item_Planform (Diagram_Item):
         self._add_artist (Flaps_Artist          (self, self.planform, show=False ,show_legend=True))
         self._add_artist (Airfoil_Name_Artist   (self, self.planform, show=False, show_legend=False))
         self._add_artist (Ref_Planforms_Artist  (self, self.planform, show=False, show_legend=True))
-        self._add_artist (Image_Artist          (self, self.planform, show=False, as_background=True))
+        self._add_artist (Image_Artist          (self, self.planform, show=False, 
+                                                       image_def=lambda: self.wing().background_image,
+                                                       as_background=True))
  
 
     @override
@@ -940,21 +942,6 @@ class Item_VLM_Result (Diagram_Item):
         artist : VLM_Result_Artist = self._get_artist (VLM_Result_Artist)[0]
         artist.set_opPoint_var (self._opPoint_var)
 
-
-    # def edit_polar_def (self):
-    #     """ edit current polar definition"""
-
-    #     ---  needs global refresh ---
-    #     from airfoil_dialogs import Polar_Definition_Dialog
-
-    #     chord = self.wing().planform.chord_root
-
-    #     diag = Polar_Definition_Dialog (self.section_panel, self.polar_def, dx=260, dy=-150, 
-    #                                     polar_type_fixed=True,
-    #                                     fixed_chord=chord)
-    #     diag.exec()
-
-    #     self.refresh()
 
 
     def _export_polar_opPoint (self):
@@ -2001,12 +1988,11 @@ class Diagram_Planform (Diagram_Abstract):
 
         self.wing().background_image._qimage = None
 
-        dialog = Dialog_Edit_Image (self.section_panel, self.wing().background_image, dx=150, dy=-400)  
+        dialog = Dialog_Edit_Image (self.section_panel, self.wing().background_image, 
+                                    parentPos=(1.1,0.5), dialogPos=(0,0.5)) 
         dialog.exec()   
 
         self.refresh()  
-
-
 
 
 
