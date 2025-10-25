@@ -288,6 +288,14 @@ class Item_Planform (Diagram_Item):
     def set_show_bounding_box (self, aBool : bool): 
         self._show_artist (Planform_Box_Artist, aBool)
 
+    @property
+    def airfoil_use_nick (self) -> bool:
+        return self.wing().airfoil_use_nick
+
+    def set_airfoil_use_nick (self, aBool : bool):
+        self.wing().set_airfoil_use_nick (aBool)
+        self.refresh()
+
 
     @property
     def section_panel (self) -> Edit_Panel:
@@ -302,10 +310,9 @@ class Item_Planform (Diagram_Item):
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils)
             CheckBox (l,r,c+1, text="Use nick name", colSpan=3,
-                        get=lambda: self.airfoil_name_artist.use_nick_name,
-                        set=self.airfoil_name_artist.set_use_nick_name,
+                        obj=self, prop=Item_Airfoils.airfoil_use_nick,
                         hide=lambda: not self.show_airfoils,
-                        toolTip="Airfoils nick name is defined in diagram 'Airfoils'")
+                        toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
             r += 1
             CheckBox (l,r,c+1, text="Also blended", 
                         get=lambda: self.show_strak, set=self.set_show_strak,
@@ -991,8 +998,11 @@ class Item_Wing (Diagram_Item):
     def plot_title(self, **kwargs):
 
         title = f'<span style="font-size: 18pt; color: whitesmoke">{self.wing().name}</span>'
-        text_with_br = self.wing().description.replace ("\n", "<br/>")      # textItem needs <br>
-        return super().plot_title (title=title, subtitle = text_with_br, **kwargs)
+        description = self.wing().description.replace ("\n", "<br/>")      # textItem needs <br>
+        powered = f"<span style='font-size: 8pt; color: #606060'>Created with PC2</span>"
+        description = f"{description}{"<br/>" if description else ""}{powered}"
+
+        return super().plot_title (title=title, subtitle = description, **kwargs)
 
 
     @override
@@ -1058,6 +1068,12 @@ class Item_Wing (Diagram_Item):
     def set_show_flaps (self, aBool : bool): 
         self._show_artist (Flaps_Artist, aBool)
 
+    @property
+    def airfoil_use_nick (self) -> bool:
+        return self.wing().airfoil_use_nick
+    def set_airfoil_use_nick (self, aBool : bool):
+        self.wing().set_airfoil_use_nick (aBool)
+        self.refresh()
 
     @property
     def airfoil_name_artist (self) -> Airfoil_Name_Artist:
@@ -1071,14 +1087,6 @@ class Item_Wing (Diagram_Item):
         self.airfoil_name_artist.set_show (aBool)
         self.setup_viewRange()                                      # ensure airfoil names fit in current view 
         self.section_panel.refresh()                                # enable nick checkbox 
-
-
-    @property
-    def use_nick_name (self) -> bool: 
-        return self.airfoil_name_artist.use_nick_name
-
-    def set_use_nick_name (self, aBool : bool): 
-        self.airfoil_name_artist.set_use_nick_name (aBool)
 
 
     @property
@@ -1110,10 +1118,9 @@ class Item_Wing (Diagram_Item):
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
             CheckBox (l,r,c+1, text="Use nick name",  
-                        get=lambda: self.use_nick_name,
-                        set=self.set_use_nick_name,
+                        obj=self, prop=Item_Wing.airfoil_use_nick,
                         hide=lambda: not self.show_airfoils,
-                        toolTip="Airfoils nick name is defined in diagram 'Airfoils'")
+                        toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
             r += 1
             CheckBox (l,r,c, text="Neutral Point (geometric)", colSpan=3, 
                       get=lambda: self.show_np, set=self.set_show_np) 
@@ -1187,6 +1194,12 @@ class Item_Wing_Airfoils (Diagram_Item):
     def airfoil_artist (self) -> Airfoil_Artist:
         return self._get_artist (Airfoil_Artist) [0]
 
+    @property
+    def airfoil_use_nick (self) -> bool:
+        return self.wing().airfoil_use_nick
+    def set_airfoil_use_nick (self, aBool : bool):
+        self.wing().set_airfoil_use_nick (aBool)
+        self.refresh()
 
     @property
     def section_panel (self) -> Edit_Panel:
@@ -1205,9 +1218,8 @@ class Item_Wing_Airfoils (Diagram_Item):
                         set=self.airfoil_artist.set_show_strak) 
             r += 1
             CheckBox (l,r,c, text="Use nick name", 
-                        get=lambda: self.airfoil_artist.use_nick_name,
-                        set=self.airfoil_artist.set_use_nick_name, 
-                        toolTip="Airfoils nick name is defined in diagram 'Airfoils'")
+                        obj=self, prop=Item_Airfoils.airfoil_use_nick,
+                        toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
             r += 1
             l.setColumnStretch (3,2)
 
@@ -1324,7 +1336,14 @@ class Item_Airfoils (Diagram_Item):
     @property
     def airfoil_artist (self) -> Airfoil_Artist:
         return self._get_artist (Airfoil_Artist) [0]
-    
+
+    @property
+    def airfoil_use_nick (self) -> bool:
+        return self.wing().airfoil_use_nick
+    def set_airfoil_use_nick (self, aBool : bool):
+        self.wing().set_airfoil_use_nick (aBool)
+        self.refresh()
+
     @property 
     def airfoil_nick_prefix (self) -> str:
         return self.wing().airfoil_nick_prefix
@@ -1358,8 +1377,7 @@ class Item_Airfoils (Diagram_Item):
                         set=self.airfoil_artist.set_show_thick) 
             r += 1
             CheckBox (l,r,c, text="Use airfoils nick name", colSpan=4,
-                        get=lambda: self.airfoil_artist.use_nick_name,
-                        set=self.airfoil_artist.set_use_nick_name) 
+                        obj=self, prop=Item_Airfoils.airfoil_use_nick) 
             r += 1
             Field    (l,r,c+1, lab="Prefix", width=60,
                         obj=self, prop=Item_Airfoils.airfoil_nick_prefix,
@@ -2166,7 +2184,7 @@ class Diagram_Airfoils (Diagram_Abstract):
     Diagram view to show/plot airfoil diagrams - Container for diagram items 
     """
 
-    name   = "Airfoils && Polars"                           # will be shown in Tabs 
+    name   = "Airfoils"                                     # will be shown in Tabs 
 
     def __init__(self, *args, diagram_settings=[], **kwargs):
 
@@ -2804,9 +2822,9 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
     def launch_flz (self): 
         """ export wing to FLZ and launch """
 
-        self.wing().export_flz.do_it ()
+        self.wing().exporter_flz.do_it ()
 
-        pathFileName = os.path.join (self.wing().export_flz.export_dir_abs, self.wing().export_flz.flz_filename) 
+        pathFileName = os.path.join (self.wing().exporter_flz.export_dir_abs, self.wing().exporter_flz.flz_filename) 
         try: 
             os.startfile(pathFileName, 'open')
         except: 

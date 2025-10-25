@@ -135,10 +135,10 @@ class Wing:
 
         # will hold the handler which manages export including its parameters
 
-        self._export_airfoils       = None 
-        self._export_xflr5          = None 
-        self._export_flz            = None 
-        self._export_dxf            = None 
+        self._exporter_airfoils     = None 
+        self._exporter_xflr5        = None 
+        self._exporter_flz          = None 
+        self._exporter_dxf          = None 
 
         # wing for VLM aero calculation    
 
@@ -146,6 +146,7 @@ class Wing:
 
         # miscellaneous parms
 
+        self._airfoil_use_nick    = fromDict (dataDict, "airfoil_use_nick", False)
         self._airfoil_nick_prefix = fromDict (dataDict, "airfoil_nick_prefix", "PC2-")
         self._airfoil_nick_base   = fromDict (dataDict, "airfoil_nick_base", 100)
 
@@ -172,6 +173,7 @@ class Wing:
         toDict (dataDict, "wing_name",          self._name) 
         toDict (dataDict, "description",        self._description) 
         toDict (dataDict, "fuselage_width",     self._fuselage_width) 
+        toDict (dataDict, "airfoil_use_nick",   self._airfoil_use_nick)
         toDict (dataDict, "airfoil_nick_prefix",self._airfoil_nick_prefix) 
         toDict (dataDict, "airfoil_nick_base",  self._airfoil_nick_base) 
         toDict (dataDict, "reference_pc2_file", self._reference_pc2_file)
@@ -190,14 +192,14 @@ class Wing:
         self._planform._save_to (dataDict)
 
         toDict (dataDict, "panels",             self.planform_paneled._as_dict()) 
-        if self._export_xflr5: 
-            toDict (dataDict, "xflr5",          self._export_xflr5._as_dict()) 
-        if self._export_flz: 
-            toDict (dataDict, "flz",            self._export_flz._as_dict()) 
-        if self._export_airfoils: 
-            toDict (dataDict, "airfoils_export",self._export_airfoils._as_dict()) 
-        if self._export_dxf: 
-            toDict (dataDict, "dxf",            self._export_dxf._as_dict()) 
+        if self._exporter_xflr5: 
+            toDict (dataDict, "xflr5",          self._exporter_xflr5._as_dict()) 
+        if self._exporter_flz: 
+            toDict (dataDict, "flz",            self._exporter_flz._as_dict()) 
+        if self._exporter_airfoils: 
+            toDict (dataDict, "airfoils_export",self._exporter_airfoils._as_dict()) 
+        if self._exporter_dxf: 
+            toDict (dataDict, "dxf",            self._exporter_dxf._as_dict()) 
 
         return dataDict
 
@@ -479,7 +481,14 @@ class Wing:
 
 
     @property
+    def airfoil_use_nick(self) ->  bool: 
+        """ True if airfoil nick names shall be used for display and export (default) """
+        return self._airfoil_use_nick if self._airfoil_use_nick else False
+    def set_airfoil_use_nick(self, aBool : bool): self._airfoil_use_nick = aBool == True
+
+    @property
     def airfoil_nick_prefix(self): 
+        """ prefix string for airfoil nick names e.g. 'JX-GP-' """
         return self._airfoil_nick_prefix if self._airfoil_nick_prefix else 'PC2-'
     def set_airfoil_nick_prefix(self, newStr): self._airfoil_nick_prefix = newStr
 
@@ -505,47 +514,47 @@ class Wing:
 
 
     @property
-    def export_xflr5 (self) : 
+    def exporter_xflr5 (self) : 
         """ returns exporter managing Xflr5 export """
-        from wing_exports       import Export_Xflr5             # here - otherwise circular errors
+        from wing_exports       import Exporter_Xflr5             # here - otherwise circular errors
 
-        if self._export_xflr5 is None:                          # init exporter with parameters in sub dictionary
+        if self._exporter_xflr5 is None:                          # init exporter with parameters in sub dictionary
             xflr5_dict         = fromDict (self.dataDict, "xflr5", "")
-            self._export_xflr5 = Export_Xflr5 (self, self.planform_paneled, xflr5_dict) 
-        return self._export_xflr5     
+            self._exporter_xflr5 = Exporter_Xflr5 (self, self.planform_paneled, xflr5_dict) 
+        return self._exporter_xflr5     
 
 
     @property
-    def export_flz (self) : 
+    def exporter_flz (self) : 
         """ returns exporter managing FLZ export """
-        from wing_exports       import Export_FLZ               # here - otherwise circular errors
+        from wing_exports       import Exporter_FLZ               # here - otherwise circular errors
 
-        if self._export_flz is None:                            # init exporter with parameters in sub dictionary
+        if self._exporter_flz is None:                            # init exporter with parameters in sub dictionary
             flz_dict         = fromDict (self.dataDict, "flz", "")
-            self._export_flz = Export_FLZ (self, self.planform_paneled, flz_dict) 
-        return self._export_flz     
+            self._exporter_flz = Exporter_FLZ (self, self.planform_paneled, flz_dict) 
+        return self._exporter_flz     
 
 
     @property
-    def export_dxf (self): 
+    def exporter_dxf (self): 
         """ returns class managing Dxf export """
-        from wing_exports       import Export_Dxf               # here - otherwise circular errors
+        from wing_exports       import Exporter_Dxf               # here - otherwise circular errors
 
-        if self._export_dxf is None:                            # init exporter with parameters in sub dictionary       
+        if self._exporter_dxf is None:                            # init exporter with parameters in sub dictionary       
             dxf_dict         = fromDict (self.dataDict, "dxf", "")
-            self._export_dxf = Export_Dxf(self, dxf_dict) 
-        return self._export_dxf     
+            self._exporter_dxf = Exporter_Dxf(self, dxf_dict) 
+        return self._exporter_dxf     
 
 
     @property
-    def export_airfoils (self): 
+    def exporter_airfoils (self): 
         """ returns exporter managing airfoils export"""
-        from wing_exports  import Export_Airfoils               # here - otherwise circular errors
+        from wing_exports  import Exporter_Airfoils               # here - otherwise circular errors
 
-        if self._export_airfoils is None:                       # init exporter with parameters in sub dictionary
+        if self._exporter_airfoils is None:                       # init exporter with parameters in sub dictionary
             airfoilsDict          = fromDict (self.dataDict, "airfoils_export", "")
-            self._export_airfoils = Export_Airfoils (self, airfoilsDict) 
-        return self._export_airfoils     
+            self._exporter_airfoils = Exporter_Airfoils (self, airfoilsDict) 
+        return self._exporter_airfoils     
 
     @property
     def parm_pathFileName (self):
@@ -4078,7 +4087,6 @@ class Planform_Paneled (Planform):
         self._wx_dist        = None                             # distribution function along chord
         self._width_min_targ = None                             # target min panel width 1%
         self._cn_diff_max    = None                             # max cn difference 5%
-        self._use_nick_name  = None
         self._from_dict (dataDict )
 
         # dict of available panel distribution functions used for x and y  
@@ -4124,7 +4132,6 @@ class Planform_Paneled (Planform):
         self._width_min_targ = fromDict (d, "width_min", None)                # target min panel width 1%
         self._n_distrib.set_cn_tip_min (fromDict (d, "cn_tip_min",None))      # min tip chord 10%
         self._cn_diff_max    = fromDict (d, "cn_diff_max", None)              # max cn difference 5%
-        self._use_nick_name  = fromDict (d, "use_nick_name", False)           # use airfoil nick name for export%
 
 
     # ---Properties --------------------- 
@@ -4257,13 +4264,6 @@ class Planform_Paneled (Planform):
         """ a list of available distribution functions for wx - along chord"""
         return list(self._wx_distribution_fns.keys())
 
-    @property
-    def use_nick_name (self) -> bool:
-        """ use airfoil nick name for export """
-        return self._use_nick_name
-    def set_use_nick_name (self, aBool : bool):
-        self._use_nick_name = aBool == True
-
 
     def _xn_rel_stations (self, wy_panels=None) -> np.ndarray:
         """ 
@@ -4337,8 +4337,9 @@ class Planform_Paneled (Planform):
 
             width_min_cur = min (width_min_cur, np.mean (panel_widths))
 
-        return xn_stations * self._parent_planform.span, width_min_cur
-    
+        x_stations = np.round (xn_stations * self._parent_planform.span, 6)
+
+        return x_stations , width_min_cur
 
 
     def nx_panels_of_section (self, index : int) -> int:
