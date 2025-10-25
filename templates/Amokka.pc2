@@ -1,7 +1,7 @@
 {
   "pc2_version":2,
   "wing_name":"Amokka",
-  "description":"Planform with a straight trailing edge\nbased on Peter Wicks great Amokka design.",
+  "description":"Planform with a straight trailing edge\nbased on Peter Wicks Amokka design.",
   "fuselage_width":50.0,
   "airfoil_nick_prefix":"JX-",
   "airfoil_nick_base":100,
@@ -23,11 +23,7 @@
       1.0,
       0.55,
       0.089282
-    ],
-    "p1x":0.55,
-    "p1y":1.0,
-    "p2y":0.55,
-    "p3y":0.089282
+    ]
   },
   "chord_reference":{
     "p0y":1.0,
@@ -38,8 +34,7 @@
     {
       "xn":0.0,
       "hinge_cn":0.76,
-      "flap_group":1,
-      "airfoil":"Root_Example.dat"
+      "flap_group":1
     },
     {
       "cn":0.971205,
@@ -82,8 +77,7 @@
     },
     {
       "xn":1.0,
-      "flap_group":2,
-      "airfoil":"Tip_Example.dat"
+      "flap_group":2
     }
   ],
   "flaps":{

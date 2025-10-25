@@ -40,15 +40,21 @@ class Exporter_Abstract:
     EXPORT_DIR_SUFFIX = "_exported"
 
 
-    def __init__(self, wing : Wing):
+    def __init__(self, wing : Wing, dataDict: dict = None):
  
-        self._wing          = wing
-        self._working_dir   = wing.workingDir
-        self._export_dir    = None
-        self._clear_export_dir = False
+        self._wing              = wing
+        self._working_dir       = wing.workingDir
+        self._export_dir        = fromDict (dataDict, "export_dir", None)
+        self._clear_export_dir  = False
 
-        self._exporter_airfoils = None              # optional slave exporter for airfoils
+        # optional slave exporter for airfoils
 
+        if isinstance (self, Exporter_Airfoils):
+            self._exporter_airfoils = None              
+        else:
+            self._exporter_airfoils = Exporter_Airfoils (wing,
+                            dataDict=dataDict,
+                            export_dir_fn= lambda : self.export_dir)
 
     @property
     def wing (self) -> Wing:
@@ -57,7 +63,6 @@ class Exporter_Abstract:
     @property
     def planform (self) -> Planform: 
         return self.wing.planform
-
 
     @property
     def export_dir_default(self):
@@ -90,9 +95,6 @@ class Exporter_Abstract:
     @property
     def exporter_airfoils (self) -> 'Exporter_Airfoils':
         """ returns exporter managing airfoils export"""
-        if self._exporter_airfoils is None:
-            self._exporter_airfoils = Exporter_Airfoils (self.wing, 
-                                                         export_dir_fn= lambda : self.export_dir)
         return self._exporter_airfoils
 
 
@@ -127,16 +129,14 @@ class Exporter_Airfoils (Exporter_Abstract):
                  dataDict : dict = None,                        # initial data dict
                  export_dir_fn : Callable | None = None         # alternate function to get export dir
                  ):
-        super().__init__(wing)
+        super().__init__(wing, dataDict=dataDict)
  
         self._export_dir_fn     = export_dir_fn if callable(export_dir_fn) else None
-        self._export_dir        = fromDict (dataDict, "export_dir", None)
         self._adapt_te_gap      = fromDict (dataDict, "adapt_te_gap", False)
         self._te_gap_mm         = fromDict (dataDict, "te_gap_mm", 0.5)
         self._set_flap          = fromDict (dataDict, "set_flap", False)
         self._flap_angle        = fromDict (dataDict, "flap_angle", 3.0)
-
-        self._use_nick_name     = self.wing.airfoil_use_nick    # initial value from wing
+        self._use_nick_name     = fromDict (dataDict, "use_nick_name", self.wing.airfoil_use_nick)    
 
 
     def _as_dict (self) -> dict:
@@ -144,8 +144,17 @@ class Exporter_Airfoils (Exporter_Abstract):
 
         d = {}
         toDict (d, "export_dir",        self._export_dir) 
+
         toDict (d, "adapt_te_gap",      self._adapt_te_gap) 
-        toDict (d, "te_gap_mm",         self._te_gap_mm) 
+        if self._adapt_te_gap:
+            toDict (d, "te_gap_mm",         self._te_gap_mm) 
+
+        toDict (d, "set_flap",          self._set_flap) 
+        if self._set_flap:  
+            toDict (d, "flap_angle",        self._flap_angle) 
+            
+        toDict (d, "use_nick_name",     self._use_nick_name)
+
         return d
 
 
@@ -341,17 +350,18 @@ class Exporter_Xflr5 (Exporter_Abstract):
     distrib_name_map ["sine"]    = "SINE"
     distrib_name_map ["cosine"]  = "COSINE"
 
-    def __init__(self, wing: Wing, planform_paneled : Planform_Paneled, myDict: dict = None): 
-        super().__init__(wing)
+    def __init__(self, wing: Wing, planform_paneled : Planform_Paneled, dataDict: dict = None): 
+        super().__init__(wing, dataDict=dataDict)
 
         self._planform_paneled  = planform_paneled
-        self._export_dir        = fromDict (myDict, "export_dir", None)
+
 
     def _as_dict (self) -> dict:
         """ returns a data dict with the paramters of self"""
 
         d = {}
         toDict (d, "export_dir", self._export_dir) 
+        d.update(self.exporter_airfoils._as_dict())
         return d
     
 
@@ -580,11 +590,10 @@ class Exporter_FLZ (Exporter_Abstract):
     distrib_name_map ["cosine"]  = "COS"
 
 
-    def __init__(self, wing : Wing, planform_paneled : Planform_Paneled, myDict: dict = None):
-        super().__init__(wing)
+    def __init__(self, wing : Wing, planform_paneled : Planform_Paneled, dataDict: dict = None):
+        super().__init__(wing, dataDict=dataDict)
 
         self._planform_paneled  = planform_paneled
-        self._export_dir        = fromDict (myDict, "export_dir", None)
 
 
     def _as_dict (self) -> dict:
@@ -592,6 +601,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
         d = {}
         toDict (d, "export_dir", self._export_dir) 
+        d.update(self.exporter_airfoils._as_dict())
         return d
 
 
@@ -985,11 +995,10 @@ class Exporter_Dxf (Exporter_Abstract):
 
     EXPORT_DIR_SUFFIX = "_dxf"
 
-    def __init__(self, wing : Wing, myDict: dict = None):
-        super().__init__(wing)
+    def __init__(self, wing : Wing, dataDict: dict = None):
+        super().__init__(wing, dataDict=dataDict)
  
-        self._export_dir         = fromDict (myDict, "export_dir", None)
-        self._export_airfoils    = fromDict (myDict, "export_airfoils", True)
+        self._export_airfoils    = fromDict (dataDict, "export_airfoils", True)
 
 
     def _as_dict (self) -> dict:
@@ -998,7 +1007,7 @@ class Exporter_Dxf (Exporter_Abstract):
         d = {}
         toDict (d, "export_dir",        self._export_dir) 
         toDict (d, "export_airfoils",   self._export_airfoils) 
-
+        d.update(self.exporter_airfoils._as_dict())
         return d
 
 

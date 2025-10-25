@@ -3,16 +3,17 @@
   "wing_name":"Spitfire",
   "description":"Simple elliptical planform similar to the\nSpitfire showing a single inserted flap.",
   "fuselage_width":150.0,
+  "airfoil_use_nick":false,
   "airfoil_nick_prefix":"JX-",
   "airfoil_nick_base":100,
   "background_image":{
     "file":"Spitfire.png",
     "mirrored_horizontal":false,
     "mirrored_vertical":false,
+    "rotated":false,
     "invert":true,
     "remove_red":true,
     "black_level":73,
-    "white_level":201,
     "point_le":[
       103.38,
       38.07
@@ -22,21 +23,39 @@
       109.32
     ]
   },
+  "polar_definitions":[],
   "halfspan":925.0,
   "chord_root":445.704731,
   "sweep_angle":0.0,
   "chord_distribution":{
     "chord_style":"Bezier",
-    "p1x":0.619922,
-    "p1y":0.991035,
-    "p2y":0.441747,
-    "p3y":0.028423
+    "px":[
+      0.0,
+      0.619922,
+      1.0,
+      1.0
+    ],
+    "py":[
+      1.0,
+      0.991035,
+      0.441747,
+      0.028423
+    ]
   },
   "chord_reference":{
     "p0y":0.364545,
     "p1y":0.398367
   },
-  "reference_line":{},
+  "reference_line":{
+    "px":[
+      0.0,
+      1.0
+    ],
+    "py":[
+      0.0,
+      0.0
+    ]
+  },
   "wingSections":[
     {
       "xn":0.0,
@@ -60,5 +79,11 @@
   ],
   "flaps":{
     "hinge_equal_ref_line":false
+  },
+  "panels":{
+    "wy_panels":8,
+    "wy_distribution":"uniform",
+    "wx_panels":4,
+    "wx_distribution":"uniform"
   }
 }

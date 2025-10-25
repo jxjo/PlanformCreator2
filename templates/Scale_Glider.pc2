@@ -3,6 +3,7 @@
   "wing_name":"Scale Glider",
   "description":"Trapezoidal planfrom of real gliders,\nin this case it is the ASW 17.",
   "fuselage_width":100.0,
+  "airfoil_use_nick":false,
   "airfoil_nick_prefix":"",
   "airfoil_nick_base":100,
   "background_image":{
@@ -25,7 +26,7 @@
   "polar_definitions":[],
   "halfspan":2000.0,
   "chord_root":190.0,
-  "sweep_angle":-1.5,
+  "sweep_angle":-0.7,
   "chord_distribution":{
     "chord_style":"Trapezoid"
   },
@@ -33,15 +34,23 @@
     "p0y":0.75,
     "p1y":0.75
   },
-  "reference_line":{},
+  "reference_line":{
+    "px":[
+      0.0,
+      1.0
+    ],
+    "py":[
+      0.0,
+      0.0
+    ]
+  },
   "wingSections":[
     {
       "xn":0.0,
       "cn":1.0,
       "defines_cn":true,
       "hinge_cn":0.82,
-      "flap_group":1,
-      "airfoil":"Root_Example.dat"
+      "flap_group":1
     },
     {
       "xn":0.587083,
@@ -59,8 +68,7 @@
       "cn":0.43,
       "defines_cn":true,
       "hinge_cn":0.73,
-      "flap_group":2,
-      "airfoil":"Tip_Example.dat"
+      "flap_group":2
     }
   ],
   "flaps":{

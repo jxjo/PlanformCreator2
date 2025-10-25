@@ -3,24 +3,43 @@
   "wing_name":"F3B/F3F",
   "description":"Typical optimized planform with a\nslightly over-elliptical chord distribution",
   "fuselage_width":40.0,
+  "airfoil_use_nick":false,
   "airfoil_nick_prefix":"JX-",
   "airfoil_nick_base":100,
   "background_image":{},
+  "polar_definitions":[],
   "halfspan":1470.0,
   "chord_root":230.0,
   "sweep_angle":0.0,
   "chord_distribution":{
     "chord_style":"Bezier",
-    "p1x":0.55,
-    "p1y":1.0,
-    "p2y":0.584092,
-    "p3y":0.021395
+    "px":[
+      0.0,
+      0.55,
+      1.0,
+      1.0
+    ],
+    "py":[
+      1.0,
+      1.0,
+      0.584092,
+      0.021395
+    ]
   },
   "chord_reference":{
     "p0y":0.75,
     "p1y":0.75
   },
-  "reference_line":{},
+  "reference_line":{
+    "px":[
+      0.0,
+      1.0
+    ],
+    "py":[
+      0.0,
+      0.0
+    ]
+  },
   "wingSections":[
     {
       "xn":0.0,
@@ -36,12 +55,22 @@
       "flap_group":2
     },
     {
+      "cn":0.734014,
+      "flap_group":2,
+      "is_for_panels":true
+    },
+    {
       "cn":0.55,
       "flap_group":2
     },
     {
       "cn":0.33,
       "flap_group":2
+    },
+    {
+      "cn":0.175718,
+      "flap_group":2,
+      "is_for_panels":true
     },
     {
       "xn":1.0,
@@ -55,7 +84,7 @@
   "panels":{
     "wy_panels":8,
     "wy_distribution":"uniform",
-    "wx_panels":8,
+    "wx_panels":5,
     "wx_distribution":"uniform",
     "width_min":0.02,
     "cn_tip_min":0.07,
