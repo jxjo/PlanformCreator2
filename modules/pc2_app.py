@@ -110,17 +110,19 @@ class Main_PC2 (QMainWindow):
     def __init__(self, pc2_file):
         super().__init__()
 
-        self._panel_data            = None                  # lower main panel
-        self._panel_data_small      = None                  # lower main panel - minimized version
-        self._panel_data_minimized  = False                 # is lower panel minimized
-        self._panel_diagrams        = None                  # upper main panel
-        self._cur_wingSection       = None                  # Dispatcher field between Diagram and Edit
-        self._wing : Wing           = None                  # actual wing model
-        self._watchdog              = None                  # polling thread for new polars
+        self._panel_data                    = None          # lower main panel
+        self._panel_data_small              = None          # lower main panel - minimized version
+        self._panel_data_minimized          = False         # is lower panel minimized
+        self._panel_diagrams : Tab_Panel    = None          # upper main panel
+        self._cur_wingSection               = None          # Dispatcher field between Diagram and Edit
+        self._wing : Wing                   = None          # actual wing model
+        self._watchdog                      = None          # polling thread for new polars
 
         # set user settings path, load settings 
 
-        Settings.set_path (APP_NAME, file_extension= '.settings')
+        Settings.set_file (APP_NAME, file_extension= '.settings')
+        app_settings = Settings()                            # load app settings
+
 
         # check for newer version on PyPi 
 
@@ -130,7 +132,7 @@ class Main_PC2 (QMainWindow):
 
         # Worker for polar generation ready?
 
-        workingDir = Settings.user_data_dir (APP_NAME)                      # temp working dir for Worker and Xoptfoil2  
+        workingDir = Settings.user_data_dir (APP_NAME)                  # temp working dir for Worker and Xoptfoil2  
         modulesDir = os.path.dirname(os.path.abspath(__file__))                
         projectDir = os.path.dirname(modulesDir)
         Worker(workingDir=workingDir).isReady (projectDir, min_version=self.WORKER_MIN_VERSION)
@@ -138,16 +140,17 @@ class Main_PC2 (QMainWindow):
 
         # ---- create 'wing' model -------
 
-        Example.workingDir_default = Settings.user_data_dir (APP_NAME)    # example airfoil workingDir 
+        Example.workingDir_default = Settings.user_data_dir (APP_NAME)  # example airfoil workingDir 
 
         # if no initial pc2 file, try to get last opened pc2 file
 
         if not pc2_file: 
-            pc2_file = Settings().get('last_opened', default=None)
+            pc2_file = app_settings.get('last_opened', default=None)
 
         if pc2_file and not os.path.isfile (pc2_file):
             logger.error (f"Parameter file '{pc2_file}' doesn't exist")
-            Settings().set('last_opened', None)
+            app_settings.set('last_opened', None)
+            app_settings.save()
             pc2_file = None
 
         self.load_wing (pc2_file, initial=True)
@@ -160,20 +163,18 @@ class Main_PC2 (QMainWindow):
 
         # Qt color scheme, initial window size from settings      
 
-        scheme_name = Settings().get('color_scheme', Qt.ColorScheme.Unknown.name)           # either unknown (from System), Dark, Light
+        scheme_name = app_settings.get('color_scheme', Qt.ColorScheme.Unknown.name)           # either unknown (from System), Dark, Light
         QGuiApplication.styleHints().setColorScheme(Qt.ColorScheme[scheme_name])            # set scheme of QT
         Widget.light_mode = not (scheme_name == Qt.ColorScheme.Dark.name)                   # set mode for Widgets 
 
-        geometry = Settings().get('window_geometry', [])
-        maximize = Settings().get('window_maximize', False)
+        geometry = app_settings.get('window_geometry', [])
+        maximize = app_settings.get('window_maximize', False)
         Win_Util.set_initialWindowSize (self, size_frac= (0.70, 0.70), pos_frac=(0.1, 0.1),
                                         geometry=geometry, maximize=maximize)
 
         # main layout of app
 
         l = QGridLayout () 
-
-        self._panel_data_minimized = Settings().get('panel_data_minimized', False)
 
         l.addWidget (self.panel_diagrams,   0,0)
         l.addWidget (self.panel_data_small, 1,0)
@@ -186,6 +187,14 @@ class Main_PC2 (QMainWindow):
         main = QWidget()
         main.setLayout (l) 
         self.setCentralWidget (main)
+
+        # apply settings to UI
+
+        self._panel_view_minimized = app_settings.get('panel_view_minimized', False)
+        self._panel_diagrams.set_tab (app_settings.get('current_diagram', None))
+
+        for diagram in self._diagrams:
+            diagram.set_settings (app_settings)
 
         # ---- signals and slots ------------ 
 
@@ -262,10 +271,8 @@ class Main_PC2 (QMainWindow):
 
             self._panel_data = Container_Panel (layout=l, title="Wing Data", height=150,
                                                 hide=lambda: self._panel_data_minimized,
-                                                doubleClick= self.toggle_data_panel_size)
-            # hint will add stretch to layout
-            self._panel_data.add_doubleClick_hint ("Double click to minimize")
-
+                                                doubleClick= self.toggle_data_panel_size,
+                                                hint="Double click to minimize")
         return self._panel_data
 
 
@@ -283,10 +290,8 @@ class Main_PC2 (QMainWindow):
 
             self._panel_data_small = Container_Panel (layout=l, title="Wing Data Small", height=62,
                                                       hide=lambda: not self._panel_data_minimized,
-                                                      doubleClick= self.toggle_data_panel_size)
-            # hint will add stretch to layout
-            self._panel_data_small.add_doubleClick_hint ("Double click to maximize")
-
+                                                      doubleClick= self.toggle_data_panel_size,
+                                                      hint="Double click to maximize")
         return self._panel_data_small
 
 
@@ -296,21 +301,17 @@ class Main_PC2 (QMainWindow):
 
         if self._panel_diagrams is None: 
 
-            polar_settings  = Settings().get (Diagram_Airfoils.__name__, [])
-            current_diagram = Settings().get('current_diagram', Diagram_Making_Of.__name__)
-
             diagrams = []
             diagrams.append (Diagram_Making_Of     (self, self.wing))
             diagrams.append (Diagram_Wing          (self, self.wing))
             diagrams.append (Diagram_Planform      (self, self.wing, self.wingSection))
-            diagrams.append (Diagram_Airfoils      (self, self.wing, diagram_settings= polar_settings))
+            diagrams.append (Diagram_Airfoils      (self, self.wing))
             diagrams.append (Diagram_Wing_Analysis (self, self.wing, self.wingSection))
 
             tab_panel = Tab_Panel (self)
             for diagram in diagrams:
                 tab_panel.add_tab(diagram)
             tab_panel.setMinimumHeight(500)
-            tab_panel.set_tab (current_diagram)
 
             self._panel_diagrams = tab_panel
             self._diagrams = diagrams
@@ -411,28 +412,27 @@ class Main_PC2 (QMainWindow):
         self.setWindowTitle (APP_NAME + "  v" + str(__version__) + "  [" + self.wing().parm_fileName + "]")
 
 
-    def _save_settings (self):
+    def _save_app_settings (self):
         """ save settings, eg Window size and position, to file """
 
-        # get settings dict to avoid a lot of read/write
-        settings = Settings().get_dataDict ()
+        s = Settings()
 
-        toDict (settings,'window_geometry', self.normalGeometry ().getRect())
-        toDict (settings,'window_maximize', self.isMaximized())
-        toDict (settings,'panel_data_minimized', self._panel_data_minimized)
+        # save Window size and position 
+        s.set ('window_maximize', self.isMaximized())
+        s.set ('window_geometry', self.normalGeometry().getRect())
+        s.set ('panel_view_minimized', self._panel_view_minimized)
 
         # save current tab as classname 
-        current_diagram = self._panel_diagrams.currentWidget().__class__.__name__
-        toDict (settings,'current_diagram',current_diagram)
+        cur_widget : Diagram_Abstract = self._panel_diagrams.currentWidget()
+        s.set('current_diagram', cur_widget.__class__.__name__)
 
         # save settings of diagrams 
         diagram : Diagram_Abstract
         for diagram in self._diagrams:
-            parms = diagram._as_dict_list ()
-            toDict (settings, diagram.__class__.__name__, parms)
+            s_diagram = diagram.settings()
+            s.set(diagram.name, s_diagram)
 
-
-        Settings().write_dataDict (settings)
+        s.save()
         
 
     @override
@@ -476,7 +476,7 @@ class Main_PC2 (QMainWindow):
 
             # save application settings
             else:                                
-                self._save_settings ()
+                self._save_app_settings ()
 
             # terminate polar watchdog thread 
 
@@ -562,7 +562,9 @@ class Main_PC2 (QMainWindow):
         if newPathFilename: 
             self.save (newPathFilename = newPathFilename)
             self.set_title ()
-            Settings().set('last_opened', newPathFilename)
+            s = Settings()
+            s.set('last_opened', newPathFilename)
+            s.save()
 
 
     def edit_settings (self):
@@ -582,7 +584,9 @@ class Main_PC2 (QMainWindow):
         self._cur_wingSection = None
 
         if self.wing().parm_fileName != FILENAME_NEW:
-            Settings().set('last_opened', self.wing().parm_pathFileName_abs)
+            s = Settings()
+            s.set('last_opened', self.wing().parm_pathFileName_abs)
+            s.save()
 
         self.set_title ()
 
@@ -747,7 +751,7 @@ class Panel_File (Panel_Planform_Abstract):
         SpaceR (l,r, stretch=1)
         r += 1
         Button (l,r,c, text="&Exit", width=100, set=self.app.close)
-        l.setColumnMinimumWidth (1,20)
+        l.setColumnMinimumWidth (1,12)
         l.setColumnStretch (3,1)
 
         return l 
@@ -816,28 +820,40 @@ class Panel_File (Panel_Planform_Abstract):
         QDesktopServices.openUrl(QUrl(link))
 
 
-class Panel_File_Small (Panel_Planform_Abstract):
+
+class Panel_File_Small (Panel_File):
     """ File panel small height  - just exit """
 
-    name = 'File'
     
     def _init_layout (self): 
 
         l = QGridLayout()
         r,c = 0, 0 
         Button      (l,r,c, text="&Open", width=100, 
-                     set=self.app.open, toolTip="Open new Planform",
-                     button_style=button_style.PRIMARY)
-        ToolButton  (l,r,c+2, icon=Icon.COLLAPSE, set=self.app.toggle_data_panel_size,
+                    set=self.app.open, toolTip="Open new Planform",
+                    button_style=button_style.PRIMARY)
+        MenuButton  (l,r,c+2, text="More...", width=80, 
+                    menu=self._more_menu(), 
+                    toolTip="Choose further actions for this airfoil")
+        ToolButton  (l,r,c+3, icon=Icon.COLLAPSE, set=self.app.toggle_data_panel_size,
                     toolTip='Maximize lower panel -<br>Alternatively, you can double click on the lower panels')
         r += 1
         Button      (l,r,c, text="&Exit", width=100, set=self.app.close)
         r += 1
-        l.setRowStretch (r,1)
-
-        l.setColumnStretch (1,2)
+        l.setColumnMinimumWidth (1,12)
+        l.setColumnStretch (2,2)
         return l 
  
+    def _more_menu (self) -> QMenu:
+        """ create and return sub menu for 'more' actions"""
+
+        menue = super()._more_menu ()
+        menue.insertAction (menue.actions()[0], MenuAction ("&Save", self, set=self.app.save,   
+                                    toolTip="Save Planform to parameter file"))
+        menue.insertAction (menue.actions()[0], MenuAction ("&New", self, set=self.app.new,   
+                                    toolTip="Create new Planform"))
+        return menue
+
 
 class Panel_Wing (Panel_Planform_Abstract):
     """ Main geometry data of wing"""
@@ -888,11 +904,11 @@ class Panel_Wing (Panel_Planform_Abstract):
 
 
 
-class Panel_Wing_Small (Panel_Planform_Abstract):
+class Panel_Wing_Small (Panel_Wing):
     """ Minimized wing panel """
 
-    name = 'Wing'
-    _width  = (420, None)
+    _width  = None
+    _panel_margins = (0, 0, 0, 0)
 
     def _init_layout (self): 
 
@@ -909,9 +925,8 @@ class Panel_Wing_Small (Panel_Planform_Abstract):
         l.setRowStretch (r,1)
 
         l.setColumnMinimumWidth (0,95)
+        l.setColumnMinimumWidth (2,15)
         l.setColumnMinimumWidth (3,90)
-        l.setColumnStretch (2,1)
-        l.setColumnStretch (5,2)
         return l 
 
 
@@ -950,11 +965,11 @@ class Panel_Chord_Reference (Panel_Planform_Abstract):
 
 
 
-class Panel_Chord_Reference_Small (Panel_Planform_Abstract):
+class Panel_Chord_Reference_Small (Panel_Chord_Reference):
     """ Small Chord Reference panel"""
 
-    name    = 'Chord Distribution and Reference'
-    _width  = (370, None)
+    _width  = None
+    _panel_margins = (0, 0, 0, 0)
 
     def _init_layout (self): 
         l = QGridLayout()
@@ -976,12 +991,12 @@ class Panel_Chord_Reference_Small (Panel_Planform_Abstract):
         return l 
 
 
+
 class Panel_WingSection (Panel_Planform_Abstract):
     """ Main geometry data of wing"""
 
     name = 'Wing Section'
     _width  = (680, None)
-
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1282,18 +1297,11 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
 
 
-class Panel_WingSection_Small (Panel_Planform_Abstract):
+class Panel_WingSection_Small (Panel_WingSection):
     """ Main geometry data of wing"""
 
-    name = 'Wing Section Small'
-    _width  = (460, None)
-
-    @override
-    @property
-    def _isDisabled (self) -> bool:
-        """ overloaded: disabled if section is just for paneling """
-        return self._wingSection().is_for_panels
-
+    _width  = None
+    _panel_margins = (0, 0, 0, 0)
 
     def _init_layout (self): 
 
@@ -1338,46 +1346,6 @@ class Panel_WingSection_Small (Panel_Planform_Abstract):
         l.setColumnStretch (c+7,2)
         return l 
 
-
-    def _wingSections_list (self) -> list:
-        sec_list = [section.name_short for section in self.wingSections_to_show()]
-        return sec_list 
-
-    def _wingSection (self) -> WingSection:
-        """ Dispatcher for current WingSection between Edit and Diagram """
-        return self.app.wingSection()
-
-    def _wingSection_name (self) -> str:
-        return self._wingSection().name_short
-    
-    def _set_wingSection_name (self, aSection : WingSection| str):
-        """ set cur wingSection by name """
-        self.app.on_wingSection_selected(aSection)
-
-
-    def _delete_wingSection (self):
-        """ delete current wingSection"""
-        aSection = self.wingSections().delete (self._wingSection())     
-        self.app.on_wingSection_selected (aSection)  
-
-    def _add_wingSection (self):
-        """ add wingSection after current"""
-        aSection = self.wingSections().create_after (self._wingSection()) 
-        self.app.on_wingSection_selected (aSection)    
-
-
-    def _style_for_fixed (self, is_fix: bool) -> style:
-        """ returns the style for the entry field dependant if xn or cn is fixed"""
-        if is_fix: 
-            return style.HINT
-        else: 
-            return style.NORMAL
-
-    @override
-    def _on_widget_changed (self, widget):
-        """ user changed data in widget"""
-        logger.debug (f"{self}  {self._wingSection()} changed")
-        self.app.sig_wingSection_changed.emit()
 
 
 

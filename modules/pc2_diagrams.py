@@ -69,13 +69,6 @@ class Diagram_Abstract (Diagram):
         self.graph_layout.setVerticalSpacing (10)
 
 
-    def _as_dict_list (self) -> list:
-        """ returns a list with data dict of the parameters of self"""
-
-        # to override 
-        return None
-
-
     def wing (self) -> Wing: 
         """ currently active wing"""
         return self._getter()
@@ -1415,12 +1408,11 @@ class Item_Polars (Diagram_Item):
 
     sig_xyVars_changed           = pyqtSignal()         # airfoil data changed in a diagram 
 
-    def __init__(self, *args, iItem= 1, xyVars=None, **kwargs):
+    def __init__(self, *args, iItem= 1, **kwargs):
 
         self._iItem  = iItem
         self._xyVars = None
         self._xyVars_show_dict = {}                     # dict of xyVars shown up to now 
-        self.set_xyVars (xyVars)                        # polar vars for x,y axis 
 
         self._title_item2 = None                        # a second 'title' for x-axis 
         self._autoRange_not_set = True                  # to handle initial no polars to autoRange 
@@ -1433,20 +1425,40 @@ class Item_Polars (Diagram_Item):
 
         # buttons for prev/next diagram 
 
-        ico = Icon (Icon.COLLAPSE,light_mode = False)
-        self._prev_btn = pg.ButtonItem(pixmap=ico.pixmap(QSize(52,52)), width=26, parentItem=self)
-        self._prev_btn.mode = 'auto'
-        self._prev_btn.clicked.connect(self._prev_btn_clicked)  
+        p = Icon_Button (Icon.COLLAPSE, parent=self, itemPos=(0.5,0), parentPos=(0.5,0), offset=(0,0) )
+        p.clicked.connect(self._btn_prev_next_clicked)  
+        self._prev_btn = p
 
-        ico = Icon (Icon.EXPAND,light_mode = False)
-        self._next_btn = pg.ButtonItem(pixmap=ico.pixmap(QSize(52,52)), width=26, parentItem=self)
-        self._next_btn.mode = 'auto'
-        self._next_btn.clicked.connect(self._next_btn_clicked)       
+        p = Icon_Button (Icon.EXPAND, parent=self, itemPos=(0.5,1), parentPos=(0.5,1), offset=(0,5) )
+        p.clicked.connect(self._btn_prev_next_clicked)
+        self._next_btn = p
 
         self._refresh_prev_next_btn ()
 
         # set margins (inset) of self 
         self.setContentsMargins ( 0,10,10,20)
+
+    @override
+    def _settings (self) -> dict:
+        """ return dictionary of self settings"""
+        d = {}
+
+        # axes x, y variables
+        toDict (d, "xyVars", (str(self.xVar), str(self.yVar)))
+        return d
+
+
+    @override
+    def _set_settings (self, d : dict):
+        """ set settings of self from dict """
+
+        # axes x, y variables
+        xyVars = d.get('xyVars', None)                          
+        if xyVars is not None:
+            self.set_xyVars (xyVars)
+            self._refresh_artist_xy ()
+            self.setup_viewRange ()
+
 
     @property 
     def has_reset_button (self) -> bool:
@@ -1473,8 +1485,10 @@ class Item_Polars (Diagram_Item):
         super().resizeEvent (ev)
 
 
-    def _handle_prev_next (self, step = 0):
-        """ activates prev or next xy view defined by step"""
+    def _btn_prev_next_clicked (self, button : Icon_Button):
+        """ prev or next buttons clicked"""
+
+        step = -1 if button.icon_name == Icon.COLLAPSE else 1
 
         try:
             # save current view Range
@@ -1487,23 +1501,29 @@ class Item_Polars (Diagram_Item):
                 self._xyVars = l[i]
                 viewRect = self._xyVars_show_dict [self._xyVars]
                 self.setup_viewRange (rect=viewRect)                # restore view Range
-                self._refresh_artist ()                             # draw new polar
+                self._refresh_artist_xy ()                             # draw new polar
                 self.sig_xyVars_changed.emit()                      # update view panel 
             self._refresh_prev_next_btn ()                          # update vsibility of buttons
         except :
             pass
 
 
-    def _prev_btn_clicked (self):
-        """ previous diagram button clicked"""
-        # leave scene clicked event as plot items will be removed with new xy vars 
-        QTimer.singleShot (10, lambda: self._handle_prev_next (step=-1))
-
-
-    def _next_btn_clicked (self):
-        """ next diagram button clicked"""
-        # leave scene clicked event as plot items will be removed with new xy vars 
-        QTimer.singleShot (10, lambda: self._handle_prev_next (step=1))
+    def _btn_var_clicked (self, axis, pos : QPoint):
+        """ slot - polar var button in diagram clicked - show menu list of variables"""
+        menu = QMenu()
+       
+        # Build popup menu 
+        for v in var.list_small():
+            action = QAction (v.value, menu)
+            action.setCheckable (True)
+            if axis == "y":
+                action.setChecked (v == self.yVar)
+                action.triggered.connect (lambda  checked, v=v: self.set_yVar (v))
+            else:
+                action.setChecked (v == self.xVar)
+                action.triggered.connect (lambda  checked, v=v: self.set_xVar (v))
+            menu.addAction (action)
+        menu.exec (pos)
 
 
     @override
@@ -1517,19 +1537,17 @@ class Item_Polars (Diagram_Item):
             self.scene().removeItem (self._title_item2)         # was added directly to the scene via setParentItem
        
         # y-axis
-        p = pg.LabelItem(self.yVar, color=QColor(Artist.COLOR_HEADER), size=f"{Artist.SIZE_HEADER}pt")    
-
-        p.setParentItem(self)                              # add to self (Diagram Item) for absolute position 
-        p.anchor(itemPos=(0,0), parentPos=(0,0), offset=(50,5))
-        p.setZValue(5)
+        p = Text_Button (self.yVar, parent=self, color=QColor(Artist.COLOR_HEADER), size=f"{Artist.SIZE_HEADER}pt",
+                         itemPos=(0,0), parentPos=(0,0), offset=(60,5))
+        p.clicked.connect (lambda pos: self._btn_var_clicked("y",pos)) 
+        p.setToolTip (f"Select polar variable for y axis")           
         self._title_item = p
 
         # x-axis
-        p = pg.LabelItem(self.xVar, color=QColor(Artist.COLOR_HEADER), size=f"{Artist.SIZE_HEADER}pt")    
-
-        p.setParentItem(self)                              # add to self (Diagram Item) for absolute position 
-        p.anchor(itemPos=(1.0,1), parentPos=(0.98,1.0), offset=(0,-40))
-        p.setZValue(5)
+        p = Text_Button (self.xVar, parent=self, color=QColor(Artist.COLOR_HEADER), size=f"{Artist.SIZE_HEADER}pt",
+                         itemPos=(1,1), parentPos=(1,1), offset=(-15,-50))
+        p.setToolTip (f"Select polar variable for x axis")           
+        p.clicked.connect (lambda pos: self._btn_var_clicked("x",pos))            
         self._title_item2 = p
 
 
@@ -1570,7 +1588,7 @@ class Item_Polars (Diagram_Item):
             self._next_btn.hide()
 
 
-    def _refresh_artist (self): 
+    def _refresh_artist_xy (self): 
         """ refresh plar artist with new diagram variables"""
 
         artist : Polar_Artist = self._artists [0]
@@ -1595,7 +1613,7 @@ class Item_Polars (Diagram_Item):
         # wait a little until user is sure for new xyVars (prev/next buttons)
         QTimer.singleShot (3000, self._add_xyVars_to_show_dict)
 
-        self._refresh_artist ()
+        self._refresh_artist_xy ()
         self.setup_viewRange ()
 
 
@@ -1614,7 +1632,7 @@ class Item_Polars (Diagram_Item):
         # wait a little until user is sure for new xyVars (prev/next buttons)
         QTimer.singleShot (3000, self._add_xyVars_to_show_dict)
 
-        self._refresh_artist ()
+        self._refresh_artist_xy ()
         self.setup_viewRange ()
 
 
@@ -1700,7 +1718,7 @@ class Item_Polars (Diagram_Item):
 
         # reduce vertical spacing 
         l : QGraphicsGridLayout = self.legend.layout
-        l.setVerticalSpacing(0)
+        l.setVerticalSpacing(-5)
 
 
 
@@ -2186,13 +2204,11 @@ class Diagram_Airfoils (Diagram_Abstract):
 
     name   = "Airfoils"                                     # will be shown in Tabs 
 
-    def __init__(self, *args, diagram_settings=[], **kwargs):
+    def __init__(self, *args, **kwargs):
 
-        self._polar_panel   = None 
-        self._general_panel = None                          # panel with general settings  
-        self._export_panel  = None
-
-        self._diagram_settings = diagram_settings
+        self._panel_polar   = None 
+        self._panel_common  = None                          # panel with general settings  
+        self._panel_export  = None
 
         self._show_operating_points = False                 # show polars operating points 
         self._show_strak    = False                         # show blended airfoils
@@ -2202,21 +2218,6 @@ class Diagram_Airfoils (Diagram_Abstract):
         super().__init__(*args, **kwargs)
 
         self._apply_min_re_to_artists ()
-
-    # --- save --------------------- 
-
-    def _as_dict_list (self) -> list:
-        """ returns a list with data dict of the parameters of diagram items """
-
-        l = []
-        item : Item_Polars
-        for item in self._get_items (Item_Polars):
-            item_dict = {}
-            toDict (item_dict, "xyVars", (str(item.xVar), str(item.yVar)))
-
-            l.append (item_dict)
-        return l
-
 
     # -------------
 
@@ -2261,17 +2262,13 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             # create Polar items with init values from settings 
 
-            dataDict = self._diagram_settings[0] if len(self._diagram_settings) > 0 else {"xyVars" : (var.CD,var.CL)}
-            xyVars = dataDict ["xyVars"]
-
-            item = Item_Polars (self, iItem=1, getter=self.wing, xyVars=xyVars, show=False)
+            item = Item_Polars (self, iItem=1, getter=self.wing, show=False)
+            item._set_settings ({"xyVars" : (var.CD,var.CL)})
             item.sig_xyVars_changed.connect (self._on_xyVars_changed)
             self._add_item (item, r, 0)
 
-            dataDict = self._diagram_settings[1] if len(self._diagram_settings) > 1 else {"xyVars" : (var.CL,var.GLIDE)}
-            xyVars = dataDict ["xyVars"]
-
-            item = Item_Polars (self, iItem=2, getter=self.wing, xyVars=xyVars, show=False)
+            item = Item_Polars (self, iItem=2, getter=self.wing, show=False)
+            item._set_settings ({"xyVars" : (var.CL,var.GLIDE)})
             item.sig_xyVars_changed.connect (self._on_xyVars_changed)
             self._add_item (item, r, 1)
  
@@ -2288,13 +2285,13 @@ class Diagram_Airfoils (Diagram_Abstract):
 
         layout : QVBoxLayout = self._viewPanel.layout()
 
-        layout.insertWidget (0, self.general_panel, stretch=0)
-        layout.insertWidget (2, self.polar_panel, stretch=0)
+        layout.insertWidget (0, self.panel_common, stretch=0)
+        layout.insertWidget (2, self.panel_polar, stretch=0)
 
         # export panel at bottom 
 
         layout.addStretch   (3)
-        layout.addWidget    (self.export_panel, stretch=0)
+        layout.addWidget    (self.panel_export, stretch=0)
 
 
     @property 
@@ -2338,7 +2335,7 @@ class Diagram_Airfoils (Diagram_Abstract):
 
     def set_apply_min_re (self, aBool : bool):
         self._apply_min_re = aBool == True 
-        self.polar_panel.refresh()
+        self.panel_polar.refresh()
         self._apply_min_re_to_artists ()
 
 
@@ -2353,10 +2350,10 @@ class Diagram_Airfoils (Diagram_Abstract):
 
 
     @property 
-    def general_panel (self) -> Edit_Panel | None:
+    def panel_common (self) -> Edit_Panel | None:
         """ additional section panel with commmon settings"""
 
-        if self._general_panel is None:
+        if self._panel_common is None:
 
             l = QGridLayout()
             r,c = 0, 0
@@ -2365,16 +2362,16 @@ class Diagram_Airfoils (Diagram_Abstract):
             r += 1
             l.setColumnStretch (3,2)
 
-            self._general_panel = Edit_Panel (title="Common Options", layout=l, auto_height=True,
+            self._panel_common = Edit_Panel (title="Common Options", layout=l, auto_height=True,
                                               switchable=False, switched_on=True)
-        return self._general_panel 
+        return self._panel_common 
 
 
     @property
-    def polar_panel (self) -> Edit_Panel:
+    def panel_polar (self) -> Edit_Panel:
         """ return polar extra panel to admin polar definitions and define polar diagrams"""
 
-        if self._polar_panel is None:
+        if self._panel_polar is None:
         
             l = QGridLayout()
             r,c = 0, 0
@@ -2407,17 +2404,8 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             r += 1
             if Worker.ready:
-                Label (l,r,c, colSpan=4, get="Diagram variables", style=style.COMMENT) 
-                r += 1
-                for item in self._get_items (Item_Polars):
-
-                    Label       (l,r,c,   width=20, get="y")
-                    ComboBox    (l,r,c+1, width=60, obj=item, prop=Item_Polars.yVar, options=var.values)
-                    SpaceC      (l,c+2,   width=15, stretch=0)
-                    Label       (l,r,c+3, width=20, get="x")
-                    ComboBox    (l,r,c+4, width=60, obj=item, prop=Item_Polars.xVar, options=var.values)
-                    SpaceC      (l,c+5)
-                    r += 1
+                Label (l,r,c, colSpan=5, style=style.COMMENT, height=40,
+                       get="To change polar variables, <br>click the axis labels in the diagram.")
                 r += 1
                 l.setRowStretch (r,3)
 
@@ -2435,7 +2423,7 @@ class Diagram_Airfoils (Diagram_Abstract):
                 r += 1
                 l.setRowStretch (r,3)
 
-            self._polar_panel = Edit_Panel (title="View Polars", layout=l, 
+            self._panel_polar = Edit_Panel (title="View Polars", layout=l, 
                                             auto_height=True,
                                             switchable=True, switched_on=False, 
                                             on_switched=self._on_polars_switched)
@@ -2443,28 +2431,28 @@ class Diagram_Airfoils (Diagram_Abstract):
             # patch Worker version into head of panel 
 
             if Worker.ready:
-                l_head = self._polar_panel._head.layout()
+                l_head = self._panel_polar._head.layout()
                 Label  (l_head, get=f"{Worker.NAME} {Worker.version}", style=style.COMMENT, fontSize=size.SMALL,
                         align=Qt.AlignmentFlag.AlignBottom)
 
-        return self._polar_panel 
+        return self._panel_polar 
 
 
     @property 
-    def export_panel (self) -> Edit_Panel | None:
+    def panel_export (self) -> Edit_Panel | None:
         """ additional section panel with export buttons"""
 
-        if self._export_panel is None:
+        if self._panel_export is None:
 
             l = QGridLayout()
             r,c = 0, 0
             Button      (l,r,c, text="Export Airfoils", width=100, set=self.export_airfoils)
             l.setColumnStretch (2,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, 
+            self._panel_export = Edit_Panel (title="Export", layout=l, 
                                              auto_height=True, main_margins = (10, 5,10, 10),
                                              switchable=False, switched_on=True)
-        return self._export_panel 
+        return self._panel_export 
 
 
 
@@ -2517,7 +2505,7 @@ class Diagram_Airfoils (Diagram_Abstract):
 
         logger.debug (f"{str(self)} on xyVars changed in diagram")
 
-        self.polar_panel.refresh()
+        self.panel_polar.refresh()
 
 
 

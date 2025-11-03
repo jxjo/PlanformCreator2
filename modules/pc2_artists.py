@@ -1618,7 +1618,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
         # shift-click - delete section 
 
-        if (ev.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier): 
+        if (ev.modifiers() & Qt.KeyboardModifier.ShiftModifier): 
             
             new_current = self.wingSections.delete (section) 
             if new_current: 
@@ -1626,7 +1626,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
         # alt-click - toggle defines chord  
 
-        elif (ev.modifiers() & QtCore.Qt.KeyboardModifier.AltModifier): 
+        elif (ev.modifiers() & Qt.KeyboardModifier.AltModifier): 
             
             toggled = section.set_defines_cn (not section.defines_cn) 
             if toggled: 
@@ -1673,7 +1673,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
         """ 
 
         # handle only ctrl-click
-        if not (ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier): return  
+        if not (ev.modifiers() & Qt.KeyboardModifier.ControlModifier): return  
        
         # was the scene click in my viewbox?
 
@@ -2179,7 +2179,7 @@ class Flaps_Artist (Abstract_Artist_Planform):
             """ slot - hinge item clicked - try to insert a new point  """
 
             # handle only ctrl-click
-            if not (ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier): return  
+            if not (ev.modifiers() & Qt.KeyboardModifier.ControlModifier): return  
 
             # get y-position on the hinge line 
             viewbox : pg.ViewBox = self.getViewBox ()               
