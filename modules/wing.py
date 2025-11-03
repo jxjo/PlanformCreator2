@@ -85,48 +85,48 @@ class Wing:
             logger.error (f".pc2 file '{parm_filePath}' does not exist (anymore) - creating default wing")
             self.pathHandler   = PathHandler (workingDir=defaultDir)
             self._parm_pathFileName = FILENAME_NEW
-            dataDict = {}
+            p = {}
 
         else:
 
-            dataDict = Parameters (parm_filePath).get_dataDict()
-            if not dataDict:
+            p = Parameters (parm_filePath)
+            if not p:
                 logger.info (f'No input data - a default wing will be created in: {defaultDir}')
                 # handler for the relative path to the parameter file (working directory)
                 self.pathHandler   = PathHandler (workingDir=defaultDir)
                 self._parm_pathFileName = FILENAME_NEW
             else: 
-                parm_version = fromDict (dataDict, "pc2_version", 1)
+                parm_version = fromDict (p, "pc2_version", 1)
                 logger.info (f"Reading wing parameters from '{parm_filePath}' (file version: {parm_version})")
 
                 if parm_version == 1:
-                    dataDict = self._convert_parm_file_v2 (dataDict)
+                    p = self._convert_parm_file_v2 (p)
 
                 # handler for the relative path to the parameter file (working directory)
                 self.pathHandler = PathHandler (onFile=parm_filePath)
                 self._parm_pathFileName = parm_filePath
 
-        self.dataDict = dataDict
+        self._parms : Parameters    = p
 
-        self._name                  = fromDict (dataDict, "wing_name", "My new Wing")
-        self._description           = fromDict (dataDict, "description", "This is just an example planform.\nUse 'New' to select another template.")
-        self._fuselage_width        = fromDict (dataDict, "fuselage_width", 80.0)
+        self._name                  = p.get ("wing_name", "My new Wing")
+        self._description           = p.get ("description", "This is just an example planform.\nUse 'New' to select another template.")
+        self._fuselage_width        = p.get ("fuselage_width", 80.0)
 
         # polar definitions
 
         self._polar_definitions     = []
-        for def_dict in fromDict (dataDict, 'polar_definitions', []):
+        for def_dict in p.get ('polar_definitions', []):
             self._polar_definitions.append(Polar_Definition(dataDict=def_dict))
 
         # attach the Planform 
 
-        self._planform              = Planform (self, dataDict)
+        self._planform              = Planform (self, p)
 
         # reference planforms and background image  
 
         self._planform_elliptical   = None
         self._planform_ref_pc2      = None
-        self._reference_pc2_file    = fromDict (dataDict, "reference_pc2_file", None)
+        self._reference_pc2_file    = p.get ("reference_pc2_file", None)
         self._background_image      = None
 
         # paneled version of self planform    
@@ -146,14 +146,14 @@ class Wing:
 
         # miscellaneous parms
 
-        self._airfoil_use_nick    = fromDict (dataDict, "airfoil_use_nick", False)
-        self._airfoil_nick_prefix = fromDict (dataDict, "airfoil_nick_prefix", "PC2-")
-        self._airfoil_nick_base   = fromDict (dataDict, "airfoil_nick_base", 100)
+        self._airfoil_use_nick    = p.get ("airfoil_use_nick", False)
+        self._airfoil_nick_prefix = p.get ("airfoil_nick_prefix", "PC2-")
+        self._airfoil_nick_base   = p.get ("airfoil_nick_base", 100)
 
         # if new wing save initial dataDict for change detection on save 
 
-        if not self.dataDict:
-            self.dataDict = self._save()
+        if not self._parms:
+            self._parms = self._save()
         
         logger.info (str(self)  + ' created')
 
@@ -164,20 +164,20 @@ class Wing:
         return f"<{type(self).__name__} {self.name}>"
 
 
-    def _save (self) -> dict:
-        """ returns the parameters of self as a dict"""
+    def _save (self) -> Parameters:
+        """ returns the parameters of self as new Parameters"""
 
-        dataDict = {}
+        p = Parameters ()
 
-        toDict (dataDict, "pc2_version", 2)
-        toDict (dataDict, "wing_name",          self._name) 
-        toDict (dataDict, "description",        self._description) 
-        toDict (dataDict, "fuselage_width",     self._fuselage_width) 
-        toDict (dataDict, "airfoil_use_nick",   self._airfoil_use_nick)
-        toDict (dataDict, "airfoil_nick_prefix",self._airfoil_nick_prefix) 
-        toDict (dataDict, "airfoil_nick_base",  self._airfoil_nick_base) 
-        toDict (dataDict, "reference_pc2_file", self._reference_pc2_file)
-        toDict (dataDict, "background_image",   self.background_image._as_dict())
+        p.set ("pc2_version", 2)
+        p.set ("wing_name",          self._name) 
+        p.set ("description",        self._description) 
+        p.set ("fuselage_width",     self._fuselage_width) 
+        p.set ("airfoil_use_nick",   self._airfoil_use_nick)
+        p.set ("airfoil_nick_prefix",self._airfoil_nick_prefix) 
+        p.set ("airfoil_nick_base",  self._airfoil_nick_base) 
+        p.set ("reference_pc2_file", self._reference_pc2_file)
+        p.set ("background_image",   self.background_image._as_dict())
 
         # polar definitions - do not save if there is only a default definition 
         def_list = []
@@ -185,23 +185,26 @@ class Wing:
             def_dict = polar_def._as_dict()
             if not (len (self.polar_definitions) == 1 and def_dict == Polar_Definition()._as_dict()):
                 def_list.append (polar_def._as_dict())
-        toDict (dataDict,'polar_definitions', def_list)
+        p.set ("polar_definitions", def_list)
 
         # save planform with all sub objects  
 
-        self._planform._save_to (dataDict)
+        self._planform._save_to (p)
 
-        toDict (dataDict, "panels",             self.planform_paneled._as_dict()) 
-        if self._exporter_xflr5: 
-            toDict (dataDict, "xflr5",          self._exporter_xflr5._as_dict()) 
-        if self._exporter_flz: 
-            toDict (dataDict, "flz",            self._exporter_flz._as_dict()) 
-        if self._exporter_airfoils: 
-            toDict (dataDict, "airfoils_export",self._exporter_airfoils._as_dict()) 
-        if self._exporter_dxf: 
-            toDict (dataDict, "dxf",            self._exporter_dxf._as_dict()) 
+        # save exporters
 
-        return dataDict
+        p.set ("panels", self.planform_paneled._as_dict()) 
+
+        if self._exporter_xflr5:
+            p.set ("xflr5", self._exporter_xflr5._as_dict()) 
+        if self._exporter_flz:
+            p.set ("flz", self._exporter_flz._as_dict()) 
+        if self._exporter_airfoils:
+            p.set ("airfoils_export", self._exporter_airfoils._as_dict()) 
+        if self._exporter_dxf:
+            p.set ("dxf", self._exporter_dxf._as_dict()) 
+
+        return p
 
 
     def _convert_parm_file_v2 (self, dataDict :dict) -> dict:
@@ -402,7 +405,7 @@ class Wing:
         which is the base for Xflr5 or FLZ export"""
 
         if self._planform_paneled is None:     
-            self._planform_paneled = Planform_Paneled (self, dataDict = fromDict (self.dataDict, "panels", {})) 
+            self._planform_paneled = Planform_Paneled (self, dataDict = fromDict (self._parms, "panels", {})) 
 
         return self._planform_paneled
 
@@ -412,7 +415,7 @@ class Wing:
         """ an elliptical reference norm planform having same span and chord reference """
 
         if self._planform_elliptical is None:      
-            self._planform_elliptical = Planform (self, dataDict = self.dataDict, 
+            self._planform_elliptical = Planform (self, dataDict = self._parms, 
                                                         chord_style = N_Distrib_Elliptical.name,
                                                         chord_ref = self.planform.n_chord_ref )
         return self._planform_elliptical
@@ -473,7 +476,7 @@ class Wing:
         """ returns the image definition of the background image"""
         if self._background_image is None: 
             self._background_image = Image_Definition (self.workingDir, 
-                                                          fromDict (self.dataDict, "background_image", {}))
+                                                          fromDict (self._parms, "background_image", {}))
         return self._background_image
 
     @property
@@ -519,7 +522,7 @@ class Wing:
         from wing_exports       import Exporter_Xflr5             # here - otherwise circular errors
 
         if self._exporter_xflr5 is None:                          # init exporter with parameters in sub dictionary
-            xflr5_dict         = fromDict (self.dataDict, "xflr5", "")
+            xflr5_dict         = fromDict (self._parms, "xflr5", "")
             self._exporter_xflr5 = Exporter_Xflr5 (self, self.planform_paneled, xflr5_dict) 
         return self._exporter_xflr5     
 
@@ -530,7 +533,7 @@ class Wing:
         from wing_exports       import Exporter_FLZ               # here - otherwise circular errors
 
         if self._exporter_flz is None:                            # init exporter with parameters in sub dictionary
-            flz_dict         = fromDict (self.dataDict, "flz", "")
+            flz_dict         = fromDict (self._parms, "flz", "")
             self._exporter_flz = Exporter_FLZ (self, self.planform_paneled, flz_dict) 
         return self._exporter_flz     
 
@@ -541,7 +544,7 @@ class Wing:
         from wing_exports       import Exporter_Dxf               # here - otherwise circular errors
 
         if self._exporter_dxf is None:                            # init exporter with parameters in sub dictionary       
-            dxf_dict         = fromDict (self.dataDict, "dxf", "")
+            dxf_dict         = fromDict (self._parms, "dxf", "")
             self._exporter_dxf = Exporter_Dxf(self, dxf_dict) 
         return self._exporter_dxf     
 
@@ -552,7 +555,7 @@ class Wing:
         from wing_exports  import Exporter_Airfoils               # here - otherwise circular errors
 
         if self._exporter_airfoils is None:                       # init exporter with parameters in sub dictionary
-            airfoilsDict          = fromDict (self.dataDict, "airfoils_export", "")
+            airfoilsDict          = fromDict (self._parms, "airfoils_export", "")
             self._exporter_airfoils = Exporter_Airfoils (self, airfoilsDict) 
         return self._exporter_airfoils     
 
@@ -705,7 +708,7 @@ class Wing:
         Returns: 
             True : if succeeded, False if failed
         """
-        currentDict = self._save()
+        parms = self._save()
 
         # save dict to new file
         if newPathFilename is None:
@@ -713,11 +716,18 @@ class Wing:
         else:
             pathFileName_abs = newPathFilename if os.path.isabs(newPathFilename) else os.path.join (self.workingDir, newPathFilename)
 
-        save_ok = Parameters (pathFileName_abs).write_dataDict(currentDict)
+        parms.set_pathFileName (pathFileName_abs)
+
+        try:
+            parms.save()
+            save_ok = True
+        except Exception as e:
+            logger.error (f"Saving wing parameters to file '{pathFileName_abs}' failed: {e}")
+            save_ok = False
 
         if save_ok:
             # keep dataDict for later change detection 
-            self.dataDict = currentDict  
+            self._parms = parms  
 
             # copy airfoils to new airfoils dir if file name changed
             if newPathFilename:
@@ -783,7 +793,7 @@ class Wing:
 
         # compare json string as dict compare is too sensible 
         new_json = json.dumps (self._save())
-        cur_json = json.dumps (self.dataDict)
+        cur_json = json.dumps (self._parms)
 
         return new_json != cur_json
   

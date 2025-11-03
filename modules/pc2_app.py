@@ -433,57 +433,65 @@ class Main_PC2 (QMainWindow):
             s.set(diagram.name, s_diagram)
 
         s.save()
-        
+
+
+    def _on_leaving_planform (self) -> bool:
+        """ 
+        Do checks and handle if user wants to leave current planform.
+        Returns True if leaving ok, False if cancelled 
+        """
+        leave = True
+
+        if self.wing().has_changed(): 
+            message = "The planform has been modified..\n\n" + \
+                      "Do you want to save before leaving?"
+            button = MessageBox.save(self, f"Leaving {self.wing().parm_fileName}", message)
+
+            if button == QMessageBox.StandardButton.Save:
+                # save settings and parameters
+                self.save()
+
+            elif button == QMessageBox.StandardButton.Discard:
+                # on Discard remove temp dir of airfoil strak etc
+                self.wing().remove_tmp ()
+
+            elif button == QMessageBox.StandardButton.Cancel:
+                leave = False
+
+        if leave:
+            # remove airfoils dir if new file
+            if self.wing().parm_fileName == FILENAME_NEW:
+                self.wing().remove_airfoils_dir ()
+
+            # remove lost worker input files 
+            if Worker.ready:
+                Worker().clean_workingDir (self.workingDir)
+        return leave
+
 
     @override
     def closeEvent  (self, event : QCloseEvent):
         """ main window is closed """
 
-        button = None 
 
-        # save changes? 
-        if self.wing().has_changed(): 
-
-            message = "The planform has been modified..\n\n" + \
-                      "Do you want to save before exit?"
-            button = MessageBox.save(self, "Close "+ APP_NAME, message)
-
-            if button == QMessageBox.StandardButton.Save:
-                self.save()
-                event.accept()
-            elif button == QMessageBox.StandardButton.Discard:
-                event.accept()
-            else:
-                event.ignore()
-        else:
-            event.accept()
+        leave = self._on_leaving_planform ()
 
         # final actions if not cancelled
 
-        if event.isAccepted():
+        if leave:
 
-            # remove lost worker input files 
-            if Worker.ready:
-                Worker().clean_workingDir (self.workingDir)
+            event.accept()
 
-            # on Discard remove temp dir of airfoil strak etc.
-            if button == QMessageBox.StandardButton.Discard :
-                self.wing().remove_tmp ()
-        
-            # remove airfoils dir if new wing
-            if self.wing().parm_fileName == FILENAME_NEW:
-                self.wing().remove_airfoils_dir ()
-
-            # save application settings
-            else:                                
-                self._save_app_settings ()
+            # save app settings like window size and position
+            self._save_app_settings ()
 
             # terminate polar watchdog thread 
-
             if self._watchdog:
                 self._watchdog.requestInterruption ()
                 self._watchdog.wait()           
 
+        else:
+            event.ignore()
         
 
 
@@ -491,6 +499,10 @@ class Main_PC2 (QMainWindow):
 
     def new (self):
         """ reset - and start with example definition"""
+
+        if not self._on_leaving_planform ():                                    # changes made? user cancelled?
+            return
+
 
         # select a new template 
         modulesDir = os.path.dirname(os.path.abspath(__file__))                
@@ -526,6 +538,9 @@ class Main_PC2 (QMainWindow):
     def open (self):
         """ open a new wing definition json and load it"""
 
+        if not self._on_leaving_planform ():                                    # changes made? user cancelled?
+            return
+        
         filters    = "PlanformCreator2 files (*.pc2)"
         workingDir = self.wing().workingDir
 
@@ -547,7 +562,7 @@ class Main_PC2 (QMainWindow):
 
         ok = self.wing().save (newPathFilename=newPathFilename)
         if ok:
-            MessageBox.success (self,"Save Planform", f"<b>{self.wing().parm_fileName}</b> saved", min_height= 60)
+            MessageBox.success (self,"Save Planform", f"<b>{self.wing().parm_fileName}</b> saved", min_height= 60, min_width=150)
         else:
             MessageBox.error   (self,"Save Planform", f"<b>{self.wing().parm_fileName}</b> couldn't be saved", min_height= 60)
 
@@ -839,11 +854,11 @@ class Panel_File_Small (Panel_File):
                     toolTip='Maximize lower panel -<br>Alternatively, you can double click on the lower panels')
         r += 1
         Button      (l,r,c, text="&Exit", width=100, set=self.app.close)
-        r += 1
         l.setColumnMinimumWidth (1,12)
         l.setColumnStretch (2,2)
         return l 
  
+
     def _more_menu (self) -> QMenu:
         """ create and return sub menu for 'more' actions"""
 
@@ -853,6 +868,7 @@ class Panel_File_Small (Panel_File):
         menue.insertAction (menue.actions()[0], MenuAction ("&New", self, set=self.app.new,   
                                     toolTip="Create new Planform"))
         return menue
+
 
 
 class Panel_Wing (Panel_Planform_Abstract):
