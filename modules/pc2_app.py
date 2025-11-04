@@ -22,11 +22,23 @@
                 ...                             - ...
 """
 
+
+APP_NAME         = "PlanformCreator2"
+PACKAGE_NAME     = "planformcreator2"
+__version__      = "4.0_dev"                                    # hatch "version dynamic" reads this version for build
+
+AE_MIN_VERSION   = '4.2.0'                                      # min airfoileditor version required
+AE_PACKAGE_NAME  = 'airfoileditor'                              # airfoileditor package name
+
 # ---- imports -----
 
 import os
 import sys
 import argparse
+from importlib.metadata     import version
+from packaging.version      import Version                                  # has to be installed
+from typing                 import TYPE_CHECKING                        # to handle circular imports
+
 
 from PyQt6.QtCore           import QMargins, QThread, QUrl
 from PyQt6.QtWidgets        import (QApplication, QMainWindow, QWidget, QMessageBox, QFileDialog,
@@ -35,31 +47,47 @@ from PyQt6.QtGui            import QCloseEvent, QGuiApplication, QDesktopService
 
 # For VsCode add airfoileditor package path to the setting "python.analysis.extraPaths" (Pylance)
 
-# ---- Dev mode - load local airfoileditor
 
-airfoileditor_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..', 'airfoileditor/modules'))
-sys.path.insert(0, airfoileditor_path)
+# Check version of installed package and setup imports
+try: 
+    airfoileditor_version = version(AE_PACKAGE_NAME)
+    if Version(airfoileditor_version) < Version(AE_MIN_VERSION):
+        print (f"Installed {AE_PACKAGE_NAME} version {airfoileditor_version} is too old - please install at least version {AE_MIN_VERSION}")
+        sys.exit(0)
 
-from base.common_utils      import * 
-from base.panels            import Container_Panel, MessageBox, Win_Util, Edit_Panel, Tab_Panel
-from base.widgets           import *
-from model.xo2_driver       import Worker
-from model.airfoil          import Airfoil, GEO_BASIC 
-from model.airfoil_examples import Example
-from app_utils              import *
+    print(f"Using installed {AE_PACKAGE_NAME} version {airfoileditor_version}")
 
-# ----- end dev mode imports -----
+    if not TYPE_CHECKING:
+        from airfoileditor.base.common_utils    import * 
+        from airfoileditor.base.panels          import *
+        from airfoileditor.base.widgets         import *
+        from airfoileditor.model.xo2_driver     import Worker
+        from airfoileditor.model.airfoil        import Airfoil, GEO_BASIC 
+        from airfoileditor.model.airfoil_examples import Example
+        from airfoileditor.base.app_utils       import *
 
-# # ---- Prod mode - load installed airfoileditor
-# from airfoileditor.base.common_utils    import * 
-# from airfoileditor.base.panels          import Container_Panel, MessageBox, Win_Util
-# from airfoileditor.base.widgets         import *
-# from airfoileditor.model.xo2_driver     import Worker
-# from airfoileditor.app_utils            import *
+except Exception as e:
+    print(f"Required package {AE_PACKAGE_NAME} not found - setting sys.path for local development")
+    
+    # ---- Dev mode - add local airfoileditor path to sys.path
+    airfoileditor_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..', 'airfoileditor/modules'))
+    sys.path.insert(0, airfoileditor_path)
+        
+    print(f"Dev mode: local airfoileditor path added: {airfoileditor_path}")
+
+    from base.common_utils      import * 
+    from base.panels            import *
+    from base.widgets           import *
+    from model.xo2_driver       import Worker
+    from model.airfoil          import Airfoil, GEO_BASIC 
+    from model.airfoil_examples import Example
+    from base.app_utils         import *
+
+
+
 
 # ---- setup logging  - init local logger
 
-from base.common_utils      import init_logging 
 init_logging (level= logging.INFO)             # INFO, DEBUG or WARNING
 
 import logging
@@ -72,16 +100,8 @@ from wing                   import *
 from pc2_diagrams           import *
 from pc2_dialogs            import *
 
-# print("\n".join(sys.path))
-logger.warning (f"Dev mode: local airfoileditor path added: {airfoileditor_path}")
-
  
 #------------------------------------------------
-
-
-APP_NAME         = "PlanformCreator2"
-PACKAGE_NAME     = "planformcreator2"
-__version__      = "4.0_dev"                              # hatch "version dynamic" reads this version for build
 
 
 #-------------------------------------------------------------------------------
