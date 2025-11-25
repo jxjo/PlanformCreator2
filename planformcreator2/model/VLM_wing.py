@@ -21,12 +21,12 @@ Wing build with VLM_Panels based on Planform_Paneled
 """
         
 import numpy as np
-from enum                       import StrEnum
-from typing                     import NamedTuple
-from math                       import isclose, degrees, radians
+from enum                           import StrEnum
+from typing                         import NamedTuple
+from math                           import isclose, degrees, radians
 
-from VLM                        import calc_Qjj
-from model.polar_set            import Polar_Set, RE_SCALE_ROUND_TO, re_from_v
+from .VLM                           import calc_Qjj
+from airfoileditor.model.polar_set  import Polar_Set, RE_SCALE_ROUND_TO, re_from_v, Polar
 
 import logging
 logger = logging.getLogger(__name__)
@@ -341,6 +341,10 @@ class VLM_Wing:
             
         return polar 
 
+    def has_polars (self) -> bool:
+        """ True if at least one polar is existing"""
+        return bool (self._polars)
+    
 
     # ----- private --------------------------------------------------
       
@@ -363,7 +367,7 @@ class VLM_Wing:
         #           |
         #           x
 
-        from wing   import Planform_Paneled
+        from model.wing   import Planform_Paneled
         planform : Planform_Paneled = self._planform 
 
         has_distorted_panels = False                                    # are there distorted panels  
@@ -634,7 +638,7 @@ class VLM_Polar:
     def _load_airfoil_polars (self):
         """ loads for all wingSections polar of airfoil"""
 
-        from wing               import WingSection, Planform                # avoid circular import
+        from .wing    import WingSection, Planform                          # avoid circular import
 
         self._airfoil_polars = {}                                           # reset
         self._error_reason  = []
@@ -704,8 +708,6 @@ class VLM_Polar:
         returns alpha0 per stripe 
             - interpolated from alpha0 of airfoils at wingSections 
         """
-
-        from model.polar_set    import Polar
 
         sections_alpha0 = []
         sections_y      = []
@@ -1185,8 +1187,6 @@ class VLM_OpPoint:
         This is a major part of the vsicous calculation loop  
         """
 
-        from model.polar_set    import Polar
-
         y_stripes = self.wing.y_stripes
 
         sections_alpha0 = []
@@ -1230,8 +1230,6 @@ class VLM_OpPoint:
         retrieve cl_max per stripe from airfoil polars 
         """
 
-        from model.polar_set    import Polar
-
         # collect cl_max of airfoils of wingSections from airfoil polar
 
         sections_cl_max = []
@@ -1254,8 +1252,6 @@ class VLM_OpPoint:
         """ 
         retrieve alpha_max (which is alpha at cl_max) per stripe from airfoil polars 
         """
-
-        from model.polar_set    import Polar
 
         # collect cl_max of airfoils of wingSections from airfoil polar
 

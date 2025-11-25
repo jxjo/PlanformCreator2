@@ -13,17 +13,17 @@ from PyQt6.QtWidgets        import QLayout, QDialogButtonBox, QPushButton, QDial
 from PyQt6.QtWidgets        import QFileDialog, QTextEdit, QDialog
 
 import pyqtgraph as pg
-from pyqtgraph.GraphicsScene.mouseEvents        import MouseClickEvent
+from pyqtgraph.GraphicsScene.mouseEvents   import MouseClickEvent
 
-from base.widgets           import * 
-from base.panels            import Dialog, MessageBox 
-from base.diagram           import Diagram, Diagram_Item
+from airfoileditor.base.widgets         import * 
+from airfoileditor.base.panels          import Dialog, MessageBox 
+from airfoileditor.base.diagram         import Diagram, Diagram_Item
+from airfoileditor.base.artist          import Artist
 
-from base.artist            import Artist
-from pc2_artists            import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
+from model.wing                         import Wing, Planform, Image_Definition, Planform_Paneled, WingSections
+from model.wing_exports                 import Exporter_Airfoils, Exporter_Dxf, Exporter_Xflr5, Exporter_FLZ
 
-from wing                   import Wing, Planform, Image_Definition, Planform_Paneled, WingSections
-from wing_exports           import Exporter_Airfoils, Exporter_Dxf, Exporter_Xflr5, Exporter_FLZ
+from ui.pc2_artists                     import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
 
 import logging
 logger = logging.getLogger(__name__)
@@ -967,7 +967,7 @@ class Dialog_Select_Template (Dialog):
         def create_diagram_items (self):
             """ create all plot Items and add them to the layout """
             for i, wing in enumerate (self.template_wings):
-                item = Dialog_Select_Template.Item_Thumbnail (self, getter=wing)
+                item = Dialog_Select_Template.Item_Thumbnail (wing)
                 self._add_item (item, i, 0)
 
                 item.sig_wing_selected.connect (self._on_wing_selected)

@@ -29,16 +29,16 @@ from typing                 import override
 from pathlib                import Path
 from math                   import isclose
 
-from base.math_util           import * 
-from base.spline              import * 
-from base.common_utils        import *
+from airfoileditor.base.math_util           import * 
+from airfoileditor.base.spline              import * 
+from airfoileditor.base.common_utils        import *
 
-from model.airfoil            import Airfoil, GEO_BASIC
-from model.polar_set          import Polar_Definition, Polar_Set
-from model.airfoil_examples   import Root_Example, Tip_Example
-from model.xo2_driver         import Worker
+from airfoileditor.model.airfoil            import Airfoil, GEO_BASIC
+from airfoileditor.model.polar_set          import Polar_Definition, Polar_Set
+from airfoileditor.model.airfoil_examples   import Root_Example, Tip_Example
+from airfoileditor.model.xo2_driver         import Worker
 
-from VLM_wing                 import VLM_Wing
+from .VLM_wing                 import VLM_Wing
 
 
 import logging
@@ -347,6 +347,11 @@ class Wing:
     def set_name(self, aStr : str):  self._name = aStr
 
     @property
+    def is_new_wing(self) -> bool:
+        """ True if wing has not been saved yet (new wing) """
+        return self.parm_fileName == FILENAME_NEW
+
+    @property
     def description (self) -> str: 
         """description of wing""" 
         return self._description if self._description is not None else ''
@@ -519,7 +524,7 @@ class Wing:
     @property
     def exporter_xflr5 (self) : 
         """ returns exporter managing Xflr5 export """
-        from wing_exports       import Exporter_Xflr5             # here - otherwise circular errors
+        from .wing_exports       import Exporter_Xflr5             # here - otherwise circular errors
 
         if self._exporter_xflr5 is None:                          # init exporter with parameters in sub dictionary
             xflr5_dict         = fromDict (self._parms, "xflr5", "")
@@ -530,7 +535,7 @@ class Wing:
     @property
     def exporter_flz (self) : 
         """ returns exporter managing FLZ export """
-        from wing_exports       import Exporter_FLZ               # here - otherwise circular errors
+        from .wing_exports       import Exporter_FLZ               # here - otherwise circular errors
 
         if self._exporter_flz is None:                            # init exporter with parameters in sub dictionary
             flz_dict         = fromDict (self._parms, "flz", "")
@@ -541,7 +546,7 @@ class Wing:
     @property
     def exporter_dxf (self): 
         """ returns class managing Dxf export """
-        from wing_exports       import Exporter_Dxf               # here - otherwise circular errors
+        from .wing_exports       import Exporter_Dxf               # here - otherwise circular errors
 
         if self._exporter_dxf is None:                            # init exporter with parameters in sub dictionary       
             dxf_dict         = fromDict (self._parms, "dxf", "")
@@ -552,7 +557,7 @@ class Wing:
     @property
     def exporter_airfoils (self): 
         """ returns exporter managing airfoils export"""
-        from wing_exports  import Exporter_Airfoils               # here - otherwise circular errors
+        from .wing_exports  import Exporter_Airfoils               # here - otherwise circular errors
 
         if self._exporter_airfoils is None:                       # init exporter with parameters in sub dictionary
             airfoilsDict          = fromDict (self._parms, "airfoils_export", "")
@@ -628,6 +633,11 @@ class Wing:
         """
 
         airfoils_dir = os.path.join (self.workingDir, self.airfoils_dir_rel)
+
+        # ensure airfoils dir exists
+        if not os.path.isdir (airfoils_dir):
+            os.makedirs (airfoils_dir, exist_ok=True)
+
         return airfoils_dir
 
 
@@ -792,9 +802,19 @@ class Wing:
         """returns true if the parameters has been changed since last save() of parameters"""
 
         # compare json string as dict compare is too sensible 
-        new_json = json.dumps (self._save())
-        cur_json = json.dumps (self._parms)
+        new_dict = self._save()
+        cur_dict = self._parms
 
+        # Option 1: Simple check with detailed comparison if different
+        new_json = json.dumps(new_dict, sort_keys=True)
+        cur_json = json.dumps(cur_dict, sort_keys=True)
+        
+        if new_json != cur_json:
+            # Find differences
+            for key in set(list(new_dict.keys()) + list(cur_dict.keys())):
+                if new_dict.get(key) != cur_dict.get(key):
+                    logger.debug(f"Changed key '{key}': {cur_dict.get(key)} -> {new_dict.get(key)}")
+        
         return new_json != cur_json
   
         
@@ -1814,6 +1834,7 @@ class WingSection :
 
         # create airfoil and load coordinates if exist 
 
+        self._airfoil = None
         airfoil = self._get_airfoil (pathFileName = fromDict (dataDict, "airfoil", None), workingDir=self.workingDir)
         self.set_airfoil (airfoil)                          # ensure normalized (copied to airfoils dir if needed)
 

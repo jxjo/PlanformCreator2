@@ -12,6 +12,7 @@ import os, re
 import io
 import numpy as np
 import shutil
+from pathlib                import Path
 
 from copy                   import deepcopy
 from typing                 import TextIO, Callable, override
@@ -23,10 +24,10 @@ import xml.etree.ElementTree as ET                              # Xflr5 xml hand
 import ezdxf                                                    # dxf handling
 from ezdxf import enums
 
-from base.common_utils      import * 
-from wing                   import Wing, Planform, Planform_Paneled
-from wing                   import WingSection, WingSections, Flap
-from model.airfoil          import Airfoil, GEO_SPLINE, Flap_Definition
+from airfoileditor.base.common_utils      import fromDict, toDict, PathHandler 
+from airfoileditor.model.airfoil          import Airfoil, GEO_SPLINE, Flap_Definition
+
+from .wing                   import Wing, Planform, Planform_Paneled, WingSection, WingSections, Flap
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

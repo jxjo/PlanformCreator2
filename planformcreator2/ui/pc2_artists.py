@@ -8,24 +8,24 @@ The "Artists" to plot a airfoil object on a pg.PlotItem
 """
 from enum                       import Enum
 from math                       import isclose
-
-
-from base.math_util             import interpolate
-from base.artist                import *
-from base.common_utils          import *
-
-from wing                       import Wing
-from wing                       import Planform, N_Distrib_Bezier
-from wing                       import WingSection, WingSections, Flaps, Flap, Image_Definition
-
-from model.airfoil              import GEO_BASIC
-from model.polar_set            import *
-from VLM_wing                   import VLM_OpPoint, VLM_Polar,OpPoint_Var
+import html 
 
 from PyQt6.QtGui                import QColor, QImage, QBrush, QPen, QTransform
 from PyQt6.QtCore               import pyqtSignal
 
-from pyqtgraph.graphicsItems    import PColorMeshItem
+import pyqtgraph as pg
+
+from airfoileditor.base.math_util             import interpolate
+from airfoileditor.base.artist                import *
+from airfoileditor.base.common_utils          import *
+from airfoileditor.model.airfoil              import GEO_BASIC
+from airfoileditor.model.polar_set            import *
+
+from model.wing                 import (Wing, Planform, N_Distrib_Bezier, 
+                                        WingSection, WingSections, Flaps, Flap, Image_Definition)
+
+from model.VLM_wing             import VLM_OpPoint, VLM_Polar,OpPoint_Var
+
 
 import logging
 logger = logging.getLogger(__name__)
@@ -706,8 +706,8 @@ class Neutral_Point_Artist (Abstract_Artist_Planform):
 
         _, _, _, np_y = self.wing.wing_data ()
 
-        self._plot_point (0.0, np_y, size=9, color=COLOR_REF_LINE, brushColor=COLOR_REF_LINE.darker(200), 
-                          text="NP", textFill="black")
+        self._plot_point (0.0, np_y, size=9, color=COLOR_REF_LINE, brush=COLOR_REF_LINE.darker(300), 
+                          textOffset = (0,-5), text="NP", textFill="black")
 
 
 
@@ -1053,7 +1053,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
         # sanity VLM polar needed
         
         if self.polar is None:  
-            self._plot_text (f"No VLM-Polar available", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
+            self._plot_text (f"Calculating VLM-Polar...", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
             return
 
         # strak airfoils if needed to have polars
@@ -1065,7 +1065,8 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
         if not self.polar.get_ready_for_op_point():
             if self.polar.is_generating_airfoil_polars:
-                self._plot_text (f"Generating polars", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
+                n_running = Polar_Task.get_total_n_polars_running()
+                self._plot_text (f"Generating airfoil polars... ({n_running} running)", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
             else:
                 logger.debug (f"Polar not ready for opPoint - this should not happen")
             return   
