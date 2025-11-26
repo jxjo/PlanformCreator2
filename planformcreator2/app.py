@@ -34,12 +34,11 @@ from PyQt6.QtWidgets        import QApplication, QMainWindow, QWidget
 from PyQt6.QtWidgets        import QGridLayout
 from PyQt6.QtGui            import QCloseEvent, QGuiApplication
 
+# --- AE modules ---------------
 
 # Check version of installed airfoileditor package
-
 AE_MIN_VERSION   = '4.2.0b2'                                    # min airfoileditor version required
 AE_PACKAGE_NAME  = 'airfoileditor'                              # airfoileditor package name
-
 try: 
     airfoileditor_version = version(AE_PACKAGE_NAME)
     if Version(airfoileditor_version) < Version(AE_MIN_VERSION):
@@ -49,16 +48,27 @@ except Exception as e:
     logging.error(f"Required package {AE_PACKAGE_NAME} not found")
     sys.exit(0)
     
-
 from airfoileditor.base.common_utils    import * 
-from airfoileditor.base.panels          import *
-from airfoileditor.base.widgets         import *
+from airfoileditor.base.widgets         import Icon, Widget
+from airfoileditor.base.panels          import Tab_Panel, Win_Util
 from airfoileditor.base.app_utils       import Settings, check_or_get_initial_file, Run_Checker, Update_Checker
 
-from app_model              import App_Model, Mode_Id
-from app_modes              import Modes_Manager, Mode_Modify
+# --- PC2 modules ---------------
 
-from ui.pc2_diagrams        import (Diagram_Wing, Diagram_Planform, Diagram_Airfoils, Diagram_Making_Of,
+package_dir     = os.path.dirname(os.path.abspath(__file__))
+PACKAGE_NAME    = os.path.basename (package_dir)
+
+# DEV: when running app.py as main, set package path and property to allow relative imports
+if __name__ == "__main__":  
+    repository_dir  = os.path.dirname (package_dir)
+    if not repository_dir in sys.path:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = PACKAGE_NAME
+
+from .app_model              import App_Model, Mode_Id
+from .app_modes              import Modes_Manager, Mode_Modify
+
+from .ui.pc2_diagrams        import (Diagram_Wing, Diagram_Planform, Diagram_Airfoils, Diagram_Making_Of,
                                     Diagram_Wing_Analysis)
 
 
@@ -71,7 +81,6 @@ logger.setLevel(logging.DEBUG)
 #-------------------------------------------------------------------------------
 
 APP_NAME         = "PlanformCreator2"
-PACKAGE_NAME     = "planformcreator2"
 __version__      = "4.0_dev"                                    # hatch "version dynamic" reads this version for build
 
 
@@ -136,7 +145,7 @@ class Main (QMainWindow):
         # app Modes and manager ---------------
         
         modes_manager = Modes_Manager (app_model)
-        modes_manager.add_mode (Mode_Modify     (app_model))
+        modes_manager.add_mode (Mode_Modify (app_model))
 
         modes_manager.set_mode (mode_to_start, pc2_file)                    # set initial object in app_model
         modes_manager.sig_close_requested.connect (self.close)              # app close requested from mode view
@@ -235,13 +244,12 @@ class Main (QMainWindow):
         """ upper UI main panel - Tab with diagrams"""
 
         diagrams = []
-        diagrams.append (Diagram_Making_Of     (self._app_model))
-        diagrams.append (Diagram_Wing          (self._app_model))
-        diagrams.append (Diagram_Planform      (self._app_model))
-        diagrams.append (Diagram_Airfoils      (self._app_model))
-        diagrams.append (Diagram_Wing_Analysis (self._app_model))
-
-        tab_panel = Tab_Panel (self)
+        diagrams.append (Diagram_Making_Of     (self, self._app_model))
+        diagrams.append (Diagram_Wing          (self, self._app_model))
+        diagrams.append (Diagram_Planform      (self, self._app_model))
+        diagrams.append (Diagram_Airfoils      (self, self._app_model))
+        diagrams.append (Diagram_Wing_Analysis (self, self._app_model))
+        tab_panel = Tab_Panel (parent=self)
         for diagram in diagrams:
             tab_panel.add_tab(diagram)
         tab_panel.setMinimumHeight(500)

@@ -367,7 +367,7 @@ class VLM_Wing:
         #           |
         #           x
 
-        from model.wing   import Planform_Paneled
+        from .wing   import Planform_Paneled
         planform : Planform_Paneled = self._planform 
 
         has_distorted_panels = False                                    # are there distorted panels  

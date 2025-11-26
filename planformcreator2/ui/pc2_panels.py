@@ -17,12 +17,12 @@ from airfoileditor.base.widgets         import *
 from airfoileditor.base.panels          import Edit_Panel, MessageBox
 from airfoileditor.model.airfoil        import Airfoil, GEO_BASIC
 
-from model.wing             import Wing, STRAK_AIRFOIL_NAME
-from model.wing             import (Planform, N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line,
+from ..model.wing           import Wing, STRAK_AIRFOIL_NAME
+from ..model.wing           import (Planform, N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line,
                                     Flaps, WingSections, WingSection)
 
-from app_model              import App_Model
-from ui.pc2_dialogs         import Dialog_TextEdit
+from ..app_model            import App_Model
+from .pc2_dialogs           import Dialog_TextEdit
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.WARNING)

@@ -27,8 +27,8 @@ from airfoileditor.model.polar_set          import Polar_Task, Polar_Definition,
 
 # --- the real model imports
 
-from model.wing             import Wing, WingSection
-from model.VLM_wing         import VLM_OpPoint, VLM_Polar
+from .model.wing             import Wing, WingSection
+from .model.VLM_wing         import VLM_OpPoint, VLM_Polar
 
 
 import logging

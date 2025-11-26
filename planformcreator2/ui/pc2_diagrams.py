@@ -24,14 +24,14 @@ from airfoileditor.ui.util_dialogs      import Polar_Definition_Dialog
 
 # ---- pc2 modules  
 
-from model.wing         import Wing, Planform, Planform_Paneled
-from model.VLM_wing     import VLM_OpPoint, OpPoint_Var
+from ..model.wing       import Wing, Planform
+from ..model.VLM_wing   import VLM_OpPoint, OpPoint_Var
 
-from ui.pc2_artists     import *
-from ui.pc2_dialogs     import (Dialog_Edit_Image, Dialog_Edit_Paneling, Dialog_Export_Xflr5,
+from .pc2_artists       import *
+from .pc2_dialogs       import (Dialog_Edit_Image, Dialog_Edit_Paneling, Dialog_Export_Xflr5,
                                 Dialog_Export_FLZ, Dialog_Export_Airfoil, Dialog_Export_Dxf)
 
-from app_model          import App_Model
+from ..app_model        import App_Model
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -52,8 +52,8 @@ class Diagram_Abstract (Diagram):
     name   = "Abstract"                                     # will be shown in Tabs 
 
 
-    def __init__(self, app_model : App_Model,  **kwargs):
-        super().__init__(app_model, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self._viewPanel.setMinimumWidth(250)
         self._viewPanel.setMaximumWidth(250)
@@ -69,7 +69,7 @@ class Diagram_Abstract (Diagram):
     @property
     def app_model (self) -> App_Model:
         """ application model """
-        return self._getter
+        return self._dataObject
 
     @property
     def wing (self) -> Wing: 
@@ -131,7 +131,7 @@ class Item_Abstract (Diagram_Item):
     @property
     def app_model (self) -> App_Model:
         """ application model """
-        return self._getter   
+        return self._dataObject   
 
     @property
     def wing (self) -> Wing: 
@@ -562,28 +562,6 @@ class Item_VLM_Result (Item_Abstract):
         self.app_model.sig_vlm_polar_reset.connect      (self.refresh)          # will result in new VLM calculation
 
 
-
-        # i.sig_opPoint_changed.connect   (self._on_opPoint_changed)
-        # i.sig_visible.connect           (self._on_aero_analysis_visible)
-        # item.section_panel.refresh()                                    # disable check show cp 
-
-
-        # paneling changed
-        # # overridden to re-calc alpha max
-        # item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
-        # item.set_opPoint_fixed_to_alpha_max (item.opPoint_fixed_to_alpha_max, refresh=False)
-
-        # new polar 
-        # # overridden to re-calc alpha max
-        # item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
-        # item.set_opPoint_fixed_to_alpha_max (item.opPoint_fixed_to_alpha_max, refresh=False)
-
-        # new wing
-        # # overridden to ensure reset section variables when new wing 
-        # item : Item_VLM_Result = self._get_items (Item_VLM_Result)[0]
-        # item.reset_settings ()
-
-
     @property
     def vlm_polar (self) -> VLM_Polar:
         """ current VLM polar """
@@ -671,7 +649,6 @@ class Item_VLM_Result (Item_Abstract):
     def opPoint_var_list (self) -> OpPoint_Var:
         """ variable to show in diagram"""
         return [OpPoint_Var.LIFT, OpPoint_Var.CL, OpPoint_Var.ALPHA]
-
 
 
     # ---------------
@@ -1628,15 +1605,15 @@ class Diagram_Planform (Diagram_Abstract):
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
 
-        i = Item_Planform (self.app_model)
+        i = Item_Planform (self,self.app_model)
         self._add_item (i, 0, 0)
 
-        i = Item_Chord    (self.app_model, show=False)
+        i = Item_Chord    (self, self.app_model, show=False)
         self._add_item (i, 1, 0)
         i.set_desired_xLink_name (Item_Planform.name)
         i.set_xLinked (True)
 
-        i = Item_Chord_Reference  (self.app_model, show=False)
+        i = Item_Chord_Reference  (self, self.app_model, show=False)
         self._add_item (i, 2, 0)
         i.set_desired_xLink_name (Item_Planform.name)
         i.set_xLinked (True)
@@ -1890,19 +1867,19 @@ class Diagram_Making_Of (Diagram_Abstract):
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
 
-        item = Item_Making_Of_Welcome (self.app_model)
+        item = Item_Making_Of_Welcome (self,self.app_model)
         self._add_item (item, 0, 0)
 
-        item = Item_Making_Of_Chord (self.app_model)
+        item = Item_Making_Of_Chord (self, self.app_model)
         self._add_item (item, 0, 1)
 
-        item = Item_Making_Of_Chord_Reference (self.app_model)
+        item = Item_Making_Of_Chord_Reference (self, self.app_model)
         self._add_item (item, 0, 2)
 
-        item = Item_Making_Of_Planform (self.app_model)
+        item = Item_Making_Of_Planform (self, self.app_model)
         self._add_item (item, 1, 0, colspan=2)
 
-        item = Item_Making_Of_Paneled (self.app_model)
+        item = Item_Making_Of_Paneled (self, self.app_model)
         self._add_item (item, 1, 2)
 
         self.graph_layout.setColumnStretchFactor (0,1)
@@ -1969,13 +1946,13 @@ class Diagram_Wing (Diagram_Abstract):
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
 
-        item = Item_Wing (self.app_model)
+        item = Item_Wing (self, self.app_model)
         self._add_item (item, 0, 0, colspan=2)
 
-        item = Item_Wing_Data (self.app_model)
+        item = Item_Wing_Data (self, self.app_model)
         self._add_item (item, 1, 0)
 
-        item = Item_Wing_Airfoils (self.app_model)
+        item = Item_Wing_Airfoils (self, self.app_model)
         self._add_item (item, 1, 1)
 
         self.graph_layout.setColumnStretchFactor (0,2)
@@ -2031,18 +2008,18 @@ class Diagram_Airfoils (Diagram_Abstract):
 
         r = 0 
 
-        self._add_item (Item_Airfoils (self.app_model), r, 0, colspan=2)
+        self._add_item (Item_Airfoils (self, self.app_model), r, 0, colspan=2)
 
         if Worker.ready:
             r += 1
 
             # create Polar items with init values from settings 
 
-            item = Item_Polars (self.app_model, iItem=1, show=False)
+            item = Item_Polars (self, self.app_model, iItem=1, show=False)
             item._set_settings ({"xyVars" : (var.CD,var.CL)})
             self._add_item (item, r, 0)
 
-            item = Item_Polars (self.app_model, iItem=2, show=False)
+            item = Item_Polars (self, self.app_model, iItem=2, show=False)
             item._set_settings ({"xyVars" : (var.CL,var.GLIDE)})
             self._add_item (item, r, 1)
  
@@ -2275,15 +2252,15 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
 
-        i = Item_VLM_Panels     (self.app_model, show=True)
+        i = Item_VLM_Panels     (self, self.app_model, show=True)
         self._add_item (i, 0, 0)
 
-        i = Item_Chord          (self.app_model, show=False)
+        i = Item_Chord          (self, self.app_model, show=False)
         self._add_item (i, 1, 0)
         i.set_desired_xLink_name (Item_VLM_Panels.name)
         i.set_xLinked (True)
 
-        i = Item_VLM_Result     (self.app_model, show=False)
+        i = Item_VLM_Result     (self, self.app_model, show=False)
         self._add_item (i, 2, 0)
         i.set_desired_xLink_name (Item_VLM_Panels.name)
         i.set_xLinked (True)

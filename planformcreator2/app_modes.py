@@ -16,8 +16,8 @@ from typing                 import override
 from PyQt6.QtCore           import Qt, pyqtSignal, QObject, QTimer, QMargins
 from PyQt6.QtWidgets        import QHBoxLayout, QMessageBox, QStackedWidget, QFileDialog
 
-from app_model              import App_Model, Mode_Id
-from model.wing             import Wing
+from .app_model             import App_Model, Mode_Id
+from .model.wing            import Wing
 
 from airfoileditor.base.widgets     import style, Icon       
 from airfoileditor.base.panels      import Container_Panel, Toaster, MessageBox       
@@ -25,8 +25,8 @@ from airfoileditor.base.app_utils   import Settings
 
 
 
-from ui.pc2_dialogs         import Dialog_Rename, Dialog_Select_Template
-from ui.pc2_panels          import (Panel_File, Panel_File_Small, Panel_Wing, Panel_Wing_Small,
+from .ui.pc2_dialogs        import Dialog_Rename, Dialog_Select_Template
+from .ui.pc2_panels         import (Panel_File, Panel_File_Small, Panel_Wing, Panel_Wing_Small,
                                     Panel_Chord_Reference, Panel_Chord_Reference_Small,
                                     Panel_WingSection, Panel_WingSection_Small)
 
@@ -586,7 +586,7 @@ class Modes_Manager (QObject):
     def set_mode (self, mode_id: Mode_Id, on_arg=None):
         """ set initial mode """
 
-        if not mode_id in self._modes_dict:
+        if mode_id not in self._modes_dict:
             logger.error(f"Mode {mode_id} not registered in Mode_Manager.")
             return
 

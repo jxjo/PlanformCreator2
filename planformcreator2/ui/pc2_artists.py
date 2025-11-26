@@ -21,10 +21,9 @@ from airfoileditor.base.common_utils          import *
 from airfoileditor.model.airfoil              import GEO_BASIC
 from airfoileditor.model.polar_set            import *
 
-from model.wing                 import (Wing, Planform, N_Distrib_Bezier, 
+from ..model.wing               import (Wing, Planform, N_Distrib_Bezier, 
                                         WingSection, WingSections, Flaps, Flap, Image_Definition)
-
-from model.VLM_wing             import VLM_OpPoint, VLM_Polar,OpPoint_Var
+from ..model.VLM_wing           import VLM_OpPoint, VLM_Polar,OpPoint_Var
 
 
 import logging
@@ -266,7 +265,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
 
 
         @override
-        def _add_point (self, xy : tuple) -> bool:
+        def _add_point (self, x: float, y: float) -> bool:
             """ handle add point - will be called when ctrl_click on Bezier """
 
             # limit n of control points 
@@ -275,14 +274,14 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
             # find insertion point 
 
             px     = np.array( self.jpoints_xy ()[0]) 
-            px_new = xy[0]
+            px_new = x
 
             idx = np.searchsorted(px, px_new)
             idx = clip (idx, 1, len(px)-1)                  # between start and end tangent point
 
-            self._jpoints.insert (idx, JPoint (xy))
+            self._jpoints.insert (idx, JPoint ((x,y)))
 
-            logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
+            logger.debug (f"Bezier point added at x={x} y={y}")
 
             self._finished_point (None)
 
@@ -599,7 +598,7 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
 
 
         @override
-        def _add_point (self, xy : tuple) -> bool:
+        def _add_point (self, x:float, y:float) -> bool:
             """ handle add point - will be called when ctrl_click on Bezier """
 
             # limit n of control points 
@@ -608,14 +607,14 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
             # find insertion point 
 
             px     = np.array( self.jpoints_xy ()[0]) 
-            px_new = xy[0]
+            px_new = x
 
             idx = np.searchsorted(px, px_new)
             idx = clip (idx, 2, len(px)-2)                  # between start and end tangent point
 
-            self._jpoints.insert (idx, JPoint (xy))
+            self._jpoints.insert (idx, JPoint ((x,y)))
 
-            logger.debug (f"Bezier point added at x={xy[0]} y={xy[1]}")
+            logger.debug (f"Bezier point added at x={x} y={y}")
 
             self._finished_point (None)
 
@@ -1359,7 +1358,7 @@ class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
 
 
         @override
-        def _add_point (self, xy : tuple) -> bool:
+        def _add_point (self, x:float, y:float) -> bool:
             """ handle add point - will be called when ctrl_click on Bezier """
             return False 
             

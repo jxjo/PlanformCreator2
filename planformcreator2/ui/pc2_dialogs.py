@@ -20,10 +20,10 @@ from airfoileditor.base.panels          import Dialog, MessageBox
 from airfoileditor.base.diagram         import Diagram, Diagram_Item
 from airfoileditor.base.artist          import Artist
 
-from model.wing                         import Wing, Planform, Image_Definition, Planform_Paneled, WingSections
-from model.wing_exports                 import Exporter_Airfoils, Exporter_Dxf, Exporter_Xflr5, Exporter_FLZ
+from ..model.wing                       import Wing, Planform, Image_Definition, Planform_Paneled, WingSections
+from ..model.wing_exports               import Exporter_Airfoils, Exporter_Dxf, Exporter_Xflr5, Exporter_FLZ
 
-from ui.pc2_artists                     import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
+from .pc2_artists                       import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
 
 import logging
 logger = logging.getLogger(__name__)
@@ -678,7 +678,7 @@ class Dialog_Edit_Image (Dialog):
 
         @property
         def img_def (self) -> Image_Definition:
-            return self._getter
+            return self._dataObject
 
 
         def create_diagram_items (self):
@@ -867,7 +867,7 @@ class Dialog_Select_Template (Dialog):
 
 
         def wing (self) -> Wing: 
-            return self._getter
+            return self._dataObject
 
         def planform (self) -> Planform:
             return self.wing()._planform
