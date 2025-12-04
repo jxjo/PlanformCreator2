@@ -17,14 +17,14 @@ from PyQt6.QtCore           import Qt, pyqtSignal, QObject, QTimer, QMargins
 from PyQt6.QtWidgets        import QHBoxLayout, QMessageBox, QStackedWidget, QFileDialog
 
 from .app_model             import App_Model, Mode_Id
-from .model.wing            import Wing
+from .model.wing            import Wing, FILENAME_NEW
 
 from airfoileditor.base.widgets     import style, Icon       
 from airfoileditor.base.panels      import Container_Panel, Toaster, MessageBox       
 from airfoileditor.base.app_utils   import Settings
 
 
-
+from .                      import resources_dir_pc2
 from .ui.pc2_dialogs        import Dialog_Rename, Dialog_Select_Template
 from .ui.pc2_panels         import (Panel_File, Panel_File_Small, Panel_Wing, Panel_Wing_Small,
                                     Panel_Chord_Reference, Panel_Chord_Reference_Small,
@@ -267,8 +267,10 @@ class Mode_Modify (Mode_Abstract):
             button = MessageBox.save(self.stacked_panel, f"Leaving {self.wing.parm_fileName}", message)
 
             if button == QMessageBox.StandardButton.Save:
-                # save settings and parameters
-                self.save()
+                if self.wing.is_new_wing:
+                    leave = self.save_as ()                 # save as new file - or cancel
+                else:
+                    self.save()                             # save paramter file
 
             elif button == QMessageBox.StandardButton.Discard:
                 # on Discard remove temp dir of airfoil strak etc
@@ -312,8 +314,10 @@ class Mode_Modify (Mode_Abstract):
             MessageBox.error   (self.stacked_panel,"Save Planform", f"<b>{self.wing.parm_fileName}</b> couldn't be saved", min_height= 60)
 
 
-    def save_as (self): 
-        """ save current airfoil as ..."""
+    def save_as (self) ->bool: 
+        """ 
+        Save current airfoil as ...
+        Returns True if saved, False if cancelled or error"""
 
         filters   = "PlanformCreator2 files (*.pc2)"
         directory = self.wing.workingDir
@@ -342,10 +346,7 @@ class Mode_Modify (Mode_Abstract):
             return
 
         # select a new template 
-
-        project_dir  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        template_dir = os.path.join (project_dir, TEMPLATE_DIR)
-        target_dir   = self.app_model.workingDir_default                   
+        template_dir = os.path.join (resources_dir_pc2(), TEMPLATE_DIR)
 
         try:
             dialog = Dialog_Select_Template (self.stacked_panel, template_dir, parentPos=(0.3, 0.0), dialogPos=(0,1.2))
@@ -357,19 +358,9 @@ class Mode_Modify (Mode_Abstract):
 
         if template_filePathName and os.path.isfile (template_filePathName):
 
-            # copy template file to user data dir as new file
-            new_filePathName = os.path.join(target_dir, os.path.basename(template_filePathName))
-            shutil.copy2(template_filePathName, new_filePathName)
-            logger.info (f"New planform from template '{template_filePathName}' copied to '{new_filePathName}'")
+            #load new planform from template and save in USER dir
+            self.app_model.load_wing (template_filePathName, as_new=True)
 
-            #load new planform from USER dir
-            self.app_model.load_wing (new_filePathName)
-
-            # copy background image if existing
-            if self.wing.background_image.pathFilename:
-                image_pathFileName     = os.path.join(template_dir, self.wing.background_image.pathFilename)
-                new_image_pathFileName = os.path.join(target_dir,   self.wing.background_image.pathFilename)
-                shutil.copy2(image_pathFileName, new_image_pathFileName)
 
 
 
@@ -432,7 +423,14 @@ class Mode_Modify (Mode_Abstract):
     def exit (self):
         """ User action: leave current mode and app. """
 
-        self.sig_exit_requested.emit ()
+        leave = self._on_leaving_planform ()            # changes made? user cancelled?
+
+        if leave:
+            # still new wing? - remove temp dir of airfoil strak etc
+            if self.wing.is_new_wing:
+                self.app_model.cleanup_wing (all = True)
+
+            self.sig_exit_requested.emit ()
 
     
     @property

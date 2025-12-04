@@ -37,7 +37,7 @@ from PyQt6.QtGui            import QCloseEvent, QGuiApplication
 # --- AE modules ---------------
 
 # Check version of installed airfoileditor package
-AE_MIN_VERSION   = '4.2.0b2'                                    # min airfoileditor version required
+AE_MIN_VERSION   = '4.2.0'                                      # min airfoileditor version required
 AE_PACKAGE_NAME  = 'airfoileditor'                              # airfoileditor package name
 try: 
     airfoileditor_version = version(AE_PACKAGE_NAME)
@@ -48,6 +48,7 @@ except Exception as e:
     logging.error(f"Required package {AE_PACKAGE_NAME} not found")
     sys.exit(0)
     
+from airfoileditor                      import resources_dir_ae
 from airfoileditor.base.common_utils    import * 
 from airfoileditor.base.widgets         import Icon, Widget
 from airfoileditor.base.panels          import Tab_Panel, Win_Util
@@ -55,16 +56,14 @@ from airfoileditor.base.app_utils       import Settings, check_or_get_initial_fi
 
 # --- PC2 modules ---------------
 
-package_dir     = os.path.dirname(os.path.abspath(__file__))
-PACKAGE_NAME    = os.path.basename (package_dir)
+PACKAGE_NAME    = "planformcreator2"
 
 # DEV: when running app.py as main, set package path and property to allow relative imports
 if __name__ == "__main__":  
-    repository_dir  = os.path.dirname (package_dir)
-    if not repository_dir in sys.path:
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = PACKAGE_NAME
 
+from .                       import resources_dir_pc2
 from .app_model              import App_Model, Mode_Id
 from .app_modes              import Modes_Manager, Mode_Modify
 
@@ -98,6 +97,9 @@ class Main (QMainWindow):
     def __init__(self, initial_file):
         super().__init__()
 
+        logger.info (f"Init Main Window")
+
+
         self._app_model         = None                        # the app model
         self._modes_manager     = None                        # app modes manager
         self._diagrams_panel    = None                        # main diagrams panel
@@ -113,23 +115,13 @@ class Main (QMainWindow):
 
         # --- init App Model ---------------
 
-        app_model = App_Model (workingDir_default=Settings.user_data_dir (APP_NAME))
-
-        app_model.set_app_info (__version__, "No CHANGE_TEXT", is_first_run)
+        self._app_model = App_Model (workingDir_default=Settings.user_data_dir (APP_NAME))
+        self._app_model.set_app_info (__version__, "No CHANGE_TEXT", is_first_run)
 
         # either airfoil file or Xoptfoil2 input file
 
         pc2_file = check_or_get_initial_file (initial_file)
 
-        mode_to_start = Mode_Id.MODIFY
-
-        # load initial settings like polar definitions 
-
-        app_model.load_settings ()                                          # global settings 
-        app_model.sig_new_wing.connect (self._set_win_title)                # update title on new wing
-        app_model.sig_new_mode.connect (self._set_win_title)                # update title on new case
-
-        self._app_model     = app_model                                     # keep for close 
 
         # --- init UI ---------------
 
@@ -137,29 +129,31 @@ class Main (QMainWindow):
 
         logger.info (f"Initialize UI")
 
+        self._set_win_style (resources_dir_ae(), os.path.join(resources_dir_pc2(),'icons','PC2.ico')) #todo fix ae default dir
         self._set_win_title ()
-        self._set_win_style ()
         self._set_win_geometry ()
 
+        self._app_model.sig_new_wing.connect (self._set_win_title)          # update title on new wing
+        self._app_model.sig_new_mode.connect (self._set_win_title)          # update title on new case
 
         # app Modes and manager ---------------
         
-        modes_manager = Modes_Manager (app_model)
-        modes_manager.add_mode (Mode_Modify (app_model))
+        modes_manager = Modes_Manager (self._app_model)
+        modes_manager.add_mode (Mode_Modify (self._app_model))
 
-        modes_manager.set_mode (mode_to_start, pc2_file)                    # set initial object in app_model
+        modes_manager.set_mode (Mode_Id.MODIFY, pc2_file)                   # set initial object in app_model
         modes_manager.sig_close_requested.connect (self.close)              # app close requested from mode view
 
         self._modes_manager = modes_manager                                 # keep as it hosts slots
 
         # main widgets and layout of app
 
-        self._diagrams_panel = self._create_diagrams_panel ()               # main diagrams tab panel
-        self._modes_data_panel = modes_manager.stacked_modes_panel()        # stacked widget with mode data panels
+        diagram     = self._create_diagrams_panel ()                        # main diagrams tab panel
+        modes_panel = modes_manager.stacked_modes_panel()                   # stacked widget with mode data panels
 
         l = QGridLayout () 
-        l.addWidget (self._diagrams_panel, 0,0)                              
-        l.addWidget (self._modes_data_panel, 1,0)        
+        l.addWidget (diagram, 0,0)                              
+        l.addWidget (modes_panel, 1,0)        
         l.setRowStretch (0,1)
         l.setRowMinimumHeight (0,400)
         modes_manager.set_height (160, minimized=65)
@@ -170,6 +164,8 @@ class Main (QMainWindow):
         main = QWidget()
         main.setLayout (l) 
         self.setCentralWidget (main)
+
+        self._diagrams_panel = diagram
 
         # --- Enter event loop ---------------
 
@@ -187,16 +183,27 @@ class Main (QMainWindow):
         self.setWindowTitle (APP_NAME + "  v" + str(__version__) + "  [" + pc2_file + "]")
 
 
-    def _set_win_style (self):
+    def _set_win_style (self, resources_dir, icon_filename):
         """ 
         Set window style according to settings
         """
 
-        self.setWindowIcon (Icon ('AE_ico.ico'))                                    # get icon either in modules or in icons 
+        # set resources dir for Icons
+        
+        if resources_dir is not None:
+            Icon.RESOURCES_DIR = resources_dir
+
+        # set app icon    
+
+        self.setWindowIcon(Icon(icon_filename=icon_filename))
+
+        # set dark or light mode
 
         scheme_name = Settings().get('color_scheme', Qt.ColorScheme.Unknown.name)   # either unknown (from System), Dark, Light
         QGuiApplication.styleHints().setColorScheme(Qt.ColorScheme[scheme_name])    # set scheme of QT
+
         Widget.light_mode = not (scheme_name == Qt.ColorScheme.Dark.name)           # set mode for Widgets
+
 
 
     def _set_win_geometry (self):
@@ -217,6 +224,14 @@ class Main (QMainWindow):
 
         s.set ('window_maximize', self.isMaximized())
         s.set ('window_geometry', self.normalGeometry().getRect())
+
+        wing = self._app_model.wing
+        if wing and not wing.is_new_wing: 
+            s.set ('last_opened', wing.parm_pathFileName_abs)
+        else:
+            s.set ('last_opened', None)
+
+        s.set ('current_diagram', self._diagrams_panel.current_tab_name)
 
         s.save()
 
@@ -253,6 +268,8 @@ class Main (QMainWindow):
         for diagram in diagrams:
             tab_panel.add_tab(diagram)
         tab_panel.setMinimumHeight(500)
+
+        tab_panel.set_current_tab (Settings().get('current_diagram', None))
 
         return tab_panel
 

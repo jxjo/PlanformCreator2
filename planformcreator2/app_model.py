@@ -19,6 +19,7 @@ from enum                   import Enum, auto
 from typing                 import override
 from PyQt6.QtCore           import pyqtSignal, QObject, QThread, QTimer
 
+from airfoileditor                          import resources_dir_ae
 from airfoileditor.base.common_utils        import Parameters, clip
 from airfoileditor.base.app_utils           import Settings
 from airfoileditor.model.airfoil_examples   import Example
@@ -27,7 +28,8 @@ from airfoileditor.model.polar_set          import Polar_Task, Polar_Definition,
 
 # --- the real model imports
 
-from .model.wing             import Wing, WingSection
+from .                       import resources_dir_pc2
+from .model.wing             import Wing, WingSection, FILENAME_NEW
 from .model.VLM_wing         import VLM_OpPoint, VLM_Polar
 
 
@@ -57,6 +59,9 @@ class App_Model (QObject):
 
     """
 
+    # root directory for the resources like ./assets,  ./examples_optimize - has to be adjusted at runtime
+    RESOURCES_DIR               = os.path.abspath (os.path.join (os.path.dirname(__file__), '..'))
+
     WORKER_MIN_VERSION         = '1.0.10'
 
     sig_new_mode                = pyqtSignal()          # new mode selected
@@ -69,7 +74,7 @@ class App_Model (QObject):
     sig_new_polars              = pyqtSignal()          # new polars generated
     sig_paneling_changed        = pyqtSignal()          # paneling definition changed
 
-    sig_vlm_polar_reset         = pyqtSignal()          # VLM resetted - new polar will be generated on demand
+    sig_vlm_polar_reset         = pyqtSignal()          # VLM reset - new polar will be generated on demand
     sig_vlm_polar_changed       = pyqtSignal()          # current VLM polar changed
     sig_vlm_opPoint_changed     = pyqtSignal()          # current VLM operating point changed
 
@@ -79,6 +84,9 @@ class App_Model (QObject):
 
         self._workingDir_default= workingDir_default if workingDir_default else os.getcwd()
 
+        logger.info (f"Init App_Model - working dir: {self._workingDir_default}")
+
+
         self._version           = ""                    # application version
         self._change_text       = ""                    # change text for this version
         self._is_first_run      = False                 # is first run of this version
@@ -87,7 +95,7 @@ class App_Model (QObject):
         self._cur_wingSection : WingSection = None      # current selected wing section
 
         self._cur_vlm_alpha : float        = None       # current VLM opPoint alpha
-        self._cur_vlm_polar : VLM_Polar    = None       # for change detectioncurrent VLM polar
+        self._cur_vlm_polar : VLM_Polar    = None       # for change detection current VLM polar
         self._cur_polar_def : Polar_Definition = None   # current polar definition
         self._vlm_alpha_fixed_to_max : bool = False     # is vlm alpha fixed to max lift alpha
 
@@ -97,11 +105,8 @@ class App_Model (QObject):
         # set working dir for Example airfoils created
         Example.workingDir_default = workingDir_default   
 
-        # Worker for polar generation and Xoptfoil2 for optimization ready? 
-        modulesDir = os.path.dirname(os.path.abspath(__file__))                
-        projectDir = os.path.dirname(modulesDir)
-
-        Worker    (workingDir=self.workingDir_default).isReady (projectDir, min_version=self.WORKER_MIN_VERSION)
+        # setup path of worker and its working dir
+        Worker    (workingDir=self.workingDir_default).isReady (resources_dir_ae(), min_version=self.WORKER_MIN_VERSION)
 
         # initialize watchdog thread for polars and xo2 state changes
         self._init_watchdog()
@@ -264,14 +269,13 @@ class App_Model (QObject):
     def set_cur_polar_def (self, polar_def : Polar_Definition):
         """ set selected polar definition of wingSection at root"""
 
-        if polar_def != self._cur_polar_def:
+        if polar_def != self._cur_polar_def and polar_def in self.wing.polar_definitions:
             self._cur_polar_def = polar_def
             logger.debug (f"{self} set cur_polar_def to {polar_def}")
 
             # reset current VLM opPoint 
-            self._cur_vlm_alpha = None if self.vlm_alpha_fixed_to_max else 0.0
-            self.sig_vlm_opPoint_changed.emit()
-
+            self.notify_polar_definitions_changed ()    
+ 
 
     @property
     def polar_definitions_T1 (self) -> list[Polar_Definition]:
@@ -332,10 +336,17 @@ class App_Model (QObject):
             return None
     
 
-    def load_wing (self, pathFilename, initial=False): 
+    def load_wing (self, pathFilename, as_new = False): 
         """ creates / loads new wing as current"""
 
         self._wing = Wing (pathFilename, defaultDir=self.workingDir_default)
+
+        if as_new:
+            logger.info (f"{self} Loading new wing from {pathFilename}")
+
+            # set working dir of new wing to default working dir
+            new_pathFilename_abs = os.path.join(self.workingDir_default, FILENAME_NEW)
+            self.wing.save (new_pathFilename_abs)
         
         self._cur_wingSection = None
         self._cur_vlm_alpha   = None
@@ -347,13 +358,12 @@ class App_Model (QObject):
     def cleanup_wing (self, all=False):
         """ close current wing - remove temp files"""
 
-        # remove airfoils dir if new file
-        if self.wing.is_new_wing:
-            self.wing.remove_airfoils_dir ()
-
         # remove airfoil strak dir etc...
         if all:
             self.wing.remove_tmp ()
+
+        # remove airfoils dir if new file or empty
+        self.wing.remove_airfoils_dir_not_needed ()
 
         # remove lost worker input files 
         if Worker.ready:
@@ -367,6 +377,11 @@ class App_Model (QObject):
         # as polar definitions could have changed, ensure a new initialized polarSet 
         self.wing.planform.wingSections.refresh_polar_sets (ensure=True)
         self.sig_polar_set_changed.emit()
+
+        # reset alpha - may angle won't be available anymore
+        self._cur_vlm_alpha = None if self.vlm_alpha_fixed_to_max else 0.0
+ 
+        QTimer.singleShot(0, self.sig_vlm_polar_reset.emit)         # notify after current events processed
 
 
     def notify_planform_changed (self):
@@ -386,7 +401,7 @@ class App_Model (QObject):
         self.wing.vlm_wing_reset ()
         self.sig_paneling_changed.emit()
 
-        # init VL recalculation
+        # init VLM recalculation
         if self.vlm_alpha_fixed_to_max:
             self._cur_vlm_alpha = None 
 
@@ -412,50 +427,12 @@ class App_Model (QObject):
         return self._settings
 
 
-    # ---- functions on state
-
-    
-    def load_settings (self):
-        """ 
-        Load and apply either default or individual settings for airfoil like view, polars, ...
-        """
-
-        pass
-
-
-
-    def save_settings (self, to_app_settings: bool = False,
-                               add_key: str = "",
-                               add_value = None):
-        """ 
-        Save settings either to app settings or to settings of current airfoil
-            An additional key, value pair (like diagram settings)can be added"""
-
-        # save either in global settings or airfoil individual settings
-        if to_app_settings:
-            s = Settings()
- 
-        #todo 
-        # cur_widget : Diagram_Abstract = self._panel_diagrams.currentWidget()
-        # s.set('current_diagram', cur_widget.__class__.__name__)
-
-        # # save settings of diagrams 
-        # diagram : Diagram_Abstract
-        # for diagram in self._diagrams:
-        #     s_diagram = diagram.settings()
-        #     s.set(diagram.name, s_diagram)
-
-        # s.save()
-
-
     def close (self):
         """ finish app model """
 
         self._finish_watchdog()
 
-
-
-
+        self.cleanup_wing ()
 
 
 # -----------------------------------------------------------------------------

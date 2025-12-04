@@ -703,9 +703,11 @@ class Neutral_Point_Artist (Abstract_Artist_Planform):
 
     def _plot (self): 
 
-        _, _, _, np_y = self.wing.wing_data ()
+        _, _, _, np = self.wing.wing_data ()
 
-        self._plot_point (0.0, np_y, size=9, color=COLOR_REF_LINE, brush=COLOR_REF_LINE.darker(300), 
+        color = QColor ('mediumorchid')
+
+        self._plot_point (np[0], np[1], size=10, color=color, brush=color.darker(150), 
                           textOffset = (0,-5), text="NP", textFill="black")
 
 
@@ -2640,7 +2642,7 @@ class Wing_Data_Artist (Abstract_Artist_Planform):
         x1 = 140
         dy = 25
 
-        wing_area, wing_ar, mac, np_y = self.wing.wing_data ()
+        wing_area, wing_ar, mac, np = self.wing.wing_data ()
 
         y = 0 
         self._plot_text ("Wing Span",  parentPos=p0, offset=(0, y))
@@ -2668,7 +2670,7 @@ class Wing_Data_Artist (Abstract_Artist_Planform):
 
         y += dy
         self._plot_text ("NP_x geometric",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{np_y:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        self._plot_text (f"{np[1]:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
         self._plot_text ("mm", parentPos=p0, offset=(x1, y))
 
 

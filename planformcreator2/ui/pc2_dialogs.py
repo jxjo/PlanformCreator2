@@ -849,15 +849,15 @@ class Dialog_Select_Template (Dialog):
         min_width   = 200                                       # min size needed - see below 
         min_height  = 50 
 
+        show_buttons = False                                    # hide resize buttons
+        show_coords  = False                                    # hide coordinates
 
-        sig_wing_selected         = pyqtSignal(Wing)             # self was clicked 
+        sig_wing_selected         = pyqtSignal(Wing)            # self was clicked 
 
         def __init__(self, *args, **kwargs):
 
             super().__init__(*args, **kwargs)
-
-            self.buttonsHidden = True                           # hide resize buttons
-
+    
             # set margins (inset) of self 
             self.setContentsMargins ( 300,10,0,10)
 
@@ -865,18 +865,19 @@ class Dialog_Select_Template (Dialog):
             #   delayed as during init scene is not yet available
             QTimer().singleShot (10, self._connect_scene_mouseClick)
 
-
+        @property
         def wing (self) -> Wing: 
             return self._dataObject
 
+        @property
         def planform (self) -> Planform:
-            return self.wing()._planform
+            return self.wing.planform
 
 
         @override
         def plot_title(self, **kwargs):
-            text_with_br = self.wing().description.replace ("\n", "<br/>")      # textItem needs <br>
-            super().plot_title (title=self.wing().name, title_size=Artist.SIZE_NORMAL,
+            text_with_br = self.wing.description.replace ("\n", "<br/>")      # textItem needs <br>
+            super().plot_title (title=self.wing.name, title_size=Artist.SIZE_NORMAL,
                                 subtitle = text_with_br, offset=(10,10), **kwargs)
 
 
@@ -917,14 +918,14 @@ class Dialog_Select_Template (Dialog):
             # was the scene click in my geometry rectangle?
             if self.geometry().contains (ev._scenePos):
                 ev.accept()
-                self.sig_wing_selected.emit (self.wing())
+                self.sig_wing_selected.emit (self.wing)
 
 
         @override
         def setup_artists (self):
             """ create and setup the artists of self"""
-            self._add_artist (Planform_Artist       (self, self.planform, as_contour=True, show_mouse_helper=False))
-            self._add_artist (Ref_Line_Artist       (self, self.planform, mode=mode.REF_TO_PLAN, show_mouse_helper=False))
+            self._add_artist (Planform_Artist       (self, lambda: self.planform, as_contour=True, show_mouse_helper=False))
+            self._add_artist (Ref_Line_Artist       (self, lambda: self.planform, mode=mode.REF_TO_PLAN, show_mouse_helper=False))
     
 
         @override
@@ -946,10 +947,7 @@ class Dialog_Select_Template (Dialog):
 
         sig_wing_selected         = pyqtSignal(Wing)             # self was clicked 
 
-        def __init__(self, *args, template_wings : list [Wing] = [], **kwargs):
-
-            self._template_wings     = template_wings
-
+        def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
 
             self.graph_layout.setContentsMargins (10,10,10,10)  # default margins
@@ -961,13 +959,13 @@ class Dialog_Select_Template (Dialog):
 
         @property
         def template_wings (self) -> list [Wing]:
-            return self._template_wings
+            return self._dataObject
 
 
         def create_diagram_items (self):
             """ create all plot Items and add them to the layout """
             for i, wing in enumerate (self.template_wings):
-                item = Dialog_Select_Template.Item_Thumbnail (wing)
+                item = Dialog_Select_Template.Item_Thumbnail (self,wing)
                 self._add_item (item, i, 0)
 
                 item.sig_wing_selected.connect (self._on_wing_selected)
@@ -1067,7 +1065,7 @@ class Dialog_Select_Template (Dialog):
         l = QGridLayout()
 
         # create image diagram 
-        self._diagram = self.Diagram_Templates (self, template_wings=self._template_wings())
+        self._diagram = self.Diagram_Templates (self, self._template_wings())
         l.addWidget (self._diagram, 0, 0, 1, 10)        
  
         l.setRowStretch (0,1)    

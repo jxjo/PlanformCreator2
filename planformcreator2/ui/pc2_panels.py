@@ -7,6 +7,9 @@ UI panels
 
 """
 
+import subprocess
+import sys
+
 import logging
 
 from PyQt6.QtWidgets        import QMenu, QDialog, QFileDialog, QMessageBox
@@ -14,7 +17,7 @@ from PyQt6.QtGui            import QDesktopServices
 from PyQt6.QtCore           import QUrl
 
 from airfoileditor.base.widgets         import * 
-from airfoileditor.base.panels          import Edit_Panel, MessageBox
+from airfoileditor.base.panels          import Edit_Panel, MessageBox, Disabled_Overlay
 from airfoileditor.model.airfoil        import Airfoil, GEO_BASIC
 
 from ..model.wing           import Wing, STRAK_AIRFOIL_NAME
@@ -391,24 +394,21 @@ class Panel_WingSection (Panel_Planform_Abstract):
     @property
     def _isDisabled (self) -> bool:
         """ overloaded: disabled if section is just for paneling """
-        return self._wingSection.is_for_panels
+        return self.wingSection.is_for_panels
 
 
     @override
     def _add_to_header_layout(self, l_head: QHBoxLayout):
         """ add Widgets to header layout"""
 
-        l_head.addSpacing (15) 
-        # l_head.addStretch(1)
-
         ComboBox     (l_head, width=55,
-                      get=lambda: self._wingSection_name, set=self._set_wingSection_name,
-                      options= lambda: self._wingSections_list, signal=False )      # do not signal (would be double refresh)
+                      get=lambda: self.wingSection_name, set=self.set_wingSection_name,
+                      options= lambda: self.wingSections_list, signal=False )      # do not signal (would be double refresh)
         ToolButton   (l_head, icon=Icon.ADD,    set=self._add_wingSection,
-                      disable=lambda: self._wingSection.is_tip,
+                      disable=lambda: self.wingSection.is_tip,
                       toolTip='Add a new wing section')
         ToolButton   (l_head, icon=Icon.DELETE, set=self._delete_wingSection,
-                      disable=lambda: self._wingSection.is_root_or_tip,
+                      disable=lambda: self.wingSection.is_root_or_tip,
                       toolTip='Delete selected wing section')
         l_head.addStretch(3)
 
@@ -421,29 +421,29 @@ class Panel_WingSection (Panel_Planform_Abstract):
         # 1. column - section settings and airfoil 
 
         Label  (l,r,c, get=self._section_info, colSpan=5, 
-                style=lambda: style.HINT if self._wingSection.is_for_panels else style.COMMENT,
+                style=lambda: style.HINT if self.wingSection.is_for_panels else style.COMMENT,
                 hide = lambda: self.planform.chord_defined_by_sections) 
         CheckBox (l,r,c, text="Section defines chord", colSpan=5,               # toggle trapezoid or not 
-                obj=lambda: self._wingSection, prop=WingSection.defines_cn,
-                disable=lambda: self._wingSection.is_root_or_tip,
+                obj=lambda: self.wingSection, prop=WingSection.defines_cn,
+                disable=lambda: self.wingSection.is_root_or_tip,
                 hide=lambda:  not self.planform.chord_defined_by_sections)     
                
         r += 1
         FieldF (l,r,c,   lab="Position", width=85, unit="mm", step=1, lim=lambda: (0, self.planform.span), dec=1,
-                obj=lambda: self._wingSection, prop=WingSection.x, 
-                disable=lambda: not self._wingSection.is_set_xn_allowed,
-                style=lambda: self._style_for_fixed(self._wingSection.is_xn_fix) )
+                obj=lambda: self.wingSection, prop=WingSection.x, 
+                disable=lambda: not self.wingSection.is_set_xn_allowed,
+                style=self._style_for_xn_fixed)
         FieldF (l,r,c+3, lab="of span", width=65, unit="%", step=1, lim=(0, 100), dec=1,
-                obj=lambda:self._wingSection, prop=WingSection.xn, 
-                disable=lambda: not self._wingSection.is_set_xn_allowed)
+                obj=lambda:self.wingSection, prop=WingSection.xn, 
+                disable=lambda: not self.wingSection.is_set_xn_allowed)
         r += 1
         FieldF (l,r,c,   lab="Chord", width=85, unit="mm", step=1, lim=lambda:(1, self.planform.chord_root), dec=1,
-                obj=lambda: self._wingSection, prop=WingSection.c, 
-                disable=lambda: not self._wingSection.is_set_cn_allowed,
-                style=lambda: self._style_for_fixed(self._wingSection.is_cn_fix))
+                obj=lambda: self.wingSection, prop=WingSection.c, 
+                disable=lambda: not self.wingSection.is_set_cn_allowed,
+                style=self._style_for_cn_fixed)
         FieldF (l,r,c+3, lab="of root", width=65, unit="%", step=1, lim=(1, 100), dec=1,
-                obj=lambda: self._wingSection, prop=WingSection.cn, 
-                disable=lambda: not self._wingSection.is_set_cn_allowed)
+                obj=lambda: self.wingSection, prop=WingSection.cn, 
+                disable=lambda: not self.wingSection.is_set_cn_allowed)
 
         r += 1
 
@@ -453,27 +453,28 @@ class Panel_WingSection (Panel_Planform_Abstract):
         l_foil = QGridLayout (p_foil)
         Field  (l_foil,0,0,   lab="Airfoil",
                 get=lambda: self._airfoil_name,                 # name as strak fileName can be long
-                toolTip=lambda: self._wingSection.airfoil.info_as_html)
+                toolTip=lambda: self.wingSection.airfoil.info_as_html)
 
         ToolButton (l_foil,0,2, icon=Icon.OPEN, set=self._open_airfoil, 
                         toolTip="Select an airfoil for this wing section")
         ToolButton (l_foil,0,3, icon=Icon.DELETE, set=self._remove_airfoil,
                     toolTip="Remove airfoil - airfoil at section will be blended", 
-                    disable=lambda: self._wingSection.airfoil.isBlendAirfoil)
+                    disable=lambda: self.wingSection.airfoil.isBlendAirfoil or self.wingSection.is_root_or_tip)
         ToolButton (l_foil,0,4, icon=Icon.AE,   set=self._edit_airfoil,   
                     toolTip="Edit airfoil with the AirfoilEditor", 
-                    disable=lambda: self._wingSection.airfoil.isBlendAirfoil)
+                    disable=lambda: self.wingSection.airfoil.isBlendAirfoil)
         
         l_foil.setContentsMargins (QMargins(0, 0, 0, 0)) 
         l_foil.setSpacing (2)
         l_foil.setColumnMinimumWidth (0,70)
-        l_foil.setColumnStretch (1,5)
+        l_foil.setColumnMinimumWidth (1,215)
+        l_foil.setColumnStretch (5,5)
         l.addWidget (p_foil, r, c, 1, 7)
 
         l.setColumnMinimumWidth (0,70)
         l.setColumnMinimumWidth (2,10)
         l.setColumnMinimumWidth (3,50)
-        l.setColumnMinimumWidth (5,50)
+        l.setColumnMinimumWidth (5,40)
 
         r += 1
         l.setRowStretch (r,2)
@@ -485,19 +486,19 @@ class Panel_WingSection (Panel_Planform_Abstract):
         Label  (l,r,c, get="Flaps hinge line is defined by reference line", colSpan=5, style=style.COMMENT,
                 hide=lambda: not self.flaps.hinge_equal_ref_line )
         CheckBox (l,r,c, text="Section defines flaps hinge line", colSpan=5,  
-                obj=lambda: self._wingSection, prop=WingSection.defines_hinge,
+                obj=lambda: self.wingSection, prop=WingSection.defines_hinge,
                 hide=lambda: self.flaps.hinge_equal_ref_line)     
         r += 1
         FieldF (l,r,c,   lab="Flap depth", width=80, unit="mm", step=1, lim=lambda: (0, self.planform.chord_root), dec=1,
-                obj=lambda: self._wingSection, prop=WingSection.flap_c, specialText='Auto',
-                disable=lambda: not self._wingSection.defines_hinge or self._wingSection.hinge_equal_ref_line)
+                obj=lambda: self.wingSection, prop=WingSection.flap_c, specialText='Auto',
+                disable=lambda: not self.wingSection.defines_hinge or self.wingSection.hinge_equal_ref_line)
         FieldF (l,r,c+3, lab="of chord", width=65, unit="%", step=1, lim=(-1, 100), dec=1,
-                obj=lambda: self._wingSection, prop=WingSection.flap_cn, specialText='-',
-                disable=lambda: not self._wingSection.defines_hinge or self._wingSection.hinge_equal_ref_line)
+                obj=lambda: self.wingSection, prop=WingSection.flap_cn, specialText='-',
+                disable=lambda: not self.wingSection.defines_hinge or self.wingSection.hinge_equal_ref_line)
 
         r += 1
         FieldI (l,r,c,   lab="Flap Group", width=50, step=1, lim=(0, 20),  colSpan=2, specialText="-",
-                obj=lambda: self._wingSection, prop=WingSection.flap_group)
+                obj=lambda: self.wingSection, prop=WingSection.flap_group)
 
         l.setColumnMinimumWidth (c  ,70)
         l.setColumnMinimumWidth (c+2,10)
@@ -507,52 +508,60 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
 
     @property
-    def _wingSections_list (self) -> list[str]:
+    def wingSections_list (self) -> list[str]:
         sec_list = [section.name_short for section in self.wingSections_to_show]
         return sec_list 
 
     @property
-    def _wingSection (self) -> WingSection:
+    def wingSection (self) -> WingSection:
         """ Dispatcher for current WingSection between Edit and Diagram """
         return self.app_model.cur_wingSection
 
     @property
-    def _wingSection_name (self) -> str:
-        return self._wingSection.name_short
+    def wingSection_name (self) -> str:
+        return self.wingSection.name_short
     
-    def _set_wingSection_name (self, aSection : WingSection| str):
+    def set_wingSection_name (self, aSection : WingSection| str):
         """ set cur wingSection by name """
         self.app_model.set_cur_wingSection (aSection)
 
 
     def _delete_wingSection (self):
         """ delete current wingSection"""
-        aSection = self.wingSections.delete (self._wingSection)     
+        aSection = self.wingSections.delete (self.wingSection)     
         self.app_model.set_cur_wingSection (aSection)
 
 
     def _add_wingSection (self):
         """ add wingSection after current"""
-        aSection = self.wingSections.create_after (self._wingSection) 
+        aSection = self.wingSections.create_after (self.wingSection) 
         self.app_model.set_cur_wingSection (aSection)    
 
 
-    def _style_for_fixed (self, is_fix: bool) -> style:
-        """ returns the style for the entry field dependant if xn or cn is fixed"""
-        if is_fix: 
+    def _style_for_xn_fixed (self) -> style:
+        """ returns the style for the entry field dependant if xn fixed"""
+        if self.wingSection.is_xn_fix and not self.wingSection.is_root_or_tip: 
             return style.HINT
         else: 
             return style.NORMAL
 
+    def _style_for_cn_fixed (self) -> style:
+        """ returns the style for the entry field dependant if cn fixed"""
+        if self.wingSection.is_cn_fix and not self.wingSection.is_root_or_tip: 
+            return style.HINT
+        else: 
+            return style.NORMAL
+
+
     def _section_info (self) -> str:
         """ info text about section"""
-        if self._wingSection.is_for_panels:
+        if self.wingSection.is_for_panels:
             text = "Section is only for paneling support"
-        elif self._wingSection.defines_cn:
+        elif self.wingSection.defines_cn:
             text = "Section defines the planform"
-        elif self._wingSection.is_xn_fix:
+        elif self.wingSection.is_xn_fix:
             text = "Section is at fixed span position"
-        elif self._wingSection.is_cn_fix:
+        elif self.wingSection.is_cn_fix:
             text = "Section has a fixed relative chord"
         else: 
             text = ""
@@ -561,143 +570,129 @@ class Panel_WingSection (Panel_Planform_Abstract):
     @property
     def _airfoil_name (self) -> str:
         """ get airfoil file name or 'strak' at section"""
-        airfoil = self._wingSection.airfoil
+        airfoil = self.wingSection.airfoil
         return STRAK_AIRFOIL_NAME if airfoil.isBlendAirfoil else airfoil.fileName
 
 
     def _open_airfoil (self):
         """ open a new airfoil and load it"""
 
-        airfoil = self._wingSection.airfoil
+        airfoil = self.wingSection.airfoil
 
         filters   = "Airfoil files (*.dat);;Bezier files (*.bez);;Hicks Henne files (*.hicks)"
-        # inital strak airfoil has yet no fileName - use working dir of wing
-        directory = airfoil.pathName_abs if airfoil.fileName else self.wing.workingDir
+        directory = self.wing.airfoils_dir if airfoil.isBlendAirfoil else airfoil.pathName_abs
 
         newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters, directory=directory)
 
         if newPathFilename:                         # user pressed open
-
-            airfoil_loaded = False
-
-            try: 
-                airfoil = Airfoil.onFileType(newPathFilename, geometry=GEO_BASIC)
-                airfoil.load()
-                airfoil_loaded = airfoil.isLoaded
-            except:
-                pass
-
-            if airfoil_loaded:
-                self._set_airfoil (airfoil)
-            else:
-                msg     = f"<b>{newPathFilename}</b> couldn't be loaded."
-                MessageBox.error   (self,'Load Airfoil', f"{msg}", min_height= 60)
+            self._set_airfoil_by_file (newPathFilename)
 
 
     def _edit_airfoil (self, airfoil : Airfoil = None):
         """ edit airfoil with AirfoilEditor"""
 
         if airfoil is None: 
-            airfoil = self._wingSection.airfoil
+            airfoil = self.wingSection.airfoil
 
         if airfoil.isBlendAirfoil:
             MessageBox.error(self, 'Edit Airfoil', "Cannot edit a blended (strak) airfoil.\nPlease assign a real airfoil first.", min_height=60)
             return
         
-        #todo
         # Run AirfoilEditor as a separate Python process
-        import subprocess
-        import sys
-        ae_script = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'airfoileditor', 'airfoileditor.py')
 
         try:
-            # Check if the script exists first
-            if not os.path.exists(ae_script):
-                raise FileNotFoundError(f"Script not found at: {ae_script}")
-            
-            process = subprocess.Popen([sys.executable, ae_script, airfoil.pathFileName_abs])
+            overlay = Disabled_Overlay (self.window())
+            self.window().setEnabled(False)                 # Disable main window to simulate modal behavior
+            QApplication.processEvents()                    # ensure overlay is shown
+
+            process = subprocess.Popen([sys.executable, '-m', 'airfoileditor', airfoil.pathFileName_abs])
             process.wait()  # Wait for the process to complete (modal behavior)
+
         except FileNotFoundError as e:
             MessageBox.error(self, 'Edit Airfoil', f"Could not open AirfoilEditor.\n\n{e}", min_height=60)
             return
         except Exception as e:
             MessageBox.error(self, 'Edit Airfoil', f"Error launching AirfoilEditor.\n\n{e}", min_height=60)
             return
-        # from airfoileditor.app import Main
+        finally:
+            self.window().setEnabled(True)                  # Re-enable main window
+            overlay.hide()                                  # Hide immediately
+            overlay.close()                                 # Close and trigger closeEvent
+            overlay.deleteLater()                           # Schedule for deletion
 
-        # ae = Main (os.path.join(airfoil.workingDir, airfoil.pathFileName), parent=self.app)
-        # ae.sig_closing.connect (self._on_edit_finished) 
-
-        # ae.show()
+        # After editing, reload the airfoil to reflect any changes - reset strak
+        self._set_airfoil_by_file (airfoil.pathFileName_abs)
 
 
-    def _set_airfoil (self, airfoil : Airfoil | None):
-        """ set airfoil for section"""
+    def _set_airfoil_by_file (self, pathFileName : str | None):
+        """ 
+        Set new airfoil for current section by file name 
+            - handles copying to airfoils dir and normalization """
 
-        do_copy = True 
+        new_pathFileName = self.wingSection.get_airfoil_file (pathFileName)
 
-        if airfoil: 
+        if new_pathFileName is None:
+            # remove airfoil - will blend strak
+            self.wingSections.create_airfoil_for (self.wingSection, None)
+            self.app_model.notify_wingSection_changed ()
+            return
+        
+        # Check if airfoil is already in the airfoils directory
+        try:
+            already_there = os.path.samefile(os.path.dirname(pathFileName), self.wing.airfoils_dir)
+        except (FileNotFoundError, OSError):
+            already_there = False
 
-            already_copied = os.path.samefile (airfoil.pathName_abs, self.wing.airfoils_dir)
+        # Check if airfoil can be loaded and is normalized 
+        airfoil = Airfoil.onFileType(new_pathFileName, geometry=GEO_BASIC)
+        airfoil.load()
+        
+        if not airfoil.isLoaded:
+            MessageBox.error(self, 'Load Airfoil', f"<b>{new_pathFileName}</b> couldn't be loaded.", min_height=60)
+            return        
+        
+        # 1 not normalized -> normalize and copy
+        if not airfoil.isNormalized:
 
-            if not airfoil.isNormalized:
+            text = f"The airfoil '{airfoil.fileName}' is not normalized,<br>" +\
+                f"but this is needed for blending (strak).<br><br>" + \
+                f"It will be normalized and copied to <b>./{self.wing.airfoils_dir_rel}</b>."
 
-            # 1 not normalized -> normalize and copy
+            msg = MessageBox (self, "Airfoil not normalized", text, Icon (Icon.INFO), min_width=350)
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok | MessageBox.StandardButton.Cancel)
+            button = msg.exec()
 
-                text = f"The airfoil '{airfoil.fileName}' is not normalized,\n" +\
-                    f"but this is needed for blending (strak).\n\n" + \
-                    f"It will be normalized and copied to {self.wing.airfoils_dir_rel}/."
+            if button == QMessageBox.StandardButton.Cancel:
+                return
+            do_copy = True
 
-                msg = MessageBox (self, "Airfoil not normalized", text, Icon (Icon.INFO), min_width=350)
-                msg.setStandardButtons(QMessageBox.StandardButton.Ok | MessageBox.StandardButton.Cancel)
-                button = msg.exec()
+        # 2 normalized and not in airfoils_dir -> ask copy
+        elif not already_there:    
 
-                if button == QMessageBox.StandardButton.Cancel:
-                    return
-                
-            elif not already_copied:    
-            # 2 normalized -> ask copy
+            text = f"'{airfoil.fileName}' will be copied into directory <b>./{self.wing.airfoils_dir_rel}</b><br>" +\
+                f"which is the recommended location for airfoils of this planform.<br><br>" + \
+                f"Copy airfoil?"
+            msg = MessageBox (self, "Copy Airfoil", text, Icon (Icon.INFO), min_width=350)
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok | MessageBox.StandardButton.No)
+            button = msg.exec()
 
-                text = f"The airfoil '{airfoil.fileName}' will be copied to {self.wing.airfoils_dir_rel}/.\n" +\
-                    f"which is the recommended location for airfoils of this planform\n\n" + \
-                    f"Copy airfoil?"
-                msg = MessageBox (self, "Airfoil not normalized", text, Icon (Icon.INFO), min_width=350)
-                msg.setStandardButtons(QMessageBox.StandardButton.Ok | MessageBox.StandardButton.No)
-                button = msg.exec()
+            do_copy = button == QMessageBox.StandardButton.Ok
 
-                do_copy = button == QMessageBox.StandardButton.Ok
+        # 3 already there -> no copy
+        else:
+            do_copy = False
 
-        self.wingSections.set_airfoil_for (self._wingSection, airfoil, in_airfoils_dir=do_copy)
+        # do it - will assign polarSet and reset strak 
+        self.wingSections.create_airfoil_for (self.wingSection, new_pathFileName, into_airfoils_dir=do_copy)
+        self.app_model.notify_wingSection_changed ()
 
-        self._on_widget_changed (None)
 
 
     def _remove_airfoil (self):
         """ remove airfoil from section"""
 
-        self.wingSections.set_airfoil_for (self._wingSection, None)
+        self.wingSections.create_airfoil_for (self.wingSection, None)
         self.app_model.notify_wingSection_changed ()
-
-
-    def _on_edit_finished (self, pathFilename : str):
-        """ slot - AirfoilEditor finished with airfoil pathFilename"""
-
-        # create temp Airfoil to check within _set
-        try: 
-            airfoil = Airfoil (pathFileName=pathFilename, geometry=GEO_BASIC)
-            airfoil.load()
-        except:
-            return
-
-        self._set_airfoil (airfoil) 
-
-
-    @override
-    def _on_widget_changed (self, widget):
-        """ user changed data in widget"""
-        logger.debug (f"{self}  {self._wingSection} changed")
-        self.app_model.notify_wingSection_changed ()
-
 
 
 
@@ -716,13 +711,13 @@ class Panel_WingSection_Small (Panel_WingSection):
         Label        (l,r,c, get="Wing Section",colSpan=2)
         r += 1
         ComboBox     (l,r,c, width=55,
-                      get=lambda: self._wingSection_name, set=self._set_wingSection_name,
-                      options= lambda: self._wingSections_list, signal=False )      # do not signal (would be double refresh)
+                      get=lambda: self.wingSection_name, set=self.set_wingSection_name,
+                      options= lambda: self.wingSections_list, signal=False )      # do not signal (would be double refresh)
         ToolButton   (l,r,c+1, icon=Icon.ADD,    set=self._add_wingSection,
-                      disable=lambda: self._wingSection.is_tip,
+                      disable=lambda: self.wingSection.is_tip,
                       toolTip='Add a new wing section')
         ToolButton   (l,r,c+2, icon=Icon.DELETE, set=self._delete_wingSection,
-                      disable=lambda: self._wingSection.is_root_or_tip,
+                      disable=lambda: self.wingSection.is_root_or_tip,
                       toolTip='Delete selected wing section')
 
         # 1. column - section settings and airfoil 
@@ -731,20 +726,20 @@ class Panel_WingSection_Small (Panel_WingSection):
         c += 4
                
         FieldF (l,r,c,   lab="Position", width=85, unit="mm", step=1, lim=lambda: (0, self.planform.span), dec=1,
-                obj=lambda: self._wingSection, prop=WingSection.x, 
-                disable=lambda: not self._wingSection.is_set_xn_allowed,
-                style=lambda: self._style_for_fixed(self._wingSection.is_xn_fix) )
+                obj=lambda: self.wingSection, prop=WingSection.x, 
+                disable=lambda: not self.wingSection.is_set_xn_allowed,
+                style=lambda: self._style_for_fixed(self.wingSection.is_xn_fix) )
         FieldF (l,r,c+3, lab="of span", width=65, unit="%", step=1, lim=(0, 100), dec=1,
-                obj=lambda: self._wingSection, prop=WingSection.xn, 
-                disable=lambda: not self._wingSection.is_set_xn_allowed)
+                obj=lambda: self.wingSection, prop=WingSection.xn, 
+                disable=lambda: not self.wingSection.is_set_xn_allowed)
         r += 1
         FieldF (l,r,c,   lab="Chord", width=85, unit="mm", step=1, lim=lambda:(1, self.planform.chord_root), dec=1,
-                obj=lambda: self._wingSection, prop=WingSection.c, 
-                disable=lambda: not self._wingSection.is_set_cn_allowed,
-                style=lambda: self._style_for_fixed(self._wingSection.is_cn_fix))
+                obj=lambda: self.wingSection, prop=WingSection.c, 
+                disable=lambda: not self.wingSection.is_set_cn_allowed,
+                style=lambda: self._style_for_fixed(self.wingSection.is_cn_fix))
         FieldF (l,r,c+3, lab="of root", width=65, unit="%", step=1, lim=(1, 100), dec=1,
-                obj=lambda: self._wingSection, prop=WingSection.cn, 
-                disable=lambda: not self._wingSection.is_set_cn_allowed)
+                obj=lambda: self.wingSection, prop=WingSection.cn, 
+                disable=lambda: not self.wingSection.is_set_cn_allowed)
 
         r += 1
         l.setRowStretch (r,2)

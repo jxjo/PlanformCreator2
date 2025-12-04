@@ -336,7 +336,7 @@ class VLM_Wing:
         polar = self._polars.get (v, None)          # already exisiting 
         
         if not polar:
-            polar = VLM_Polar (self, v)             # calculate new opPOint 
+            polar = VLM_Polar (self, v)             # calculate new Polar and opPoints 
             self._polars[v] = polar 
             
         return polar 
@@ -344,7 +344,17 @@ class VLM_Wing:
     def has_polars (self) -> bool:
         """ True if at least one polar is existing"""
         return bool (self._polars)
-    
+
+
+    def remove_polar_at (self, vtas: float):
+        """ removes polar for air speed vtas - will be calculated new on next request"""
+        if not isinstance (vtas, (int, float)) or vtas <= 0.0:
+            return 
+
+        v = round (vtas, 1)                         # ensure clean key for dict
+        self._polars.pop(v, None)                   # remove existing, None if not found
+
+
 
     # ----- private --------------------------------------------------
       

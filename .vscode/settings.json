@@ -6,5 +6,8 @@
     "markdown.preview.fontSize": 13,
     "python.testing.pytestArgs": ["modules"],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "cSpell.words": [
+        "planformcreator"
+    ]
 }

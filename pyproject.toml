@@ -20,7 +20,8 @@ dependencies = [
   "pyqtgraph>=0.13.7",
   "f90nml>=1.4.4",
   "termcolor>=2.3.0",
-  "platformdirs>=4.3.0"
+  "platformdirs>=4.3.0",
+  "airfoileditor>=4.2.0"
 ]
 classifiers = [
     "Operating System :: OS Independent",

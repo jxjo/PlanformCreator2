@@ -20,12 +20,12 @@ from airfoileditor.base.panels          import Container_Panel, MessageBox
 
 from airfoileditor.model.polar_set      import *
 from airfoileditor.model.xo2_driver     import Worker
-from airfoileditor.ui.util_dialogs      import Polar_Definition_Dialog
+from airfoileditor.ui.util_dialogs      import Polar_Definition_Dialog, Calc_Reynolds_Dialog
 
 # ---- pc2 modules  
 
 from ..model.wing       import Wing, Planform
-from ..model.VLM_wing   import VLM_OpPoint, OpPoint_Var
+from ..model.VLM_wing   import VLM_OpPoint, OpPoint_Var, VLM_Wing
 
 from .pc2_artists       import *
 from .pc2_dialogs       import (Dialog_Edit_Image, Dialog_Edit_Paneling, Dialog_Export_Xflr5,
@@ -150,7 +150,7 @@ class Item_Abstract (Diagram_Item):
     def _on_wingSection_changed (self):
         """ slot when wingSection changed - refresh only relevant artists """
 
-        if self.isVisible():
+        if self.isVisible_effective():
             artist : WingSections_Artist 
             for artist in self._get_artist (WingSections_Artist):
                 logger.debug (f"{self} _on_wingSection_changed refresh {artist}")
@@ -166,7 +166,7 @@ class Item_Abstract (Diagram_Item):
                 artist.sig_planform_changed.connect     (self.app_model.notify_planform_changed) 
                 artist.sig_flaps_changed.connect        (self.app_model.notify_planform_changed) 
                 artist.sig_wingSection_changed.connect  (self.app_model.notify_wingSection_changed) 
-                artist.sig_wingSection_new.connect      (self.app_model.notify_wingSection_changed) 
+                artist.sig_wingSection_new.connect      (lambda sec :self.app_model.set_cur_wingSection (sec)) 
                 artist.sig_wingSection_selected.connect (lambda sec :self.app_model.set_cur_wingSection (sec))
 
 
@@ -202,6 +202,7 @@ class Item_Planform (Item_Abstract):
         self._add_artist (Image_Artist          (self, lambda: self.planform, show=False, 
                                                        image_def=lambda: self.wing.background_image,
                                                        as_background=True))
+        self._add_artist (Neutral_Point_Artist  (self, lambda: self.planform, show=False))
 
         # connect signals from artists to app model notify
         self._setup_artists_slots()
@@ -231,6 +232,14 @@ class Item_Planform (Item_Abstract):
         self.airfoil_name_artist.set_show (aBool)        
         self.section_panel.refresh()                                # enable blended checkbox 
         self.setup_viewRange()                                      # ensure airfoil names fit in current view 
+
+
+    @property
+    def show_np (self) -> bool: 
+        return self._get_artist (Neutral_Point_Artist)[0].show
+    
+    def set_show_np (self, aBool : bool): 
+        self._show_artist (Neutral_Point_Artist, aBool)
 
 
     @property
@@ -267,6 +276,9 @@ class Item_Planform (Item_Abstract):
             CheckBox (l,r,c, text="Bounding Box", colSpan=2,
                       get=lambda: self.show_bounding_box, set=self.set_show_bounding_box)
             r += 1
+            CheckBox (l,r,c, text="Neutral Point (geometric)", colSpan=3, 
+                      get=lambda: self.show_np, set=self.set_show_np) 
+            r += 1
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils)
             CheckBox (l,r,c+1, text="Use nick name", colSpan=3,
@@ -283,9 +295,9 @@ class Item_Planform (Item_Abstract):
             l.setRowStretch    (r+1,2)
                      
             self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True, 
-                                              switchable=True, hide_switched=True, 
-                                              switched_on=self._show,
-                                              on_switched=self.setVisible)
+                                              switchable  = True,
+                                              switched_on = lambda: self.show,  
+                                              on_switched = lambda aBool: self.set_show(aBool))
         return self._section_panel 
 
 
@@ -340,10 +352,10 @@ class Item_Chord (Item_Abstract):
         """ return section panel within view panel"""
 
         if self._section_panel is None:    
-            self._section_panel = Edit_Panel (title=self.name, 
-                                              switchable=True, hide_switched=False, 
-                                              switched_on=self._show,
-                                              on_switched=self.setVisible)
+            self._section_panel = Edit_Panel (title=self.name, auto_height=True,
+                                              switchable  = True,
+                                              switched_on = lambda: self.show,  
+                                              on_switched = lambda aBool: self.set_show(aBool))
         return self._section_panel 
 
 
@@ -355,7 +367,7 @@ class Item_Chord_Reference (Item_Abstract):
     """
 
     name        = "View Chord Reference"                    # used for link and section header 
-    title       = "Chord Reference"                 
+    title       = "2. Chord Reference"                 
     subtitle    = ""                                 
 
 
@@ -396,9 +408,9 @@ class Item_Chord_Reference (Item_Abstract):
 
         if self._section_panel is None:    
             self._section_panel = Edit_Panel (title=self.name, 
-                                              switchable=True, hide_switched=False, 
-                                              switched_on=self._show,
-                                              on_switched=self.setVisible)
+                                              switchable  = True,
+                                              switched_on = lambda: self.show,  
+                                              on_switched = lambda aBool: self.set_show(aBool))
         return self._section_panel 
 
 
@@ -426,10 +438,19 @@ class Item_VLM_Panels (Item_Abstract):
         self.app_model.sig_vlm_polar_changed.connect    (self.section_panel.refresh)    # cp checkbox enable/disable
 
 
+    def _is_vlm_data_available (self) -> bool:
+        """ check if VLM data is available to plot"""
+
+        vlm_wing : VLM_Wing = self.wing._vlm_wing
+        if vlm_wing is None:
+            return False   
+        return vlm_wing.has_polars() 
+
+
     @property
     def cur_vlm_opPoint (self) -> VLM_OpPoint | None: 
         """ returns the current VLM operating point - only if VLM polars are existing"""
-        if self.wing.vlm_wing.has_polars():
+        if self._is_vlm_data_available():
             return self.app_model.cur_vlm_opPoint
         else:
             return None
@@ -507,12 +528,13 @@ class Item_VLM_Panels (Item_Abstract):
             r += 1
             CheckBox (l,r,c, text="Show Cp in panels", colSpan=3,
                         obj=self, prop=Item_VLM_Panels.show_cp_in_panels,
-                        disable=lambda: self.wing.vlm_wing.has_polars() is False)
+                        disable=lambda: not self._is_vlm_data_available())
             l.setRowStretch (r+1,3)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True,
-                                              switched_on=self._show,  
-                                              switchable=True, on_switched=self.setVisible)
+                                              switchable  = True,
+                                              switched_on = lambda: self.show,  
+                                              on_switched = lambda aBool: self.set_show(aBool))
             
         return self._section_panel 
 
@@ -560,6 +582,16 @@ class Item_VLM_Result (Item_Abstract):
         self.app_model.sig_vlm_opPoint_changed.connect  (self.refresh)
         self.app_model.sig_new_polars.connect           (self.refresh)
         self.app_model.sig_vlm_polar_reset.connect      (self.refresh)          # will result in new VLM calculation
+        self.app_model.sig_polar_set_changed.connect    (self.section_panel.refresh)  # first step just refresh of panel
+
+
+    def _is_vlm_data_available (self) -> bool:
+        """ check if VLM data is available to plot"""
+
+        vlm_wing : VLM_Wing = self.wing._vlm_wing
+        if vlm_wing is None:
+            return False   
+        return vlm_wing.has_polars() 
 
 
     @property
@@ -719,10 +751,17 @@ class Item_VLM_Result (Item_Abstract):
             r,c = 0, 0
             Label    (l,r,c, colSpan=4, get=f"Choose airfoil T1 polar of root", style=style.COMMENT)
             r += 1
-            ComboBox (l,r,c, width=180, obj=self, prop=Item_VLM_Result.polar_def_name, colSpan=4,
+            ComboBox (l,r,c, width=None, obj=self, prop=Item_VLM_Result.polar_def_name, colSpan=4,
                          options=lambda: self.polar_def_list)
-            # ToolButton (l,r,c+4, icon=Icon.EDIT, set=self.edit_polar_def,      # global refresh needed!
-            #                 toolTip="Change the settings of this polar definition")                              
+            ToolButton (l,r,c+4, icon=Icon.ADD, set=self._add_polar_def,
+                        disable=lambda: not self._is_vlm_data_available(), # wait until VLM ended
+                        toolTip="Add a polar definition <br><br>" +
+                                "Currently the polar has to differ in Re number not only Ncrit or Mach "+
+                                "to be handled correctly by the VLM viscous calculation - sorry!")                              
+            ToolButton (l,r,c+5, icon=Icon.DELETE, set=self._delete_polar_def,
+                        disable=lambda: not self._is_vlm_data_available() or  
+                                        len(self.polar_def_list) <= 1,           # wait until VLM ended
+                        toolTip="Delete this polar definition")                              
             r += 1
             SpaceR   (l,r, height=10,stretch=0)
             r += 1
@@ -730,12 +769,12 @@ class Item_VLM_Result (Item_Abstract):
             r += 1
             CheckBox (l,r,c, text="Set close to Alpha max", colSpan=4,
                         obj=self, prop=Item_VLM_Result.alpha_fixed_to_max,
-                        disable=lambda: self.wing.vlm_wing.has_polars() is False,
+                        disable=lambda: not self._is_vlm_data_available(),
                         toolTip="Operating point of wing is set to alpha_max of current polar")
             r +=1
             FieldF   (l,r,c, lab="Alpha", lim=(-20,20), step=0.5, width=60, unit="°", dec=1, 
                         obj=self, prop=Item_VLM_Result.vlm_alpha,
-                        disable=lambda: self.alpha_fixed_to_max or self.wing.vlm_wing.has_polars() is False) 
+                        disable=lambda: self.alpha_fixed_to_max or not self._is_vlm_data_available()) 
             r += 1
             SpaceR   (l,r, height=10,stretch=0)
             r += 1
@@ -745,8 +784,9 @@ class Item_VLM_Result (Item_Abstract):
 
             ComboBox (l,r,c+1, width=60, obj=self, prop=Item_VLM_Result.vlm_opPoint_var, 
                          options=self.opPoint_var_list, colSpan=3,
-                         disable=lambda: self.wing.vlm_wing.has_polars() is False,
+                         disable=lambda: not self._is_vlm_data_available(),
                          toolTip="Choose variable to show along span in diagram")
+
             r += 1
             l.setRowStretch (r,1)
 
@@ -761,8 +801,9 @@ class Item_VLM_Result (Item_Abstract):
             l.setColumnMinimumWidth (0,50)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, height =260,
-                                              switched_on=self._show,  
-                                              switchable=True, on_switched=self.setVisible)   
+                                              switchable  = True,
+                                              switched_on = lambda: self.show,  
+                                              on_switched = lambda aBool: self.set_show(aBool))
 
             # patch Panel Aero into head of panel 
 
@@ -792,10 +833,74 @@ class Item_VLM_Result (Item_Abstract):
             l.setColumnMinimumWidth (0,50)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, height =150,
-                                              switched_on=self._show,  
-                                              switchable=True, on_switched=self.setVisible)   
-
+                                              switchable  = True,
+                                              switched_on = lambda: self.show,  
+                                              on_switched = lambda aBool: self.set_show(aBool))
         return self._section_panel 
+
+
+    def _edit_polar_def (self, polar_def: Polar_Definition = None, silent: bool=False):
+        """ edit polar definition - currently only re number"""
+
+        if polar_def is None:   
+            polar_def = self.app_model.cur_polar_def
+
+        chord = self.wing.planform.chord_root
+
+        # currently only mini dialog for re number
+        dialog = Calc_Reynolds_Dialog (self.section_panel, re_asK=polar_def.re_asK, fixed_chord=chord,
+                                       title="Set Reynolds Number for Polar Definition",
+                                       parentPos=(1.1, 0.5), dialogPos=(0,0.5))
+
+        dialog.exec()     
+
+        if dialog.has_been_set:
+            polar_def.set_re_asK (dialog.re_asK)
+
+        # sort polar definitions ascending re number 
+        self.wing.polar_definitions.sort (key=lambda aDef : aDef.re)
+
+        if not silent:
+            self.app_model.notify_polar_definitions_changed ()
+
+
+    def _delete_polar_def (self):
+        """ delete current polar definition"""
+
+        if len (self.wing.polar_definitions) <= 1:
+            return                                  # cannot delete last polar definition
+
+        polar_def = self.app_model.cur_polar_def
+        self.wing.polar_definitions.remove (polar_def)
+
+        # set new current - will signal change 
+        new_cur = self.wing.polar_definitions[-1]
+        self.app_model.set_cur_polar_def (new_cur)                
+
+
+    def _add_polar_def (self):
+        """ add a new polar definition"""
+
+        # increase re number for the new polar definition
+        if self.wing.polar_definitions:
+            new_polar_def  = deepcopy (self.wing.polar_definitions[-1])
+            new_polar_def.set_is_mandatory (False)                  # parent could have been mandatory
+            new_polar_def.set_re (new_polar_def.re + 100000)
+            new_polar_def.set_active(True)
+        else: 
+            new_polar_def = Polar_Definition()
+
+        self.wing.polar_definitions.append (new_polar_def)
+
+        # open edit dialog for new def 
+        self._edit_polar_def (polar_def=new_polar_def, silent=True)     # silent to avoid double notify
+
+        # set new current - will signal change 
+        self.app_model.set_cur_polar_def (new_polar_def)                
+
+
+
+
 
 
     def _export_polar_opPoint (self):
@@ -850,11 +955,13 @@ class Item_Wing (Item_Abstract):
         self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.WING_RIGHT))
         self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
         self._add_artist (Airfoil_Name_Artist   (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
+        self._add_artist (Neutral_Point_Artist  (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
+
         self._add_artist (Planform_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT, as_contour=True))
         self._add_artist (Ref_Line_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT))
         self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.WING_LEFT))
         self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
-        self._add_artist (Neutral_Point_Artist  (self, lambda: self.planform, show=False))
+        self._add_artist (Neutral_Point_Artist  (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
 
         # switch off mose helper 
 
@@ -947,6 +1054,9 @@ class Item_Wing (Item_Abstract):
             CheckBox (l,r,c, text="Flaps", colSpan=2, 
                         get=lambda: self.show_flaps, set=self.set_show_flaps) 
             r += 1
+            CheckBox (l,r,c, text="Neutral Point (geometric)", colSpan=3, 
+                      get=lambda: self.show_np, set=self.set_show_np) 
+            r += 1
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
             CheckBox (l,r,c+1, text="Use nick name",  
@@ -954,16 +1064,14 @@ class Item_Wing (Item_Abstract):
                         hide=lambda: not self.show_airfoils,
                         toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
             r += 1
-            CheckBox (l,r,c, text="Neutral Point (geometric)", colSpan=3, 
-                      get=lambda: self.show_np, set=self.set_show_np) 
-            r += 1
             l.setColumnMinimumWidth (0,70)
             l.setColumnMinimumWidth (1,80)
             l.setColumnStretch (3,5)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True, 
-                                              switchable=False, hide_switched=True, 
-                                              on_switched=self.setVisible)
+                                              switchable  = True,
+                                              switched_on = lambda: self.show,  
+                                              on_switched = lambda aBool: self.set_show(aBool))
 
         return self._section_panel 
 
@@ -1045,8 +1153,9 @@ class Item_Wing_Airfoils (Item_Abstract):
             l.setColumnStretch (3,2)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True, 
-                                              switchable=False, hide_switched=False, 
-                                              on_switched=self.setVisible)
+                                              switchable  = True,
+                                              switched_on = lambda: self.show,  
+                                              on_switched = lambda aBool: self.set_show(aBool))
 
         return self._section_panel 
 
@@ -1190,8 +1299,9 @@ class Item_Airfoils (Item_Abstract):
             l.setRowStretch    (r,2)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True,
-                                              switchable=True, hide_switched=True, 
-                                              on_switched=self.setVisible)
+                                              switchable  = True,
+                                              switched_on = lambda: self.show,  
+                                              on_switched = lambda aBool: self.set_show(aBool))
         return self._section_panel 
 
 
@@ -1460,7 +1570,7 @@ class Item_Polars (Item_Abstract):
     def setup_artists (self):
         """ create and setup the artists of self"""
 
-        a = Polar_Artist     (self, self.planform, xyVars=self._xyVars, 
+        a = Polar_Artist     (self, lambda: self.planform, xyVars=self._xyVars, 
                               show_legend=True)
         self._add_artist (a)
 
@@ -1606,15 +1716,15 @@ class Diagram_Planform (Diagram_Abstract):
         """ create all plot Items and add them to the layout """
 
         i = Item_Planform (self,self.app_model)
-        self._add_item (i, 0, 0)
+        self._add_item (i, 0, 0, rowStretch=3)
 
         i = Item_Chord    (self, self.app_model, show=False)
-        self._add_item (i, 1, 0)
+        self._add_item (i, 1, 0, rowStretch=2)
         i.set_desired_xLink_name (Item_Planform.name)
         i.set_xLinked (True)
 
         i = Item_Chord_Reference  (self, self.app_model, show=False)
-        self._add_item (i, 2, 0)
+        self._add_item (i, 2, 0, rowStretch=2)
         i.set_desired_xLink_name (Item_Planform.name)
         i.set_xLinked (True)
 
@@ -1725,7 +1835,8 @@ class Diagram_Planform (Diagram_Abstract):
             l.setColumnStretch (0,3)
 
             self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, auto_height=True,
-                                              switchable=True, hide_switched=True, switched_on=False, 
+                                              switchable=True, 
+                                              switched_on=False, 
                                               on_switched=self.set_show_ref_planforms)
 
         return self._section_panel 
@@ -1761,6 +1872,7 @@ class Diagram_Planform (Diagram_Abstract):
 
         filters  = "PlanformCreator2 files (*.pc2)"
         newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters,
+                                                         directory=self.app_model.workingDir,
                                                          caption="Open PlanformCreator file")
 
         if newPathFilename: 
@@ -1782,6 +1894,7 @@ class Diagram_Planform (Diagram_Abstract):
 
         filters  = "Image files (*.png *.jpg *.bmp)"
         newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters, 
+                                                         directory=self.app_model.workingDir,
                                                          caption="Open background image")
 
         if newPathFilename: 
@@ -1882,6 +1995,9 @@ class Diagram_Making_Of (Diagram_Abstract):
         item = Item_Making_Of_Paneled (self, self.app_model)
         self._add_item (item, 1, 2)
 
+        self.graph_layout.setRowStretchFactor (0,2)
+        self.graph_layout.setRowStretchFactor (1,3)
+
         self.graph_layout.setColumnStretchFactor (0,1)
         self.graph_layout.setColumnMinimumWidth (0,400)
         
@@ -1919,7 +2035,7 @@ class Diagram_Making_Of (Diagram_Abstract):
             l.setColumnStretch (0,2)
 
             self._section_panel = Edit_Panel (title="Diagram Options", layout=l, auto_height=True,
-                                              switchable=False, switched_on=True)
+                                              switchable=False)
         return self._section_panel 
 
 
@@ -1991,7 +2107,7 @@ class Diagram_Airfoils (Diagram_Abstract):
 
     # -------------
 
-
+    @property
     def polar_defs (self) -> list [Polar_Definition]:
         """ actual polar definitions"""
         return self.wing.polar_definitions
@@ -2008,20 +2124,20 @@ class Diagram_Airfoils (Diagram_Abstract):
 
         r = 0 
 
-        self._add_item (Item_Airfoils (self, self.app_model), r, 0, colspan=2)
+        self._add_item (Item_Airfoils (self, self.app_model), r, 0, colspan=2,  rowStretch=2)
 
         if Worker.ready:
             r += 1
 
-            # create Polar items with init values from settings 
+            # create Polar items with init default values from  
 
             item = Item_Polars (self, self.app_model, iItem=1, show=False)
             item._set_settings ({"xyVars" : (var.CD,var.CL)})
-            self._add_item (item, r, 0)
+            self._add_item (item, r, 0,  rowStretch=3)
 
             item = Item_Polars (self, self.app_model, iItem=2, show=False)
             item._set_settings ({"xyVars" : (var.CL,var.GLIDE)})
-            self._add_item (item, r, 1)
+            self._add_item (item, r, 1,  rowStretch=3)
  
 
     @override
@@ -2043,6 +2159,15 @@ class Diagram_Airfoils (Diagram_Abstract):
 
         layout.addStretch   (3)
         layout.addWidget    (self.panel_export, stretch=0)
+
+
+    @property
+    def show_polars (self) -> bool:
+        """ show polar diagrams """
+        return self._show_item (Item_Polars)
+
+    def set_show_polars (self, aBool : bool, silent=False):
+        self._set_show_item (Item_Polars, aBool, silent=silent)
 
 
     @property 
@@ -2132,7 +2257,7 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             # helper panel for polar definitions 
 
-            p = Panel_Polar_Defs (self, self.polar_defs, 
+            p = Panel_Polar_Defs (self, lambda: self.polar_defs, 
                                   auto_height=True, width=(None,250),
                                   chord_fn=lambda: self.chord_root)
 
@@ -2147,7 +2272,7 @@ class Diagram_Airfoils (Diagram_Abstract):
             CheckBox    (l,r,c, text="Exclude Re less than", colSpan=4,
                             obj=self, prop=Diagram_Airfoils.apply_min_re,
                             toolTip="Apply a minimum Re number for polars in the diagrams")
-            FieldF      (l,r,c+4, width=60, step=1, lim=(1, 1000), unit="k", dec=0,
+            FieldF      (l,r,c+4, width=60, step=10, lim=(1, 1000), unit="k", dec=0,
                             obj=self, prop=Diagram_Airfoils.min_re_asK,
                             hide=lambda: not self.apply_min_re)
 
@@ -2174,10 +2299,10 @@ class Diagram_Airfoils (Diagram_Abstract):
                 r += 1
                 l.setRowStretch (r,3)
 
-            self._panel_polar = Edit_Panel (title="View Polars", layout=l, 
-                                            auto_height=True,
-                                            switchable=True, switched_on=False, 
-                                            on_switched=self._on_polars_switched)
+            self._panel_polar = Edit_Panel (title="View Polars", layout=l, auto_height=True,
+                                            switchable  = True, 
+                                            switched_on = lambda: self.show_polars, 
+                                            on_switched = lambda aBool: self.set_show_polars(aBool))
 
             # patch Worker version into head of panel 
 
@@ -2215,17 +2340,6 @@ class Diagram_Airfoils (Diagram_Abstract):
 
 
 
-    # --- private slots ---------------------------------------------------
-
-    def _on_polars_switched (self, aBool):
-        """ slot to handle polars switched on/off """
-
-        logger.debug (f"{str(self)} on polars switched")
-
-        for item in self._get_items (Item_Polars):
-            item.setVisible (aBool)
-
-
 
 class Diagram_Wing_Analysis (Diagram_Abstract):
     """    
@@ -2253,15 +2367,15 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
         """ create all plot Items and add them to the layout """
 
         i = Item_VLM_Panels     (self, self.app_model, show=True)
-        self._add_item (i, 0, 0)
+        self._add_item (i, 0, 0, rowStretch=3)
 
         i = Item_Chord          (self, self.app_model, show=False)
-        self._add_item (i, 1, 0)
+        self._add_item (i, 1, 0, rowStretch=2)
         i.set_desired_xLink_name (Item_VLM_Panels.name)
         i.set_xLinked (True)
 
         i = Item_VLM_Result     (self, self.app_model, show=False)
-        self._add_item (i, 2, 0)
+        self._add_item (i, 2, 0, rowStretch=2)
         i.set_desired_xLink_name (Item_VLM_Panels.name)
         i.set_xLinked (True)
 
@@ -2377,8 +2491,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
         # overridden to ensure new strak (-> airfoil polar) when wingSection changed 
         if self.isVisible():
             self.wing.planform.wingSections.do_strak()
-
-        super().refresh(also_viewRange=False)
+            super().refresh(also_viewRange=False)
 
 
     @override
@@ -2453,16 +2566,16 @@ class Item_Making_Of_Abstract (Item_Abstract):
 class Item_Making_Of_Planform (Item_Making_Of_Abstract):
     """ Making Of Diagram (Plot) Item for Planform  """
 
-    title       = "Planform"                 
+    title       = "3. Planform"                 
     subtitle    = "Chord Distribution and Reference are combined to form the shape. The result is scaled by span and chord.<br> " + \
                   "Finally a sweep angle is applied by shearing the planform."                         
 
     def setup_artists (self):
-        self._add_artist (Planform_Artist     (self, self.planform))
-        self._add_artist (Ref_Line_Artist     (self, self.planform, mode=mode.REF_TO_PLAN))
-        self._add_artist (Planform_Box_Artist (self, self.planform))
-        self._add_artist (WingSections_Artist (self, self.planform, show=False))
-        self._add_artist (Flaps_Artist        (self, self.planform, show=False))
+        self._add_artist (Planform_Artist     (self, lambda: self.planform))
+        self._add_artist (Ref_Line_Artist     (self, lambda: self.planform, mode=mode.REF_TO_PLAN))
+        self._add_artist (Planform_Box_Artist (self, lambda: self.planform))
+        self._add_artist (WingSections_Artist (self, lambda: self.planform, show=False))
+        self._add_artist (Flaps_Artist        (self, lambda: self.planform, show=False))
 
         # connect signals from artists to app model notify
         self._setup_artists_slots()
@@ -2482,7 +2595,7 @@ class Item_Making_Of_Planform (Item_Making_Of_Abstract):
 class Item_Making_Of_Paneled (Item_Making_Of_Abstract):
     """ Making Of Diagram (Plot) Item for Planform  """
 
-    title       = "Wing Analysis"                 
+    title       = "4. Wing Analysis"                 
     subtitle    = "The planform is idealized by panels being the starting basis <br>" + \
                   "either for aerodynamic assessment of the lift reserves of the wing<br>" + \
                   "or the export to Xflr5 or FLZ_vortex for further processing."                         
@@ -2491,9 +2604,8 @@ class Item_Making_Of_Paneled (Item_Making_Of_Abstract):
     def setup_artists (self):
         """ create and setup the artists of self"""
         
-        self._add_artist (VLM_Panels_Artist     (self, self.planform, opPoint_fn=None, show_legend=False))
-        self._add_artist (WingSections_Artist   (self, self.planform, show=False))
-
+        self._add_artist (VLM_Panels_Artist     (self, lambda: self.planform, opPoint_fn=None, show_legend=False))
+        self._add_artist (WingSections_Artist   (self, lambda: self.planform, show=False))
         # connect signals from artists to app model notify
         self._setup_artists_slots()
 
@@ -2521,11 +2633,12 @@ class Item_Making_Of_Welcome (Item_Making_Of_Abstract):
     title       = ""                                    # has it's own title 
     subtitle    = None
 
+    show_buttons = False
+    show_coords  = False
+
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-
-        self.buttonsHidden      = True                          # don't show buttons and coordinates
 
         # set margins (inset) of self 
         self.setContentsMargins ( 0,20,0,0)
@@ -2592,13 +2705,13 @@ class Item_Making_Of_Welcome (Item_Making_Of_Abstract):
 class Item_Making_Of_Chord (Item_Making_Of_Abstract):
     """ Making Of Diagram (Plot) Item for Chord distribution  """
 
-    title       = "Chord Distribution"                       # title of diagram item
+    title       = "1. Chord Distribution"                       # title of diagram item
     subtitle    = "Defines the chord along the span in a normalized system.<br>" + \
                   "Chord at root equals to 100%"
 
     def setup_artists (self):
-        self._add_artist (Norm_Chord_Artist     (self, self.planform, mode=mode.NORM_NORM))
-        self._add_artist (WingSections_Artist   (self, self.planform, mode=mode.NORM_NORM, show=False))
+        self._add_artist (Norm_Chord_Artist     (self, lambda: self.planform, mode=mode.NORM_NORM))
+        self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.NORM_NORM, show=False))
 
         # connect signals from artists to app model notify
         self._setup_artists_slots()
@@ -2624,14 +2737,14 @@ class Item_Making_Of_Chord (Item_Making_Of_Abstract):
 class Item_Making_Of_Chord_Reference (Item_Making_Of_Abstract):
     """ Making Of Diagram (Plot) Item for Chord distribution  """
 
-    title       = "Chord Reference"                 
+    title       = "2. Chord Reference"                 
     subtitle    = "Describes how much of the chord is added to the leading<br>" + \
                   "and to the trailing edge in relation to the reference line."                         
 
     def setup_artists (self):
-        self._add_artist (Norm_Chord_Ref_Artist (self, self.planform))
-        self._add_artist (WingSections_Artist   (self, self.planform, mode=mode.REF_TO_NORM, show=False))
-        self._add_artist (Flaps_Artist          (self, self.planform, mode=mode.REF_TO_NORM, show=False))
+        self._add_artist (Norm_Chord_Ref_Artist (self, lambda: self.planform))
+        self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.REF_TO_NORM, show=False))
+        self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.REF_TO_NORM, show=False))
 
         # connect signals from artists to app model notify
         self._setup_artists_slots()
@@ -2663,15 +2776,15 @@ class Item_Making_Of_Wing (Item_Making_Of_Abstract):
 
     @override
     def setup_artists (self):
-        self._add_artist (Planform_Artist       (self, self.planform, mode=mode.WING_RIGHT, as_contour=True))
-        self._add_artist (Ref_Line_Artist       (self, self.planform, mode=mode.WING_RIGHT))
-        self._add_artist (Flaps_Artist          (self, self.planform, mode=mode.WING_RIGHT, show=False))
-        self._add_artist (WingSections_Artist   (self, self.planform, mode=mode.WING_RIGHT, show=False))
+        self._add_artist (Planform_Artist       (self, lambda: self.planform, mode=mode.WING_RIGHT, as_contour=True))
+        self._add_artist (Ref_Line_Artist       (self, lambda: self.planform, mode=mode.WING_RIGHT))
+        self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
+        self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
 
-        self._add_artist (Planform_Artist       (self, self.planform, mode=mode.WING_LEFT, as_contour=True))
-        self._add_artist (Ref_Line_Artist       (self, self.planform, mode=mode.WING_LEFT))
-        self._add_artist (Flaps_Artist          (self, self.planform, mode=mode.WING_LEFT, show=False))
-        self._add_artist (WingSections_Artist   (self, self.planform, mode=mode.WING_LEFT, show=False))
+        self._add_artist (Planform_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT, as_contour=True))
+        self._add_artist (Ref_Line_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT))
+        self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
+        self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
 
         for artist in self._artists: artist.set_show_mouse_helper (False) 
 
@@ -2770,7 +2883,8 @@ class Panel_Polar_Defs (Edit_Panel):
         if isinstance (id, int):
             polar_def = self.polar_defs[id]
 
-        diag = Polar_Definition_Dialog (self, polar_def, dx=260, dy=-150, fixed_chord=self.chord)
+        diag = Polar_Definition_Dialog (self, polar_def, 
+                                        parentPos=(1.1, 0.5), dialogPos=(0,0.5), fixed_chord=self.chord)
         diag.exec()
 
         # sort polar definitions ascending re number 

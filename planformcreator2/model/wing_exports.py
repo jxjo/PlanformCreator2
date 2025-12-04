@@ -883,7 +883,9 @@ class Exporter_FLZ (Exporter_Abstract):
             twist = 0.0 
             dihedral = 0.0
 
-            sweep = atan (abs((self.left_section.le_te()[0] - self.right_section.le_te()[0])/(1000 *width))) * 180 / pi
+            le_y_left  = self.left_section.le_te() [0] 
+            le_y_right = self.right_section.le_te()[0] 
+            sweep = atan ((le_y_right - le_y_left)/(1000 *width)) * 180 / pi
             refSweep = 0
 
             left_flap_depth  = self.left_section.flap_cn  * 100.0
