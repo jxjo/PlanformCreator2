@@ -747,6 +747,7 @@ class Wing:
         try:
             parms.save()
             save_ok = True
+            logger.info (f"{self} saved to '{pathFileName_abs}'")
         except Exception as e:
             logger.error (f"Saving wing parameters to file '{pathFileName_abs}' failed: {e}")
             save_ok = False

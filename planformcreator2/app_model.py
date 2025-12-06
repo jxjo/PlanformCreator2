@@ -19,7 +19,7 @@ from enum                   import Enum, auto
 from typing                 import override
 from PyQt6.QtCore           import pyqtSignal, QObject, QThread, QTimer
 
-from airfoileditor                          import resources_dir_ae
+from airfoileditor.resources                import get_assets_dir as ae_assets_dir
 from airfoileditor.base.common_utils        import Parameters, clip
 from airfoileditor.base.app_utils           import Settings
 from airfoileditor.model.airfoil_examples   import Example
@@ -28,7 +28,6 @@ from airfoileditor.model.polar_set          import Polar_Task, Polar_Definition,
 
 # --- the real model imports
 
-from .                       import resources_dir_pc2
 from .model.wing             import Wing, WingSection, FILENAME_NEW
 from .model.VLM_wing         import VLM_OpPoint, VLM_Polar
 
@@ -106,7 +105,7 @@ class App_Model (QObject):
         Example.workingDir_default = workingDir_default   
 
         # setup path of worker and its working dir
-        Worker    (workingDir=self.workingDir_default).isReady (resources_dir_ae(), min_version=self.WORKER_MIN_VERSION)
+        Worker    (workingDir=self.workingDir_default).isReady (ae_assets_dir(), min_version=self.WORKER_MIN_VERSION)
 
         # initialize watchdog thread for polars and xo2 state changes
         self._init_watchdog()

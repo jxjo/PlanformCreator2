@@ -32,23 +32,25 @@ from packaging.version      import Version                                  # ha
 from PyQt6.QtCore           import pyqtSignal, QMargins, Qt
 from PyQt6.QtWidgets        import QApplication, QMainWindow, QWidget 
 from PyQt6.QtWidgets        import QGridLayout
-from PyQt6.QtGui            import QCloseEvent, QGuiApplication
+from PyQt6.QtGui            import QCloseEvent, QGuiApplication, QIcon
 
 # --- AE modules ---------------
 
 # Check version of installed airfoileditor package
-AE_MIN_VERSION   = '4.2.0'                                      # min airfoileditor version required
+AE_MIN_VERSION   = '4.2.1'                                      # min airfoileditor version required
 AE_PACKAGE_NAME  = 'airfoileditor'                              # airfoileditor package name
-try: 
-    airfoileditor_version = version(AE_PACKAGE_NAME)
-    if Version(airfoileditor_version) < Version(AE_MIN_VERSION):
-        logging.error (f"Installed {AE_PACKAGE_NAME} version {airfoileditor_version} is too old - needed version {AE_MIN_VERSION}")
+
+if not getattr(sys, 'frozen', False):                           # in frozen exe (pyinstaller) no ae version check
+    try: 
+        airfoileditor_version = version(AE_PACKAGE_NAME)
+        if Version(airfoileditor_version) < Version(AE_MIN_VERSION):
+            logging.error (f"Installed {AE_PACKAGE_NAME} version {airfoileditor_version} is too old - needed version {AE_MIN_VERSION}")
+            sys.exit(0)
+    except Exception as e:
+        logging.error(f"Required package {AE_PACKAGE_NAME} not found")
         sys.exit(0)
-except Exception as e:
-    logging.error(f"Required package {AE_PACKAGE_NAME} not found")
-    sys.exit(0)
     
-from airfoileditor                      import resources_dir_ae
+from airfoileditor.resources            import get_icons_path as ae_icons_path
 from airfoileditor.base.common_utils    import * 
 from airfoileditor.base.widgets         import Icon, Widget
 from airfoileditor.base.panels          import Tab_Panel, Win_Util
@@ -63,7 +65,7 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = PACKAGE_NAME
 
-from .                       import resources_dir_pc2
+from .resources              import get_icon_path
 from .app_model              import App_Model, Mode_Id
 from .app_modes              import Modes_Manager, Mode_Modify
 
@@ -80,7 +82,7 @@ logger.setLevel(logging.DEBUG)
 #-------------------------------------------------------------------------------
 
 APP_NAME         = "PlanformCreator2"
-__version__      = "4.0_dev"                                    # hatch "version dynamic" reads this version for build
+__version__      = "4.0.0b1"                            # hatch "version dynamic" reads this version for build
 
 
 
@@ -128,8 +130,8 @@ class Main (QMainWindow):
         # main window style - dark or light mode
 
         logger.info (f"Initialize UI")
-
-        self._set_win_style (resources_dir_ae(), os.path.join(resources_dir_pc2(),'icons','PC2.ico')) #todo fix ae default dir
+ 
+        self._set_win_style (ae_icons_path(), 'PC2.ico')
         self._set_win_title ()
         self._set_win_geometry ()
 
@@ -183,26 +185,25 @@ class Main (QMainWindow):
         self.setWindowTitle (APP_NAME + "  v" + str(__version__) + "  [" + pc2_file + "]")
 
 
-    def _set_win_style (self, resources_dir, icon_filename):
+    def _set_win_style (self, icons_path : Path = None, app_icon_name : str  = None):
         """ 
         Set window style according to settings
         """
 
         # set resources dir for Icons
-        
-        if resources_dir is not None:
-            Icon.RESOURCES_DIR = resources_dir
+        Icon.ICONS_PATH = icons_path
 
-        # set app icon    
-
-        self.setWindowIcon(Icon(icon_filename=icon_filename))
+        # get and set app icon  
+        app_icon_path = get_icon_path(app_icon_name) 
+        if app_icon_path:
+            self.setWindowIcon (QIcon (str(app_icon_path)))  
 
         # set dark or light mode
-
         scheme_name = Settings().get('color_scheme', Qt.ColorScheme.Unknown.name)   # either unknown (from System), Dark, Light
         QGuiApplication.styleHints().setColorScheme(Qt.ColorScheme[scheme_name])    # set scheme of QT
 
-        Widget.light_mode = not (scheme_name == Qt.ColorScheme.Dark.name)           # set mode for Widgets
+        # set mode for Widgets
+        Widget.light_mode = not (scheme_name == Qt.ColorScheme.Dark.name)    
 
 
 
@@ -286,11 +287,11 @@ def start ():
 
     # command line arguments? 
     
-    parser = argparse.ArgumentParser(prog=APP_NAME, description='View and modify an airfoil')
-    parser.add_argument("airfoil", nargs='*', help="Airfoil .dat or .bez file to show")
+    parser = argparse.ArgumentParser(prog=APP_NAME, description='Create a wing planform')
+    parser.add_argument("file", nargs='*', help="Project .pc2 file to show")
     args = parser.parse_args()
-    if args.airfoil: 
-        initial_file = args.airfoil[0]
+    if args.file: 
+        initial_file = args.file[0]
     else: 
         initial_file = None
 
@@ -303,7 +304,6 @@ def start ():
     main.show()
     rc = app.exec()
     return rc 
-
 
 
 if __name__ == "__main__":

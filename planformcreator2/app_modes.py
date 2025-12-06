@@ -24,7 +24,7 @@ from airfoileditor.base.panels      import Container_Panel, Toaster, MessageBox
 from airfoileditor.base.app_utils   import Settings
 
 
-from .                      import resources_dir_pc2
+from .resources             import get_template_dir
 from .ui.pc2_dialogs        import Dialog_Rename, Dialog_Select_Template
 from .ui.pc2_panels         import (Panel_File, Panel_File_Small, Panel_Wing, Panel_Wing_Small,
                                     Panel_Chord_Reference, Panel_Chord_Reference_Small,
@@ -340,13 +340,11 @@ class Mode_Modify (Mode_Abstract):
     def new (self):
         """ reset - and start with example definition"""
 
-        TEMPLATE_DIR               = "templates"
-
         if not self._on_leaving_planform ():                                    # changes made? user cancelled?
             return
 
         # select a new template 
-        template_dir = os.path.join (resources_dir_pc2(), TEMPLATE_DIR)
+        template_dir = str(get_template_dir())
 
         try:
             dialog = Dialog_Select_Template (self.stacked_panel, template_dir, parentPos=(0.3, 0.0), dialogPos=(0,1.2))

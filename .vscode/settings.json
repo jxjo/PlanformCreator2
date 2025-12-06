@@ -1,10 +1,6 @@
 {
-    // "python.analysis.extraPaths": ["C:/Users/jochen/AppData/Local/Programs/Python/Python313/Lib/site-packages/airfoileditor","./modules"],
-    // "python.analysis.extraPaths": ["C:/Users/jochen/AppData/Local/Programs/Python/Python313/Lib/site-packages/airfoileditor"],
-    // "python.analysis.extraPaths": ["e:/GitHub/airfoileditor/airfoileditor" ],
     "python.analysis.typeCheckingMode": "off",
     "markdown.preview.fontSize": 13,
-    "python.testing.pytestArgs": ["modules"],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "cSpell.words": [

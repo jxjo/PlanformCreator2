@@ -15,12 +15,9 @@ requires-python = ">=3.12"
 dependencies = [
   "numpy~=2.2.0",
   "packaging>=24.0",
-  "requests",
   "pyqt6>=6.9.1",
   "pyqtgraph>=0.13.7",
-  "f90nml>=1.4.4",
-  "termcolor>=2.3.0",
-  "platformdirs>=4.3.0",
+  "ezdxf>=1.4.0",
   "airfoileditor>=4.2.0"
 ]
 classifiers = [
@@ -38,6 +35,7 @@ Issues = "https://github.com/jxjo/PlanformCreator2/issues"
 
 [project.gui-scripts]
 planformcreator2 = "planformcreator2.app:start"
+
 [tool.hatch.version]
 path = "planformcreator2/app.py"
 
@@ -45,9 +43,15 @@ path = "planformcreator2/app.py"
 packages = ["planformcreator2"]
 only-include = [
   "planformcreator2", 
-  "assets",
+  "icons",
+  "templates",
   "examples"
 ]
+
+[tool.hatch.build.targets.wheel.sources]
+"examples" = "planformcreator2/examples"
+"icons" = "planformcreator2/icons"
+"templates" = "planformcreator2/templates"
 
 [tool.hatch.build.targets.sdist]
 exclude = [
@@ -55,15 +59,12 @@ exclude = [
 ]
 include = [
   "planformcreator2",
+  "icons",
   "examples",
-  "assets",
+  "templates",
   "README.md",
   "LICENSE"
 ]
-
-[tool.hatch.build.targets.wheel.sources]
-"examples/optimize" = "planformcreator2/examples"
-"assets" = "planformcreator2/assets"
 
 [tool.pytest.ini_options]
 pythonpath = ["planformcreator2"]          # add project root to sys.path to find planformcreator2 moduls

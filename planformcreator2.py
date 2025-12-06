@@ -7,7 +7,7 @@ Start PlanformCreator2 when installed as clone/copy of GitHub repository
 """
 
 import sys
-from modules import pc2_app
+from planformcreator2 import app
 
 if __name__ == '__main__':
-    sys.exit(pc2_app.start())  
+    sys.exit(app.start())  

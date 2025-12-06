@@ -297,11 +297,12 @@ Download python sources from the [releases section](https://github.com/jxjo/Plan
 Install the additional modules needed:
 
 ```
-pip3 install pyqt6
-pip3 install numpy
-pip3 install pyqtgraph 
-pip3 install termcolor
-pip3 install ezdxf
+pip install packaging
+pip install numpy
+pip install pyqt6
+pip install pyqtgraph 
+pip install ezdxf
+pip install airfoileditor
 ```
 Run the app:
 
