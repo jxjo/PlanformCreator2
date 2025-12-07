@@ -18,7 +18,7 @@ dependencies = [
   "pyqt6>=6.9.1",
   "pyqtgraph>=0.13.7",
   "ezdxf>=1.4.0",
-  "airfoileditor>=4.2.0"
+  "airfoileditor>=4.2.1"
 ]
 classifiers = [
     "Operating System :: OS Independent",

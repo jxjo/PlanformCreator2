@@ -10,20 +10,26 @@ set ICON_NAME=PC2.ico
 if not exist pyproject.toml cd ..
 if not exist pyproject.toml goto end
 
-rem ---- get package name and version with hatch https://hatch.pypa.io/latest/cli/reference/
+echo.
+echo ------  Create Windows exe using Pyinstaller  ...
+echo.
 
-hatch project metadata name > tmpFile 
-set /p PACKAGE_NAME= < tmpFile 
-hatch project metadata version > tmpFile 
-set /p PACKAGE_VERSION= < tmpFile 
-del tmpFile 
+rem ---- Get package version using hatch
+
+for /f "delims=" %%i in ('hatch project metadata name') do set PACKAGE_NAME=%%i
+for /f "delims=" %%i in ('hatch project metadata version') do set PACKAGE_VERSION=%%i
 
 set WIN_EXE_DIR=%PACKAGE_NAME%-%PACKAGE_VERSION%_win_exe
 
-rem ---- run pyinstaller 
+echo App              : %APP_NAME%
+echo Icon             : %ICON_NAME%
+echo Package name     : %PACKAGE_NAME%
+echo Package version  : %PACKAGE_VERSION%
+echo In directory     : %DIST_DIR%
+echo Pyinstaller exe  : %WIN_EXE_DIR%
 
 echo.
-echo ------ Pyinstaller: Build ...win.exe on %PACKAGE_NAME% %PACKAGE_VERSION% in %DIST_DIR%
+echo ------ Pyinstaller: Build %APP_NAME% 
 echo.
 
 pause
@@ -31,11 +37,12 @@ pause
 rem needed for pyinstaller to avoid "WARNING: lib not found: api-ms-win-crt ..." 
 setlocal
 set PATH=%PATH%;C:\Windows\System32\downlevel
-rem to show missing imports: 			--debug imports ^
-rem also look in modules for imports!: 	--paths modules ^
-rem more infos during build:		 	--log-level=INFO
-rem suppress console  					--noconsole    ^
-pyinstaller --noconfirm --log-level=INFO  --onedir  ^
+
+rem to show missing imports: 					--debug imports ^
+rem also look in airfoileditor for imports!: 	--paths airfoileditor ^
+rem more infos during build:		 			--log-level=INFO
+rem suppress console  	--noconsole    ^
+pyinstaller --noconfirm --log-level=INFO  --onedir --noconsole ^
 	--icon=./icons/%ICON_NAME% ^
 	--paths %PACKAGE_NAME% ^
     --add-data="./icons;%PACKAGE_NAME%/icons" ^
@@ -70,6 +77,9 @@ if exist %WIN_EXE_DIR% (
 )
 ren %APP_NAME% %WIN_EXE_DIR%
 
+rem - no more zip 
+goto finished
+
 rem ---- zip directory 
 
 echo.
@@ -80,6 +90,7 @@ pause
 if exist %WIN_EXE_DIR%.zip del %WIN_EXE_DIR%.zip
 powershell Compress-Archive %WIN_EXE_DIR%\* %WIN_EXE_DIR%.zip
 
+:finished
 echo.
 echo ------ Finished successfully! 
 echo.
