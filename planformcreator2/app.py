@@ -5,29 +5,27 @@
 
     Object model overview (a little simplified) 
 
-    App                                         - root frame 
-        |-- Panel_File                          - file functions
-        |-- Panel_Wing                          - wing data
-                ...                             - ...
+    App                                         - Main 
+        |-- App_Mode                            - different UI modes like Modify,
+            |-- Data_Panel                      - UI lower data panel for mode 
+                |-- Panel_Geometry              - UI single panel with fields 
 
-        |-- Diagram_Wing                        - wing overview diagram 
-                |-- Item_Wing                   - Pyqtgraph Plot item for complete wing
-                |-- Item_Wing_Airfoils          - Pyqtgraph Plot item for airfoils of wing 
-                ...                             - ...
-        |-- Diagram_Planform                    - planform diagram
-        ...
+            |-- Planform_Diagram                - UI upper diagram area 
+                |-- Chord_Diagram_Item          - UI a single plot item within diagram
+                    |-- Chord_Artist            - UI curvature plot artist
+            
+        |-- App_Model                           - App shell around data model allowing signals
+            |-- Wing                            - wing object  
+                |-- Planform                    - planform object of wing 
+                    |-- WingSections            - wing sections of a planform
+                        |-- Airfoil             - airfoil with wing section
 
-        |-- Wing                                - Entry to model 
-                |-- Planform                    - the planform - main object 
-                ...                             - ...
 """
 
 import os
 import sys
 import argparse
 import logging
-from importlib.metadata     import version
-from packaging.version      import Version                                  # has to be installed
 
 from PyQt6.QtCore           import pyqtSignal, QMargins, Qt
 from PyQt6.QtWidgets        import QApplication, QMainWindow, QWidget 
@@ -35,20 +33,6 @@ from PyQt6.QtWidgets        import QGridLayout
 from PyQt6.QtGui            import QCloseEvent, QGuiApplication, QIcon
 
 # --- AE modules ---------------
-
-# Check version of installed airfoileditor package
-AE_MIN_VERSION   = '4.2.1'                                      # min airfoileditor version required
-AE_PACKAGE_NAME  = 'airfoileditor'                              # airfoileditor package name
-
-if not getattr(sys, 'frozen', False):                           # in frozen exe (pyinstaller) no ae version check
-    try: 
-        airfoileditor_version = version(AE_PACKAGE_NAME)
-        if Version(airfoileditor_version) < Version(AE_MIN_VERSION):
-            logging.error (f"Installed {AE_PACKAGE_NAME} version {airfoileditor_version} is too old - needed version {AE_MIN_VERSION}")
-            sys.exit(0)
-    except Exception as e:
-        logging.error(f"Required package {AE_PACKAGE_NAME} not found")
-        sys.exit(0)
     
 from airfoileditor.resources            import get_icons_path as ae_icons_path
 from airfoileditor.base.common_utils    import * 
@@ -82,8 +66,7 @@ logger.setLevel(logging.DEBUG)
 #-------------------------------------------------------------------------------
 
 APP_NAME         = "PlanformCreator2"
-__version__      = "4.0.0b1"                            # hatch "version dynamic" reads this version for build
-
+__version__      = "4.0.0"                            # hatch "version dynamic" reads this version for build
 
 
 class Main (QMainWindow):
@@ -91,16 +74,10 @@ class Main (QMainWindow):
         App - Main Window 
     '''
 
-    # Qt Signals 
-
-    sig_closing                 = pyqtSignal(str)       # the app is closing with an airfoils pathFilename
-
-
     def __init__(self, initial_file):
         super().__init__()
 
         logger.info (f"Init Main Window")
-
 
         self._app_model         = None                        # the app model
         self._modes_manager     = None                        # app modes manager
@@ -241,14 +218,8 @@ class Main (QMainWindow):
     def closeEvent  (self, event : QCloseEvent):
         """ main window is closed """
 
-        # save airfoil settings in app settings
-        #todo
-        # self._app_model.save_settings (to_app_settings=True,
-        #                                add_key  = self._diagram.name, 
-        #                                add_value= self._diagram.settings())
-
         # terminate polar watchdog thread, clean up working dir 
-        self._app_model.close()                            # finish app model
+        self._app_model.close()                           
 
         # save e.g. diagram options 
         self._save_app_settings () 
