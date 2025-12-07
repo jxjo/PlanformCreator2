@@ -1,4 +1,4 @@
-#!/usr/bin/env pythonbutton_color
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """  
@@ -62,7 +62,7 @@ class Diagram_Abstract (Diagram):
         self.graph_layout.setContentsMargins (20,10,20,10)  # default margins
         self.graph_layout.setVerticalSpacing (10)
 
-        # connect to app model signals to refresh - only hammer signals here, detaild signals in Item
+        # connect to app model signals to refresh - only hammer signals here, detailed signals in Item
         self.app_model.sig_new_wing.connect                 (self.refresh)
 
 
@@ -305,7 +305,7 @@ class Item_Planform (Item_Abstract):
 
 class Item_Chord (Item_Abstract):
     """ 
-    Diagram (Plot) Item for normed Chord alon span
+    Diagram (Plot) Item for normed Chord along span
     """
 
     name        = "View Chord Distribution"                 # used for link and section header 
@@ -428,7 +428,7 @@ class Item_VLM_Panels (Item_Abstract):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # set margins (inset) of self - there is an extra colum for color bar!
+        # set margins (inset) of self - there is an extra column for color bar!
         self.setContentsMargins ( 0,30,10,10)
 
         # connect to app model signals to refresh - new wing is handled in Diagram_Abstract
@@ -540,7 +540,7 @@ class Item_VLM_Panels (Item_Abstract):
 
 
     def _edit_paneling (self):
-        """ dialog to edit paneling paramters  """
+        """ dialog to edit paneling parameters  """
 
 
         # show difference between original and paneled planform before dialog
@@ -611,7 +611,7 @@ class Item_VLM_Result (Item_Abstract):
 
     @property
     def vlm_opPoint (self) -> VLM_OpPoint:
-        """ current selected opPoint based on vta and aplha"""
+        """ current selected opPoint based on vta and alpha"""
         return self.app_model.cur_vlm_opPoint 
 
 
@@ -963,7 +963,7 @@ class Item_Wing (Item_Abstract):
         self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
         self._add_artist (Neutral_Point_Artist  (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
 
-        # switch off mose helper 
+        # switch off mouse helper 
 
         for artist in self._artists: artist.set_show_mouse_helper (False) 
 
@@ -1200,10 +1200,7 @@ class Item_Wing_Data (Item_Abstract):
 
         text = Label (layout,0,0, get="Hallo", width=100)
         layoutItem = self.scene ().addWidget (text)
-        if isinstance (layoutItem, QGraphicsLayoutItem):
-            print ("yepee")
         layout.addItem (layoutItem,0,0,1,1)
-        # label : pg.LabelItem = graphicsLayout.addLabel ("hallooooo", color=QColor(Artist.COLOR_LEGEND), size=f"{Artist.SIZE_NORMAL}pt")
         self.addItem (layout)
 
 
@@ -1418,7 +1415,7 @@ class Item_Polars (Item_Abstract):
                 self.setup_viewRange (rect=viewRect)                # restore view Range
                 self._refresh_artist_xy ()                             # draw new polar
                 self.sig_xyVars_changed.emit()                      # update view panel 
-            self._refresh_prev_next_btn ()                          # update vsibility of buttons
+            self._refresh_prev_next_btn ()                          # update visibility of buttons
         except :
             pass
 
@@ -1496,7 +1493,7 @@ class Item_Polars (Item_Abstract):
 
 
     def _refresh_artist_xy (self): 
-        """ refresh plar artist with new diagram variables"""
+        """ refresh polar artist with new diagram variables"""
 
         artist : Polar_Artist = self._artists [0]
         artist.set_xyVars (self._xyVars)
@@ -1749,7 +1746,7 @@ class Diagram_Planform (Diagram_Abstract):
 
     @property 
     def general_panel (self) -> Edit_Panel | None:
-        """ additional section panel with commmon settings"""
+        """ additional section panel with common settings"""
 
         if self._general_panel is None:
 
@@ -2016,7 +2013,7 @@ class Diagram_Making_Of (Diagram_Abstract):
             CheckBox (l,r,c, text="Show mouse helper", 
                       get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
             r += 1
-            Label    (l,r,c, get="Drag the little helper points\nto modifiy the geometry. ",
+            Label    (l,r,c, get="Drag the little helper points\nto modify the geometry. ",
                       height=60, style=style.COMMENT).setAlignment(Qt.AlignmentFlag.AlignTop)
             r += 1
             CheckBox (l,r,c, text="Wing Sections", 
@@ -2096,7 +2093,7 @@ class Diagram_Airfoils (Diagram_Abstract):
         self._show_operating_points = False                 # show polars operating points 
         self._show_strak    = False                         # show blended airfoils
         self._min_re_asK    = 10                            # minimum re number / 1000 to plot 
-        self._apply_min_re  = True                          # activate min re rumber 
+        self._apply_min_re  = True                          # activate min re number 
 
         super().__init__(*args, **kwargs)
 
@@ -2172,7 +2169,7 @@ class Diagram_Airfoils (Diagram_Abstract):
 
     @property 
     def show_operating_points (self) -> bool:
-        """ show polar operatins points """
+        """ show polar operating points """
         return self._show_operating_points
 
     def set_show_operating_points (self, aBool : bool):
@@ -2197,7 +2194,7 @@ class Diagram_Airfoils (Diagram_Abstract):
 
     @property 
     def min_re_asK (self) -> int:
-        """ minimum re rumber / 1000 to plot  """
+        """ minimum re number / 1000 to plot  """
         return self._min_re_asK
 
     def set_min_re_asK (self, aVal : int):
@@ -2227,7 +2224,7 @@ class Diagram_Airfoils (Diagram_Abstract):
 
     @property 
     def panel_common (self) -> Edit_Panel | None:
-        """ additional section panel with commmon settings"""
+        """ additional section panel with common settings"""
 
         if self._panel_common is None:
 
@@ -2266,7 +2263,7 @@ class Diagram_Airfoils (Diagram_Abstract):
             l.addWidget (p, r, c, 1, 6)
             l.setRowStretch (r,1)
 
-            # minimum re rumber to plot 
+            # minimum re number to plot 
 
             r += 1
             CheckBox    (l,r,c, text="Exclude Re less than", colSpan=4,
@@ -2359,7 +2356,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
     @property
     def cur_vlm_opPoint (self) -> VLM_OpPoint:
-        """ current selected opPoint based on vta and aplha"""
+        """ current selected opPoint based on vta and alpha"""
         return self.app_model.cur_vlm_opPoint
     
 
@@ -2434,7 +2431,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
     @property 
     def general_panel (self) -> Edit_Panel | None:
-        """ additional section panel with commmon settings"""
+        """ additional section panel with common settings"""
 
         if self._general_panel is None:
 
@@ -2720,8 +2717,8 @@ class Item_Making_Of_Chord (Item_Making_Of_Abstract):
     @override
     def setup_viewRange (self):
         self.viewBox.autoRange ()                            
-        self.viewBox.setXRange (-0.1, 1.1, padding=0.0)       
-        self.viewBox.setYRange (  0, 1.1,  padding=0.1)       
+        self.viewBox.setXRange (-0.1, 1.2, padding=0.0)       
+        self.viewBox.setYRange (  0, 1.2,  padding=0.1)       
 
         x_axis : pg.AxisItem = self.getAxis ("bottom")
         x_axis.setLabel (units="%")
@@ -2752,8 +2749,8 @@ class Item_Making_Of_Chord_Reference (Item_Making_Of_Abstract):
     @override
     def setup_viewRange (self):
         self.viewBox.autoRange ()                            
-        self.viewBox.setXRange (-0.1, 1.1, padding=0.0)       
-        self.viewBox.setYRange (-0.1, 1.0,  padding=0.1)       
+        self.viewBox.setXRange (-0.1, 1.2, padding=0.0)       
+        self.viewBox.setYRange (-0.1, 1.2,  padding=0.0)       
 
         x_axis : pg.AxisItem = self.getAxis ("bottom")
         x_axis.setLabel (units="%")
@@ -2926,7 +2923,7 @@ class Panel_Polar_Defs (Edit_Panel):
     def _on_polar_def_changed (self):
         """ handle changed polar def - inform parent"""
 
-        # ensure if only 1 polardef, this has to be active 
+        # ensure if only 1 polar def, this has to be active 
         if len(self.polar_defs) == 1 and not self.polar_defs[0].active:
             self.polar_defs[0].set_active(True)
 

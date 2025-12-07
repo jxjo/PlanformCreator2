@@ -1130,7 +1130,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
             # error message for error in VLM calculation 
 
             if self.opPoint.VLM_error and (opPoint_var == OpPoint_Var.CL or opPoint_var == OpPoint_Var.ALPHA):
-                text = 'VLM error occured (maybe less x-panels could help)'         
+                text = 'VLM error occurred (maybe less x-panels could help)'         
                 self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
 
                 self._plot_critical_Cl_stripes (aero_results, aero_results [OpPoint_Var.ERROR_MASK], 
@@ -1237,7 +1237,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
             y_pos = section.x/1000
 
-            # far enough away from neighbour (values shouldn't overlap)?
+            # far enough away from neighbor (values shouldn't overlap)?
             if y_pos - y_last > 0.02 * y_max:
                 # get (closest) polar for y pos 
                 polars_dict = self.opPoint.polar.airfoil_polars
@@ -1671,7 +1671,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
     def _scene_clicked (self, ev : MouseClickEvent):
         """ 
-        slot - mouse click in scene of self - handle add wing section with crtl-click 
+        slot - mouse click in scene of self - handle add wing section with ctrl-click 
         """ 
 
         # handle only ctrl-click
@@ -1736,14 +1736,14 @@ class WingSections_Artist (Abstract_Artist_Planform):
             super().__init__(self._point_xy(), movable=movable, color=COLOR_SECTION,
                              symbol='s', size=8, show_label_static = movable,**kwargs)
             
-            # set static brush depending if point to indicate current section dependancy ...
+            # set static brush depending if point to indicate current section dependency ...
 
             if (move_by_pos and section.is_cn_fix) or (not move_by_pos and section.is_xn_fix):
                 self.setBrush (QColor("black"))
 
 
         def _line_of_section (self) -> tuple:
-            """ poyline of section in display coordinate"""
+            """ polyline of section in display coordinate"""
 
             if self._mode == mode.NORM_NORM or self._mode == mode.NORM_TO_SPAN:
                 xn,yn = self._section.line_in_chord ()
@@ -1778,7 +1778,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
             xn, yn = self._tr_fn (self.x, self.y)
 
-            # check if mouse point is between neighbour sections
+            # check if mouse point is between neighbor sections
             x = self.x
             left_x, right_x = self._section.x_limits()
             x = clip (x, left_x, right_x)
@@ -1795,12 +1795,12 @@ class WingSections_Artist (Abstract_Artist_Planform):
                 if self._mode == mode.DEFAULT:
                     _, te_y = self._section.le_te ()
                     c  = te_y - y                                   # calculate new c from trailing edge
-                    lower_c, upper_c = self._section.c_limits()     # c shouldn't be more than left neighbour
+                    lower_c, upper_c = self._section.c_limits()     # c shouldn't be more than left neighbor
                     c = clip (c, lower_c, upper_c)
                     self._section.set_c (c)                         # update section chord
                 else: 
                     cn = yn                                         # yn is chord 
-                    lower_cn, upper_cn = self._section.cn_limits()  # cn shouldn't be more than left neighbour
+                    lower_cn, upper_cn = self._section.cn_limits()  # cn shouldn't be more than left neighbor
                     cn = clip (cn, lower_cn, upper_cn)
                     self._section.set_cn (cn)                       # update section chord
 
@@ -2049,7 +2049,7 @@ class Flaps_Artist (Abstract_Artist_Planform):
     class Movable_Hinge (pg.PlotDataItem):
         """
         pg.PlotCurveItem/UIGraphicsItem which represents 
-        the hinge poyline with its points at wing sections 
+        the hinge polyline with its points at wing sections 
         
         Points are implemented with Movable_Points
         """
@@ -2191,7 +2191,7 @@ class Flaps_Artist (Abstract_Artist_Planform):
             insert_ok = self._flaps.insert_hinge_point_at (x) 
 
             if insert_ok:
-                # if successful, leave self directly without updatung points 
+                # if successful, leave self directly without updating points 
                 ev.accept()
                 if callable(self._callback_changed):
                     QTimer().singleShot(10, lambda: self._callback_changed())
@@ -2388,7 +2388,7 @@ class Airfoil_Name_Artist (Abstract_Artist_Planform):
                 else: 
                     x,y = section.line ()
 
-                # take root setion to get a constant offset for y of label 
+                # take root section to get a constant offset for y of label 
 
                 if section.is_root:
                     dy = (y[1] - y[0]) / 4
@@ -2534,7 +2534,7 @@ class Image_Artist (Abstract_Artist_Planform):
 
         self._imageItem = None
 
-        # re-set original qimage into imgaeItem 
+        # re-set original qimage into imageItem 
         self.imageItem.setImage (pg.functions.imageToArray (self._qimage))
 
         # apply defined transformations 
@@ -2710,7 +2710,7 @@ class Polar_Artist (Abstract_Artist_Planform):
     def min_re_asK (self) -> int: 
         return self._min_re_asK 
     def set_min_re_asK (self, aVal: int ): 
-        """ set minimum re rumber to be plotted for polar """
+        """ set minimum re number to be plotted for polar """
         self._min_re_asK = aVal 
         self.refresh()
 

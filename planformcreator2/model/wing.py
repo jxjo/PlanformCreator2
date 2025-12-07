@@ -56,7 +56,7 @@ type Polylines  = tuple[Array, Array, Array]
 
 VAR_AIRFOILS_DIR        = "${airfoils_dir}"
 
-AIRFOILS_DIR_POSFIX     = "_airfoils"
+AIRFOILS_DIR_SUFFIX     = "_airfoils"
 TEMP_STRAK_DIR          = "strak_temp"
 FILENAME_NEW            = "new.pc2"
 
@@ -462,7 +462,7 @@ class Wing:
 
         if self._vlm_wing is None: 
  
-            # esnure all wing sections have straked airfoils
+            # ensure all wing sections have straked airfoils
             if not self.planform.wingSections.strak_done:
                 self.planform.wingSections.do_strak (geometry_class=GEO_BASIC)
 
@@ -569,7 +569,7 @@ class Wing:
 
     @property
     def parm_pathFileName (self):
-        """ path and filename of the parameter file like './mydir/VJX.pc2' relative to working dir"""
+        """ path and filename of the parameter file like './my_dir/VJX.pc2' relative to working dir"""
         return self._parm_pathFileName 
 
     @property
@@ -586,7 +586,7 @@ class Wing:
 
     @property
     def parm_pathFileName_abs (self):
-        """ absolute path and filename of the parameter file like 'c:/mydir/VJX.pc2' """
+        """ absolute path and filename of the parameter file like 'c:/my_dir/VJX.pc2' """
         if self.workingDir:
             pathFileName_abs =  os.path.join(self.workingDir, self.parm_pathFileName)
         else: 
@@ -622,9 +622,9 @@ class Wing:
         """
 
         if self._parm_pathFileName is None: 
-            airfoils_dir = Path(FILENAME_NEW).stem + AIRFOILS_DIR_POSFIX
+            airfoils_dir = Path(FILENAME_NEW).stem + AIRFOILS_DIR_SUFFIX
         else:
-            airfoils_dir = Path(self._parm_pathFileName).stem + AIRFOILS_DIR_POSFIX 
+            airfoils_dir = Path(self._parm_pathFileName).stem + AIRFOILS_DIR_SUFFIX 
         return airfoils_dir
     
 
@@ -761,7 +761,7 @@ class Wing:
                 target_dir = os.path.dirname(pathFileName_abs)
 
                 # copy airfoils to new airfoils dir if file name changed
-                new_airfoils_dir = os.path.join (target_dir, Path(newPathFilename).stem + AIRFOILS_DIR_POSFIX)
+                new_airfoils_dir = os.path.join (target_dir, Path(newPathFilename).stem + AIRFOILS_DIR_SUFFIX)
                 copy_ok = self.copy_airfoils_dir (new_airfoils_dir)
                 if not copy_ok:
                     logger.error (f"Saving wing parameters succeeded but copying airfoils to new dir '{new_airfoils_dir}' failed")
@@ -777,7 +777,7 @@ class Wing:
                 self.pathHandler.set_workingDirFromFile (pathFileName_abs)
                 self._parm_pathFileName = os.path.basename(pathFileName_abs)  # only the file name relative to working dir
 
-                # reinit planform with wingsections and new airfoils 
+                # reinit planform with wing sections and new airfoils 
                 self._planform = Planform (self, parms)
 
 
@@ -788,14 +788,14 @@ class Wing:
         """ set new file name for the parameter file - only the file name relative to working dir
             used after 'Save As' operation
         Args:
-            fileName_stem: new file name like 'mywing' with extension '.pc2' added automatically
+            fileName_stem: new file name like 'my_wing' with extension '.pc2' added automatically
         """
 
         pathFileName_abs = self.parm_pathFileName_abs
 
         # first rename airfoils dir if existing 
         new_airfoils_dir = os.path.join (os.path.dirname(pathFileName_abs), 
-                                        fileName_stem + AIRFOILS_DIR_POSFIX)    
+                                        fileName_stem + AIRFOILS_DIR_SUFFIX)    
         old_airfoils_dir = self.airfoils_dir
 
         if os.path.isdir(old_airfoils_dir):

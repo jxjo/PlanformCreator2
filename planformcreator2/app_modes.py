@@ -270,7 +270,7 @@ class Mode_Modify (Mode_Abstract):
                 if self.wing.is_new_wing:
                     leave = self.save_as ()                 # save as new file - or cancel
                 else:
-                    self.save()                             # save paramter file
+                    self.save()                             # save parameter file
 
             elif button == QMessageBox.StandardButton.Discard:
                 # on Discard remove temp dir of airfoil strak etc
