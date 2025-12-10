@@ -10,7 +10,7 @@ rem ========================================================================
 setlocal
 set CUR_DIR=%cd%
 set APP_NAME=PlanformCreator2
-set DESCRIPTION="An interactive wing planform designer"
+set DESCRIPTION="An interactive wing planform design tool"
 set ICON_NAME=PC2.ico
 
 if not exist pyproject.toml cd ..
@@ -25,8 +25,8 @@ rem ---- Get package version using hatch
 for /f "delims=" %%i in ('hatch project metadata name') do set PACKAGE_NAME=%%i
 for /f "delims=" %%i in ('hatch project metadata version') do set PACKAGE_VERSION=%%i
 
-
 set WIN_EXE_DIR=%PACKAGE_NAME%-%PACKAGE_VERSION%_win_exe
+set INSTALLER_NAME=%PACKAGE_NAME%-%PACKAGE_VERSION%_win_setup.exe
 
 echo App              : %APP_NAME%
 echo Desciption       : %DESCRIPTION%
@@ -34,7 +34,7 @@ echo Icon             : %ICON_NAME%
 echo Package name     : %PACKAGE_NAME%
 echo Package version  : %PACKAGE_VERSION%
 echo Pyinstaller exe  : %WIN_EXE_DIR%
-
+echo Installer name   : %INSTALLER_NAME%
 
 rem ---- Check if PyInstaller build exists
 
@@ -61,7 +61,7 @@ if %errorlevel% neq 0 (
 
 rem ---- Run NSIS to create installer
 echo.
-echo ------ Creating installer with NSIS... %PACKAGE_VERSION%
+echo ------ Creating installer with NSIS...
 echo.
 
 pause
@@ -73,12 +73,13 @@ makensis.exe /V3 ^
     /DWIN_EXE_DIR=%WIN_EXE_DIR% ^
     /DDESCRIPTION=%DESCRIPTION% ^
     /DICON_NAME=%ICON_NAME% ^
+    /DINSTALLER_NAME=%INSTALLER_NAME% ^
     dev\win_installer.nsi
 
 if %errorlevel% equ 0 (
     echo.
     echo --------------------------------------------------------------------
-    echo Installer created: dist\%APP_NAME%_%PACKAGE_VERSION%_Setup.exe
+    echo Installer created: dist\%APP_NAME%_%PACKAGE_VERSION%_setup.exe
     echo --------------------------------------------------------------------
     echo.
 ) else (

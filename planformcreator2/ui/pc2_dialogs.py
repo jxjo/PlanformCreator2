@@ -27,7 +27,7 @@ from .pc2_artists                       import Image_Artist, Planform_Artist, Re
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 class Dialog_Export_Airfoil (Dialog):

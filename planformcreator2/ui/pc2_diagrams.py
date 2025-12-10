@@ -34,7 +34,7 @@ from .pc2_dialogs       import (Dialog_Edit_Image, Dialog_Edit_Paneling, Dialog_
 from ..app_model        import App_Model
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 #-------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-# see PyPI_how_to.docx
+# see PyPI_how_to.docx <"dingens">26 
 
 [build-system]
 requires = ["hatchling"]
@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 name = "planformcreator2"
 dynamic = ["version"]               
 authors = [{ name="Jochen Guenzel", email="jochen@jxjo.de" }]
-description = "Create and modifiy wing planform"
+description = "Design a wing planform"
 readme = "doc/README_PyPi.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -18,7 +18,7 @@ dependencies = [
   "pyqt6>=6.9.1",
   "pyqtgraph>=0.13.7",
   "ezdxf>=1.4.0",
-  "airfoileditor>=4.2.1"
+  "airfoileditor>=4.2.2"
 ]
 classifiers = [
     "Operating System :: OS Independent",
@@ -45,11 +45,9 @@ only-include = [
   "planformcreator2", 
   "icons",
   "templates",
-  "examples"
 ]
 
 [tool.hatch.build.targets.wheel.sources]
-"examples" = "planformcreator2/examples"
 "icons" = "planformcreator2/icons"
 "templates" = "planformcreator2/templates"
 
@@ -60,15 +58,7 @@ exclude = [
 include = [
   "planformcreator2",
   "icons",
-  "examples",
   "templates",
   "README.md",
   "LICENSE"
-]
-
-[tool.pytest.ini_options]
-pythonpath = ["planformcreator2"]          # add project root to sys.path to find planformcreator2 moduls
-testpaths = ["tests"]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]

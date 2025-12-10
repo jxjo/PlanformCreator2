@@ -43,7 +43,7 @@ from .VLM_wing                 import VLM_Wing
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 # ---- Typing -------------------------------------
 
@@ -3471,7 +3471,7 @@ class Planform:
 
         self._span        = fromDict (dataDict, "halfspan", 1200.0) 
         self._chord_root  = fromDict (dataDict, "chord_root", 200.0)
-        self._sweep_angle = fromDict (dataDict, "sweep_angle", 1.0)
+        self._sweep_angle = fromDict (dataDict, "sweep_angle", 0.0)
 
         self._wingSections  = None                                        # early to have property
 

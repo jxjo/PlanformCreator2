@@ -34,7 +34,7 @@ from .model.VLM_wing         import VLM_OpPoint, VLM_Polar
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 # -----------------------------------------------------------------------------
@@ -57,9 +57,6 @@ class App_Model (QObject):
     and provides Signals when data is changed
 
     """
-
-    # root directory for the resources like ./assets,  ./examples_optimize - has to be adjusted at runtime
-    RESOURCES_DIR               = os.path.abspath (os.path.join (os.path.dirname(__file__), '..'))
 
     WORKER_MIN_VERSION         = '1.0.10'
 

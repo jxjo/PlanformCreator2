@@ -30,7 +30,7 @@ from airfoileditor.model.polar_set  import Polar_Set, RE_SCALE_ROUND_TO, re_from
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 #-------------------------------------------------------------------------------

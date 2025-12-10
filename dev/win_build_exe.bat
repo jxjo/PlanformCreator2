@@ -47,7 +47,6 @@ pyinstaller --noconfirm --log-level=INFO  --onedir --noconsole ^
 	--paths %PACKAGE_NAME% ^
     --add-data="./icons;%PACKAGE_NAME%/icons" ^
     --add-data="./templates;%PACKAGE_NAME%/templates" ^
-    --add-data="./examples;%PACKAGE_NAME%/examples" ^
     --collect-data airfoileditor ^
 	--runtime-tmpdir="mySuperTemp" ^
 	--exclude-module matplotlib ^
@@ -76,19 +75,17 @@ if exist %WIN_EXE_DIR% (
 	goto end
 )
 ren %APP_NAME% %WIN_EXE_DIR%
+if %ERRORLEVEL% neq 0 (
+	echo Error: Failed to rename %APP_NAME% to %WIN_EXE_DIR%
+	echo Please close any programs that might be using files in this directory.
+	pause
+	ren %APP_NAME% %WIN_EXE_DIR%
+)
+if %ERRORLEVEL% neq 0 (
+	echo Error: Rename still failed
+	goto end
+)
 
-rem - no more zip 
-goto finished
-
-rem ---- zip directory 
-
-echo.
-echo ------ zip %WIN_EXE_DIR% into %WIN_EXE_DIR%.zip
-echo.
-pause
-
-if exist %WIN_EXE_DIR%.zip del %WIN_EXE_DIR%.zip
-powershell Compress-Archive %WIN_EXE_DIR%\* %WIN_EXE_DIR%.zip
 
 :finished
 echo.

@@ -2,7 +2,7 @@
 ![PC2](images/PC2_logo.png "Logo")
 
 
-# v4.0 dev
+# v4.0
 
 **PlanformCreator2** - short PC2 - is an app to design the planform of a wing focusing on model sailplanes. 
 
@@ -17,95 +17,95 @@
 #### Airfoils and Polars
 * Define airfoil at wing sections and edit its properties using the [Airfoil Editor](https://github.com/jxjo/AirfoilEditor)
 * Generate blended airfoils for intermediate wing sections ('strak')
-* :new:  v3: View polars of the airfoil based on xfoil polar generation
+* View polars of the airfoil based on xfoil polar generation
 
 #### Wing Analysis
-* Auto panelling of the planform as preparation for aerodynamic calculation 
-* :new:  v3: VLM based lift calculation 
-* :new:  v3: Determine critical sections where cl_max of airfoils will be reached
+* Auto paneling of the planform as preparation for aerodynamic calculation 
+* VLM based lift calculation 
+* Determine critical sections where cl_max of airfoils will be reached
 * Export wing definition to Xflr5 and FLZ_vortex for further analysis
 
 The project was inspired by the 'Planform Creator' being part of [The Strak Machine](https://github.com/Matthias231/The-Strak-Machine).
 
-## Basic concepts
+## Basic Concepts
 
-The idea behind **PlanformCreator2** is to have a tool to design a new wing with a more graphical, 'playful' approach. It tries to fill the gap between CAD based design and aerodynamic analysis tools like Xflr5.
+The idea behind **PlanformCreator2** is to have a tool to design a new wing with a more graphical, playful approach. It tries to fill the gap between CAD based design and aerodynamic analysis tools like Xflr5.
 
 <img src="images/PC2_usage.png" width="800" />
 
-Within the early design process of a wing **PlanformCreator2** is the master of 'truth'. It provides the data for the aerodynamic analysis. A first lift and lift failure analysis of the wing is part of PC2. 
-Further analysis and performance assessments are made with external apps. 
+During the early design phase, **PlanformCreator2** serves as the single source of truth for wing geometry. It provides data for aerodynamic analysis and includes built-in lift and stall analysis capabilities. 
+More detailed performance assessments can be performed using external tools. 
+
+Once the design is finalized, the planform and airfoils are exported as DXF files to a CAD program for final 3D design work, such as creating molds. 
+
+Unlike a "paint program," the planform is defined parametrically using values such as 'span', 'root depth', and 'sweep angle'. The chord distribution along the span is controlled by mathematical functions with adjustable parameters.
+This parametric approach allows independent parameter adjustments, enabling rapid iteration toward the desired wing planform.
 
 
-When the results are satisfying the planform and the involved airfoils are exported as dxf to a CAD program to continue with the final 3D design e.g. for a mold of the wing. 
 
-In contrast to a "paint program", the planform is defined by parameters such as 'span', 'root depth' or "sweep angle". The chord distribution along the span is controlled by a mathematical function via parameters.
-The advantage is that the parameters can be changed independently of each other, allowing a quick approach to the desired wing planform.
+## Designing a Planform 
 
+'Form follows Function' - this is especially true in PC2, where the planform results from a combination of mathematical functions and parameters. 
 
+### Chord Distribution and Chord Reference
+The most important element, typically defined first, is the chord distribution along the wing span. The geometric chord distribution directly determines the lift distribution, as the local lift coefficient depends on both the effective angle of attack (influenced by wing shape) and the local Reynolds number (which varies proportionally with chord length).
 
-## Designing a planform 
+Two methods are available for defining the chord distribution:
+- **Bezier curve**: The curve is defined by dragging control points with the mouse, using a start tangent at the root and an end tangent at the tip.<br>
+Additional Bezier control points can be added to achieve a wide range of chord distributions.<br>
+A constant chord area can be created by moving the Bezier start point toward the tip.
+- **Trapezoid**: For single or multiple trapezoid wings, the chord is defined by the chord length at each wing section.
 
-'Form follows Function' - this is especially true in PC2: The planform of a wing results from a combination of functions and parameters. 
+In PC2, the chord distribution is always displayed in normalized form, with both span and chord length ranging from 0 to 1. This enables direct comparison of chord distributions across different wing designs without distortion.
 
-### Chord distribution and Chord Reference
-Most important and usually defined first, is the chord distribution along the wing span. The geometric chord distribution directly and significantly determines the lift distribution along the span. The local lift coefficient depends on the local effective angle of attack (influenced by the wing shape) and on the local Reynolds number, which changes proportionally to the local chord.
-
-Two different "types" are available for defining the chord distribution:
-- **Bezier curve**: Using a start tangent at the root and a end tangent at the wing tip, the curve of the chord distribution is defined by dragging the control points with the mouse.<br>
-:new:  v3: Additional Bezier control points may be defined to achieve a wide range of chord distributions<br>
-:new:  v3: An area with constant chord can be defined by moving the start point of Bezier towards tip
-- **Trapezoid**: For the definition of a (multiple) trapezoid wing. The chord is defined by the chord length of the individual wing sections.
-
-In PC2, the chord distribution is always displayed in normalized form. Both span and chord length range from 0 to 1. This allows chord distributions - even of different wing designs - to be compared with each other without distortion.
-
-The second main definition is the 'Chord Reference' which defines how much of the chord is assigned towards leading and trailing edge along a virtual 'Chord Reference Line'.  
+The second key element is the 'Chord Reference', which defines how the chord is distributed between the leading and trailing edges along a virtual 'Chord Reference Line'.  
 
 <img src="images/chord_distribution_reference.png" width="800" />
 
-By combining these two functions, scaling the result to a halfwing span and optionally shearing the result by a 'Sweep Angle' the final planform is created
+The final planform is created by combining these two functions, scaling the result to a half-wing span, and optionally applying a 'Sweep Angle' transformation.
 
 <img src="images/planform_by_chord.png" width="800" />
 
 
 #### Variations of the Chord Reference 
 
-The concept of "Chord Reference" is quite powerful to create variations of a planform. As the chord distribution is constant, all variations will have the same area and almost identical aerodynamic properties in first approximation. 
+The Chord Reference concept enables powerful planform variations. Since the chord distribution remains constant, all variations maintain the same wing area and nearly identical aerodynamic properties as a first approximation. 
 
-The following diagram shows the impact of different chord references while keeping the chord distribution constant.
+The following diagram demonstrates how different chord references affect the planform while maintaining a constant chord distribution.
  
 <img src="images/planform_variations.png" width="800" />
 
 
 
-#### Everything banana?
-A little specialty is the so called "banana function". It allows to bent the wing in spanwise direction like a banana without changing chord distribution and reference. The result can be a planform like the popular 'bow-style' flying wings. 
+#### The Banana Function
 
-Another use case for applying the 'banana function' is to finetune the flap depth along the wing span. As the flap hinge line (see further below) is a straight line, bending the planform will directly influence the flap depth. 
+A unique feature is the "banana function," which bends the wing spanwise like a banana without altering the chord distribution or reference. This creates planforms similar to popular 'bow-style' flying wings. 
+
+Another application is fine-tuning flap depth along the span. Since the flap hinge line (described below) is straight, bending the planform directly affects flap depth. 
 
 <img src="./images/planform_banana.png" width="800" />
 
-### Background image
+### Background Image
 
-If you want to recreate an wing based on an existing image, you may load this image as a background image into the app. Having a planform as contour line in the background, it is - most of the times - straight forward to define the chord distribution and the chord reference for a best fit.
+To create a wing based on an existing image, you can load it as a background in the app. With a planform contour visible in the background, defining the chord distribution and chord reference for optimal fit is typically straightforward.
 
-There is a little image editor to scale the image and adapt the colors to a 'dark mode' of the image which is best suited as a background. 
+A built-in image editor allows you to scale the image and adjust colors to create a dark mode version best suited for use as a background. 
 
-Scaling of the image is done by moving the two scale markers to the leading edge of the root and to the very tip point.  
+Image scaling is performed by positioning two scale markers at the leading edge of the root and at the wing tip.  
 
 <img src="images/background_image.png" width="800" />
 
 
 
-### Wing sections
+### Wing Sections
 
-Once the planform has been defined, another artifact comes into play: 'wing sections'. A wing section has two main tasks:
-* Define the position of an airfoil within a planform
-* Define the position of the flap hinge line and the start of a 'flap group'.
+Once the planform is defined, wing sections become the next key element. A wing section serves two main purposes:
+* Define the position of an airfoil within the planform
+* Define the flap hinge line position and the start of a 'flap group'
 
-A wing always has at least 2 wing sections - a root and a tip section. In between, any number of wing sections can be created. There are two modes how the location of a wing section can be defined: 
-- by span position: The wing section always remains in this relative span position, even if the wing span or chord distribution is changed. Positioning by span position is helpful for example to define flaps.
-- chord length: The wing section is tied to a certain relative chord. When changing the chord distribution, the wing section will move around in order to always have the same chord length. This is especially useful to have an airfoil at a certain chord length (= Reynolds number) within the wing.
+Every wing has at least two wing sections: root and tip. Additional sections can be added between them. Wing section locations can be defined in two ways:
+- **By span position**: The wing section remains at a fixed relative span position, regardless of changes to wing span or chord distribution. This mode is useful for defining flaps.
+- **By chord length**: The wing section maintains a constant relative chord length. When the chord distribution changes, the section repositions itself to preserve this chord length. This is particularly useful for maintaining an airfoil at a specific chord length (and thus Reynolds number).
 
 <img src="images/wing_sections.png" width="800" />
 
@@ -121,72 +121,70 @@ A special case arises with trapezoidal planforms. Here wing sections are also us
 
 ### Hinge Line and Flap Depth
 
-Flaps are defined by their 'hinge line' and their bounding wing sections to the left and to the right. A wing section can have a 'flap group' assigned. All subsequent wing sections with the same flap group will define a single flap.
+Flaps are defined by their hinge line and the wing sections that bound them on either side. A wing section can be assigned a 'flap group', and all subsequent wing sections with the same flap group form a single flap.
 
-In many cases the hinge line equals the 'reference line' of the planform. This is also the default case when defining flaps. 
+Typically, the hinge line coincides with the planform's reference line, which is also the default when defining flaps. 
 
-More flexibility is achieved through a separate definition of the hinge line with a hinge point at the root section and the tip section. 
-In certain cases, for example with a curved reference line, kinks in the hinge line can be defined at a wing section.
+Greater flexibility can be achieved by defining a separate hinge line with hinge points at the root and tip sections. 
+In some cases, such as when using a curved reference line, kinks in the hinge line can be defined at specific wing sections.
 
 <img src="images/flap_hinge_line.png" width="500" />
 
-### Export as dxf file 
-Once the wing design has been completed, the new wing can be transferred to a CAD program as a dxf file. The used airfoils are optionally inserted into the drawing and / or additionally exported as a .dat file.
+### Export as DXF File 
+Once the wing design is complete, it can be exported to a CAD program as a DXF file. Airfoils can optionally be inserted into the drawing and/or exported separately as .dat files.
 
-A nice feature is to define a common trailing edge thickness (trailing edge gap) in mm for all airfoils involved.
-So no manual post processing for the airfoils has to be done in CAD. 
+A useful feature allows you to define a common trailing edge thickness (trailing edge gap) in millimeters for all airfoils.
+This eliminates the need for manual post-processing of airfoils in CAD. 
 
 <img src="images/dxf_view.png" width="800" />
 
-
-The generated planform shouldn't be used directly for a 3D construction in the CAD program, since the contour line is approximated by many small straight line pieces (polyline). It is recommended to place a spline over the leading and trailing edge in the respective CAD program.
+**Note:** The generated planform contour is approximated by many small straight line segments (polyline) and should not be used directly for 3D construction. It is recommended to overlay splines on the leading and trailing edges in your CAD program for smooth surfaces.
 
 
 ## Airfoils and Polars
 
 ### Assignment of Airfoils
 
-A wing section can either be assigned a fixed airfoil or the airfoil can be left open. In this case, a 'strak' (or 'blended') airfoil is created for this wing section by blending the left and right neighboring airfoils. The 'blending ratio' is derived from the ratio of the respective chord length of the wing sections.
+A wing section can be assigned either a fixed airfoil or left unassigned. When unassigned, a 'strak' (blended) airfoil is automatically created by blending the neighboring airfoils from adjacent sections. The blending ratio is determined by the relative chord lengths of the wing sections.
 
-For the root and the tip section an airfoil is mandatory. Initially example airfoils are assigned to these two sections.
+Root and tip sections require mandatory airfoil assignments. By default, example airfoils are initially assigned to these sections.
 
 <img src="images/airfoil_names.png" width="800" />
 
 <sup>Wing sections with the corresponding airfoils. The airfoil at 'section 2' is created by blending JX-GP-100 and JX-GP-055.</sup>
 
 
-The airfoils can either be viewed in normal, normed scale or in their 'real' scale within their wing sections.
+Airfoils can be viewed in normalized scale or in their actual scale within the wing sections.
 
-Included in the **PlanformCreator2** is the  [AirfoilEditor](https://github.com/jxjo/AirfoilEditor) which allows the typical modifications of an airfoil during wing design. 
+**PlanformCreator2** includes the [AirfoilEditor](https://github.com/jxjo/AirfoilEditor), which provides common airfoil modification capabilities during wing design. 
 
-In the final stage of the design process the airfoils, including the generated 'straked' airfoils, can be exported as a .dat file. The optional setting of a continuous trailing edge thickness ('Te gap') in mm is very practical and makes the often necessary manual reworking of the airfoils in CAD superfluous.
+During the final design stage, all airfoil — including generated 'straked' airfoils — can be exported as .dat files. An optional feature allows setting a uniform trailing edge thickness ('TE gap') in millimeters for all airfoils, eliminating the manual rework typically required in CAD.
 
 
 ### Airfoil Polars
 
-To generate the polars of an airfoil the **PlanformCreator2** uses the Worker tool of the [Xoptfoil2 project](https://jxjo.github.io/Xoptfoil2). One of the Worker actions is the multi-threaded creation of a polar set using Xfoil.
+**PlanformCreator2** uses the Worker tool from the [Xoptfoil2 project](https://jxjo.github.io/Xoptfoil2) to generate airfoil polars. One Worker capability is the multi-threaded creation of polar sets using Xfoil.
 
-Within the app a polar is generated 'lazy' - meaning at the moment when the polar should be displayed - and asynchronous in a background task. Each polar is stored in a single file having the Xfoil polar format allowing to import the polar into Xflr5. 
+Polars are generated on-demand (lazily) when needed for display, running asynchronously in background tasks. Each polar is stored as a separate file in Xfoil format, enabling direct import into Xflr5. 
 
-For polar generation the `auto_range` feature of the Worker is applied which optimizes the alpha range of the polar to show the complete T1 polar from `cl_min` to `cl_max` of the airfoil. 
+The Worker's `auto_range` feature optimizes the alpha range to display the complete T1 polar from `cl_min` to `cl_max` for each airfoil. 
 
-A polar of a specific Re number is defined for the root wing section. For the other wing sections the Re number is automatically adjusted based on the local chord. Afterwards the polars of all wing sections will be generated as one set.
+A specific Reynolds number is defined for the root wing section. For other sections, the Reynolds number is automatically adjusted based on local chord length. All wing section polars are then generated as a unified set.
 
 ![Polars](images/airfoil_polars.png "Screenshot of Polar Generation")
-<sub>Airfoil and Polar view with the auto generated, Re number adjusted polars of the airfoils at the defined wing sections. </sub>
+<sub>Airfoil and polar view showing auto-generated, Reynolds number-adjusted polars for airfoils at defined wing sections.</sub>
 
-The polars along wingspan can be helpful to have a first assessment of the airfoil ‘strak’ especially towards tip with its lower Re numbers.
+The spanwise polar distribution provides an initial assessment of the airfoil strak, particularly toward the tip where Reynolds numbers are lower.
 
 ## Wing Analysis
 
 ### Panel Generation
 
-The basis for an aerodynamic analysis of a wing is the idealization with panels.
-PC2 supports this paneling step with some helpful features. 
+Aerodynamic analysis of a wing requires discretization into panels. PC2 provides several features to support this paneling process. 
 
-The paneled planform can either be exported to Xflr5 and FLZ_vortex or used for the integrated aero analysis, as described below.
+The paneled planform can be exported to Xflr5 and FLZ_vortex, or used for the integrated aerodynamic analysis described below.
 
-The first step for paneling is the definition of the number of x and y-panels of the sections. In the case of a curved leading or trailing edge this can lead to considerable geometrical deviations between the original contour and the idealized which will lead to high inaccuracies of the aerodynamic calculation.
+The initial paneling step involves defining the number of x and y-panels for each section. With curved leading or trailing edges, this can produce significant geometric deviations between the original contour and the idealized panels, resulting in substantial inaccuracies in aerodynamic calculations.
 
 
 <img src="./images/panelling_step_1.png" width="800" />
@@ -194,17 +192,17 @@ The first step for paneling is the definition of the number of x and y-panels of
 <sup>Initial panelling of a planform having a single wing section '1' between root and tip. The deviation between the original contour and the trapezoidal contour, marked with yellow lines, is way to high to achieve valid results in aerodynamic calculation. </sup>
 
 
-Next, a mesh optimization can be applied based on the parameters:
+Mesh optimization can then be applied using the following parameters:
 
-* Minimum panel width – the number of y panels per section will be adapted to achieve a uniform panel width along span
-* Minimum chord deviation to planform – additional wing sections will be inserted automatically until the deviation of the section trapezoids to the original planform is below the defined threshold
-* Minimum chord at tip – this cuts the tip in such a way that a Re number is achieved that leads to meaningful Xfoil results.
+* Minimum panel width – The number of y-panels per section is adjusted to achieve uniform panel width along the span
+* Minimum chord deviation to planform** – Additional wing sections are inserted automatically until the deviation of the section trapezoids from the original planform falls below the defined threshold
+* Minimum chord at tip – The tip is trimmed to achieve a Reynolds number that produces meaningful Xfoil results
 
 ![PC2](images/panelling_steps.png "Panelling steps")
 
-<sup>Auto-optimized panelling to reduce deviation between original and idealized contour. The maximum deviation of chord is now below 2% and good enough to achieve reasonable results.</sup>
+<sup>Auto-optimized paneling reduces deviation between original and idealized contour. The maximum chord deviation is now below 2%, sufficient to achieve reasonable results.</sup>
 
-As for airfoil polar generation, panel generation is ‘lazy’: A new mesh is initialized each time the planform is changed by the user.
+Like airfoil polar generation, panel generation occurs on-demand: a new mesh is initialized whenever the planform is modified.
 
 
 #### Export to Xflr5
@@ -223,15 +221,15 @@ Do not forget to adjust the plane mass before running a calculation.
 
 ### VLM Analysis
 
-PC2 has an integrated VLM (Vortex lattice method) module to calculate the lift distribution along wing span based on the previously carried paneling of the wing.
+PC2 includes an integrated VLM (Vortex Lattice Method) module to calculate the lift distribution along the span based on the previously generated paneling.
 
 <img src="./images/vlm_cp_panel.png" width="800" />
 
-The main objective of the aero analysis in PC2 is to find the region of the wing, which will fail when the angle of attack is increased towards stall. For this assessment the 2D airfoil polar data and the 3D lift aero data is combined in a 'viscous loop'.
+The primary objective of aerodynamic analysis in PC2 is to identify wing regions that will stall first when the angle of attack increases. For this assessment, 2D airfoil polar data and 3D lift aerodynamic data are combined in a viscous loop.
 
-The 2D airfoil polar data is taken from the polar definitions as described in the section before. The airfoil polars are evaluated for each wing section. Note: For wing analysis only T1 polars (constant speed) are supported.
+The 2D airfoil polar data is taken from the polar definitions described in the previous section. Airfoil polars are evaluated for each wing section. Wing analysis supports only T1 polars (constant speed).
 
-The 'viscous loop' calculates the effective Cl and Alpha for each panel station along wing span.
+The viscous loop calculates the effective Cl and alpha for each panel station along the span.
 
 <img src="./images/vlm_viscous_loop.png" width="400" />
 
@@ -250,51 +248,102 @@ By activating the chord distribution view, the chord and thus the area in which 
 
 ## The App - a quick look 
   
-An attempt was made to provide a simple, intuitive UI to be able to 'playfully' explore the program and the design of a new wing. 
+**PlanformCreator2** provides a simple, intuitive UI for exploring the application and designing new wings. 
 
 ![PC2](images/PC2_app.png "PlanformCreator2")
 
-- The upper tabs are used to switch between the different main views. 
-- Within the panel on the left the settings for current diagram can be customized. 
+- The upper tabs switch between different main views
+- The panel on the left allows customization of settings for the current diagram
+- The bottom left contains standard file and action functions 
 
-- At the bottom left are the usual file and action functions. 
+- The lower main panel provides input and modification of planform parameters. Key parameters can also be adjusted directly in the diagram using interactive control points
 
-- In the lower main panel the input or modification of the planform parameters takes place. The most important parameters can alternatively be changed directly in the diagram using the little mouse helper squares.
-
-To get to know the app for the first time, take a look at the 'Welcome' panel. You'll find some further explanations and can start to modify the sample planform right away. The 'New' function shows a selection of predefined templates which can be a good starting point for your project.
-
-In the 'examples' folder, you'll find some full flavored PC2 projects. Just 'Open' the respective PC2 file. 
-
+For new users, the 'Welcome' panel provides additional explanations and allows immediate modification of the sample planform. The 'New' function offers predefined templates that serve as good starting points for your project.
 
 
 ## Software Aspects
 
-`PlanformCreator2` is developed in  [Python](https://www.python.org/) using [PyQt6](https://pypi.org/project/PyQt6/) which wraps and extends the Qt UI framework and [PyQtGraph](https://www.pyqtgraph.org/) which wraps the QT Graphics framework. 
+`PlanformCreator2` is developed in [Python](https://www.python.org/) using [PyQt6](https://pypi.org/project/PyQt6/), which wraps and extends the Qt UI framework, and [PyQtGraph](https://www.pyqtgraph.org/), which wraps the Qt Graphics framework. 
 
-The main building blocks of the app are
-* Model - containing all geometry and math helper routines to create and modify a wing planform. The model is independent of the UI.
+The main building blocks are:
 
-* VLM - for calculation of the lift distribution the Python VLM implementation [Panel Aero](https://github.com/DLR-AE/PanelAero) is used as the core module - thanks to Arne Voß (DLR)   
+* Model — Contains all geometry and mathematical helper routines to create and modify wing planforms. The model is independent of the UI.
 
-* UI-Framework - base classes and a little framework to ease the implementation of forms based on `Widgets` and `Diagrams`.
-Plots in `Diagrams` are handled by `Artists` where each of them visualizes certain data aspects of a planform. The base classes are imported from the  [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) project as a Git subtree
+* VLM — For lift distribution calculations, the Python VLM implementation [Panel Aero](https://github.com/DLR-AE/PanelAero) is used as the core module (thanks to Arne Voß, DLR).
 
-* Application - `App_Main` and view `Panels` to handle presentation and user interaction 
+* UI Framework — Base classes and a framework to ease implementation of forms based on widgets and diagrams. Plots in diagrams are handled by artists, each visualizing specific data aspects of a planform. The base classes are imported from the [Airfoil Editor](https://github.com/jxjo/AirfoilEditor) project as a package.
+
+* Application — App modes and view panels handle presentation and user interaction. 
 
 
-##  Installation
+# Installation
 
-### Windows only
+### Windows Easy Setup
 
-A pre-build Windows App is available in the [releases section](https://github.com/jxjo/PlanformCreator2/releases), which can be downloaded, unzipped and run.   
+A Windows Installer including Worker for polar generation is available in the [releases section on GitHub](https://github.com/jxjo/PlanformCreator2/releases).
 
-### Windows and Linux without a Python virtual environment
+Download and run the setup program. During installation, you may define whether the file extension .pc2 (PlanformCreator2 project files) shall be assigned to the app. 
 
-Make sure that you have installed the latest Python version. 
+When running the downloaded setup file, Windows SmartScreen may display a warning: "Windows protected your PC" with "Unknown publisher". **This is normal** for open-source software distributed without a code signing certificate.
 
-Download python sources from the [releases section](https://github.com/jxjo/PlanformCreator2/releases) or clone the repository. 
+To install in this case:
+1. Click "More info"
+2. Click "Run anyway"
 
-Install the additional modules needed:
+
+
+### Windows Setup using Python
+
+If you already have installed Python version >=3.12, it is advantageous to install the PlanformCreator2 as a 'package'. 
+This will startup the app faster than using the standalone .exe file. 
+The package already includes Worker and Xoptfoil2. 
+
+Install the app:
+```
+pip install planformcreator2 
+```
+
+To upgrade to the actual version use `pip install planformcreator2 -U`.
+
+Run the app by typing `planformcreator2` on the command line.
+
+The command `where planformcreator2.exe` will show, where Python installed the program within your filesystem.
+This file path can be used to create a shortcut on your desktop or to assign the file extension '.dat' to the app,  allowing to open an airfoil with a double click. 
+
+If you just want to try out the app and want to ensure, that the installation doesn't influence other packages, you may prefer to install the package in an 'virtual environment'. For daily use a 'normal' installation is more convenient.
+
+
+
+### Linux and MacOS
+
+The app is installed as a Python 'package'. Please ensure to have a Python version >=3.12.
+
+`pip3 install planformcreator2`
+
+To upgrade to the actual version use
+
+ `pip3 install planformcreator2 -U`
+
+Run the app by typing `planformcreator2` on the command line.
+
+The command `which planformcreator2` will show, where Python installed the program within your filesystem.
+This file path can be used to create a shortcut on your desktop or to assign the file extension '.dat' to the app,  allowing to open an airfoil with a double click. 
+
+
+#### Preparing Worker
+To use polar generation and wing analysis the program `worker` has to be compiled and made available for PlanformCreator2 by copying the program into /usr/local/bin. 
+
+Please have a look into [Xoptfoil2 README](https://github.com/jxjo/Xoptfoil2#Installation) for further information.
+
+As a little reward for the extra effort polar generation will run 2-3 times faster on Linux compared to the Windows version.
+
+#### Ubuntu
+
+If there is warning message like "Failed to create wl_display" when starting the app, set a QT environment variable with `export QT_QPA_PLATFORM=xcb`.
+
+### Cloning from Github
+
+If you want to clone the AirfoilEditor repo from GitHub for local development, the following package have to be installed in your (virtual) python environment 
 
 ```
 pip install packaging
@@ -304,41 +353,14 @@ pip install pyqtgraph
 pip install ezdxf
 pip install airfoileditor
 ```
-Run the app:
 
-```
-python3 PlanformCreator2.py
-```
+### Changelog
 
-### Windows and Linux using a Python virtual environment
+See [CHANGELOG.md](CHANGELOG.md) for history of changes.
 
-If you are are running other python applications on your PC, it is recommended to create a virtual environment for the PlanformCreator2 not to influence the other installations with the additional PC2 modules.
 
-Make sure that you have installed the latest Python version.
+# Finally 
 
-Download python sources from the [releases section](https://github.com/jxjo/PlanformCreator2/releases) or clone the repository. 
-
-Install the additional modules needed.
-
-```
-# change to the PC2 directory
-python3 -m venv venv                        # create virtual environment
-. venv/bin/activate                         # for Windows: 'venv\bin\activate'
-pip3 install pyqt6
-pip3 install numpy
-pip3 install pyqtgraph 
-pip3 install termcolor
-pip3 install ezdxf
-```
-Run the app:
-
-```
-. venv/bin/activate                         # for Windows: venv\bin\activate  
-python3 PlanformCreator2.py
-. venv/bin/deactivate                       # for Windows: venv\bin\deactivate' 
-```
-
----
-Have fun! ;-)
+I hope you enjoy working with the **PlanformCreator2**.
 
 jochen@jxjo.de

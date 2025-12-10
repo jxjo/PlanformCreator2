@@ -67,13 +67,13 @@ class Exporter_Abstract:
 
     @property
     def export_dir_default(self):
-        """the default directory for self export - path is relativ to current """
+        """the default directory for self export - path is relative to current """
         return self.wing.parm_fileName_stem  + self.EXPORT_DIR_SUFFIX
 
 
     @property
     def export_dir(self):
-        """the directory for self export - path is relativ to current or absolute """
+        """the directory for self export - path is relative to current or absolute """
 
         if self._export_dir is None or self._export_dir.strip() == "":
             return self.export_dir_default
@@ -141,7 +141,7 @@ class Exporter_Airfoils (Exporter_Abstract):
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         toDict (d, "export_dir",        self._export_dir) 
@@ -228,7 +228,7 @@ class Exporter_Airfoils (Exporter_Abstract):
     @override
     @property
     def export_dir(self):
-        """the directory for self export - path is relativ to current or absolute """
+        """the directory for self export - path is relative to current or absolute """
 
         if self._export_dir_fn is not None:
             return self._export_dir_fn()
@@ -292,7 +292,7 @@ class Exporter_Airfoils (Exporter_Abstract):
         sections  = self.planform.wingSections.without_for_panels if without_for_panels else self.planform.wingSections
 
         for section in sections:
-
+            
             airfoil = self.do_section (section)
 
             fileNames.add (airfoil.fileName) 
@@ -358,7 +358,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         toDict (d, "export_dir", self._export_dir) 
@@ -377,7 +377,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
     def do_it (self): 
         """ 
-        Main entry: start the export to the file defined in paramters.
+        Main entry: start the export to the file defined in parameters.
         Airfoils will also be copied into the xflr5 directory
 
         Returns:
@@ -412,7 +412,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
         airfoilNames = set()                                    # set of all airfoil names exported
 
-        # get file object with xflr xml templae 
+        # get file object with xflr xml template 
         templateFile = Exporter_Xflr5.Xflr5_template().get_template_wing()
 
         # basically parse the XML-file
@@ -598,7 +598,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         toDict (d, "export_dir", self._export_dir) 
@@ -621,7 +621,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
     def do_it (self): 
         """ 
-        Main entry: start the export to the file defined in paramters.
+        Main entry: start the export to the file defined in parameters.
         Airfoils will also be copied into the xflr5 directory
         """
 
@@ -639,7 +639,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
         pathFileName = os.path.join (self.export_dir_abs, self.flz_filename)
 
-        # set paramter of export
+        # set parameter of export
         Exporter_FLZ.PROFIL.use_nick_name = self.exporter_airfoils.use_nick_name
 
         # let FLUGZEUG write to stream all the data 
@@ -718,7 +718,7 @@ class Exporter_FLZ (Exporter_Abstract):
         def __init__(self, *args):
             super().__init__(*args)
 
-            # build the flz datstructure tree
+            # build the flz data structure tree
             self.flaeche        = Exporter_FLZ.FLAECHE (*args, index=0)
             self.schalter       = Exporter_FLZ.SCHALTER()
             self.einstellungen  = Exporter_FLZ.EINSTELLUNGEN()

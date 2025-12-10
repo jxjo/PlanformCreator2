@@ -27,7 +27,7 @@ import sys
 import argparse
 import logging
 
-from PyQt6.QtCore           import pyqtSignal, QMargins, Qt
+from PyQt6.QtCore           import QMargins, Qt
 from PyQt6.QtWidgets        import QApplication, QMainWindow, QWidget 
 from PyQt6.QtWidgets        import QGridLayout
 from PyQt6.QtGui            import QCloseEvent, QGuiApplication, QIcon
@@ -58,7 +58,7 @@ from .ui.pc2_diagrams        import (Diagram_Wing, Diagram_Planform, Diagram_Air
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 #-------------------------------------------------------------------------------

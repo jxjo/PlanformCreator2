@@ -12,7 +12,7 @@ from pathlib import Path
 # subdirectory for resources in PyInstaller frozen executable onedir mode
 FROZEN_RESOURCES_SUBDIR   = '_internal/planformcreator2'
 
-# directory for xo2 examples relative to resources directory
+# directory for templates relative to resources directory
 TEMPLATES_DIR             = "templates"
 
 
@@ -46,7 +46,7 @@ def get_resource_path(resource_type: str, *path_parts: str) -> Path:
     Works for pip packages, dev mode and PyInstaller executables.
     
     Args:
-        resource_type: 'icons', 'templates', or 'examples'
+        resource_type: 'icons', 'templates'
         *path_parts: Additional path components (e.g., 'PC2.ico')
     
     Returns:
@@ -54,14 +54,13 @@ def get_resource_path(resource_type: str, *path_parts: str) -> Path:
         
     Examples:
         >>> get_resource_path('icons', 'PC2.ico')
-        >>> get_resource_path('examples', 'VJX.glide', 'VJX.glide.pc2')
     """
     if _is_frozen():
         # PyInstaller: resources are in _internal directory
         base = _get_resources_dir_pyinstaller()
     else:
         # Pip package: resources are at project root level
-        # (icons/, templates/, examples/ next to planformcreator2/)
+        # (icons/, templates/ next to planformcreator2/)
         base = _get_resources_dir_pip()
 
         if not (base / resource_type).exists():
@@ -92,11 +91,6 @@ def get_icons_path() -> Path:
 def get_template_dir() -> Path:
     """Get the templates directory path."""
     return get_resource_path('templates')
-
-
-def get_examples_dir() -> Path:
-    """Get the examples directory path."""
-    return get_resource_path('examples')
 
 
 def get_assets_dir() -> Path:
