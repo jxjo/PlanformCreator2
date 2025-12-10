@@ -11,7 +11,11 @@ test/*
 test_VLM/*
 *.xlsx
 *_tmp
-*_tmp/*
+*_temp
+*_dxf
+*_xflr5
+*_flz
+*_exported
 images/~*.pptx					# tmp ppt 
 doc/rcn
 

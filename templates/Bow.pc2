@@ -23,11 +23,7 @@
       1.0,
       0.371219,
       0.134876174
-    ],
-    "p1x":0.797466,
-    "p1y":1.0,
-    "p2y":0.371219,
-    "p3y":0.134876
+    ]
   },
   "chord_reference":{
     "p0y":0.75,
@@ -51,8 +47,7 @@
     {
       "xn":0.0,
       "hinge_cn":0.75,
-      "flap_group":1,
-      "airfoil":"Root_Example.dat"
+      "flap_group":1
     },
     {
       "xn":0.3125,
@@ -87,8 +82,7 @@
     {
       "xn":1.0,
       "hinge_cn":0.7,
-      "flap_group":2,
-      "airfoil":"Tip_Example.dat"
+      "flap_group":2
     }
   ],
   "flaps":{

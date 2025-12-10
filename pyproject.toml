@@ -1,0 +1,64 @@
+# see PyPI_how_to.docx <"dingens">26 
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[project]
+name = "planformcreator2"
+dynamic = ["version"]               
+authors = [{ name="Jochen Guenzel", email="jochen@jxjo.de" }]
+description = "Design a wing planform"
+readme = "doc/README_PyPi.md"
+requires-python = ">=3.12"
+dependencies = [
+  "numpy~=2.2.0",
+  "packaging>=24.0",
+  "pyqt6>=6.9.1",
+  "pyqtgraph>=0.13.7",
+  "ezdxf>=1.4.0",
+  "airfoileditor>=4.2.2"
+]
+classifiers = [
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Intended Audience :: End Users/Desktop"
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/jxjo/PlanformCreator2"
+Issues = "https://github.com/jxjo/PlanformCreator2/issues"
+
+[project.gui-scripts]
+planformcreator2 = "planformcreator2.app:start"
+
+[tool.hatch.version]
+path = "planformcreator2/app.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["planformcreator2"]
+only-include = [
+  "planformcreator2", 
+  "icons",
+  "templates",
+]
+
+[tool.hatch.build.targets.wheel.sources]
+"icons" = "planformcreator2/icons"
+"templates" = "planformcreator2/templates"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "doc",
+]
+include = [
+  "planformcreator2",
+  "icons",
+  "templates",
+  "README.md",
+  "LICENSE"
+]
