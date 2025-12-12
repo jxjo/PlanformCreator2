@@ -15,7 +15,7 @@ requires-python = ">=3.12"
 dependencies = [
   "numpy~=2.2.0",
   "packaging>=24.0",
-  "pyqt6>=6.9.1",
+  "pyqt6>=6.10.1",
   "pyqtgraph>=0.13.7",
   "ezdxf>=1.4.0",
   "airfoileditor>=4.2.2"
