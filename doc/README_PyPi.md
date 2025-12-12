@@ -15,7 +15,7 @@
 * Export planform as dxf file for use in CAD
 
 #### Airfoils and Polars
-* Define airfoil at wing sections and edit its properties using the [Airfoil Editor](https://github.com/jxjo/AirfoilEditor)
+* Define airfoil at wing sections and edit its properties using the [AirfoilEditor](https://github.com/jxjo/AirfoilEditor)
 * Generate blended airfoils for intermediate wing sections ('strak')
 * View polars of the airfoil based on xfoil polar generation
 
