@@ -343,15 +343,11 @@ If there is warning message like "Failed to create wl_display" when starting the
 
 ### Cloning from Github
 
-If you want to clone the AirfoilEditor repo from GitHub for local development, the following package have to be installed in your (virtual) python environment 
+If you want to clone the PlanformCreator2 repo from GitHub for local development, the following package have to be installed in your (virtual) python environment 
 
 ```
-pip install packaging
-pip install numpy
-pip install pyqt6
-pip install pyqtgraph 
-pip install ezdxf
 pip install airfoileditor
+pip install ezdxf
 ```
 
 ### Changelog
