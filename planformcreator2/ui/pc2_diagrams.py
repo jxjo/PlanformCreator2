@@ -29,7 +29,7 @@ from ..model.VLM_wing   import VLM_OpPoint, OpPoint_Var, VLM_Wing
 
 from .pc2_artists       import *
 from .pc2_dialogs       import (Dialog_Edit_Image, Dialog_Edit_Paneling, Dialog_Export_Xflr5,
-                                Dialog_Export_FLZ, Dialog_Export_Airfoil, Dialog_Export_Dxf)
+                                Dialog_Export_FLZ, Dialog_Export_CSV, Dialog_Export_Airfoil, Dialog_Export_Dxf)
 
 from ..app_model        import App_Model
 
@@ -2462,13 +2462,15 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             Button      (l,r,c, text="Export Xflr5", width=100, set=self.export_xflr5)
-            r += 1
-            Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz)         
             c += 1
+            Button      (l,r,c, text="Export Csv", width=100, set=self.export_csv)
+            r += 1
+            c = 0
+            Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz)         
             SpaceC (l,c, width=20, stretch=0)
             c += 1
-            Button      (l,r,c, text="Launch FLZ", width=80, set=self.launch_flz,
-                                hide= not os.name == 'nt')                                  # only Windows, Linux requires some extra investigations
+            Button      (l,r,c, text="Launch FLZ", width=100, set=self.launch_flz,hide= not os.name == 'nt')                                 # only Windows, Linux requires some extra investigations
+            
             l.setColumnStretch (3,2)
 
             self._export_panel = Edit_Panel (title="Export", layout=l, 
@@ -2481,6 +2483,13 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
 
     @override
+    def on_wingSection_changed (self):
+        """ slot to handle changed wing section data"""
+
+        # overridden to ensure new strak (-> airfoil polar) when wingSection changed 
+        if self.isVisible():
+            self.wing.planform.wingSections.do_strak()
+            super().refresh(also_viewRange=False)
     def on_wingSection_changed (self):
         """ slot to handle changed wing section data"""
 
@@ -2507,15 +2516,19 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
         """ export wing to xflr5"""
 
         dialog = Dialog_Export_Xflr5 (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
-        dialog.exec()     
-
+        dialog.exec()   
 
     def export_flz (self): 
         """ export wing to flz"""
 
         dialog = Dialog_Export_FLZ (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
-        dialog.exec()     
+        dialog.exec() 
+    
+    def export_csv (self):
+        """ export wing to csv file"""
 
+        dialog = Dialog_Export_CSV (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
+        dialog.exec() 
 
     def launch_flz (self): 
         """ export wing to FLZ and launch """
