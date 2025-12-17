@@ -2463,13 +2463,12 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             r,c = 0, 0
             Button      (l,r,c, text="Export Xflr5", width=100, set=self.export_xflr5)
             r += 1
-            Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz,
-                                hide= not os.name == 'nt')                                  # only Windows
+            Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz)         
             c += 1
             SpaceC (l,c, width=20, stretch=0)
             c += 1
             Button      (l,r,c, text="Launch FLZ", width=80, set=self.launch_flz,
-                                hide= not os.name == 'nt')                                  # only Windows
+                                hide= not os.name == 'nt')                                  # only Windows, Linux requires some extra investigations
             l.setColumnStretch (3,2)
 
             self._export_panel = Edit_Panel (title="Export", layout=l, 
