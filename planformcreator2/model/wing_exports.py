@@ -1029,7 +1029,7 @@ class Exporter_Csv(Exporter_Abstract):
             csv_writer = csv.writer (csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
             # write header 
-            csv_writer.writerow (["xn", "x", "c", "le_y", "te_y", "twist_deg", "flap_cn", "flap_group", "airfoil_file"])
+            csv_writer.writerow (["xn", "x", "c", "le_y", "te_y", "flap_cn", "flap_group", "airfoil_file"])
 
             # write data for each section 
             for section in self.planform.wingSections.without_for_panels:
