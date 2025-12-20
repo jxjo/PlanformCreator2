@@ -1849,6 +1849,8 @@ class Diagram_Planform (Diagram_Abstract):
             r,c = 0, 0
             Button  (l,r,c, text="Export Dxf", width=100, set=self.export_dxf)
             l.setColumnStretch (2,2)
+            c += 1
+            Button      (l,r,c, text="Export Csv", width=100, set=self.export_csv)
 
             self._export_panel = Edit_Panel (title="Export", layout=l,  
                                              auto_height=True, main_margins = (10, 5,10, 10),
@@ -1862,7 +1864,11 @@ class Diagram_Planform (Diagram_Abstract):
         dialog = Dialog_Export_Dxf (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
         dialog.exec()     
 
+    def export_csv (self):
+        """ export wing to csv file"""
 
+        dialog = Dialog_Export_CSV (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
+        dialog.exec() 
 
     def _open_planform_ref_pc2 (self):
         """ open reference pc2 file """
@@ -2462,10 +2468,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             Button      (l,r,c, text="Export Xflr5", width=100, set=self.export_xflr5)
-            c += 1
-            Button      (l,r,c, text="Export Csv", width=100, set=self.export_csv)
             r += 1
-            c = 0
             Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz)         
             SpaceC (l,c, width=20, stretch=0)
             c += 1
@@ -2490,9 +2493,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
         if self.isVisible():
             self.wing.planform.wingSections.do_strak()
             super().refresh(also_viewRange=False)
-    def on_wingSection_changed (self):
-        """ slot to handle changed wing section data"""
-
+   
         # overridden to ensure new strak (-> airfoil polar) when wingSection changed 
         if self.isVisible():
             self.wing.planform.wingSections.do_strak()
@@ -2524,11 +2525,6 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
         dialog = Dialog_Export_FLZ (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
         dialog.exec() 
     
-    def export_csv (self):
-        """ export wing to csv file"""
-
-        dialog = Dialog_Export_CSV (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
-        dialog.exec() 
 
     def launch_flz (self): 
         """ export wing to FLZ and launch """

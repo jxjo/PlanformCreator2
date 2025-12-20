@@ -533,8 +533,8 @@ class Dialog_Export_CSV (Dialog):
         super().__init__ ( *args, **kwargs)
 
         # connect dialog buttons
-        self._cancel_btn.clicked.connect  (self.close)
-        self._export_btn.clicked.connect (self._export_csv)
+        self._cancel_btn.clicked.connect (self.close)
+        self._export_btn.clicked.connect (self._exporter_csv)
 
 
     @property
@@ -548,7 +548,15 @@ class Dialog_Export_CSV (Dialog):
         r = 0 
         Label  (l,r,0, colSpan=5, style=style.COMMENT, height=40,
                 get="The paneled planform will be exported to a CSV file.")
+
         r += 1
+        SpaceR (l, r, height=5, stretch=0) 
+        r += 1 
+        Field  (l,r,0, width=250, colSpan=2, lab= "To Directory", get=lambda:self.exporter_csv.export_dir)
+        Button (l,r,4, width=70, text= "Select", set=self._select_directory)
+        r += 1
+        SpaceR   (l, r, stretch=0, height=10) 
+        
         l.setRowStretch (r,1)
         l.setColumnMinimumWidth (0,80)
         l.setColumnStretch (1,1)
@@ -557,15 +565,23 @@ class Dialog_Export_CSV (Dialog):
 
         return l
 
+    def _select_directory (self):
+        """ select directory for export"""
 
-    def _export_csv (self, *_):
+        directory = QFileDialog.getExistingDirectory(self, caption="Select Export Directory", directory=self.wing.workingDir)
+
+        if directory: 
+            self.exporter_csv.set_export_dir (directory)                    
+            self.refresh()
+
+    def _exporter_csv (self, *_):
         """ do export csv"""
 
         self.wing.exporter_csv.do_it ()
 
         self.close()
 
-        msg = f"Paneled Planform exported as {self.wing.exporter_csv.csv_filename}"
+        msg = f"Planform exported as {self.wing.exporter_csv.csv_filename}"
         MessageBox.success (self,"Export CSV", msg)
 
 

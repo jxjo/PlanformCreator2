@@ -142,6 +142,7 @@ class Wing:
         self._exporter_xflr5        = None 
         self._exporter_flz          = None 
         self._exporter_dxf          = None 
+        self._exporter_csv          = None 
 
         # wing for VLM aero calculation    
 
@@ -206,6 +207,8 @@ class Wing:
             p.set ("airfoils_export", self._exporter_airfoils._as_dict()) 
         if self._exporter_dxf:
             p.set ("dxf", self._exporter_dxf._as_dict()) 
+        if self._exporter_csv:
+            p.set ("csv", self._exporter_csv._as_dict()) 
 
         return p
 
@@ -556,6 +559,15 @@ class Wing:
             self._exporter_dxf = Exporter_Dxf(self, dxf_dict) 
         return self._exporter_dxf     
 
+    @property
+    def exporter_csv (self): 
+        """ returns class managing Csv export """
+        from .wing_exports       import Exporter_Csv               # here - otherwise circular errors
+
+        if self._exporter_csv is None:                            # init exporter with parameters in sub dictionary       
+            csv_dict         = fromDict (self._parms, "csv", "")
+            self._exporter_csv = Exporter_Csv(self, csv_dict) 
+        return self._exporter_csv     
 
     @property
     def exporter_airfoils (self): 
