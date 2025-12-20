@@ -12,6 +12,7 @@ import os, re
 import io
 import numpy as np
 import shutil
+import csv                                                      # csv writing
 from pathlib                import Path
 
 from copy                   import deepcopy
@@ -986,7 +987,62 @@ class Exporter_FLZ (Exporter_Abstract):
             self._write (aStream, "SPLITTERPOS=%s"             % "1400")
             self._write (aStream, self.end_tag)
 
+class Exporter_Csv(Exporter_Abstract):
+    """ 
 
+    Handle export of the planform to csv 
+
+    """
+
+    EXPORT_DIR_SUFFIX = "_csv"
+
+    def __init__(self, wing : Wing, dataDict: dict = None):
+        super().__init__(wing, dataDict=dataDict)
+ 
+
+    def _as_dict (self) -> dict:
+        """ returns a data dict with the paramters of self"""
+
+        d = {}
+        toDict (d, "export_dir",        self._export_dir) 
+        d.update(self.exporter_airfoils._as_dict())
+        return d
+
+
+    @property
+    def csv_filename(self): 
+        return self._wing.parm_fileName_stem + '_wing.csv'
+
+
+    def do_it (self): 
+        """ 
+        main entry: start the export to the file defined in self parameters.
+        Returns a message string what was done 
+        """
+
+        self._ensure_export_dir()
+
+        # plot the different parts in a csv document 
+
+        csv_pathFileName = os.path.join (self.export_dir_abs, self.csv_filename)
+
+        with open (csv_pathFileName, mode='w', newline='') as csvfile:
+            csv_writer = csv.writer (csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+            # write header 
+            csv_writer.writerow (["xn", "x", "c", "le_y", "te_y", "flap_cn", "flap_group", "airfoil_file"])
+            # write data for each section 
+            for section in self.planform.wingSections.without_for_panels:
+                le_y, te_y = section.le_te()
+                csv_writer.writerow ([f"{section.xn:.4f}", f"{section.x:.2f}", f"{section.c:.2f}", 
+                                      f"{le_y:.2f}", f"{te_y:.2f}", #f"{section.twist:.2f}", 
+                                      f"{section.flap_cn:.4f}", f"{section.flap_group}", 
+                                      f"{section.airfoil.fileName}"])
+
+
+        logger.info ("CSV file " + self.csv_filename + " written to " + self.export_dir_abs) 
+
+        return
 
 class Exporter_Dxf (Exporter_Abstract):
     """ 

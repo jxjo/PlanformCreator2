@@ -515,7 +515,97 @@ class Dialog_Export_FLZ (Dialog):
 
         return buttonBox 
     
+class Dialog_Export_CSV (Dialog):
+    """ 
+    Dialog to export paneled planform to CSV file
+    """
 
+    _width  = 460
+    _height = 200
+
+    name = "Export Paneled Planform as CSV File"
+
+    def __init__ (self, *args, **kwargs): 
+
+        self._export_btn : QPushButton = None
+        self._cancel_btn : QPushButton = None 
+
+        super().__init__ ( *args, **kwargs)
+
+        # connect dialog buttons
+        self._cancel_btn.clicked.connect (self.close)
+        self._export_btn.clicked.connect (self._exporter_csv)
+
+
+    @property
+    def wing (self) -> Wing:
+        return self.dataObject
+    
+
+    def _init_layout(self) -> QLayout:
+
+        l = QGridLayout()
+        r = 0 
+        Label  (l,r,0, colSpan=5, style=style.COMMENT, height=40,
+                get="The paneled planform will be exported to a CSV file.")
+
+        r += 1
+        SpaceR (l, r, height=5, stretch=0) 
+        r += 1 
+        Field  (l,r,0, width=250, colSpan=2, lab= "To Directory", get=lambda:self.exporter_csv.export_dir)
+        Button (l,r,4, width=70, text= "Select", set=self._select_directory)
+        r += 1
+        SpaceR   (l, r, stretch=0, height=10) 
+        
+        l.setRowStretch (r,1)
+        l.setColumnMinimumWidth (0,80)
+        l.setColumnStretch (1,1)
+        l.setColumnStretch (3,1)
+        l.setColumnStretch (5,2)
+
+        return l
+
+    def _select_directory (self):
+        """ select directory for export"""
+
+        directory = QFileDialog.getExistingDirectory(self, caption="Select Export Directory", directory=self.wing.workingDir)
+
+        if directory: 
+            self.exporter_csv.set_export_dir (directory)                    
+            self.refresh()
+
+    def _exporter_csv (self, *_):
+        """ do export csv"""
+
+        self.wing.exporter_csv.do_it ()
+
+        self.close()
+
+        msg = f"Planform exported as {self.wing.exporter_csv.csv_filename}"
+        MessageBox.success (self,"Export CSV", msg)
+
+
+    @override
+    def _on_widget_changed (self):
+        """ slot a input field changed"""
+        self.refresh()
+
+
+    @override
+    def _button_box (self):
+        """ returns the QButtonBox with the buttons of self"""
+
+        buttons = QDialogButtonBox.StandardButton.Cancel
+        buttonBox = QDialogButtonBox(buttons)
+
+        self._cancel_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
+
+        self._export_btn = QPushButton ("&Export", parent=self)
+        self._export_btn.setFixedWidth (80)
+
+        buttonBox.addButton (self._export_btn, QDialogButtonBox.ButtonRole.ActionRole)
+
+        return buttonBox
 
 class Dialog_Rename (Dialog):
     """ 
