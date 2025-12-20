@@ -552,22 +552,24 @@ class Wing:
     @property
     def exporter_dxf (self): 
         """ returns class managing Dxf export """
-        from .wing_exports       import Exporter_Dxf               # here - otherwise circular errors
+        from .wing_exports       import Exporter_DXF               # here - otherwise circular errors
 
         if self._exporter_dxf is None:                            # init exporter with parameters in sub dictionary       
             dxf_dict         = fromDict (self._parms, "dxf", "")
-            self._exporter_dxf = Exporter_Dxf(self, dxf_dict) 
+            self._exporter_dxf = Exporter_DXF(self, dxf_dict) 
         return self._exporter_dxf     
+
 
     @property
     def exporter_csv (self): 
         """ returns class managing Csv export """
-        from .wing_exports       import Exporter_Csv               # here - otherwise circular errors
+        from .wing_exports       import Exporter_CSV               # here - otherwise circular errors
 
         if self._exporter_csv is None:                            # init exporter with parameters in sub dictionary       
             csv_dict         = fromDict (self._parms, "csv", "")
-            self._exporter_csv = Exporter_Csv(self, csv_dict) 
+            self._exporter_csv = Exporter_CSV(self, csv_dict) 
         return self._exporter_csv     
+
 
     @property
     def exporter_airfoils (self): 

@@ -21,7 +21,8 @@ from airfoileditor.base.diagram         import Diagram, Diagram_Item
 from airfoileditor.base.artist          import Artist
 
 from ..model.wing                       import Wing, Planform, Image_Definition, Planform_Paneled, WingSections
-from ..model.wing_exports               import Exporter_Airfoils, Exporter_Dxf, Exporter_Xflr5, Exporter_FLZ
+from ..model.wing_exports               import (Exporter_Airfoils, Exporter_DXF, Exporter_Xflr5, 
+                                                Exporter_FLZ, Exporter_CSV)
 
 from .pc2_artists                       import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
 
@@ -147,7 +148,7 @@ class Dialog_Export_Airfoil (Dialog):
 
 
 
-class Dialog_Export_Dxf (Dialog):
+class Dialog_Export_DXF (Dialog):
     """ 
     Dialog to export dxf including airfoils to a subdirectory
     """
@@ -174,7 +175,7 @@ class Dialog_Export_Dxf (Dialog):
         return self.dataObject
     
     @property
-    def exporter_dxf (self) -> Exporter_Dxf:
+    def exporter_dxf (self) -> Exporter_DXF:
         """ the model dxf exporter"""
         return self.wing.exporter_dxf
 
@@ -197,12 +198,12 @@ class Dialog_Export_Dxf (Dialog):
         Button (l,r,4, width=70, text= "Select", set=self._select_directory)
         r += 1
         CheckBox (l,r,1, colSpan=2, text= "Clear directory before export",
-                  obj=self.exporter_dxf, prop=Exporter_Dxf.clear_export_dir)
+                  obj=self.exporter_dxf, prop=Exporter_DXF.clear_export_dir)
         r += 1
         SpaceR (l, r, stretch=0, height=10) 
         r += 1
         CheckBox (l,r,0, colSpan=3, text= "Export airfoils as well into this directory",
-                  obj=self.exporter_dxf, prop=Exporter_Dxf.export_airfoils)
+                  obj=self.exporter_dxf, prop=Exporter_DXF.export_airfoils)
         r += 1
         CheckBox (l,r,0, colSpan=3, text= "Use airfoils nick name",
                   obj=self.exporter_airfoils, prop=Exporter_Airfoils.use_nick_name)
@@ -514,16 +515,18 @@ class Dialog_Export_FLZ (Dialog):
         buttonBox.addButton (self._export_btn, QDialogButtonBox.ButtonRole.ActionRole)
 
         return buttonBox 
-    
+
+
+
 class Dialog_Export_CSV (Dialog):
     """ 
     Dialog to export paneled planform to CSV file
     """
 
     _width  = 460
-    _height = 200
+    _height = 180
 
-    name = "Export Paneled Planform as CSV File"
+    name = "Export Planform as CSV File"
 
     def __init__ (self, *args, **kwargs): 
 
@@ -540,14 +543,20 @@ class Dialog_Export_CSV (Dialog):
     @property
     def wing (self) -> Wing:
         return self.dataObject
+
     
+    @property
+    def exporter_csv (self) -> Exporter_CSV:
+        """ the model csv exporter"""
+        return self.wing.exporter_csv
+
 
     def _init_layout(self) -> QLayout:
 
         l = QGridLayout()
         r = 0 
         Label  (l,r,0, colSpan=5, style=style.COMMENT, height=40,
-                get="The paneled planform will be exported to a CSV file.")
+                get="The wing sections of the planform will be exported to a CSV file.")
 
         r += 1
         SpaceR (l, r, height=5, stretch=0) 
@@ -606,6 +615,8 @@ class Dialog_Export_CSV (Dialog):
         buttonBox.addButton (self._export_btn, QDialogButtonBox.ButtonRole.ActionRole)
 
         return buttonBox
+
+
 
 class Dialog_Rename (Dialog):
     """ 

@@ -987,11 +987,11 @@ class Exporter_FLZ (Exporter_Abstract):
             self._write (aStream, "SPLITTERPOS=%s"             % "1400")
             self._write (aStream, self.end_tag)
 
-class Exporter_Csv(Exporter_Abstract):
+
+
+class Exporter_CSV (Exporter_Abstract):
     """ 
-
-    Handle export of the planform to csv 
-
+    Handle export of the planform (wing sections) to csv file
     """
 
     EXPORT_DIR_SUFFIX = "_csv"
@@ -1035,7 +1035,7 @@ class Exporter_Csv(Exporter_Abstract):
             for section in self.planform.wingSections.without_for_panels:
                 le_y, te_y = section.le_te()
                 csv_writer.writerow ([f"{section.xn:.4f}", f"{section.x:.2f}", f"{section.c:.2f}", 
-                                      f"{le_y:.2f}", f"{te_y:.2f}", #f"{section.twist:.2f}", 
+                                      f"{le_y:.2f}", f"{te_y:.2f}", 
                                       f"{section.flap_cn:.4f}", f"{section.flap_group}", 
                                       f"{section.airfoil.fileName}"])
 
@@ -1044,7 +1044,9 @@ class Exporter_Csv(Exporter_Abstract):
 
         return
 
-class Exporter_Dxf (Exporter_Abstract):
+
+
+class Exporter_DXF (Exporter_Abstract):
     """ 
 
     Handle export of the planform and airfoils to dxf 
