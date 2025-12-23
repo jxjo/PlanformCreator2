@@ -932,6 +932,12 @@ class Item_Wing (Item_Abstract):
 
     name = "View Wing"                                          # used for link and section header 
 
+    def __init__(self, *args, **kwargs):
+
+        self._show_full_wing = True
+
+        super().__init__(*args, **kwargs)
+
 
     @override
     def plot_title(self, **kwargs):
@@ -957,11 +963,12 @@ class Item_Wing (Item_Abstract):
         self._add_artist (Airfoil_Name_Artist   (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
         self._add_artist (Neutral_Point_Artist  (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
 
-        self._add_artist (Planform_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT, as_contour=True))
-        self._add_artist (Ref_Line_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT))
-        self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.WING_LEFT))
-        self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
-        self._add_artist (Neutral_Point_Artist  (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
+        if self.show_full_wing:
+            self._add_artist (Planform_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT, as_contour=True))
+            self._add_artist (Ref_Line_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT))
+            self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.WING_LEFT))
+            self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
+            self._add_artist (Neutral_Point_Artist  (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
 
         # switch off mouse helper 
 
@@ -982,6 +989,27 @@ class Item_Wing (Item_Abstract):
         self.showGrid(x=False, y=False)
         self.showAxis('left', show=False)
         self.showAxis('bottom', show=True)
+
+    @property
+    def show_full_wing (self) -> bool:
+        return self._show_full_wing
+    
+    def set_show_full_wing (self, aBool : bool):
+        self._show_full_wing = aBool
+
+        # switch off existing artists
+        for artist in self._artists:
+            artist.set_show (False)
+
+        # rebuild artists with new mode
+        self._artists.clear()
+        if self.scene():
+            try:                            # remove any connected scene mouse clickedsignals 
+                self.scene().sigMouseClicked.disconnect ()
+            except:
+                pass
+        self.setup_artists()
+        self.refresh()
 
 
     @property
@@ -1043,6 +1071,8 @@ class Item_Wing (Item_Abstract):
         if self._section_panel is None:    
             l = QGridLayout()
             r,c = 0, 0 
+            CheckBox (l,r,c, text="Full Wing", colSpan=2, 
+                        get=lambda: self.show_full_wing, set=self.set_show_full_wing) 
             r += 1
             CheckBox (l,r,c, text="Reference Line", colSpan=2, 
                         get=lambda: self.show_ref_line,
