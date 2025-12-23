@@ -784,7 +784,8 @@ class Wing:
                 if self.background_image.pathFilename:
                     image_pathFileName     = self.background_image.pathFilename_abs
                     new_image_pathFileName = os.path.join(target_dir,   self.background_image.pathFilename)
-                    shutil.copy2(image_pathFileName, new_image_pathFileName)
+                    if not os.path.samefile(image_pathFileName, new_image_pathFileName):
+                        shutil.copy2(image_pathFileName, new_image_pathFileName)
                     self._background_image = None                       # reset to reload from new location
 
                 # set the current working Dir to the dir of the new saved parameter file            
