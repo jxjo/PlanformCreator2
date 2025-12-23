@@ -670,6 +670,10 @@ class Wing:
         if not os.path.isabs (newDir):
             newDir = os.path.join (self.workingDir, newDir)
 
+        if os.path.samefile(self.airfoils_dir, newDir):
+            # same dir - nothing to do 
+            return True 
+
         try:
             if os.path.isdir (newDir):
                 shutil.rmtree(newDir, ignore_errors=True)
@@ -1675,6 +1679,10 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
 
         super().__init__ ()
 
+    @property
+    def parent_planform (self) -> 'Planform':
+        """ parent planform self belongs to """ 
+        return self._parent_planform
 
     @property
     def cn_tip_min (self) -> float | None: 
@@ -1682,8 +1690,8 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
 
         if self._cn_tip_min is not None: 
             # wing sections can change during lifetime - so dynamic check 
-            cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
-            cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
+            cn_min = self.parent_planform.wingSections[-1].cn                 # cn of tip 
+            cn_max = self.parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
             self._cn_tip_min = clip (self._cn_tip_min, cn_min, cn_max)
             return round (self._cn_tip_min,2)                                  # calc of cn may have numerical issues 
         else: 
@@ -1693,10 +1701,10 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         """ set minimum - it can't be smaller than parent tip section cn"""
 
         if aVal == 0.0:
-            self._cn_tip_min = round(self._parent_planform.wingSections[-1].cn + 0.005,2)     # round up
+            self._cn_tip_min = round(self.parent_planform.wingSections[-1].cn + 0.005,2)     # round up
         elif aVal is not None:
-            cn_min = self._parent_planform.wingSections[-1].cn                 # cn of tip 
-            cn_max = self._parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
+            cn_min = self.parent_planform.wingSections[-1].cn                 # cn of tip 
+            cn_max = self.parent_planform.wingSections[1].cn                  # cn of 2nd section to ensure at least 2 sections
             self._cn_tip_min = clip (aVal, cn_min, cn_max)
         else: 
             self._cn_tip_min = None
@@ -1716,7 +1724,7 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
 
         xn, cn = [], []
         section : WingSection
-        for section in self._parent_planform.wingSections:
+        for section in self.parent_planform.wingSections:
             if self.cn_tip_min is None or  (round(section.cn,3) >= self.cn_tip_min) :
                 xn.append(section.xn)
                 cn.append(section.cn)
@@ -1730,7 +1738,7 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         """
 
         xn_arr, cn_arr = [], []
-        for section in self._parent_planform.wingSections:
+        for section in self.parent_planform.wingSections:
             xn_arr.append(section.xn)
             cn_arr.append(section.cn)
 
@@ -4181,7 +4189,6 @@ class Planform_Paneled (Planform):
 
 
         self._wing = wing
-        self._parent_planform = wing.planform
 
         self._span        = None                                        # will take it from parent 
         self._chord_root  = None
@@ -4190,14 +4197,14 @@ class Planform_Paneled (Planform):
 
         # create Norm_Chord distribution based on parent planform 
 
-        self._n_distrib     = N_Distrib_Paneled (self._parent_planform)
+        self._n_distrib     = N_Distrib_Paneled (self.parent_planform)
 
         # main objects from parent
 
-        self._n_chord_ref   = self._parent_planform.n_chord_ref 
-        self._n_ref_line    = self._parent_planform.n_ref_line 
-        self._wingSections  = self._parent_planform.wingSections
-        self._flaps         = self._parent_planform.flaps
+        self._n_chord_ref   = self.parent_planform.n_chord_ref 
+        self._n_ref_line    = self.parent_planform.n_ref_line 
+        self._wingSections  = self.parent_planform.wingSections
+        self._flaps         = self.parent_planform.flaps
 
         # get panel parameters - x,y are in wing coordinate system (wy is along span)
 
@@ -4256,20 +4263,25 @@ class Planform_Paneled (Planform):
 
     # ---Properties --------------------- 
 
+    @property
+    def parent_planform (self) -> Planform:
+        """ parent planform which is paneled"""
+        return self.wing.planform
+
     @override
     @property
     def span (self) -> float:
-        return self._parent_planform.span 
+        return self.parent_planform.span 
 
     @override
     @property
     def chord_root (self) -> float:
-        return self._parent_planform.chord_root
+        return self.parent_planform.chord_root
 
     @override
     @property
     def sweep_angle (self) -> float:
-        return self._parent_planform.sweep_angle
+        return self.parent_planform.sweep_angle
 
 
     def wingSections_reduced (self) -> list[WingSection]:
@@ -4342,7 +4354,7 @@ class Planform_Paneled (Planform):
 
         cn_diff = 0.0
         for xi in self.x_stations():
-            c_diff   = self._parent_planform.c_at (xi) - self.c_at (xi)
+            c_diff   = self.parent_planform.c_at (xi) - self.c_at (xi)
             cn_diff = max ((c_diff/self.chord_root), cn_diff)               
         return cn_diff 
     
@@ -4457,7 +4469,7 @@ class Planform_Paneled (Planform):
 
             width_min_cur = min (width_min_cur, np.mean (panel_widths))
 
-        x_stations = np.round (xn_stations * self._parent_planform.span, 6)
+        x_stations = np.round (xn_stations * self.parent_planform.span, 6)
 
         return x_stations , width_min_cur
 
@@ -4496,14 +4508,14 @@ class Planform_Paneled (Planform):
 
             # actual chords at station 
             c_panel  = self.c_at (xi)
-            c_parent = self._parent_planform.c_at (xi)
+            c_parent = self.parent_planform.c_at (xi)
             c_diff   = c_parent - c_panel
 
             if c_diff > c_diff_max:
 
                 # get leading and trailing edge of paneled and of parent planform 
                 le_y, te_y = self.le_te_at (xi)
-                le_y_parent, te_y_parent = self._parent_planform.le_te_at (xi)
+                le_y_parent, te_y_parent = self.parent_planform.le_te_at (xi)
                 
                 # line between both at le 
                 line_x, line_y = [xi, xi],  [le_y_parent, le_y]
@@ -4574,7 +4586,7 @@ class Planform_Paneled (Planform):
 
                     xni = (sections[i_sec].xn + sections[i_sec+1].xn) / 2
                     cn_panel  = self._n_distrib.at (xni)
-                    cn_parent = self._parent_planform.n_distrib.at (xni)
+                    cn_parent = self.parent_planform.n_distrib.at (xni)
 
                     if (cn_parent - cn_panel) > self.cn_diff_max:
 

@@ -404,6 +404,11 @@ class App_Model (QObject):
         QTimer.singleShot(0, self.sig_vlm_polar_reset.emit)   # notify after current events processed
 
 
+    def notify_fileName_changed (self):
+        """ notify self that file name has changed """
+        self.sig_new_wing.emit()                                # refresh title etc.
+
+
     @property
     def workingDir_default (self) -> str: 
         """ default working directory """
@@ -417,11 +422,6 @@ class App_Model (QObject):
         else:
             return self.workingDir_default
         
-    @property
-    def settings (self) -> Parameters:
-        """ current loaded settings """
-        return self._settings
-
 
     def close (self):
         """ finish app model """

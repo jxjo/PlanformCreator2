@@ -329,10 +329,11 @@ class Mode_Modify (Mode_Abstract):
         ok = self.wing.save (newPathFilename = newPathFilename)
         if ok:
             self._toast_message (f"Planform saved as {newPathFilename}", toast_style=style.GOOD)
+            self.app_model.notify_fileName_changed()            # refresh title ...
         else:
             MessageBox.error   (self.stacked_panel,"Save Planform", f"<b>{newPathFilename}</b> couldn't be saved", min_height= 60)
 
-            self.app_model.load_wing (newPathFilename)    # reload old wing
+            self.app_model.load_wing (newPathFilename)          # reload old wing
             return
 
 
