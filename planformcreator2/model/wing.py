@@ -464,7 +464,10 @@ class Wing:
         """ wing for VLM aero calculation """
 
         if self._vlm_wing is None: 
- 
+
+            # create new VLM_Wing - new planform_paneled with new wingSections will be created if needed
+            self._vlm_wing = VLM_Wing (self.planform_paneled)
+
             # ensure all wing sections have straked airfoils
             if not self.planform.wingSections.strak_done:
                 self.planform.wingSections.do_strak (geometry_class=GEO_BASIC)
@@ -472,10 +475,8 @@ class Wing:
             # ensure all wingSections have a polar with the current re
             self.planform.wingSections.refresh_polar_sets (ensure=False)
 
-            # create new VLM_Wing
-            self._vlm_wing = VLM_Wing (self.planform_paneled)
-
         return self._vlm_wing
+
 
     def vlm_wing_reset (self):
         """ reset (will init new) VLM wing"""
@@ -2580,7 +2581,8 @@ class WingSections (list [WingSection]):
                 index = self.index (aSection)
                 self.remove (aSection)
 
-                self.reset_strak()
+                if not aSection.is_for_panels:
+                    self.reset_strak()                      # reset strak if "real" wing section is deleted
 
                 return self[index-1] 
             except: 
@@ -4199,13 +4201,6 @@ class Planform_Paneled (Planform):
 
         self._n_distrib     = N_Distrib_Paneled (self.parent_planform)
 
-        # main objects from parent
-
-        self._n_chord_ref   = self.parent_planform.n_chord_ref 
-        self._n_ref_line    = self.parent_planform.n_ref_line 
-        self._wingSections  = self.parent_planform.wingSections
-        self._flaps         = self.parent_planform.flaps
-
         # get panel parameters - x,y are in wing coordinate system (wy is along span)
 
         self._wy_panels      = None                             # number of panels along span
@@ -4270,6 +4265,30 @@ class Planform_Paneled (Planform):
 
     @override
     @property
+    def wingSections (self) -> WingSections:
+        """ wingSections object (list)"""
+        return self.parent_planform.wingSections
+
+    @override
+    @property
+    def n_chord_ref (self) -> N_Chord_Reference:
+        """ normalized chord distribution object """
+        return self.parent_planform.n_chord_ref
+
+    @override
+    @property
+    def n_ref_line (self) -> N_Reference_Line:
+        """ normalized reference line object """
+        return self.parent_planform.n_ref_line
+    
+    @override
+    @property
+    def flaps (self) -> Flaps:
+        """ flaps object which generates flaps"""
+        return self.parent_planform.flaps   
+
+    @override
+    @property
     def span (self) -> float:
         return self.parent_planform.span 
 
@@ -4296,9 +4315,9 @@ class Planform_Paneled (Planform):
 
         # if yes, reduce wing sections 
         if isec_cutted:
-            sections = self._wingSections [:isec_cutted]           
+            sections = self.wingSections [:isec_cutted]           
         else: 
-            sections = self._wingSections
+            sections = self.wingSections
         return sections
 
 
@@ -4480,11 +4499,11 @@ class Planform_Paneled (Planform):
         left_sec_x  = self.wingSections [index].x
 
         # sanity 
-        if index < (len(self._wingSections) - 1):
+        if index < (len(self.wingSections) - 1):
             right_sec_x = self.wingSections [index+1].x
-        elif index == (len(self._wingSections) - 1):
+        elif index == (len(self.wingSections) - 1):
             right_sec_x = left_sec_x
-        if index > (len(self._wingSections) - 1):
+        if index > (len(self.wingSections) - 1):
             raise ValueError (f"Index {index} to get wing section is to high")        
 
         npan = 0 

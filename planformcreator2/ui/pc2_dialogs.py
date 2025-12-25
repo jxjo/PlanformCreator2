@@ -1294,7 +1294,6 @@ class Dialog_Edit_Paneling (Dialog):
         self._reset_btn.clicked.connect  (self._on_reset)
 
         # connect widgets change to signal parent
-        w : Widget
         for w in self.widgets:
             w.sig_changed.connect (self._on_field_changed)
 
@@ -1311,7 +1310,7 @@ class Dialog_Edit_Paneling (Dialog):
     def is_parent_trapezoidal (self) -> bool:
         """ True if parent planform is (already) trapezoidal"""
 
-        return self.planform._parent_planform._n_distrib.isTrapezoidal
+        return self.planform.parent_planform._n_distrib.isTrapezoidal
 
     # -------------------------------------------------------------------
 

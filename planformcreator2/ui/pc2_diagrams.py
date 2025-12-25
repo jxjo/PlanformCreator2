@@ -900,9 +900,6 @@ class Item_VLM_Result (Item_Abstract):
 
 
 
-
-
-
     def _export_polar_opPoint (self):
         """ export a wing polar and current opPoint to csv"""
 

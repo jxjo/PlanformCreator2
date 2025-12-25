@@ -321,12 +321,15 @@ class App_Model (QObject):
             
             if aBool:                                               # try to set to max now  
                 self._cur_vlm_alpha = self._get_vlm_alpha_max ()
-                self.sig_vlm_opPoint_changed.emit()
+            
+            self.sig_vlm_opPoint_changed.emit()
 
     @property
     def cur_vlm_opPoint (self) -> VLM_OpPoint:
         """ current VLM operating point based on alpha """
-        if self.cur_vlm_polar:
+
+        # sanity - airfoils must be straked  - 
+        if self.cur_vlm_polar and self.wing.planform.wingSections.strak_done:
             return self.cur_vlm_polar.opPoint_at (self.cur_vlm_alpha)
         else:
             return None

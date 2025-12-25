@@ -206,9 +206,9 @@ class VLM_Wing:
 
     """
 
-    def __init__ (self, planform ):
+    def __init__ (self, planform_paneled ):
 
-        self._planform = planform                   # Planform_Paneled as base 
+        self._planform_paneled = planform_paneled                   # Planform_Paneled as base 
 
         self._panels_right  = None                  # VLM_Panels of the right wing side 
         self._has_distorted_panels = False          # indicate distored (bad) panels 
@@ -252,7 +252,7 @@ class VLM_Wing:
     @property
     def nx_panels (self) -> int:
         """ number of panels in x direction"""
-        return self._planform.wx_panels
+        return self._planform_paneled.wx_panels
 
     @property
     def ny_panels (self) -> int:
@@ -378,7 +378,7 @@ class VLM_Wing:
         #           x
 
         from .wing   import Planform_Paneled
-        planform : Planform_Paneled = self._planform 
+        planform : Planform_Paneled = self._planform_paneled 
 
         has_distorted_panels = False                                    # are there distorted panels  
 
@@ -648,7 +648,7 @@ class VLM_Polar:
     def _load_airfoil_polars (self):
         """ loads for all wingSections polar of airfoil"""
 
-        from .wing    import WingSection, Planform                          # avoid circular import
+        from .wing    import Planform_Paneled                               # avoid circular import
 
         self._airfoil_polars = {}                                           # reset
         self._error_reason  = []
@@ -657,9 +657,7 @@ class VLM_Polar:
 
         # get airfoil polars for all wingSections
         airfoil_polars = {}
-        planform : Planform = self.vlm_wing._planform
-        planform_paneled = planform.wing.planform_paneled 
-        section  : WingSection
+        planform_paneled : Planform_Paneled = self.vlm_wing._planform_paneled
 
         for section in planform_paneled.wingSections_reduced():
 
@@ -796,7 +794,7 @@ class VLM_Polar:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames, dialect='excel')
 
             writer.writer.writerow(["PlanformCreator2"])
-            writer.writer.writerow([f"Wing Name :", f"{self.vlm_wing._planform.wing.name}"])
+            writer.writer.writerow([f"Wing Name :", f"{self.vlm_wing._planform_paneled.wing.name}"])
             writer.writer.writerow([f"Speed :", f"{self.vtas:.1f}"])
             writer.writer.writerow([ ])
 
@@ -959,7 +957,7 @@ class VLM_OpPoint:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames, dialect='excel')
 
             writer.writer.writerow(["PlanformCreator2"])
-            writer.writer.writerow([f"Wing Name :", f"{self.wing._planform.wing.name}"])
+            writer.writer.writerow([f"Wing Name :", f"{self.wing._planform_paneled.wing.name}"])
             writer.writer.writerow([f"Speed :", f"{self.polar.vtas:.1f}"])
             writer.writer.writerow([f"Alpha :", f"{self.alpha:.1f}"])
             writer.writer.writerow([ ])
