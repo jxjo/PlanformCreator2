@@ -166,8 +166,9 @@ class Item_Abstract (Diagram_Item):
                 artist.sig_planform_changed.connect     (self.app_model.notify_planform_changed) 
                 artist.sig_flaps_changed.connect        (self.app_model.notify_planform_changed) 
                 artist.sig_wingSection_changed.connect  (self.app_model.notify_wingSection_changed) 
-                artist.sig_wingSection_new.connect      (lambda sec :self.app_model.set_cur_wingSection (sec)) 
-                artist.sig_wingSection_selected.connect (lambda sec :self.app_model.set_cur_wingSection (sec))
+                artist.sig_wingSection_new.connect      (self.app_model.create_wingSection_at ) 
+                artist.sig_wingSection_delete.connect   (self.app_model.delete_wingSection) 
+                artist.sig_wingSection_selected.connect (self.app_model.set_cur_wingSection)
 
 
 

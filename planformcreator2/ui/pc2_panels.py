@@ -381,6 +381,14 @@ class Panel_WingSection (Panel_Planform_Abstract):
         for w in self.header_widgets:
             w.refresh (False)
 
+
+    @override
+    def _on_widget_changed (self, widget):
+        """ user changed data in widget"""
+        logger.debug (f"{self} {widget} widget changed wingSection slot")
+        self.app_model.notify_wingSection_changed ()
+
+
     @override
     def refresh (self, **kwargs):
         super().refresh(**kwargs)
@@ -528,14 +536,12 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
     def _delete_wingSection (self):
         """ delete current wingSection"""
-        aSection = self.wingSections.delete (self.wingSection)     
-        self.app_model.set_cur_wingSection (aSection)
+        self.app_model.delete_wingSection (self.wingSection)
 
 
     def _add_wingSection (self):
         """ add wingSection after current"""
-        aSection = self.wingSections.create_after (self.wingSection) 
-        self.app_model.set_cur_wingSection (aSection)    
+        self.app_model.create_wingSection ()
 
 
     def _style_for_xn_fixed (self) -> style:

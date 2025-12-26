@@ -87,7 +87,8 @@ class Abstract_Artist_Planform (Artist):
 
     sig_planform_changed     = pyqtSignal ()                    # planform data changed 
     sig_wingSection_selected = pyqtSignal (WingSection)         # new current wingSection 
-    sig_wingSection_new      = pyqtSignal (WingSection)         # new wingsection inserted 
+    sig_wingSection_new      = pyqtSignal (float)               # create new wingsection at 
+    sig_wingSection_delete   = pyqtSignal (WingSection)         # delete wingsection  
     sig_wingSection_changed  = pyqtSignal ()                    # wingsection data changed 
     sig_flaps_changed        = pyqtSignal ()                    # flaps hinge line changed
 
@@ -1622,9 +1623,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
         if (ev.modifiers() & Qt.KeyboardModifier.ShiftModifier): 
             
-            new_current = self.wingSections.delete (section) 
-            if new_current: 
-                QTimer().singleShot(10, lambda: self.sig_wingSection_new.emit (new_current))
+            QTimer().singleShot(0, lambda: self.sig_wingSection_delete.emit (section))
 
         # alt-click - toggle defines chord  
 
@@ -1632,15 +1631,13 @@ class WingSections_Artist (Abstract_Artist_Planform):
             
             toggled = section.set_defines_cn (not section.defines_cn) 
             if toggled: 
-                QTimer().singleShot(10, lambda: self.sig_wingSection_selected.emit (section))
+                QTimer().singleShot(0, self.sig_wingSection_changed.emit )
 
 
         # normal click - select section 
 
         else: 
-            # callback / emit signal delayed so we leave the scope of Graphics
-            #  -> refresh will delete items ...
-            QTimer().singleShot(10, lambda: self.sig_wingSection_selected.emit (section))     
+            QTimer().singleShot(0, lambda: self.sig_wingSection_selected.emit (section))     
 
 
     def _connect_scene_mouseClick (self): 
@@ -1692,11 +1689,8 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
             pos : pg.Point = viewbox.mapSceneToView(ev.scenePos())
 
-            # create new section  and signal ...
-            section = self.wingSections.create_at (pos.x())
-
-            if section: 
-                QTimer().singleShot(10, lambda: self.sig_wingSection_new.emit (section))     
+            # create new section at position x
+            QTimer().singleShot(0, lambda: self.sig_wingSection_new.emit (pos.x()))     
 
 
 

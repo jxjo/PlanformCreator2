@@ -236,6 +236,36 @@ class App_Model (QObject):
         self.sig_wingSection_selected.emit()
 
 
+    def delete_wingSection (self, aSection : WingSection):
+        """ delete a wing section and set new current wing section """
+
+        new_current = self.wing.planform.wingSections.delete (aSection) 
+        if new_current: 
+            logger.debug (f"{aSection} deleted, new current is {new_current}")
+            self._cur_wingSection = new_current     # silent set 
+            self.notify_wingSection_changed ()
+
+
+    def create_wingSection (self) -> WingSection:
+        """ create and insert a new wing section after current wing section """
+
+        new_section = self.wing.planform.wingSections.create_after (self.cur_wingSection) 
+        if new_section:
+            logger.debug (f"{new_section} created after {self.cur_wingSection}")
+            self._cur_wingSection = new_section     # silent set 
+            self.notify_wingSection_changed ()
+
+
+    def create_wingSection_at (self, pos_x : float) -> WingSection:
+        """ create and insert a new wing section at given x position """
+
+        new_section = self.wing.planform.wingSections.create_at (pos_x) 
+        if new_section:
+            logger.debug (f"{new_section} created at x={pos_x}")
+            self._cur_wingSection = new_section     # silent set 
+            self.notify_wingSection_changed ()
+
+
     # --- VLM -----
 
     @property
@@ -391,8 +421,20 @@ class App_Model (QObject):
 
     def notify_wingSection_changed (self):
         """ notify self that wing section changed """
-        self.sig_wingSection_changed.emit()
-        self.notify_paneling_changed ()
+
+        # recalc paneled planform - helper sections may have changed
+        if self.wing._planform_paneled:
+            self.wing.planform_paneled.optimize()
+
+        if self.wing.planform.chord_defined_by_sections:
+            # if wingSections define planform - do master notify
+            self.notify_planform_changed ()
+            
+        else:
+            # inform diagram
+            self.sig_wingSection_changed.emit()
+            # just handle new paneling
+            self.notify_paneling_changed ()
 
 
     def notify_paneling_changed (self):
