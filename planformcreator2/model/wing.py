@@ -671,7 +671,7 @@ class Wing:
         if not os.path.isabs (newDir):
             newDir = os.path.join (self.workingDir, newDir)
 
-        if os.path.samefile(self.airfoils_dir, newDir):
+        if os.path.isdir(newDir) and os.path.samefile(self.airfoils_dir, newDir):
             # same dir - nothing to do 
             return True 
 

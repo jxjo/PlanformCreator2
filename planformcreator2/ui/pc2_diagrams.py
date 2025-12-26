@@ -1246,7 +1246,7 @@ class Item_Airfoils (Item_Abstract):
     def setup_artists (self):
         """ create and setup the artists of self"""
 
-        self._add_artist (Airfoil_Artist    (self, self.planform, show_legend=True))
+        self._add_artist (Airfoil_Artist    (self, lambda: self.planform, show_legend=True))
 
 
     @override
