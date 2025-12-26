@@ -656,7 +656,7 @@ class Wing:
 
     # ---Methods --------------------- 
 
-    def copy_airfoils_dir (self, newDir : str) -> bool:
+    def _copy_airfoils_dir (self, newDir : str) -> bool:
         """ copy the airfoils dir of this wing to newDir without polars and tmp files
         Args:
             newDir: absolute or relative path of the new directory 
@@ -781,25 +781,27 @@ class Wing:
 
                 # copy airfoils to new airfoils dir if file name changed
                 new_airfoils_dir = os.path.join (target_dir, Path(newPathFilename).stem + AIRFOILS_DIR_SUFFIX)
-                copy_ok = self.copy_airfoils_dir (new_airfoils_dir)
+                copy_ok = self._copy_airfoils_dir (new_airfoils_dir)
                 if not copy_ok:
                     logger.error (f"Saving wing parameters succeeded but copying airfoils to new dir '{new_airfoils_dir}' failed")
 
-                # copy background image if existing
-                if self.background_image.pathFilename:
-                    image_pathFileName     = self.background_image.pathFilename_abs
-                    new_image_pathFileName = os.path.join(target_dir,   self.background_image.pathFilename)
-                    if not os.path.samefile(image_pathFileName, new_image_pathFileName):
-                        shutil.copy2(image_pathFileName, new_image_pathFileName)
+                # copy background image if existing and not an absolute path
+                if self.background_image.pathFilename and not os.path.isabs(self.background_image.pathFilename):
+                    cur_pathFileName_abs = self.background_image.pathFilename_abs
+                    if os.path.isfile(cur_pathFileName_abs):
+                        new_pathFileName_abs = os.path.join(target_dir, self.background_image.pathFilename)
+                        if not os.path.isfile(new_pathFileName_abs):
+                            shutil.copy2(cur_pathFileName_abs, new_pathFileName_abs)
                     self._background_image = None                       # reset to reload from new location
 
                 # set the current working Dir to the dir of the new saved parameter file            
                 self.pathHandler.set_workingDirFromFile (pathFileName_abs)
                 self._parm_pathFileName = os.path.basename(pathFileName_abs)  # only the file name relative to working dir
 
-                # reinit planform with wing sections and new airfoils 
+                # reinit planform with wing sections having new airfoils 
                 self._planform = Planform (self, parms)
-
+                self._planform_paneled = None                           # reset paneled planform
+                self._vlm_wing = None                                   # reset VLM wing
 
         return save_ok
 
@@ -1384,8 +1386,8 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         """ returns a data dict with the parameters of self"""
 
         d = super()._as_dict()
-        toDict (d, "px", self._bezier.points_x)
-        toDict (d, "py", self._bezier.points_y)
+        toDict (d, "px", np.round(self._bezier.points_x, 6).tolist())
+        toDict (d, "py", np.round(self._bezier.points_y, 6).tolist())
 
         return d
 
@@ -2584,7 +2586,15 @@ class WingSections (list [WingSection]):
                 if not aSection.is_for_panels:
                     self.reset_strak()                      # reset strak if "real" wing section is deleted
 
-                return self[index-1] 
+                    # find previous section which is not for_panels
+                    for sec in reversed(self[:index]):
+                        if not sec.is_for_panels:
+                            return sec
+                    logger.warning (f"{self} no previous section found after deleting {aSection}")
+                    return None
+                else:
+                    # else return previous section
+                    return self[index-1] 
             except: 
                 pass
         return None  
