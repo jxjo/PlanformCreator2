@@ -1331,51 +1331,69 @@ class Item_Airfoils (Item_Abstract):
 
 
 
+#-------------------------------------------------------------------------------
+
+
+class ViewBox_Fixed (pg.ViewBox):
+    """
+    This subclass replaces the pyqtgraph ViewBox to allow skipping the first drag event
+    after a context menu interaction. This prevents sudden jumps in the view when the user
+    interacts with the context menu and pan/drags the view immediately after.
+    """
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._skip_next_drag_start = False
+    
+    @override
+    def mouseDragEvent(self, ev, axis=None):
+        """ Skip the first drag start after menu closes to prevent jump """
+
+        if self.state['mouseMode'] == pg.ViewBox.PanMode:
+            if self._skip_next_drag_start and ev.isStart():
+                ev.accept()
+                self._skip_next_drag_start = False
+                return
+        
+        # Normal processing
+        super().mouseDragEvent(ev, axis)
+
+
+    def set_skip_next_drag(self, skip: bool):
+        """ Set whether to skip the next drag start event """
+        self._skip_next_drag_start = skip
+
 
 class Item_Polars (Item_Abstract):
     """ 
     Diagram (Plot) Item for polars 
     """
 
-    name        = "Polar"                               # used for link and section header 
+    name        = "View Polar"                          # used for link and section header 
     title       = None 
     subtitle    = None                                  # optional subtitle 
 
-    sig_xyVars_changed           = pyqtSignal()         # airfoil data changed in a diagram 
+    def __init__(self, *args, **kwargs):
 
-    def __init__(self, *args, iItem= 1, **kwargs):
-
-        self._iItem  = iItem
-        self._xyVars = None
+        self._xyVars    = None
         self._xyVars_show_dict = {}                     # dict of xyVars shown up to now 
 
         self._title_item2 = None                        # a second 'title' for x-axis 
         self._autoRange_not_set = True                  # to handle initial no polars to autoRange 
-        self._next_btn    = None
-        self._prev_btn    = None 
+        self._switch_btn  = None
+        self._popup_menu  = None                        # popup menu for variable selection
+        self._popup_menu_is_open = False
 
-        self.name = f"{self.name} {iItem}"
+        # Create custom ViewBox - see ViewBox_Fixed class for infos
+        custom_viewbox = ViewBox_Fixed(enableMenu=False)   # parent=self, 
 
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, viewBox=custom_viewbox, **kwargs)
 
-        # buttons for prev/next diagram 
+        # connect to model signals
 
-        p = Icon_Button (Icon.COLLAPSE, parent=self, itemPos=(0.5,0), parentPos=(0.5,0), offset=(0,0) )
-        p.clicked.connect(self._btn_prev_next_clicked)  
-        self._prev_btn = p
-
-        p = Icon_Button (Icon.EXPAND, parent=self, itemPos=(0.5,1), parentPos=(0.5,1), offset=(0,5) )
-        p.clicked.connect(self._btn_prev_next_clicked)
-        self._next_btn = p
-
-        self._refresh_prev_next_btn ()
-
-        # set margins (inset) of self 
-        self.setContentsMargins ( 0,10,10,20)
-
-        # connect to polar changed signal
-        self.app_model.sig_new_polars.connect  (self._on_new_polars)
-        self.app_model.sig_polar_set_changed.connect  (self.refresh)
+        self.app_model.sig_new_polars.connect               (self.refresh)
+        self.app_model.sig_polar_set_changed.connect        (self.refresh)
 
 
     @override
@@ -1396,8 +1414,6 @@ class Item_Polars (Item_Abstract):
         xyVars = d.get('xyVars', None)                          
         if xyVars is not None:
             self.set_xyVars (xyVars)
-            self._refresh_artist_xy ()
-            self.setup_viewRange ()
 
 
     @property 
@@ -1405,65 +1421,6 @@ class Item_Polars (Item_Abstract):
         """ reset view button in the lower left corner"""
         # to be overridden
         return False 
-
-    @override
-    def resizeEvent(self, ev):
-
-        # update position next/prev button 
-        if self._next_btn is not None:  
-            item_height = self.size().height()
-            item_width  = self.size().width()
-
-            btn_rect = self.mapRectFromItem(self._next_btn, self._next_btn.boundingRect())
-            x = item_width / 2
-            y = item_height - btn_rect.height() + 3
-            self._next_btn.setPos(x, y)             
-
-            y = 5
-            self._prev_btn.setPos(x, y)             
-
-        super().resizeEvent (ev)
-
-
-    def _btn_prev_next_clicked (self, button : Icon_Button):
-        """ prev or next buttons clicked"""
-
-        step = -1 if button.icon_name == Icon.COLLAPSE else 1
-
-        try:
-            # save current view Range
-            self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
-
-            # get index of current and set new 
-            l = list (self._xyVars_show_dict.keys())
-            i = l.index(self._xyVars) + step
-            if i >= 0 :
-                self._xyVars = l[i]
-                viewRect = self._xyVars_show_dict [self._xyVars]
-                self.setup_viewRange (rect=viewRect)                # restore view Range
-                self._refresh_artist_xy ()                             # draw new polar
-                self.sig_xyVars_changed.emit()                      # update view panel 
-            self._refresh_prev_next_btn ()                          # update visibility of buttons
-        except :
-            pass
-
-
-    def _btn_var_clicked (self, axis, pos : QPoint):
-        """ slot - polar var button in diagram clicked - show menu list of variables"""
-        menu = QMenu()
-       
-        # Build popup menu 
-        for v in var.list_small():
-            action = QAction (v.value, menu)
-            action.setCheckable (True)
-            if axis == "y":
-                action.setChecked (v == self.yVar)
-                action.triggered.connect (lambda  checked, v=v: self.set_yVar (v))
-            else:
-                action.setChecked (v == self.xVar)
-                action.triggered.connect (lambda  checked, v=v: self.set_xVar (v))
-            menu.addAction (action)
-        menu.exec (pos)
 
 
     @override
@@ -1491,49 +1448,151 @@ class Item_Polars (Item_Abstract):
         self._title_item2 = p
 
 
+    def _btn_var_clicked (self, axis, pos : QPoint):
+        """ slot - polar var button in diagram clicked - show menu list of variables"""
+        menu = QMenu()
+       
+        # Build popup menu 
+        for v in var.list_small():
+            action = QAction (v.value, menu)
+            action.setCheckable (True)
+            if axis == "y":
+                action.setChecked (v == self.yVar)
+                action.triggered.connect (lambda  checked, v=v: self.set_yVar (v))
+            else:
+                action.setChecked (v == self.xVar)
+                action.triggered.connect (lambda  checked, v=v: self.set_xVar (v))
+            menu.addAction (action)
+
+        # open non-modal popup menu at pos
+        self._open_popup_menu (menu, pos)
+
+
     def _add_xyVars_to_show_dict (self):
         """ add actual xyVars and viewRange to the dict of already shown combinations"""
         try:
             self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
-            self._refresh_prev_next_btn ()
+            self._refresh_switch_btn ()
         except:
             pass
 
 
-    def _refresh_prev_next_btn (self):
-        """ hide/show previous / next buttons"""
+    def _refresh_switch_btn (self):
+        """ hide/show switch diagram button"""
 
         l = list (self._xyVars_show_dict.keys())
 
-        if self._xyVars in l:
-            i = l.index(self._xyVars)
-            if i == 0:
-                self._prev_btn.hide()
-            else:
-                self._prev_btn.show()
-            if i >= (len (self._xyVars_show_dict) - 1):
-                self._next_btn.hide()
-            else:
-                self._next_btn.show()
+        if not self._xyVars in l: return                    # not yet in dict - race condition                         
+        if len(l) < 2: return                               # only one diagram shown so far
+                
+        if len(l) == 2:
+            l.remove (self._xyVars)                             
+            text = f"Switch to {l[0][1]} vs {l[0][0]}"      # switch directly to second
         else: 
-            self._prev_btn.hide()
-            self._next_btn.hide()
+            text = f"Switch to ..."
+
+        if self._switch_btn is not None:                    # remove existing button - setText doesn't work well here
+            self._switch_btn.clicked.disconnect(self._switch_btn_clicked)
+            self.scene().removeItem(self._switch_btn)
+
+        # create switch button
+        p = Text_Button (text, parent=self, color=QColor(Artist.COLOR_LEGEND), size=f"{Artist.SIZE_NORMAL}pt",
+                        itemPos=(0,0), parentPos=(0,0), offset=(130,2), frame_pad=0)
+        p.clicked.connect(self._switch_btn_clicked)  
+        p.setToolTip (f"Switch to polar diagram")
+        self._switch_btn = p
+
+
+    def _switch_btn_clicked (self, pos : QPoint):
+        """ switch button clicked - direct switch or show menu of available diagrams"""
+
+        l = list (self._xyVars_show_dict.keys())
+
+        if len(l) == 2:
+            # switch directly to second
+            l.remove (self._xyVars)                               
+            self._set_xyVars_from_switch (l[0])
+
+        elif len(l) > 2:
+            # build and open popup menu with all diagrams
+            menu = QMenu()
+            for xyVars in l:
+                action = QAction(f"{xyVars[1]} vs {xyVars[0]}", menu)
+                action.setCheckable(True)
+                action.setChecked(xyVars == self._xyVars)
+                action.triggered.connect(lambda checked, xy=xyVars: self._set_xyVars_from_switch(xy))
+                menu.addAction(action)
+
+            self._open_popup_menu (menu, pos)
+
+        # refresh button after menu closed
+        QTimer.singleShot (10, self._refresh_switch_btn)    
+
+
+    def _open_popup_menu (self, aMenu : QMenu, pos: QPoint):
+        """ 
+        Open a given popup menu at pos - with handling of menu open flag
+        """
+
+        # aMenu must bei instance variable to avoid garbage collection
+        self._popup_menu = aMenu   
+
+        # Mark menu open to suppress hover/UI flicker
+        self._popup_menu_is_open = True
+
+        # Show non-modal popup (no nested event loop)
+        self._popup_menu.popup(pos)
+
+        # When the menu hides, clear the flag and set flag to skip first pan drag
+        def on_hide():
+            if isinstance(self.viewBox, ViewBox_Fixed):
+                self.viewBox.set_skip_next_drag(True)
+            self._popup_menu_is_open = False
+
+        aMenu.aboutToHide.connect(on_hide)
+
+
+    def _set_xyVars_from_switch (self, xyVars):
+        """ set xyVars from switch button menu selection"""
+
+        try:
+            # save current diagram's viewRect before switching
+            self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
+
+            # set new xyVars
+            self._xyVars = xyVars
+            viewRect = self._xyVars_show_dict [self._xyVars]
+ 
+            self.setup_viewRange (rect=viewRect)        # restore view Range
+            self._refresh_artist_xy ()                  # draw new polar
+
+        except :
+            pass
+
+
+    @override
+    def hoverEvent(self, ev):
+        """ overridden to show/hide switch diagram button on hover"""
+
+        super().hoverEvent (ev)
+
+        if self._switch_btn is not None and not self._popup_menu_is_open:
+            if ev.enter:
+                n_diag = len(self._xyVars_show_dict.keys())
+                if n_diag > 1:
+                    self._switch_btn.show()
+            elif ev.exit:
+                self._switch_btn.hide()
 
 
     def _refresh_artist_xy (self): 
         """ refresh polar artist with new diagram variables"""
 
-        artist : Polar_Artist = self._artists [0]
-        artist.set_xyVars (self._xyVars)
+        artist : Polar_Artist
+        for artist in self._artists:
+            artist.set_xyVars (self._xyVars)
 
         self.plot_title()
-
-
-    def _on_new_polars (self):
-        """ slot - new polars available - refresh diagram"""
-
-        self._viewRange_set = False                 # ensure new scaling 
-        self.refresh()  
 
 
     @property
@@ -1558,7 +1617,7 @@ class Item_Polars (Item_Abstract):
     @property
     def yVar (self) -> var:
         return self._xyVars[1]
-    
+
     def set_yVar (self, varType: var):
         """ set y diagram variable"""
 
@@ -1567,7 +1626,7 @@ class Item_Polars (Item_Abstract):
             self._xyVars_show_dict[self._xyVars] = self.viewBox.viewRect()
 
         self._xyVars = (self._xyVars[0], varType)
-        # wait a little until user is sure for new xyVars (prev/next buttons)
+        # wait a little until user is sure for new xyVars (switch button)
         QTimer.singleShot (3000, self._add_xyVars_to_show_dict)
 
         self._refresh_artist_xy ()
@@ -1589,6 +1648,20 @@ class Item_Polars (Item_Abstract):
         else: 
             yVar = yVar 
         self._xyVars = (xVar, yVar)
+
+        self._refresh_artist_xy ()
+        self.setup_viewRange ()
+
+
+    @override
+    def refresh(self): 
+        """ refresh my artists and section panel """
+
+        if self._autoRange_not_set:
+            self._viewRange_set = False                     # ensure refresh will setup_viewRange (autoRange)
+
+        super().refresh()
+        return
 
 
     @override
@@ -1616,7 +1689,8 @@ class Item_Polars (Item_Abstract):
 
             self.showGrid(x=True, y=True)
         else: 
-            self.viewBox.setRange (rect=rect, padding=0.0)      # restore view Range
+
+            self.viewBox.setRange(rect=rect, padding=0.0)       # restore view Range
 
         self._set_legend_position ()                            # find nice legend position 
 
@@ -1633,8 +1707,7 @@ class Item_Polars (Item_Abstract):
             self.legend.anchor (itemPos=(1,0.5), parentPos=(1,0.5), offset=(-10,0))     # right, middle 
 
         elif (self.yVar == var.GLIDE or self.yVar == var.SINK) and (self.xVar == var.ALPHA or self.xVar == var.CL):
-            self.legend.anchor (itemPos=(0,0), parentPos=(0,0), offset=(40,10))         # left, top
-            # self.legend.anchor (itemPos=(0.2,1), parentPos=(0.5,1), offset=(0,-20))     # middle, bottom
+            self.legend.anchor (itemPos=(0.2,1), parentPos=(0.5,1), offset=(0,-20))     # middle, bottom
 
         elif (self.yVar == var.CL) and (self.xVar == var.ALPHA):
             self.legend.anchor (itemPos=(0,0), parentPos=(0,0), offset=(40,10))         # left, top
@@ -2157,20 +2230,18 @@ class Diagram_Airfoils (Diagram_Abstract):
 
         r = 0 
 
-        self._add_item (Item_Airfoils (self, self.app_model), r, 0, colspan=2,  rowStretch=2)
+        self._add_item (Item_Airfoils (self, self.app_model), r, 0, colspan=2,  rowStretch=3)
 
         if Worker.ready:
             r += 1
+            default_settings = [{"xyVars" : (var.CD,var.CL)}, {"xyVars" : (var.CL,var.GLIDE)}]
 
-            # create Polar items with init default values from  
-
-            item = Item_Polars (self, self.app_model, iItem=1, show=False)
-            item._set_settings ({"xyVars" : (var.CD,var.CL)})
-            self._add_item (item, r, 0,  rowStretch=3)
-
-            item = Item_Polars (self, self.app_model, iItem=2, show=False)
-            item._set_settings ({"xyVars" : (var.CL,var.GLIDE)})
-            self._add_item (item, r, 1,  rowStretch=3)
+            for iItem in [0,1]:
+                # create Polar items with init values vor axes variables 
+                item = Item_Polars (self, self.app_model, show=False)
+                item.name = f"{Item_Polars.name}_{iItem+1}"                 # set unique name as there a multiple items
+                item._set_settings (default_settings[iItem])                        # set default settings first
+                self._add_item (item, r, iItem, rowStretch=4)
  
 
     @override
