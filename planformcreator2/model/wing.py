@@ -1997,6 +1997,7 @@ class WingSection :
         
         if isinstance (airfoil, Airfoil) or airfoil is None:
             self._airfoil = airfoil
+            self._strak_info = None
         else:
             raise TypeError (f"{self} set_airfoil - invalid airfoil type {type(airfoil)}")
 
@@ -2466,11 +2467,7 @@ class WingSections (list [WingSection]):
             sections.append(WingSection (planform, {"cn": 0.35, "flap_group":2}))
             sections.append(WingSection (planform, {"xn": 1.0,  "flap_group":2}))
 
-
         self.extend (sections)
-
-        # final sanity
-        self.check_n_repair ()
 
         logger.info (f"{self} added")
 
@@ -2742,7 +2739,9 @@ class WingSections (list [WingSection]):
         # When changing major wing parms sections could become out of sort order when
         #    they have fixed xn and chord mixed    
 
-        self.sort (key=lambda sec: sec.xn) 
+        tmp = sorted (self, key=lambda sec: sec.xn) 
+        self.clear()
+        self.extend (tmp)
 
         # there must be root and tip 
         if not self[0].is_root or not self[-1].is_tip:
@@ -3552,7 +3551,8 @@ class Planform:
 
         # init wing sections 
         
-        self._wingSections    = WingSections (self, sectionsDict=fromDict(dataDict, "wingSections", {}))
+        self._wingSections = WingSections (self, sectionsDict=fromDict(dataDict, "wingSections", {}))
+        self._wingSections.check_n_repair ()        # sanity check (after ._wingSections are initialized!)
 
         # init flaps
 
