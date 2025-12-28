@@ -151,9 +151,10 @@ class Item_Abstract (Diagram_Item):
         """ slot when wingSection changed - refresh only relevant artists """
 
         if self.isVisible_effective():
-            artist : WingSections_Artist 
+            logger.debug (f"{self} _on_wingSection_changed refresh relevant artists")
             for artist in self._get_artist (WingSections_Artist):
-                logger.debug (f"{self} _on_wingSection_changed refresh {artist}")
+                artist.refresh()            
+            for artist in self._get_artist (Flaps_Artist):
                 artist.refresh()            
 
 
