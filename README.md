@@ -217,7 +217,7 @@ Please read [the short description](doc/PC2_export_to_Xflr5.md) of how it works.
 
 PC2 generates a ready to use FLZ_vortex project file which can be loaded as a new 'flight scene' ('Flugszene') or FLZ_vortex can be launched directly from PC2 having the project file loaded. For direct launch the file extension .flz must be assigned to the app FLZ_vortex. 
 
-Do not forget to adjust the plane mass before running a calculation.
+Do not forget to adjust the plane mass in FLZ before running a calculation.
 
 ### VLM Analysis
 
