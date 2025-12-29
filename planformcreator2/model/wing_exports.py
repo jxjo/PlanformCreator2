@@ -145,7 +145,9 @@ class Exporter_Airfoils (Exporter_Abstract):
         """ returns a data dict with the parameters of self"""
 
         d = {}
-        toDict (d, "export_dir",        self._export_dir) 
+        # Convert to forward slashes for cross-platform storage
+        export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
+        toDict (d, "export_dir",        export_dir) 
 
         toDict (d, "adapt_te_gap",      self._adapt_te_gap) 
         if self._adapt_te_gap:
@@ -362,7 +364,9 @@ class Exporter_Xflr5 (Exporter_Abstract):
         """ returns a data dict with the parameters of self"""
 
         d = {}
-        toDict (d, "export_dir", self._export_dir) 
+        # Convert to forward slashes for cross-platform storage
+        export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
+        toDict (d, "export_dir", export_dir) 
         d.update(self.exporter_airfoils._as_dict())
         return d
     
@@ -602,7 +606,9 @@ class Exporter_FLZ (Exporter_Abstract):
         """ returns a data dict with the parameters of self"""
 
         d = {}
-        toDict (d, "export_dir", self._export_dir) 
+        # Convert to forward slashes for cross-platform storage
+        export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
+        toDict (d, "export_dir", export_dir) 
         d.update(self.exporter_airfoils._as_dict())
         return d
 
@@ -1004,7 +1010,9 @@ class Exporter_CSV (Exporter_Abstract):
         """ returns a data dict with the paramters of self"""
 
         d = {}
-        toDict (d, "export_dir",        self._export_dir) 
+        # Convert to forward slashes for cross-platform storage
+        export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
+        toDict (d, "export_dir",        export_dir) 
         d.update(self.exporter_airfoils._as_dict())
         return d
 
@@ -1066,7 +1074,9 @@ class Exporter_DXF (Exporter_Abstract):
         """ returns a data dict with the paramters of self"""
 
         d = {}
-        toDict (d, "export_dir",        self._export_dir) 
+        # Convert to forward slashes for cross-platform storage
+        export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
+        toDict (d, "export_dir",        export_dir) 
         toDict (d, "export_airfoils",   self._export_airfoils) 
         d.update(self.exporter_airfoils._as_dict())
         return d

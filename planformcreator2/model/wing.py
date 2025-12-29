@@ -180,7 +180,9 @@ class Wing:
         p.set ("airfoil_use_nick",   self._airfoil_use_nick)
         p.set ("airfoil_nick_prefix",self._airfoil_nick_prefix) 
         p.set ("airfoil_nick_base",  self._airfoil_nick_base) 
-        p.set ("reference_pc2_file", self._reference_pc2_file)
+        # Convert reference file path to forward slashes for cross-platform storage
+        reference_file = self._reference_pc2_file.replace(os.sep, '/') if self._reference_pc2_file else None
+        p.set ("reference_pc2_file", reference_file)
         p.set ("background_image",   self.background_image._as_dict())
 
         # polar definitions - do not save if there is only a default definition 
@@ -1922,13 +1924,15 @@ class WingSection :
         if not self.airfoil.isBlendAirfoil and not self.airfoil.isExample:
             # replace with airfoils_dir variable if airfoil is in airfoils dir of wing
             if os.path.samefile(self.airfoil.pathName_abs, self._planform.wing.airfoils_dir):
-                pathFileName = f"{VAR_AIRFOILS_DIR}\\{self.airfoil.pathFileName}"
+                pathFileName = f"{VAR_AIRFOILS_DIR}/{self.airfoil.pathFileName}"
             else:
                 # make relative path to working dir if possible
                 try:
                     pathFileName = os.path.relpath(self.airfoil.pathFileName_abs, self.workingDir)
+                    pathFileName = pathFileName.replace(os.sep, '/')  # Convert to forward slashes for cross-platform storage
                 except (ValueError, TypeError):
                     pathFileName = self.airfoil.pathFileName_abs
+                    pathFileName = pathFileName.replace(os.sep, '/')  # Convert to forward slashes for cross-platform storage
             toDict (d, "airfoil",    pathFileName)
         return d
 
@@ -4663,6 +4667,9 @@ class Image_Definition:
                 relPath = PathHandler(workingDir= self._working_dir).relFilePath(self.pathFilename)
             else:
                 relPath = self.pathFilename
+            
+            # Convert to forward slashes for cross-platform storage
+            relPath = relPath.replace(os.sep, '/')
 
             toDict (d, "file",                  relPath) 
             toDict (d, "mirrored_horizontal",   self.mirrored_horizontal) 
