@@ -2,7 +2,7 @@
 ![PC2](images/PC2_logo.png "Logo")
 
 
-# v4.0
+# v4.0.1
 
 **PlanformCreator2** - short PC2 - is an app to design the planform of a wing focusing on model sailplanes. 
 
@@ -139,6 +139,10 @@ This eliminates the need for manual post-processing of airfoils in CAD.
 <img src="images/dxf_view.png" width="800" />
 
 **Note:** The generated planform contour is approximated by many small straight line segments (polyline) and should not be used directly for 3D construction. It is recommended to overlay splines on the leading and trailing edges in your CAD program for smooth surfaces.
+
+### Export as CSV File
+
+The geometric data of the wing sections, including spanwise position and leading/trailing edge coordinates, can be exported to a CSV file for further processing in apps such as Excel.
 
 
 ## Airfoils and Polars

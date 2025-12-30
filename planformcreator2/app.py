@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 #-------------------------------------------------------------------------------
 
 APP_NAME         = "PlanformCreator2"
-__version__      = "4.0.1_beta"                            # hatch "version dynamic" reads this version for build
+__version__      = "4.0.1"                            # hatch "version dynamic" reads this version for build
 
 
 class Main (QMainWindow):

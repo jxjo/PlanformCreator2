@@ -31,7 +31,7 @@ from airfoileditor.model.airfoil          import Airfoil, GEO_SPLINE, Flap_Defin
 from .wing                   import Wing, Planform, Planform_Paneled, WingSection, WingSections, Flap
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 class Exporter_Abstract:  

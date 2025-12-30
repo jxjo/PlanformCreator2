@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## 4.0.1
+
+This is just a maintenance release with a bunch of bug fixes.
+
+### Added
+
+- Export wing sections data as CSV file (Thanks to Thomas!)
+- Switch airfoil polar diagrams  
+- Show full or half wing  
+
+### Fixed
+
+- Fix several issues in 'Save as'
+- Fix refresh of VLM results
+- More minor fixes ...
+
+### Changed
+
+- Requires AirfoilEditor 4.2.3 having additional fixes 
+
+
+
 ## 4.0
 
 Major release with extensive refactoring and improved installation options. 
