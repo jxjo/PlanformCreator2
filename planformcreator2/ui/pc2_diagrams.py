@@ -1260,6 +1260,10 @@ class Item_Airfoils (Item_Abstract):
         self.viewBox.enableAutoRange(axis=pg.ViewBox.XAxis, enable=True)
         self.showGrid(x=True, y=True)
 
+        # reduce vertical spacing of legend as there can be many airfoils
+        l : QGraphicsGridLayout = self.legend.layout
+        l.setVerticalSpacing(-5)
+
 
     @property
     def airfoil_artist (self) -> Airfoil_Artist:
