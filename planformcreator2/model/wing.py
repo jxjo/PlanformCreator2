@@ -2695,11 +2695,12 @@ class WingSections (list [WingSection]):
 
                     airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
 
-                    self._strak_done = True 
                     section._strak_info = strak_info
 
         if n_straked > 0:
             logger.info (f"{self} straked {n_straked} airfoils in {tmp_dir}")
+
+        self._strak_done = True 
 
 
     def reset_strak (self): 
