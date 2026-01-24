@@ -1080,8 +1080,9 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
         # in case of ALPHA we'll plot the three angles 
 
         if self.opPoint_var == OpPoint_Var.ALPHA:
-            opPoint_vars = [OpPoint_Var.ALPHA_EFF, OpPoint_Var.ALPHA_IND, 
-                            OpPoint_Var.ALPHA, OpPoint_Var.ALPHA0, OpPoint_Var.ALPHA_MAX]
+            opPoint_vars = [OpPoint_Var.ALPHA, OpPoint_Var.ALPHA_EFF, OpPoint_Var.ALPHA_IND, 
+                            OpPoint_Var.ALPHA0_VLM, 
+                            OpPoint_Var.ALPHA_MAX, OpPoint_Var.ALPHA0]
         elif self.opPoint_var == OpPoint_Var.CL:
             opPoint_vars = [OpPoint_Var.CL, OpPoint_Var.CL_MAX, OpPoint_Var.CL_VLM_LINEAR]
         else: 
@@ -1098,12 +1099,14 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
                 pen   = pg.mkPen (color="red", width=1,style=Qt.PenStyle.DotLine)
             elif opPoint_var == OpPoint_Var.ALPHA_EFF:
                 pen   = pg.mkPen (color="red", width=1)
-            elif opPoint_var == OpPoint_Var.ALPHA0:
+            elif opPoint_var == OpPoint_Var.ALPHA0_VLM:
                 pen   = pg.mkPen (color="darkorchid", width=1, style=Qt.PenStyle.DashLine)
             elif opPoint_var == OpPoint_Var.ALPHA_MAX:
                 pen   = pg.mkPen (color="orange", width=1, style=Qt.PenStyle.DashLine)
             elif opPoint_var == OpPoint_Var.CL_MAX:
                 pen   = pg.mkPen (color="orange", width=1, style=Qt.PenStyle.DashLine)
+            elif opPoint_var == OpPoint_Var.ALPHA0:
+                pen   = pg.mkPen (color="orange", width=1, style=Qt.PenStyle.DotLine)
             elif opPoint_var == OpPoint_Var.CL_VLM_LINEAR:
                 pen   = pg.mkPen (color="limegreen", width=1, style=Qt.PenStyle.DotLine)
             else:
@@ -1125,8 +1128,13 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
                                                 "Critical range", "orangered")
 
             if opPoint_var == OpPoint_Var.CL_MAX:
-                self._plot_Cl_max_values (aero_results, "orange")
+                self._plot_cl_max_values (aero_results, "orange")
 
+            if opPoint_var == OpPoint_Var.ALPHA0:
+                self._plot_alpha0_values (aero_results, "orange")
+            
+            if opPoint_var == OpPoint_Var.ALPHA_MAX:
+                self._plot_alpha_max_values (aero_results, "orange")
             
             # error message for error in VLM calculation 
 
@@ -1218,7 +1226,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
                     iEnd   = None
 
 
-    def _plot_Cl_max_values (self, results, color):
+    def _plot_cl_max_values (self, results, color):
         """plot Cl max at wingsection """
 
         Cl_max  = results [OpPoint_Var.CL_MAX]
@@ -1255,6 +1263,65 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
                 # just skip
                 pass
                 # self._plot_point (section.x, Cl_max [idx], color=text_color, symbol="o", size=5, text=None)
+
+
+    def _plot_alpha0_values (self, results, color):
+        """plot alpha0 of airfoil at wingsection """
+
+        alpha0  = results [OpPoint_Var.ALPHA0]
+        y       = results [OpPoint_Var.Y]
+        y_max   = np.max (y) 
+        y_last  = -9999.99
+        y_in_x  = y * 1000.0
+
+        text_color = QColor (color).darker(120)
+        text_fill  = pg.mkBrush ("black")
+        anchor = (0.5,-0.1)
+
+        section : WingSection
+        for section in self.wing.planform_paneled.wingSections_reduced():
+
+            idx = (np.abs(y_in_x - section.x)).argmin()
+            y_pos = section.x/1000
+
+            # far enough away from neighbor (values shouldn't overlap)?
+            if y_pos - y_last > 0.02 * y_max:
+
+                text   = f"{alpha0 [idx]:.2f}"  
+
+                self._plot_point (section.x, alpha0 [idx], color=text_color, textFill=text_fill, size=0, text=text, 
+                                textColor=text_color, anchor=anchor)
+                y_last = y_pos 
+
+
+    def _plot_alpha_max_values (self, results, color):
+        """plot alpha0 of airfoil at wingsection """
+
+        alpha_max  = results [OpPoint_Var.ALPHA_MAX]
+        y       = results [OpPoint_Var.Y]
+        y_max   = np.max (y) 
+        y_last  = -9999.99
+        y_in_x  = y * 1000.0
+
+        text_color = QColor (color).darker(120)
+        text_fill  = pg.mkBrush ("black")
+        anchor = (0.5,1.1)
+
+        section : WingSection
+        for section in self.wing.planform_paneled.wingSections_reduced():
+
+            idx = (np.abs(y_in_x - section.x)).argmin()
+            y_pos = section.x/1000
+
+            # far enough away from neighbor (values shouldn't overlap)?
+            if y_pos - y_last > 0.02 * y_max:
+
+                text   = f"{alpha_max [idx]:.2f}"  
+
+                self._plot_point (section.x, alpha_max [idx], color=text_color, textFill=text_fill, size=0, text=text, 
+                                textColor=text_color, anchor=anchor)
+                y_last = y_pos 
+
 
 
 

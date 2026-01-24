@@ -2577,9 +2577,10 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             r += 1
             Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz)         
             SpaceC (l,c, width=20, stretch=0)
-            c += 1
-            Button      (l,r,c, text="Launch FLZ", width=100, set=self.launch_flz,hide= not os.name == 'nt')                                 # only Windows, Linux requires some extra investigations
+            c += 2
+            Button      (l,r,c, text="Launch FLZ", width=80, set=self.launch_flz,hide= not os.name == 'nt')                                 # only Windows, Linux requires some extra investigations
             
+            l.setColumnMinimumWidth (1,12)
             l.setColumnStretch (3,2)
 
             self._export_panel = Edit_Panel (title="Export", layout=l, 

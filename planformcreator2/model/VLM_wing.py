@@ -55,10 +55,11 @@ class OpPoint_Var (StrEnum_Extended):
     ERROR_MASK      = "VLM error"                           # numpy mask where VLM couldn't calculate Cp              
     ALPHA_MAX       = "Airfoil alpha max "               
     ALPHA           = "Alpha"               
-    ALPHA_EFF       = "Alpha effective"               
-    ALPHA_EFF_VLM   = "Alpha effective VLM"               
-    ALPHA_IND       = "Alpha induced"  
-    ALPHA0          = "Alpha Cl=0"             
+    ALPHA_EFF       = "alpha effective"               
+    ALPHA_EFF_VLM   = "alpha effective VLM"               
+    ALPHA_IND       = "alpha induced"  
+    ALPHA0_VLM      = "alpha0 VLM"                          # actual alpha0 of viscous loop    
+    ALPHA0          = "Airfoil alpha0"                      # alpha0 from airfoil polar  
     LIFT            = "Lift"
     LIFT_STRIPE     = "Lift of stripe"
 
@@ -637,7 +638,7 @@ class VLM_Polar:
 
     @property
     def alpha0_stripes (self) -> np.ndarray:
-        """ alpha_cl=0 from the airfoils at y position of panel stripes """
+        """ alpha0 from the airfoils at y position of panel stripes """
         if self._alpha0_stripes is None: 
             self._alpha0_stripes = self._get_alpha0_stripes ()
         return self._alpha0_stripes
@@ -667,8 +668,8 @@ class VLM_Polar:
                 self._error_reason.append (msg)
                 break
 
-            section_y  = section.x / 1000
-            section_re = re_from_v (self.vtas, section.c / 1000, round_to=RE_SCALE_ROUND_TO)
+            # ensure VLM polars with forced transition are defined, generated and loaded
+
             airfoil_polarSet : Polar_Set = section.airfoil.polarSet
 
             if airfoil_polarSet is None: 
@@ -677,9 +678,15 @@ class VLM_Polar:
                 self._error_reason.append (msg)
                 break
 
-            airfoil_polarSet.load_or_generate_polars()
+            airfoil_polarSet.ensure_polars_VLM()
+            airfoil_polarSet.load_or_generate_polars(normal=False, VLM=True)
 
-            for polar in airfoil_polarSet.polars:
+            # find polar with matching Re of this wing section
+
+            section_y  = section.x / 1000
+            section_re = re_from_v (self.vtas, section.c / 1000, round_to=RE_SCALE_ROUND_TO)
+
+            for polar in airfoil_polarSet.polars_VLM:
 
                 if isclose (polar.re, section_re, abs_tol=RE_SCALE_ROUND_TO):
                     if polar.isLoaded:
@@ -695,7 +702,7 @@ class VLM_Polar:
                     break
 
             if not isclose (polar.re, section_re, abs_tol=RE_SCALE_ROUND_TO): 
-                polars_re_list = [f"{p.re:.0f}" for p in airfoil_polarSet.polars]
+                polars_re_list = [f"{p.re:.0f}" for p in airfoil_polarSet.polars_VLM]
                 msg = f"No polar with Re = {section_re:.0f} in Polarset of {section} with polars: {polars_re_list}" 
                 logger.error (msg)
                 self._error_reason.append (msg)
@@ -725,9 +732,7 @@ class VLM_Polar:
         airfoil_polar : Polar
         for section_y, airfoil_polar in self.airfoil_polars.items():
 
-            alpha0_polar = np.interp(0.0, airfoil_polar.cl, airfoil_polar.alpha)  # 'normal' alpha0 of polar'
-                 
-            sections_alpha0.append(alpha0_polar)
+            sections_alpha0.append(airfoil_polar.alpha0)
             sections_y.append(section_y)
 
         # alpha0 per stripe by interpolation of section alpha0 
@@ -793,10 +798,10 @@ class VLM_Polar:
             fieldnames = ['Alpha', 'CL', 'Lift']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames, dialect='excel')
 
-            writer.writer.writerow(["PlanformCreator2"])
-            writer.writer.writerow([f"Wing Name :", f"{self.vlm_wing._planform_paneled.wing.name}"])
-            writer.writer.writerow([f"Speed :", f"{self.vtas:.1f}"])
-            writer.writer.writerow([ ])
+            writer.writerow(["PlanformCreator2"])
+            writer.writerow([f"Wing Name :", f"{self.vlm_wing._planform_paneled.wing.name}"])
+            writer.writerow([f"Speed :", f"{self.vtas:.1f}"])
+            writer.writerow([ ])
 
             writer.writeheader()
 
@@ -1087,11 +1092,12 @@ class VLM_OpPoint:
         results[OpPoint_Var.LIFT]           = lift
         results[OpPoint_Var.LIFT_STRIPE]    = lift_stripe
         results[OpPoint_Var.ALPHA_MAX]      = self._get_alpha_max () 
+        results[OpPoint_Var.ALPHA0]         = self.polar.alpha0_stripes             # airfoil alpha0 from polar
         results[OpPoint_Var.ALPHA_EFF]      = alpha_eff            
         results[OpPoint_Var.ALPHA_EFF_VLM]  = alpha_eff_VLM            
         results[OpPoint_Var.ALPHA_IND]      = -alpha_ind                            # take now negative   
         results[OpPoint_Var.ALPHA]          = np.full (ns, self.alpha)     
-        results[OpPoint_Var.ALPHA0]         = alpha0     
+        results[OpPoint_Var.ALPHA0_VLM]         = alpha0     
 
         # self._dump_aero_results (results)
 
@@ -1179,7 +1185,7 @@ class VLM_OpPoint:
 
             y         = results[OpPoint_Var.Y] [i]
             Cl        = results[OpPoint_Var.CL] [i] 
-            alpha0    = results[OpPoint_Var.ALPHA0] [i]  
+            alpha0    = results[OpPoint_Var.ALPHA0_VLM] [i]  
             alpha_ind = results[OpPoint_Var.ALPHA_IND] [i]  
             alpha_eff = results[OpPoint_Var.ALPHA_EFF] [i]  
 
