@@ -728,13 +728,13 @@ class Item_VLM_Result (Item_Abstract):
         rect = self.viewBox.childrenBoundingRect()
         max_val, min_val = rect.top(), rect.bottom() 
         max_val, min_val = (max_val, min_val) if max_val > min_val else (min_val, max_val)
-        max_val, min_val = round(max_val,2), round(min_val,2)
+        max_val, min_val = round(max_val,1), round(min_val,1)
 
         if self.vlm_opPoint_var == OpPoint_Var.ALPHA:
-            range_max = 10 if max_val < 10 else (int (max_val/5) + 1) * 5
+            range_max = 10 if max_val < 10 else (int (max_val/5) + 2) * 5
             range_min = 0  if min_val >= 0 else (int (min_val/5) - 1) * 5
         elif self.vlm_opPoint_var == OpPoint_Var.CL:
-            range_max = 1  if max_val < 1  else (int (max_val/0.5) + 1) * 0.5
+            range_max = 1  if max_val < 1  else (int (max_val/0.5) + 2) * 0.5
             range_min = 0  if min_val >= 0 else (int (min_val/0.5) - 1) * 0.5
         else:
             range_min = 0.0 if min_val > 0 else min_val
