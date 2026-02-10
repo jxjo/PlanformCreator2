@@ -23,7 +23,7 @@ from airfoileditor.model.polar_set            import *
 
 from ..model.wing               import (Wing, Planform, N_Distrib_Bezier, 
                                         WingSection, WingSections, Flaps, Flap, Image_Definition)
-from ..model.VLM_wing           import VLM_OpPoint, VLM_Polar,OpPoint_Var
+from ..model.VLM_wing           import VLM_OpPoint, VLM_Polar,OpPoint_Var, VLM_Wing
 
 
 import logging
@@ -1042,6 +1042,11 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
         return self._polar_fn() if callable(self._polar_fn) else None
 
     @property
+    def vlm_wing (self) -> VLM_Wing:
+        """ vlm wing of wing"""
+        return self.wing.vlm_wing 
+    
+    @property
     def opPoint_var (self) -> OpPoint_Var:
         """ variable to show in diagram"""
         return self._opPoint_var
@@ -1065,7 +1070,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
 
         # is polar ready to show results - all airfoil polars generated and loaded?
 
-        if not self.polar.get_ready_for_op_point():
+        if not self.polar.is_ready_for_op_point:
             if self.polar.is_generating_airfoil_polars:
                 n_running = Polar_Task.get_total_n_polars_running()
                 self._plot_text (f"Generating airfoil polars... ({n_running} running)", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
@@ -1128,13 +1133,13 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
                                                 "Critical range", "orangered")
 
             if opPoint_var == OpPoint_Var.CL_MAX:
-                self._plot_cl_max_values (aero_results, "orange")
+                self._plot_cl_max_values ("orange")
 
             if opPoint_var == OpPoint_Var.ALPHA0:
-                self._plot_alpha0_values (aero_results, "orange")
+                self._plot_alpha0_values ("orange")
             
             if opPoint_var == OpPoint_Var.ALPHA_MAX:
-                self._plot_alpha_max_values (aero_results, "orange")
+                self._plot_alpha_max_values ("orange")
             
             # error message for error in VLM calculation 
 
@@ -1226,102 +1231,66 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
                     iEnd   = None
 
 
-    def _plot_cl_max_values (self, results, color):
+    def _plot_cl_max_values (self, color):
         """plot Cl max at wingsection """
-
-        Cl_max  = results [OpPoint_Var.CL_MAX]
-        y       = results [OpPoint_Var.Y]
-        y_max   = np.max (y) 
-        y_last  = -9999.99
-        y_in_x  = y * 1000.0
 
         text_color = QColor (color).darker(120)
         text_fill  = pg.mkBrush ("black")
         anchor = (0.5,1.1)
 
-        section : WingSection
-        for section in self.wing.planform_paneled.wingSections_reduced():
+        # get section values from vlm_polar
+        polars = self.polar.polar_sections
+        x      = self.vlm_wing.y_sections * 1000.0
 
-            idx = (np.abs(y_in_x - section.x)).argmin()
+        for i, cl_max in enumerate(self.polar.cl_max_sections):
 
-            y_pos = section.x/1000
+            polar = polars[i] 
+            text  = f"{polar.re_asK}k\n{cl_max:.2f}"  
 
-            # far enough away from neighbor (values shouldn't overlap)?
-            if y_pos - y_last > 0.02 * y_max:
-                # get (closest) polar for y pos 
-                polars_dict = self.opPoint.polar.airfoil_polars
-                polar : Polar = polars_dict[y_pos] if y_pos in polars_dict \
-                                                else polars_dict[min(polars_dict.keys(), key=lambda k: abs(k-y_pos))]
-
-                text   = f"{polar.re_asK}k\n{Cl_max [idx]:.2f}"  
-
-                self._plot_point (section.x, Cl_max [idx], color=text_color, textFill=text_fill, size=0, text=text, 
-                                textColor=text_color, anchor=anchor)
-                y_last = y_pos 
-
-            else:
-                # just skip
-                pass
-                # self._plot_point (section.x, Cl_max [idx], color=text_color, symbol="o", size=5, text=None)
+            self._plot_point (x[i], cl_max, color=text_color, textFill=text_fill, size=0, text=text, 
+                            textColor=text_color, anchor=anchor)
+        return
 
 
-    def _plot_alpha0_values (self, results, color):
+    def _plot_alpha0_values (self, color):
         """plot alpha0 of airfoil at wingsection """
-
-        alpha0  = results [OpPoint_Var.ALPHA0]
-        y       = results [OpPoint_Var.Y]
-        y_max   = np.max (y) 
-        y_last  = -9999.99
-        y_in_x  = y * 1000.0
 
         text_color = QColor (color).darker(120)
         text_fill  = pg.mkBrush ("black")
         anchor = (0.5,-0.1)
 
-        section : WingSection
-        for section in self.wing.planform_paneled.wingSections_reduced():
+        # get section values from vlm_polar
+        polars = self.polar.polar_sections
+        x      = self.vlm_wing.y_sections * 1000.0
 
-            idx = (np.abs(y_in_x - section.x)).argmin()
-            y_pos = section.x/1000
+        for i, alpha0 in enumerate(self.polar.alpha0_sections):
 
-            # far enough away from neighbor (values shouldn't overlap)?
-            if y_pos - y_last > 0.02 * y_max:
+            polar = polars[i] 
+            text  = f"{polar.re_asK}k\n{alpha0:.1f}°"  
 
-                text   = f"{alpha0 [idx]:.2f}"  
-
-                self._plot_point (section.x, alpha0 [idx], color=text_color, textFill=text_fill, size=0, text=text, 
-                                textColor=text_color, anchor=anchor)
-                y_last = y_pos 
+            self._plot_point (x[i], alpha0, color=text_color, textFill=text_fill, size=0, text=text, 
+                            textColor=text_color, anchor=anchor)
 
 
-    def _plot_alpha_max_values (self, results, color):
+    def _plot_alpha_max_values (self, color):
         """plot alpha0 of airfoil at wingsection """
-
-        alpha_max  = results [OpPoint_Var.ALPHA_MAX]
-        y       = results [OpPoint_Var.Y]
-        y_max   = np.max (y) 
-        y_last  = -9999.99
-        y_in_x  = y * 1000.0
 
         text_color = QColor (color).darker(120)
         text_fill  = pg.mkBrush ("black")
         anchor = (0.5,1.1)
 
-        section : WingSection
-        for section in self.wing.planform_paneled.wingSections_reduced():
+        # get section values from vlm_polar
+        polars = self.polar.polar_sections
+        x      = self.vlm_wing.y_sections * 1000.0
 
-            idx = (np.abs(y_in_x - section.x)).argmin()
-            y_pos = section.x/1000
+        for i, alpha_max in enumerate(self.polar.alpha_max_sections):
 
-            # far enough away from neighbor (values shouldn't overlap)?
-            if y_pos - y_last > 0.02 * y_max:
+            polar = polars[i] 
+            text  = f"{polar.re_asK}k\n{alpha_max:.1f}°"  
 
-                text   = f"{alpha_max [idx]:.2f}"  
-
-                self._plot_point (section.x, alpha_max [idx], color=text_color, textFill=text_fill, size=0, text=text, 
-                                textColor=text_color, anchor=anchor)
-                y_last = y_pos 
-
+            self._plot_point (x[i], alpha_max, color=text_color, textFill=text_fill, size=0, text=text, 
+                            textColor=text_color, anchor=anchor)
+        return
 
 
 
@@ -2747,6 +2716,7 @@ class Polar_Artist (Abstract_Artist_Planform):
 
         self._show_strak  = show_strak                  # show also straked airfoils 
         self._show_points = False                       # show point marker 
+        self._show_VLM_polars = False                   # show only VLM polars 
         self._xyVars = xyVars                           # definition of x,y axis
         self._min_re_asK = 0                            # minimum re number to be plotted
 
@@ -2775,14 +2745,26 @@ class Polar_Artist (Abstract_Artist_Planform):
         self._min_re_asK = aVal 
         self.refresh()
 
+    @property
+    def show_VLM_polars (self) -> bool:
+        """ true - show only VLM polars (if exist) """
+        return self._show_VLM_polars
+    def set_show_VLM_polars (self, aBool : bool):
+        self._show_VLM_polars = aBool
+        self.refresh()
+
 
     def _plot (self): 
         """ do plot of airfoil polars in the prepared axes  """
 
         # strak airfoils if needed to get the generated airfoil names
 
-        if self.show_strak and not self.wingSections.strak_done:
+        if (self.show_strak or self.show_VLM_polars) and not self.wingSections.strak_done:
             self.wingSections.do_strak (geometry_class=GEO_BASIC)
+
+        # wing sections depending on VLM_polar
+
+        self._show_all_sections = self.show_VLM_polars 
 
         # get airfoil colors - same as Airfoil_Artist
 
@@ -2794,8 +2776,6 @@ class Polar_Artist (Abstract_Artist_Planform):
         nPolar_generating   = 0                     # is there a polar in calculation 
         error_msg           = []  
 
-        section : WingSection
-
         for i, section in enumerate (self.wingSections_to_show):
 
             airfoil = section.airfoil
@@ -2806,25 +2786,26 @@ class Polar_Artist (Abstract_Artist_Planform):
                 # get / prepare polars - filter for minimum re number and only active polars
                  
                 polarSet : Polar_Set = airfoil.polarSet
+                if self.show_VLM_polars:
+                    polarSet.ensure_polars_VLM ()
                 polarSet.load_or_generate_polars ()
 
-                polars_to_plot = list(filter(lambda polar: polar.active, polarSet.polars)) 
-                polars_to_plot = list(filter(lambda polar: polar.re_asK >= self.min_re_asK, polars_to_plot)) 
+                polars_to_plot : list[Polar] = []
+                for polar in polarSet.polars:
+                    if polar.active and polar.re_asK >= self.min_re_asK:
+                        if not self.show_VLM_polars and not polar.is_VLM_polar:
+                            polars_to_plot.append (polar)
+                        elif self.show_VLM_polars and polar.is_VLM_polar:
+                            polars_to_plot.append (polar)
 
-                polar : Polar 
                 for iPolar, polar in enumerate(reversed(polars_to_plot)): 
 
                     # generate increasing color hue value for the polars of an airfoil 
                     color = color_in_series (color_airfoil, iPolar, len(polars_to_plot), delta_hue=0.1)
 
-                    # legend entry only for first polar of an airfoil 
-                    # if iPolar == 0:
-                    #     label_airfoil =  f"{airfoil.name} @ {section.name_short}" 
-                    # else: 
-                    #     label_airfoil = None 
                     label_airfoil =  f"{airfoil.name} @ {section.name_short}" 
 
-                    self._plot_polar (airfoil.isBlendAirfoil, label_airfoil, polar, color)
+                    self._plot_polar (airfoil.isBlendAirfoil, section.is_for_panels, label_airfoil, polar, color)
 
                     if not polar.isLoaded: 
                         nPolar_generating += 1
@@ -2852,7 +2833,7 @@ class Polar_Artist (Abstract_Artist_Planform):
 
 
 
-    def _plot_polar (self, isBlendAirfoil: bool, label_airfoil : str, polar: Polar, color): 
+    def _plot_polar (self, isBlendAirfoil: bool, section_is_for_panels : bool, label_airfoil: str, polar: Polar, color): 
         """ plot a single polar"""
 
         # build nice label (for first polar)
@@ -2865,8 +2846,9 @@ class Polar_Artist (Abstract_Artist_Planform):
             label = None 
 
         # finally plot 
-
-        if isBlendAirfoil:
+        if section_is_for_panels:
+            pen = pg.mkPen(color, width=1.0, style=Qt.PenStyle.DotLine)
+        elif isBlendAirfoil:
             pen = pg.mkPen(color, width=1.0, style=Qt.PenStyle.DashLine)
         else:
             pen = pg.mkPen(color, width=1.0)

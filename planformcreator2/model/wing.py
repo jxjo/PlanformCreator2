@@ -1921,7 +1921,7 @@ class WingSection :
         if self.is_for_panels:
             toDict (d, "is_for_panels", self.is_for_panels)
 
-        if not self.airfoil.isBlendAirfoil and not self.airfoil.isExample:
+        if not self.airfoil.isBlendAirfoil and not self.airfoil.isExample and os.path.isfile (self.airfoil.pathFileName_abs):
             # replace with airfoils_dir variable if airfoil is in airfoils dir of wing
             if os.path.samefile(self.airfoil.pathName_abs, self._planform.wing.airfoils_dir):
                 pathFileName = f"{VAR_AIRFOILS_DIR}/{self.airfoil.pathFileName}"
