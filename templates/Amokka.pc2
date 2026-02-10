@@ -37,40 +37,6 @@
       "flap_group":1
     },
     {
-      "cn":0.971205,
-      "flap_group":1,
-      "is_for_panels":true
-    },
-    {
-      "xn":0.336134,
-      "flap_group":2
-    },
-    {
-      "cn":0.860025,
-      "flap_group":2,
-      "is_for_panels":true
-    },
-    {
-      "cn":0.777641,
-      "flap_group":2,
-      "is_for_panels":true
-    },
-    {
-      "cn":0.612872,
-      "flap_group":2,
-      "is_for_panels":true
-    },
-    {
-      "cn":0.448104,
-      "flap_group":2,
-      "is_for_panels":true
-    },
-    {
-      "cn":0.36572,
-      "flap_group":2,
-      "is_for_panels":true
-    },
-    {
       "xn":0.973863,
       "hinge_cn":0.66,
       "flap_group":3
@@ -86,10 +52,9 @@
   "panels":{
     "wy_panels":7,
     "wy_distribution":"uniform",
-    "wx_panels":3,
+    "wx_panels":4,
     "wx_distribution":"uniform",
-    "width_min":0.02,
-    "cn_tip_min":0.09,
+    "width_min":0.005,
     "cn_diff_max":0.01
   }
 }

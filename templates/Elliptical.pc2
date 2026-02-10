@@ -81,9 +81,12 @@
     "hinge_equal_ref_line":false
   },
   "panels":{
-    "wy_panels":8,
+    "wy_panels":3,
     "wy_distribution":"uniform",
     "wx_panels":4,
-    "wx_distribution":"uniform"
+    "wx_distribution":"uniform",
+    "width_min":0.01,
+    "cn_tip_min":0.03,
+    "cn_diff_max":0.01
   }
 }
