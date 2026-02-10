@@ -13,7 +13,7 @@ description = "Design a wing planform"
 readme = "doc/README_PyPi.md"
 requires-python = ">=3.12"
 dependencies = [
-  "airfoileditor>=4.2.3",
+  "airfoileditor>=4.2.5",
   "ezdxf>=1.4.0"
 ]
 classifiers = [
