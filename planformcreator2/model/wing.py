@@ -4266,9 +4266,9 @@ class Planform_Paneled (Planform):
         self._wy_dist        = fromDict (d, "wy_distribution", "uniform")
         self._wx_panels      = fromDict (d, "wx_panels", 4)
         self._wx_dist        = fromDict (d, "wx_distribution", "uniform")
-        self._width_min_targ = fromDict (d, "width_min", None)                # target min panel width 1%
-        self._n_distrib.set_cn_tip_min (fromDict (d, "cn_tip_min",None))      # min tip chord 10%
-        self._cn_diff_max    = fromDict (d, "cn_diff_max", None)              # max cn difference 5%
+        self._width_min_targ = fromDict (d, "width_min", 0.015)               # target min panel width 1%
+        self._n_distrib.set_cn_tip_min (fromDict (d, "cn_tip_min",0.06))      # min tip chord 10%
+        self._cn_diff_max    = fromDict (d, "cn_diff_max", 0.02)              # max cn difference 5%
 
 
     # ---Properties --------------------- 
