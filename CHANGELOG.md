@@ -5,15 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## 4.0.2
 
-This is just a maintenance release with a bunch of bug fixes.
-
 ### Added
 
-- VLM: use airfoil polars with forced transition to get better alpha0 of airfoil
+- VLM: use airfoil polars with forced transition for an improved alpha0, cl_max determination
+- Based on AirfoilEditor 4.2.5
 
 ### Fixed
 
 - VLM: sometimes airfoils were not straked
+- VLM: revised cl_max determination with Xfoil outlier detection
 
 
 ## 4.0.1
