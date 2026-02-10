@@ -437,6 +437,7 @@ class Item_VLM_Panels (Item_Abstract):
         self.app_model.sig_paneling_changed.connect     (self.refresh)
         self.app_model.sig_vlm_opPoint_changed.connect  (self.refresh)
         self.app_model.sig_new_polars.connect           (self.refresh)
+        self.app_model.sig_vlm_polar_reset.connect      (self.refresh)          
         self.app_model.sig_vlm_polar_changed.connect    (self.section_panel.refresh)    # cp checkbox enable/disable
 
 
@@ -2205,9 +2206,10 @@ class Diagram_Airfoils (Diagram_Abstract):
         self._panel_export  = None
 
         self._show_operating_points = False                 # show polars operating points 
-        self._show_strak    = False                         # show blended airfoils
-        self._min_re_asK    = 10                            # minimum re number / 1000 to plot 
-        self._apply_min_re  = True                          # activate min re number 
+        self._show_strak            = False                 # show blended airfoils
+        self._min_re_asK            = 10                    # minimum re number / 1000 to plot 
+        self._apply_min_re          = True                  # activate min re number 
+        self._show_VLM_polars       = False                 # show only VLM polars instead of normal polars
 
         super().__init__(*args, **kwargs)
 
@@ -2333,6 +2335,16 @@ class Diagram_Airfoils (Diagram_Abstract):
         for item in self._get_items (Item_Polars):
             item.setup_viewRange ()
 
+    @property
+    def show_VLM_polars (self) -> bool:
+        """ show only VLM polars instead of normal polars """
+        return self._show_VLM_polars
+    def set_show_VLM_polars (self, aBool : bool):
+        self._show_VLM_polars = aBool == True 
+        artist : Polar_Artist
+        for artist in self._get_artist (Polar_Artist):
+            artist.set_show_VLM_polars (aBool) 
+
 
     @property 
     def panel_common (self) -> Edit_Panel | None:
@@ -2384,6 +2396,14 @@ class Diagram_Airfoils (Diagram_Abstract):
             FieldF      (l,r,c+4, width=60, step=10, lim=(1, 1000), unit="k", dec=0,
                             obj=self, prop=Diagram_Airfoils.min_re_asK,
                             hide=lambda: not self.apply_min_re)
+            r += 1
+            CheckBox    (l,r,c, text="VLM polars (forced transition)", colSpan=5,
+                            obj=self, prop=Diagram_Airfoils.show_VLM_polars,
+                            toolTip="Show VLM polars with a forced transition close to leading edge,\n" + \
+                                "instead of the defined polars without forced transition.\n" + \
+                                "These VLM polars are used to determine alpha0 and cl_max\n"+ \
+                                "for the VLM analysis.\n"+ \
+                                "Activate 'Show blended airfoils' to see all airfoils used in VLM.")
 
             # polar diagrams variables setting 
 
