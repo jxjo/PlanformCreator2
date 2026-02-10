@@ -231,9 +231,11 @@ PC2 includes an integrated VLM (Vortex Lattice Method) module to calculate the l
 
 The primary objective of aerodynamic analysis in PC2 is to identify wing regions that will stall first when the angle of attack increases. For this assessment, 2D airfoil polar data and 3D lift aerodynamic data are combined in a viscous loop.
 
-The 2D airfoil polar data is taken from the polar definitions described in the previous section. Airfoil polars are evaluated for each wing section. Wing analysis supports only T1 polars (constant speed).
+To obtain 2D airfoil data, additional polars with forced transition close to the leading edge are evaluated. These additional polars enable more accurate determination of alpha0, as they do not exhibit Xfoil artifacts around alpha0 in the cl(alpha) polar.
 
-The viscous loop calculates the effective Cl and alpha for each panel station along the span.
+Airfoil polars are evaluated for each wing section. Wing analysis supports only T1 polars (constant speed).
+
+The viscous loop of the VLM analysis calculates the effective Cl and alpha for each panel station along the span.
 
 <img src="./images/vlm_viscous_loop.png" width="400" />
 
@@ -243,7 +245,7 @@ The maximum possible angle of attack (close to stall) is automatically evaluated
 
 <sup>Simple wing example showing the critical wing regions where local Cl reaches cl max of the airfoil.</sup>
 
-By activating the chord distribution view, the chord and thus the area in which the wing will fail first can be changed interactively.
+By activating the chord distribution view, the chord and thus the area in which the wing will stall first can be changed interactively.
 
 <img src="images/vlm_cl_max_with_chord.png" width="800" />
 
