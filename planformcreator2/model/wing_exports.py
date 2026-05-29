@@ -18,13 +18,14 @@ from pathlib                import Path
 from copy                   import deepcopy
 from typing                 import TextIO, Callable, override
 from datetime               import datetime, date
-from math                   import atan, pi
+from math                   import atan, pi, isclose, comb
 
 
 import xml.etree.ElementTree as ET                              # Xflr5 xml handling
 import ezdxf                                                    # dxf handling
 from ezdxf import enums
 
+from airfoileditor.base.spline            import Bezier
 from airfoileditor.base.common_utils      import fromDict, toDict, PathHandler 
 from airfoileditor.model.airfoil          import Airfoil, GEO_SPLINE, Flap_Definition
 
@@ -33,7 +34,11 @@ from .wing                   import Wing, Planform, Planform_Paneled, WingSectio
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 
+# ---- Typing -------------------------------------
 
+type Array      = list[float]
+type Polyline   = tuple[Array, Array]
+type Polylines  = tuple[Array, Array, Array]
 class Exporter_Abstract:  
     """ 
     Abstract base class for export classes 
@@ -1053,6 +1058,79 @@ class Exporter_CSV (Exporter_Abstract):
         return
 
 
+# --- Helper classes for Exporter_DXF ---
+
+
+class Cad_Line:
+    """CAD line segment in planform coordinates."""
+
+    def __init__(self, points: list[tuple[float, float]], name: str = ""):
+        self.points = points
+        self.name = name
+
+
+class Cad_Spline:
+    """CAD spline segment in planform coordinates."""
+
+    def __init__(self, control_points: list[tuple[float, float]], degree: int,
+                 weights: list[float] | None = None, name: str = ""):
+        self.control_points = control_points
+        self.degree = degree
+        self.weights = weights
+        self.name = name
+
+
+    @property
+    def knots(self) -> list[float]:
+        """Clamped Bezier knot vector for this single-span spline."""
+        return [0.0] * (self.degree + 1) + [1.0] * (self.degree + 1)
+
+    @property
+    def is_rational(self) -> bool:
+        return self.weights is not None
+
+
+
+def _bernstein_product(a: Array, b: Array) -> np.ndarray:
+    """Multiply two Bernstein polynomials and return Bernstein coefficients."""
+
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    n = len(a) - 1
+    m = len(b) - 1
+    c = np.zeros(n + m + 1)
+
+    for i, ai in enumerate(a):
+        for j, bj in enumerate(b):
+            k = i + j
+            c[k] += ai * bj * comb(n, i) * comb(m, j) / comb(n + m, k)
+
+    return c
+
+
+def _bernstein_elevate(a: Array, degree: int) -> np.ndarray:
+    """Elevate Bernstein coefficients to a higher degree."""
+
+    a = np.asarray(a, dtype=float)
+    n = len(a) - 1
+
+    if degree < n:
+        raise ValueError("target degree must be greater than or equal to source degree")
+    if degree == n:
+        return np.copy(a)
+
+    b = np.zeros(degree + 1)
+    degree_delta = degree - n
+
+    for j in range(degree + 1):
+        i_min = max(0, j - degree_delta)
+        i_max = min(n, j)
+        for i in range(i_min, i_max + 1):
+            b[j] += a[i] * comb(n, i) * comb(degree_delta, j - i) / comb(degree, j)
+
+    return b
+
+
 
 class Exporter_DXF (Exporter_Abstract):
     """ 
@@ -1155,7 +1233,104 @@ class Exporter_DXF (Exporter_Abstract):
         def wingSections (self) -> WingSections:
             """ wing sections without helper sections for paneling"""
             return self.planform.wingSections.without_for_panels
-        
+            
+
+        def cad_planform_entities (self, mirror_y=False) -> list[Cad_Line | Cad_Spline]:
+            """
+            CAD-native planform outline entities.
+
+            Returns an empty list when the active planform cannot be represented
+            natively and the caller should fall back to polyline export.
+            """
+
+            if self.planform.n_distrib.isBezier and self.planform.n_ref_line.is_straight_line():
+                return self._cad_planform_entities_bezier(mirror_y=mirror_y)
+
+            return []
+
+
+        def _cad_planform_entities_bezier (self, mirror_y=False) -> list[Cad_Line | Cad_Spline]:
+            """
+            Exact Bezier representation of a Bezier chord planform outline.
+
+            The LE/TE curves are built from the chord Bezier and the linear chord
+            reference without sampling the displayed/exported polyline.
+            """
+
+            planform = self.planform
+            chord_bezier : Bezier = planform.n_distrib._bezier
+
+            xn = np.asarray(chord_bezier.points_x, dtype=float)
+            cn = np.asarray(chord_bezier.points_y, dtype=float)
+
+            # The model supports a straight root segment before the Bezier chord starts.
+            # Keep native Bezier export focused on the common full-span curve case.
+            if not isclose(float(xn[0]), 0.0, abs_tol=1e-10):
+                return []
+
+            degree = (len(xn) - 1) * 2
+            xn_elev = _bernstein_elevate(xn, degree)
+            cn_elev = _bernstein_elevate(cn, degree)
+            xn_cn = _bernstein_product(xn, cn)
+
+            cr_root  = planform.n_chord_ref.cr_root
+            cr_delta = planform.n_chord_ref.cr_tip - cr_root
+
+            shear_factor = 1 / np.tan((90 - planform.sweep_angle) * np.pi / 180)
+            x_plan = planform.span * xn_elev
+
+            const = np.ones(degree + 1)
+            le_y = planform.chord_root * (cr_root * const - cr_root * cn_elev - cr_delta * xn_cn) + shear_factor * x_plan
+            te_y = planform.chord_root * (cr_root * const + (1 - cr_root) * cn_elev - cr_delta * xn_cn) + shear_factor * x_plan
+
+            if mirror_y:
+                le_y = planform.chord_root - le_y
+                te_y = planform.chord_root - te_y
+
+            le_points = self._cad_points_from_coeffs(x_plan, le_y)
+            te_points = self._cad_points_from_coeffs(x_plan, te_y)
+
+            entities : list[Cad_Line | Cad_Spline] = [
+                Cad_Line([te_points[0], le_points[0]], name="Root chord"),
+                Cad_Spline(le_points, degree=degree, name="Leading edge"),
+            ]
+
+            if not (isclose(le_points[-1][0], te_points[-1][0], abs_tol=1e-8) and
+                    isclose(le_points[-1][1], te_points[-1][1], abs_tol=1e-8)):
+                entities.append(Cad_Line([le_points[-1], te_points[-1]], name="Tip chord"))
+
+            entities.append(Cad_Spline(list(reversed(te_points)), degree=degree, name="Trailing edge"))
+
+            return entities
+
+
+        def _cad_points_from_coeffs (self, x, y) -> list[tuple[float, float]]:
+            """Convert Bezier coefficients to control points."""
+
+            points = []
+            for i, xi in enumerate(x):
+                points.append((round(float(xi), 10), round(float(y[i]), 10)))
+            return points
+
+
+        def cad_ref_line_entities (self, mirror_y=False) -> list[Cad_Line | Cad_Spline]:
+            """CAD-native reference line entity."""
+
+            ref_bezier : Bezier = self.planform.n_ref_line._ref_bezier
+            xn = np.asarray(ref_bezier.points_x, dtype=float)
+            yn = np.asarray(ref_bezier.points_y, dtype=float)
+
+            x, y = self.planform.t_ref_to_plan(xn, yn)
+            if mirror_y:
+                y = self.planform.chord_root - y
+
+            points = self._cad_points_from_coeffs(x, y)
+
+            if ref_bezier.npoints == 2:
+                return [Cad_Line(points, name="Reference line")]
+
+            return [Cad_Spline(points, degree=ref_bezier.npoints - 1, name="Reference line")]
+
 
         def _arr_to_poly (self, x,y):
             """ converts the two x,y arrays to an array of points (x,y) """
@@ -1187,13 +1362,13 @@ class Exporter_DXF (Exporter_Abstract):
             self._plot_line_fromPoints (self._arr_to_poly (x,y))
 
 
-        def _plot_cad_entity (self, entity):
+        def _plot_cad_entity (self, entity : Cad_Line | Cad_Spline):
             """Plot a CAD-native model entity."""
 
-            if entity.kind == "line":
+            if isinstance(entity, Cad_Line):
                 self.msp.add_line(entity.points[0], entity.points[1])
 
-            elif entity.kind == "spline":
+            elif isinstance(entity, Cad_Spline):
                 control_points = [(x, y, 0.0) for x, y in entity.control_points]
 
                 if entity.is_rational:
@@ -1202,11 +1377,12 @@ class Exporter_DXF (Exporter_Abstract):
                 else:
                     self.msp.add_open_spline (control_points, degree=entity.degree, knots=entity.knots)
 
+
         # --------  public ----------------
 
         def plot_planform (self):
 
-            cad_entities = self.planform.cad_planform_entities(mirror_y=True)
+            cad_entities = self.cad_planform_entities(mirror_y=True)
             if cad_entities:
                 self._planform_export_is_polyline = False
                 for entity in cad_entities:
@@ -1236,7 +1412,7 @@ class Exporter_DXF (Exporter_Abstract):
         def plot_hingeLine (self):
 
             if self.planform.flaps.hinge_equal_ref_line:
-                for entity in self.planform.cad_ref_line_entities(mirror_y=True):
+                for entity in self.cad_ref_line_entities(mirror_y=True):
                     self._plot_cad_entity(entity)
                 return
 
