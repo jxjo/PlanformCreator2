@@ -190,7 +190,7 @@ class Dialog_Export_DXF (Dialog):
         l = QGridLayout()
         r = 0 
         Label  (l,r,0, colSpan=5, style=style.COMMENT,
-                get="The planform will be exported as a polyline - not as a spline.")
+                get="Bezier planforms are exported as splines. Other modes fall back to polyline export.")
         r += 1
         SpaceR (l, r, height=10) 
         r += 1 

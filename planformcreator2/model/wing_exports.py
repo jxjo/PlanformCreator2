@@ -1145,6 +1145,7 @@ class Exporter_DXF (Exporter_Abstract):
 
             self.doc = ezdxf.new('R2010')
             self.msp = self.doc.modelspace()
+            self._planform_export_is_polyline = True
 
         @property
         def planform (self) -> Planform:
@@ -1183,11 +1184,34 @@ class Exporter_DXF (Exporter_Abstract):
         def _plot_line_fromArray (self, x: list , y:list ):
             """plots a (poly) line defined by two arrays x and y """
 
-            self.msp.add_lwpolyline (self._arr_to_poly (x,y))
+            self._plot_line_fromPoints (self._arr_to_poly (x,y))
+
+
+        def _plot_cad_entity (self, entity):
+            """Plot a CAD-native model entity."""
+
+            if entity.kind == "line":
+                self.msp.add_line(entity.points[0], entity.points[1])
+
+            elif entity.kind == "spline":
+                control_points = [(x, y, 0.0) for x, y in entity.control_points]
+
+                if entity.is_rational:
+                    self.msp.add_rational_spline (control_points, entity.weights,
+                                                  degree=entity.degree, knots=entity.knots)
+                else:
+                    self.msp.add_open_spline (control_points, degree=entity.degree, knots=entity.knots)
 
         # --------  public ----------------
 
         def plot_planform (self):
+
+            cad_entities = self.planform.cad_planform_entities(mirror_y=True)
+            if cad_entities:
+                self._planform_export_is_polyline = False
+                for entity in cad_entities:
+                    self._plot_cad_entity(entity)
+                return
             
             x, le, te, = self.planform.le_te_polyline()
 
@@ -1210,6 +1234,11 @@ class Exporter_DXF (Exporter_Abstract):
 
 
         def plot_hingeLine (self):
+
+            if self.planform.flaps.hinge_equal_ref_line:
+                for entity in self.planform.cad_ref_line_entities(mirror_y=True):
+                    self._plot_cad_entity(entity)
+                return
 
             x, y = self.planform.flaps.hinge_polyline()
 
@@ -1324,6 +1353,9 @@ class Exporter_DXF (Exporter_Abstract):
 
         def plot_warning_polyline (self):
             # plot warning that the planform is idealized as polyline
+            if not self._planform_export_is_polyline:
+                return
+
             y_m = self.planform.chord_root * 0.5
             x_m = self.planform.span * 0.4
 
