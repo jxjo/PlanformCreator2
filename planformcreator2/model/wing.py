@@ -4597,8 +4597,6 @@ class Planform_Paneled (Planform):
     def _optimize_cn_diff (self):
         """ insert new sections until chord difference is below max value """
 
-        # if not self.is_cn_diff_exceeded: return 
-
         i_cycle = 1
         section_inserted = True 
 

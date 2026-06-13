@@ -374,31 +374,8 @@ class Mode_Modify (Mode_Abstract):
 
 
 
-    def delete (self): 
-        """ delete current airfoil ..."""
-
-        # airfoil = self.app_model.airfoil
-
-        # if not os.path.isfile (airfoil.pathFileName_abs): return 
-
-        # text = f"Airfoil <b>{airfoil.fileName}</b> including temporary files will be deleted."
-        # button = MessageBox.warning (self.stacked_panel, "Delete airfoil", text)
-
-        # if button == QMessageBox.StandardButton.Ok:
-
-        #     self.delete_temp_files (silent=True)
-        #     os.remove (airfoil.pathFileName_abs)                               # remove airfoil
-
-        #     self._toast_message (f"Airfoil {airfoil.fileName} deleted", toast_style=style.GOOD)
-        #     logger.info (f"Airfoil {airfoil.fileName} deleted")
-
-        #     next_airfoil = get_next_airfoil_in_dir (airfoil, example_if_none=True)
-        #     self.app_model.set_airfoil (next_airfoil)                           # try to set on next airfoil
-
-        #     if next_airfoil.isExample:
-        #        button = MessageBox.info (self.stacked_panel, "Delete airfoil", "This was the last airfoil in the directory.<br>" + \
-        #                                        "Showing Example airfoil") 
-
+    def delete (self):
+        pass
 
     def delete_temp_files (self): 
         """ delete all temp files and directories of current airfoil ..."""

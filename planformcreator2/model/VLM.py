@@ -47,7 +47,7 @@ def calc_induced_velocities(aerogrid, Ma):
 
     # Step 1
     r1Xr2_x = r1y * r2z - r1z * r2y
-    r1Xr2_y = -r1x * r2z + r1z * r2x  # Plus-Zeichen Abweichung zu Katz & Plotkin ??
+    r1Xr2_y = -r1x * r2z + r1z * r2x  # Sign deviation from Katz & Plotkin
     r1Xr2_z = r1x * r2y - r1y * r2x
     mod_r1Xr2 = (r1Xr2_x ** 2.0 + r1Xr2_y ** 2.0 + r1Xr2_z ** 2.0) ** 0.5
     # Step 2
