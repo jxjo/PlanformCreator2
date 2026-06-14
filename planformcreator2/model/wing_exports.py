@@ -1,4 +1,4 @@
-#!/usr/bin/env pythonbutton_color
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """  
@@ -1012,7 +1012,7 @@ class Exporter_CSV (Exporter_Abstract):
  
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         # Convert to forward slashes for cross-platform storage
@@ -1149,7 +1149,7 @@ class Exporter_DXF (Exporter_Abstract):
 
 
     def _as_dict (self) -> dict:
-        """ returns a data dict with the paramters of self"""
+        """ returns a data dict with the parameters of self"""
 
         d = {}
         # Convert to forward slashes for cross-platform storage
