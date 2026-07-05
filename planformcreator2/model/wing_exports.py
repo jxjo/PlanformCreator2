@@ -18,7 +18,7 @@ from pathlib                import Path
 from copy                   import deepcopy
 from typing                 import TextIO, Callable, override
 from datetime               import datetime, date
-from math                   import atan, pi, isclose, comb
+from math                   import atan, pi, isclose
 
 
 import xml.etree.ElementTree as ET                              # Xflr5 xml handling
@@ -1079,6 +1079,21 @@ class Cad_Spline:
         self.weights = weights
         self.name = name
 
+    @classmethod
+    def from_bezier(cls, bezier: Bezier, name: str = "", y_transform: Callable[[float], float] | None = None,
+                    reverse_control_points: bool = False) -> "Cad_Spline":
+        """Build a CAD spline from a Bezier curve control polygon."""
+
+        points: list[tuple[float, float]] = []
+        for x, y in zip(bezier.points_x, bezier.points_y):
+            y_val = y_transform(float(y)) if y_transform else float(y)
+            points.append((round(float(x), 10), round(y_val, 10)))
+
+        if reverse_control_points:
+            points.reverse()
+
+        return cls(points, degree=bezier.npoints - 1, name=name)
+
 
     @property
     def knots(self) -> list[float]:
@@ -1088,47 +1103,6 @@ class Cad_Spline:
     @property
     def is_rational(self) -> bool:
         return self.weights is not None
-
-
-
-def _bernstein_product(a: Array, b: Array) -> np.ndarray:
-    """Multiply two Bernstein polynomials and return Bernstein coefficients."""
-
-    a = np.asarray(a, dtype=float)
-    b = np.asarray(b, dtype=float)
-    n = len(a) - 1
-    m = len(b) - 1
-    c = np.zeros(n + m + 1)
-
-    for i, ai in enumerate(a):
-        for j, bj in enumerate(b):
-            k = i + j
-            c[k] += ai * bj * comb(n, i) * comb(m, j) / comb(n + m, k)
-
-    return c
-
-
-def _bernstein_elevate(a: Array, degree: int) -> np.ndarray:
-    """Elevate Bernstein coefficients to a higher degree."""
-
-    a = np.asarray(a, dtype=float)
-    n = len(a) - 1
-
-    if degree < n:
-        raise ValueError("target degree must be greater than or equal to source degree")
-    if degree == n:
-        return np.copy(a)
-
-    b = np.zeros(degree + 1)
-    degree_delta = degree - n
-
-    for j in range(degree + 1):
-        i_min = max(0, j - degree_delta)
-        i_max = min(n, j)
-        for i in range(i_min, i_max + 1):
-            b[j] += a[i] * comb(n, i) * comb(degree_delta, j - i) / comb(degree, j)
-
-    return b
 
 
 
@@ -1243,7 +1217,7 @@ class Exporter_DXF (Exporter_Abstract):
             natively and the caller should fall back to polyline export.
             """
 
-            if self.planform.n_distrib.isBezier and self.planform.n_ref_line.is_straight_line():
+            if self.planform.le_te_bezier_exact() is not None:
                 return self._cad_planform_entities_bezier(mirror_y=mirror_y)
 
             return []
@@ -1258,48 +1232,30 @@ class Exporter_DXF (Exporter_Abstract):
             """
 
             planform = self.planform
-            chord_bezier : Bezier = planform.n_distrib._bezier
-
-            xn = np.asarray(chord_bezier.points_x, dtype=float)
-            cn = np.asarray(chord_bezier.points_y, dtype=float)
-
-            # The model supports a straight root segment before the Bezier chord starts.
-            # Keep native Bezier export focused on the common full-span curve case.
-            if not isclose(float(xn[0]), 0.0, abs_tol=1e-10):
+            bezier_data = planform.le_te_bezier_exact()
+            if bezier_data is None:
                 return []
 
-            degree = (len(xn) - 1) * 2
-            xn_elev = _bernstein_elevate(xn, degree)
-            cn_elev = _bernstein_elevate(cn, degree)
-            xn_cn = _bernstein_product(xn, cn)
+            le_bezier, te_bezier = bezier_data
+            y_transform = (lambda y: planform.chord_root - y) if mirror_y else None
 
-            cr_root  = planform.n_chord_ref.cr_root
-            cr_delta = planform.n_chord_ref.cr_tip - cr_root
+            le_spline = Cad_Spline.from_bezier(le_bezier, name="Leading edge", y_transform=y_transform)
+            te_spline_rev = Cad_Spline.from_bezier(te_bezier, name="Trailing edge", y_transform=y_transform,
+                                                   reverse_control_points=True)
 
-            shear_factor = 1 / np.tan((90 - planform.sweep_angle) * np.pi / 180)
-            x_plan = planform.span * xn_elev
-
-            const = np.ones(degree + 1)
-            le_y = planform.chord_root * (cr_root * const - cr_root * cn_elev - cr_delta * xn_cn) + shear_factor * x_plan
-            te_y = planform.chord_root * (cr_root * const + (1 - cr_root) * cn_elev - cr_delta * xn_cn) + shear_factor * x_plan
-
-            if mirror_y:
-                le_y = planform.chord_root - le_y
-                te_y = planform.chord_root - te_y
-
-            le_points = self._cad_points_from_coeffs(x_plan, le_y)
-            te_points = self._cad_points_from_coeffs(x_plan, te_y)
+            le_points = le_spline.control_points
+            te_points = list(reversed(te_spline_rev.control_points))
 
             entities : list[Cad_Line | Cad_Spline] = [
                 Cad_Line([te_points[0], le_points[0]], name="Root chord"),
-                Cad_Spline(le_points, degree=degree, name="Leading edge"),
+                le_spline,
             ]
 
             if not (isclose(le_points[-1][0], te_points[-1][0], abs_tol=1e-8) and
                     isclose(le_points[-1][1], te_points[-1][1], abs_tol=1e-8)):
                 entities.append(Cad_Line([le_points[-1], te_points[-1]], name="Tip chord"))
 
-            entities.append(Cad_Spline(list(reversed(te_points)), degree=degree, name="Trailing edge"))
+            entities.append(te_spline_rev)
 
             return entities
 

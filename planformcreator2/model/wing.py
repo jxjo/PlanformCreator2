@@ -27,7 +27,7 @@ import bisect
 import shutil
 from typing                 import override
 from pathlib                import Path
-from math                   import isclose
+from math                   import isclose, comb
 
 from airfoileditor.base.math_util           import * 
 from airfoileditor.base.spline              import * 
@@ -50,6 +50,46 @@ logger = logging.getLogger(__name__)
 type Array      = list[float]
 type Polyline   = tuple[Array, Array]
 type Polylines  = tuple[Array, Array, Array]
+
+
+def _bernstein_product(a: Array, b: Array) -> np.ndarray:
+    """Multiply two Bernstein polynomials and return Bernstein coefficients."""
+
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    n = len(a) - 1
+    m = len(b) - 1
+    c = np.zeros(n + m + 1)
+
+    for i, ai in enumerate(a):
+        for j, bj in enumerate(b):
+            k = i + j
+            c[k] += ai * bj * comb(n, i) * comb(m, j) / comb(n + m, k)
+
+    return c
+
+
+def _bernstein_elevate(a: Array, degree: int) -> np.ndarray:
+    """Elevate Bernstein coefficients to a higher degree."""
+
+    a = np.asarray(a, dtype=float)
+    n = len(a) - 1
+
+    if degree < n:
+        raise ValueError("target degree must be greater than or equal to source degree")
+    if degree == n:
+        return np.copy(a)
+
+    b = np.zeros(degree + 1)
+    degree_delta = degree - n
+
+    for j in range(degree + 1):
+        i_min = max(0, j - degree_delta)
+        i_max = min(n, j)
+        for i in range(i_min, i_max + 1):
+            b[j] += a[i] * comb(n, i) * comb(degree_delta, j - i) / comb(degree, j)
+
+    return b
 
 
 # ---- Model --------------------------------------
@@ -3801,6 +3841,47 @@ class Planform:
         x, te_y = self.t_norm_to_plan (xn, te_yn)
 
         return x, le_y, te_y 
+
+
+    def le_te_bezier_exact (self) -> tuple[Bezier, Bezier] | None:
+        """
+        Exact Bezier LE/TE representation if the active planform allows it.
+
+        Returns:
+            (le_bezier, te_bezier) in planform coordinates, or None.
+        """
+
+        if not self.n_distrib.isBezier or not self.n_ref_line.is_straight_line():
+            return None
+
+        chord_bezier : Bezier = self.n_distrib._bezier
+        xn = np.asarray(chord_bezier.points_x, dtype=float)
+        cn = np.asarray(chord_bezier.points_y, dtype=float)
+
+        # The model supports a straight root segment before the Bezier chord starts.
+        # Keep exact Bezier output focused on the common full-span curve case.
+        if not isclose(float(xn[0]), 0.0, abs_tol=1e-10):
+            return None
+
+        degree = (len(xn) - 1) * 2
+        xn_elev = _bernstein_elevate(xn, degree)
+        cn_elev = _bernstein_elevate(cn, degree)
+        xn_cn = _bernstein_product(xn, cn)
+
+        cr_root  = self.n_chord_ref.cr_root
+        cr_delta = self.n_chord_ref.cr_tip - cr_root
+
+        shear_factor = 1 / np.tan((90 - self.sweep_angle) * np.pi / 180)
+        x_plan = self.span * xn_elev
+
+        const = np.ones(degree + 1)
+        le_y = self.chord_root * (cr_root * const - cr_root * cn_elev - cr_delta * xn_cn) + shear_factor * x_plan
+        te_y = self.chord_root * (cr_root * const + (1 - cr_root) * cn_elev - cr_delta * xn_cn) + shear_factor * x_plan
+
+        le_bezier = Bezier(x_plan.tolist(), le_y.tolist())
+        te_bezier = Bezier(x_plan.tolist(), te_y.tolist())
+
+        return le_bezier, te_bezier
 
 
     def polygon (self) -> Polyline:
