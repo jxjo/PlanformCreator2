@@ -25,7 +25,7 @@ from ..model.wing           import (Planform, N_Distrib_Abstract, N_Chord_Refere
                                     Flaps, WingSections, WingSection)
 
 from ..app_model            import App_Model
-from .pc2_dialogs           import Dialog_TextEdit
+from .pc2_dialogs           import Dialog_Description
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.WARNING)
@@ -275,13 +275,10 @@ class Panel_Wing (Panel_Planform_Abstract):
     def _edit_description (self):
         """ open little text editor to edit description"""
 
-        dialog = Dialog_TextEdit (self, self.wing.description, title="Description of Wing", 
-                                  parentPos=(0.9,0.0), dialogPos=(0.0,1.0))
-        dialog.exec () 
-
-        if dialog.result() == QDialog.DialogCode.Accepted:
-            self.wing.set_description (dialog.new_text)
-            self._on_widget_changed (dialog)                   # manual refresh a dialog is not a 'Widget'
+        diag = Dialog_Description (self, self.wing, 
+                                         parentPos=(1.0, 0.4), dialogPos=(0,1))
+        diag.sig_final_changed.connect (self.app_model.notify_planform_changed)         
+        diag.show ()
 
 
 

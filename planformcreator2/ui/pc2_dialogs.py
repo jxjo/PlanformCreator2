@@ -16,7 +16,7 @@ import pyqtgraph as pg
 from pyqtgraph.GraphicsScene.mouseEvents   import MouseClickEvent
 
 from airfoileditor.base.widgets         import * 
-from airfoileditor.base.panels          import Dialog, MessageBox 
+from airfoileditor.base.panels          import MessageBox, Dialog_Modal, Dialog_Modeless
 from airfoileditor.base.diagram         import Diagram, Diagram_Item
 from airfoileditor.base.artist          import Artist
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 
 
-class Dialog_Export_Airfoil (Dialog):
+class Dialog_Export_Airfoil (Dialog_Modal):
     """ 
     Dialog to export airfoils to a subdirectory
     """
@@ -148,12 +148,12 @@ class Dialog_Export_Airfoil (Dialog):
 
 
 
-class Dialog_Export_DXF (Dialog):
+class Dialog_Export_DXF (Dialog_Modal):
     """ 
     Dialog to export dxf including airfoils to a subdirectory
     """
 
-    _width  = 460
+    _width  = 500
     _height = 320
 
     name = "Export Planform as dxf File"
@@ -189,7 +189,7 @@ class Dialog_Export_DXF (Dialog):
 
         l = QGridLayout()
         r = 0 
-        Label  (l,r,0, colSpan=5, style=style.COMMENT,
+        Label  (l,r,0, colSpan=6, style=style.COMMENT,
                 get="Bezier planforms are exported as splines. Other modes fall back to polyline export.")
         r += 1
         SpaceR (l, r, height=10) 
@@ -208,21 +208,22 @@ class Dialog_Export_DXF (Dialog):
         CheckBox (l,r,0, colSpan=3, text= "Use airfoils nick name",
                   obj=self.exporter_airfoils, prop=Exporter_Airfoils.use_nick_name)
         r += 1
-        CheckBox (l,r,0, colSpan=2, text= "Set a common trailing edge thickness of",
+        CheckBox (l,r,0, colSpan=3, text= "Set a common trailing edge thickness of",
                   obj=self.exporter_airfoils, prop=Exporter_Airfoils.adapt_te_gap)
         FieldF (l,r,3, width=70, unit="mm", step=0.1, lim=(0, 5), dec=1,
                   obj=self.exporter_airfoils, prop=Exporter_Airfoils.te_gap_mm,
                   disable=lambda: not self.exporter_airfoils.adapt_te_gap)
         r += 1
-        Label  (l,r,0, colSpan=5, height=50, style=style.COMMENT,
+        Label  (l,r,0, colSpan=6, height=50, style=style.COMMENT,
                 get="      The common thickness will be achieved, when the exported airfoils\n" +
                     "      will be scaled to their chord length in CAD.\n")
         r += 1
         l.setRowStretch (r,1)
         l.setColumnMinimumWidth (0,80)
-        l.setColumnStretch (1,1)
-        l.setColumnStretch (3,1)
-        l.setColumnStretch (5,2)
+        l.setColumnMinimumWidth (1,150)
+        # l.setColumnStretch (1,1)
+        # l.setColumnStretch (3,1)
+        l.setColumnStretch (5,5)
 
         return l
 
@@ -280,7 +281,7 @@ class Dialog_Export_DXF (Dialog):
 
 
 
-class Dialog_Export_Xflr5 (Dialog):
+class Dialog_Export_Xflr5 (Dialog_Modal):
     """ 
     Dialog to export xflr5 xml including airfoils to a subdirectory
     """
@@ -408,7 +409,7 @@ class Dialog_Export_Xflr5 (Dialog):
 
 
 
-class Dialog_Export_FLZ (Dialog):
+class Dialog_Export_FLZ (Dialog_Modal):
     """ 
     Dialog to export FLZ vortex file to a subdirectory
     """
@@ -518,7 +519,7 @@ class Dialog_Export_FLZ (Dialog):
 
 
 
-class Dialog_Export_CSV (Dialog):
+class Dialog_Export_CSV (Dialog_Modal):
     """ 
     Dialog to export paneled planform to CSV file
     """
@@ -618,7 +619,7 @@ class Dialog_Export_CSV (Dialog):
 
 
 
-class Dialog_Rename (Dialog):
+class Dialog_Rename (Dialog_Modal):
     """ 
     Dialog to rename a planform file
     """
@@ -749,7 +750,7 @@ class Dialog_Rename (Dialog):
 
 
 
-class Dialog_Edit_Image (Dialog):
+class Dialog_Edit_Image (Dialog_Modal):
     """ 
     Dialog to define image settings for background image
     """
@@ -933,7 +934,7 @@ class Dialog_Edit_Image (Dialog):
 
 
 
-class Dialog_Select_Template (Dialog):
+class Dialog_Select_Template (Dialog_Modal):
     """ 
     Dialog to select a template PC2 file to create a new planform
     """
@@ -1190,88 +1191,56 @@ class Dialog_Select_Template (Dialog):
 # --------------------------------------------------------
 
 
-class Dialog_TextEdit (Dialog):
+class Dialog_Description (Dialog_Modeless):
 
-    """ a small text editor """
+    """ a small text editor to edit the wing description"""
 
     _width  = 300
-    _height = 150
+    _height = 80
 
-    name = "Edit"
+    name = "Description"
 
-    def __init__ (self, *args, title : str= None, **kwargs): 
-
-        self._close_btn  : QPushButton = None 
-
-        self._new_text  = None
-
+    def __init__ (self, *args, **kwargs): 
         super().__init__ ( *args, **kwargs)
 
-
-        title = title if title is not None else self.name
-        self.setWindowTitle (f"{title}")
         self._panel.layout().setContentsMargins (QMargins(0, 0, 0, 0))  # no borders in central panel 
 
-        # connect dialog buttons
-        self._close_btn.clicked.connect  (self.close)
-
 
     @property
-    def text (self) -> str:
+    def wing (self) -> Wing:
         return self.dataObject
 
-    @property
-    def new_text (self) -> str:
-        """ the edited text when Ok was pressed"""
-        return self._new_text
-    
-    def set_new_text (self, aStr : str):
-        self._new_text = aStr
-
-    # -------------------------------------------------------------------
 
     def _init_layout(self) -> QLayout:
 
         l = QGridLayout()
 
         self._qtextEdit = QTextEdit () 
-
-        self._qtextEdit.setPlaceholderText ("Enter text ...")  
-        self._qtextEdit.setPlainText (self.text)  
+        self._qtextEdit.setPlaceholderText ("Enter a description ...")  
+        self._qtextEdit.setPlainText (self.wing.description)  
+        self._qtextEdit.textChanged.connect (lambda: self._on_widget_changed(self._qtextEdit))
 
         l.addWidget (self._qtextEdit, 0,0)
-
         l.setRowStretch (0,1)    
         l.setColumnStretch (0,1)    
 
         return l
 
 
-    @override
-    def _button_box (self):
-        """ returns the QButtonBox with the buttons of self"""
-
-        buttonBox = QDialogButtonBox (QDialogButtonBox.StandardButton.Close) #  | QDialogButtonBox.StandardButton.Cancel)
-        self._close_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Close)
-
-        return buttonBox 
-
-
     @override 
-    def close (self): 
-        """ close button clicked """
+    def _on_widget_changed(self, widget):
 
-        self.set_new_text (self._qtextEdit.toPlainText ()) 
+        # from QTextEdit to Wing
+        text = self._qtextEdit.toPlainText ()
+        self.wing.set_description (text)
 
-        super().close ()
-
-        self.setResult (QDialog.DialogCode.Accepted)
-
+        return super()._on_widget_changed(widget)   
 
 
-class Dialog_Edit_Paneling (Dialog):
+
+class Dialog_Edit_Paneling (Dialog_Modal):
     """ 
-    Dialog to edit / define üaneling options of a Paneled Planform
+    Dialog to edit / define paneling options of a Paneled Planform
     """
 
     _width  = 460

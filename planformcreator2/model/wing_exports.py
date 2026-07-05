@@ -1085,14 +1085,14 @@ class Cad_Spline:
         """Build a CAD spline from a Bezier curve control polygon."""
 
         points: list[tuple[float, float]] = []
-        for x, y in zip(bezier.points_x, bezier.points_y):
+        for x, y in zip(bezier.cpoints_x, bezier.cpoints_y):
             y_val = y_transform(float(y)) if y_transform else float(y)
             points.append((round(float(x), 10), round(y_val, 10)))
 
         if reverse_control_points:
             points.reverse()
 
-        return cls(points, degree=bezier.npoints - 1, name=name)
+        return cls(points, degree=bezier.ncp - 1, name=name)
 
 
     @property
@@ -1217,7 +1217,7 @@ class Exporter_DXF (Exporter_Abstract):
             natively and the caller should fall back to polyline export.
             """
 
-            if self.planform.le_te_bezier_exact() is not None:
+            if self.planform.le_te_as_bezier() is not None:
                 return self._cad_planform_entities_bezier(mirror_y=mirror_y)
 
             return []
@@ -1232,7 +1232,7 @@ class Exporter_DXF (Exporter_Abstract):
             """
 
             planform = self.planform
-            bezier_data = planform.le_te_bezier_exact()
+            bezier_data = planform.le_te_as_bezier()
             if bezier_data is None:
                 return []
 
@@ -1273,8 +1273,8 @@ class Exporter_DXF (Exporter_Abstract):
             """CAD-native reference line entity."""
 
             ref_bezier : Bezier = self.planform.n_ref_line._ref_bezier
-            xn = np.asarray(ref_bezier.points_x, dtype=float)
-            yn = np.asarray(ref_bezier.points_y, dtype=float)
+            xn = np.asarray(ref_bezier.cpoints_x, dtype=float)
+            yn = np.asarray(ref_bezier.cpoints_y, dtype=float)
 
             x, y = self.planform.t_ref_to_plan(xn, yn)
             if mirror_y:
@@ -1282,10 +1282,10 @@ class Exporter_DXF (Exporter_Abstract):
 
             points = self._cad_points_from_coeffs(x, y)
 
-            if ref_bezier.npoints == 2:
+            if ref_bezier.ncp == 2:
                 return [Cad_Line(points, name="Reference line")]
 
-            return [Cad_Spline(points, degree=ref_bezier.npoints - 1, name="Reference line")]
+            return [Cad_Spline(points, degree=ref_bezier.ncp - 1, name="Reference line")]
 
 
         def _arr_to_poly (self, x,y):
