@@ -393,7 +393,7 @@ class Mode_Modify (Mode_Abstract):
             self.wing.remove_tmp ()
             self.app_model.load_wing (self.wing.parm_pathFileName_abs)  # reload wing for new strak etc.
 
-            MessageBox.info (self.stacked_panel, "Delete Temp Files", "Temporary files removed")
+            self._toast_message ("Temporary files removed", toast_style=style.GOOD)
 
 
     def exit (self):

@@ -22,12 +22,12 @@ from math                   import atan, pi, isclose
 
 
 import xml.etree.ElementTree as ET                              # Xflr5 xml handling
-import ezdxf                                                    # dxf handling
-from ezdxf import enums
 
 from airfoileditor.base.spline            import Bezier
 from airfoileditor.base.common_utils      import fromDict, toDict, PathHandler 
+from airfoileditor.base.dxf_artist        import Dxf_Artist, Cad_Line, Cad_PolyLine, Cad_FitSpline, Cad_Spline, Cad_Text, TextAlign
 from airfoileditor.model.airfoil          import Airfoil, GEO_SPLINE, Flap_Definition
+from airfoileditor.model.airfoil_exports  import Dxf_Airfoil_Artist
 
 from .wing                   import Wing, Planform, Planform_Paneled, WingSection, WingSections, Flap
 
@@ -139,7 +139,6 @@ class Exporter_Airfoils (Exporter_Abstract):
         super().__init__(wing, dataDict=dataDict)
  
         self._export_dir_fn     = export_dir_fn if callable(export_dir_fn) else None
-        self._adapt_te_gap      = fromDict (dataDict, "adapt_te_gap", False)
         self._te_gap_mm         = fromDict (dataDict, "te_gap_mm", 0.5)
         self._set_flap          = fromDict (dataDict, "set_flap", False)
         self._flap_angle        = fromDict (dataDict, "flap_angle", 3.0)
@@ -154,8 +153,7 @@ class Exporter_Airfoils (Exporter_Abstract):
         export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
         toDict (d, "export_dir",        export_dir) 
 
-        toDict (d, "adapt_te_gap",      self._adapt_te_gap) 
-        if self._adapt_te_gap:
+        if self.adapt_te_gap:
             toDict (d, "te_gap_mm",         self._te_gap_mm) 
 
         toDict (d, "set_flap",          self._set_flap) 
@@ -225,7 +223,7 @@ class Exporter_Airfoils (Exporter_Abstract):
             airfoil.set_name (f"{airfoil._name_org}{mods}")
             # build new airfoil fileName
             airfoil.set_fileName (airfoil._fileName_org)            # reset to original if possible
-            airfoil.set_fileName_add_suffix (mods)                  # add te_gap modification label to fileName
+            airfoil._set_name_postfix (mods)                        # add te_gap modification label to fileName
 
         # save it to file 
         airfoil.save ()
@@ -259,8 +257,15 @@ class Exporter_Airfoils (Exporter_Abstract):
     def set_use_nick_name(self, aBool): self._use_nick_name = aBool
 
     @property
-    def adapt_te_gap(self) -> bool: return self._adapt_te_gap
-    def set_adapt_te_gap(self, aBool): self._adapt_te_gap = aBool
+    def adapt_te_gap(self) -> bool:
+        return self._te_gap_mm is not None 
+
+    def set_adapt_te_gap(self, aBool: bool):
+        if aBool:
+            if self._te_gap_mm is None:
+                self._te_gap_mm = 0.5
+        else:
+            self._te_gap_mm = None
 
     @property
     def te_gap_mm(self) -> float: return self._te_gap_mm
@@ -343,6 +348,28 @@ class Exporter_Airfoils (Exporter_Abstract):
         logger.debug (f"Airfoil {airfoil.fileName} written to {self.export_dir_abs}") 
 
         return airfoil
+
+    @property
+    def airfoils_issues (self) -> dict[str, list[str]]:
+        """ 
+        Returns a dict with airfoil file names as keys and a list of 
+        geometry/curvature issues as values.
+        Only airfoils with issues are included in the dict.
+        """
+        issues = {}
+        for section in self.planform.wingSections.without_for_panels:
+            if not section.airfoil.isBlendAirfoil:
+                airfoil_issues = section.airfoil.geo.assess_quality()
+                if airfoil_issues:
+                    issues[section.airfoil.fileName] = airfoil_issues
+        return issues
+
+    @property
+    def is_airfoils_quality_good(self) -> bool:
+        """ 
+        Returns True if all airfoils have good quality, False otherwise.
+        """
+        return not self.airfoils_issues
 
 
 
@@ -1061,48 +1088,261 @@ class Exporter_CSV (Exporter_Abstract):
 # --- Helper classes for Exporter_DXF ---
 
 
-class Cad_Line:
-    """CAD line segment in planform coordinates."""
+class Dxf_Wing_Artist (Dxf_Artist):
+    """DXF artist implementation for Wing/Planform exports."""
 
-    def __init__(self, points: list[tuple[float, float]], name: str = ""):
-        self.points = points
-        self.name = name
+    def __init__(self, wing : Wing,
+                 use_nick: bool = False,
+                 te_gap_mm: float|None = None,
+                 always_as_cubic_fit: bool = False):
 
+        super().__init__()
 
-class Cad_Spline:
-    """CAD spline segment in planform coordinates."""
+        self._wing = wing
+        self._planform = wing.planform
 
-    def __init__(self, control_points: list[tuple[float, float]], degree: int,
-                 weights: list[float] | None = None, name: str = ""):
-        self.control_points = control_points
-        self.degree = degree
-        self.weights = weights
-        self.name = name
+        self._use_nick      = use_nick
+        self._te_gap_mm     = te_gap_mm
 
-    @classmethod
-    def from_bezier(cls, bezier: Bezier, name: str = "", y_transform: Callable[[float], float] | None = None,
-                    reverse_control_points: bool = False) -> "Cad_Spline":
-        """Build a CAD spline from a Bezier curve control polygon."""
-
-        points: list[tuple[float, float]] = []
-        for x, y in zip(bezier.cpoints_x, bezier.cpoints_y):
-            y_val = y_transform(float(y)) if y_transform else float(y)
-            points.append((round(float(x), 10), round(y_val, 10)))
-
-        if reverse_control_points:
-            points.reverse()
-
-        return cls(points, degree=bezier.ncp - 1, name=name)
+        self._always_as_cubic_fit = always_as_cubic_fit
 
 
     @property
-    def knots(self) -> list[float]:
-        """Clamped Bezier knot vector for this single-span spline."""
-        return [0.0] * (self.degree + 1) + [1.0] * (self.degree + 1)
+    def planform (self) -> Planform:
+        return self._planform
 
     @property
-    def is_rational(self) -> bool:
-        return self.weights is not None
+    def wingSections (self) -> WingSections:
+        """ wing sections without helper sections for paneling"""
+        return self.planform.wingSections.without_for_panels
+
+    @property
+    def is_bspline_plot(self) -> bool:
+        """Return True if the planform Bezier (and airfoils) are plotted as uniform B-spline curves."""
+        return not self._always_as_cubic_fit and  self.planform.le_te_as_bezier()
+
+
+
+    def plot_planform_as_bezier (self, mirror_y=False):
+        """
+        Plot exact Bezier representation of a Bezier chord planform outline.
+
+        The LE/TE curves are built from the chord Bezier and the linear chord
+        reference without sampling the displayed/exported polyline.
+        """
+
+        planform = self.planform
+        bezier_data = planform.le_te_as_bezier()
+        if bezier_data is None:
+            return []
+
+        le_bezier, te_bezier = bezier_data
+        te_bezier_rev = Bezier(list(reversed(te_bezier.cpoints)))
+
+        point_transform = None
+        if mirror_y:
+            point_transform = lambda x, y: (x, planform.chord_root - y)
+
+        le_spline     = Cad_Spline.from_bezier(le_bezier, point_transform=point_transform)
+        te_spline_rev = Cad_Spline.from_bezier(te_bezier_rev, point_transform=point_transform)
+
+        le_points = le_spline.control_points
+        # te_spline_rev is built from reversed TE control points; reverse again to get root->tip order.
+        te_points = list(reversed(te_spline_rev.control_points))
+
+        entities : list[Cad_Line | Cad_Spline] = [
+            Cad_Line([te_points[0], le_points[0]]),
+            le_spline,
+        ]
+
+        if not (isclose(le_points[-1][0], te_points[-1][0], abs_tol=1e-8) and
+                isclose(le_points[-1][1], te_points[-1][1], abs_tol=1e-8)):
+            entities.append(Cad_Line([le_points[-1], te_points[-1]]))
+
+        entities.append(te_spline_rev)
+
+        for e in entities:
+            self._plot(e)
+
+        # plot info text 
+
+        y_m = self.planform.chord_root * 0.5
+        x_m = self.planform.span * 0.4
+
+        fontsize = (self.planform.chord_root / 230.0) * 5.0
+        msg  = "Leading and trailing edges are plotted as real Bezier curves for perfect accuracy."
+        self._plot(Cad_Text(msg, (x_m, y_m), fontsize, align=TextAlign.MIDDLE_CENTER))
+
+
+
+    def plot_ref_line (self, mirror_y=False):
+        """plot reference line."""
+
+        ref_bezier : Bezier = self.planform.n_ref_line._ref_bezier
+        xn = np.asarray(ref_bezier.cpoints_x, dtype=float)
+        yn = np.asarray(ref_bezier.cpoints_y, dtype=float)
+
+        x, y = self.planform.t_ref_to_plan(xn, yn)
+        if mirror_y:
+            y = self.planform.chord_root - y
+
+        if ref_bezier.ncp == 2:
+            self._plot(Cad_Line.from_x_y (x,y))
+        else:
+            self._plot(Cad_Spline.from_bezier (Bezier(x, y)))
+
+
+    def _y_mirror (self, y_arr : list) -> list:
+        """ mirrors y values so that
+        - te point of root will be at 0,0
+        - le point of root will be at 0, rootchord"""
+        mirrored_y = np.empty (len(y_arr))
+        y_mirror = self.planform.chord_root / 2               # flip x  around half rootchord
+        for i, y in enumerate(y_arr):
+            mirrored_y [i] = y_mirror - (y - y_mirror)
+        return mirrored_y
+
+
+    def plot_planform (self):
+
+        x, le, te, = self.planform.le_te_polyline()
+
+        # mirror the lines along span so that root-te will be at 0,0
+        le = self._y_mirror (le)
+        te = self._y_mirror (te)
+
+        if self.planform.le_te_polyline_is_approximation:
+            # plot LE/TE as smooth fit splines when the source polyline is an approximation
+            msg  = "Leading and trailing edges are approximated as polylines"
+        else: 
+            # plot LE/TE as exact polyline segments
+            msg  = "Leading and trailing edges are exact polylines"
+
+        le_entity = Cad_PolyLine.from_x_y(x, le)
+        te_entity = Cad_PolyLine.from_x_y(x, te)
+
+        entities = [Cad_Line([(x[0], te[0]), (x[0], le[0])]), le_entity]
+
+        if not isclose(le[-1], te[-1], abs_tol=1e-8):
+            entities.append(Cad_Line([(x[-1], le[-1]), (x[-1], te[-1])]))
+
+        entities.append(te_entity)
+
+        for e in entities:
+            self._plot(e)
+
+        # plot info text 
+
+        y_m = self.planform.chord_root * 0.5
+        x_m = self.planform.span * 0.4
+
+        fontsize = (self.planform.chord_root / 230.0) * 5.0
+        self._plot(Cad_Text(msg, (x_m, y_m), fontsize, align=TextAlign.MIDDLE_CENTER))
+
+
+    def plot_hingeLine (self):
+
+        if self.planform.flaps.hinge_equal_ref_line:
+            self.plot_ref_line(mirror_y=True)
+            return
+
+        x, y = self.planform.flaps.hinge_polyline()
+
+        # mirror the lines along span so that root-te will be at 0,0
+        y = self._y_mirror (y)
+        # insert into dxf doc
+        self._plot(Cad_PolyLine.from_x_y (x, y))
+
+
+    def plot_flapLines (self):
+
+        flaps = self.planform.flaps.get()
+
+        flap : Flap
+        for i, flap in enumerate (flaps):
+            if i < (len (flaps) - 1):                           # no flap line at tip
+
+                x, y = flap.line_right ()                       # only one line of flap box needed
+                y = self._y_mirror (y)
+                # insert into dxf doc
+                self._plot(Cad_Line.from_x_y (x, y))
+
+
+    def plot_wingSections (self):
+        # plot a little vertical marker line at wing section station above le
+
+        sec : WingSection
+        for sec in self.wingSections:
+
+            _, le_te = sec.line()               # le from sec line - we have to mirror
+            y_m = self._y_mirror (le_te)[0] + 20
+
+            x_m = sec.x
+            p1 = (x_m, y_m)
+            p2 = (x_m, y_m + 15)
+            self._plot(Cad_Line ([p1,p2]))
+
+
+    def plot_airfoils (self, te_gap_mm = None, use_nick = False):
+        # plot the airfoils in real size to the left of the planform
+        # an absolute Te gap is set
+
+        # ! here in dxf and airfoil coordinate system (not wing) !
+
+        for sec in self.wingSections:
+
+
+            x = sec.x - sec.c /4                                # center t/4 above ypos of section
+            y = self._y_mirror (sec.line()[1])[0] + 20 + 80     # we have to mirror the y position of the section line
+
+            if use_nick and sec.airfoil_nick_name:
+                nick_name = sec.airfoil_nick_name
+            else:
+                nick_name = None
+
+            artist = Dxf_Airfoil_Artist (sec.airfoil, nick_name=nick_name, 
+                                         chord_mm=sec.c, xy_pos_mm=(x, y), 
+                                         te_gap_mm=te_gap_mm, drawing=self.drawing,
+                                         always_as_cubic_fit=self._always_as_cubic_fit)
+            artist.plot()
+
+
+    def plot_title (self):
+        # plot wing name at the bottom
+        y_m = - self.planform.chord_root * 0.2
+        x_m = 0.0
+        fontsize = (self.planform.chord_root / 230.0) * 10.0
+        self._plot(Cad_Text(self._wing.name, (x_m, y_m), fontsize,
+               align=TextAlign.TOP_LEFT))
+
+        y_m = y_m - 20
+        fontsize = (self.planform.chord_root / 230.0) * 5.0
+        self._plot(Cad_Text("Generated by PlanformCreator2", (x_m, y_m), fontsize,
+               align=TextAlign.TOP_LEFT))
+
+        today = date.today().isoformat()
+        y_m = y_m - fontsize - 5
+        self._plot(Cad_Text(f"{today}", (x_m, y_m), fontsize,
+               align=TextAlign.TOP_LEFT))
+
+
+    @override
+    def plot (self):
+        """Build the wing-specific DXF content."""
+
+        # plot planform as real Bezier if it is a Bezier planform, otherwise as polyline
+
+        if self.is_bspline_plot:
+            self.plot_planform_as_bezier(mirror_y=True)
+        else: 
+            self.plot_planform()
+
+        self.plot_hingeLine()
+        self.plot_wingSections()
+        self.plot_flapLines()
+        self.plot_title()
+        self.plot_airfoils(te_gap_mm=self._te_gap_mm, use_nick=self._use_nick)
+
 
 
 
@@ -1119,7 +1359,8 @@ class Exporter_DXF (Exporter_Abstract):
     def __init__(self, wing : Wing, dataDict: dict = None):
         super().__init__(wing, dataDict=dataDict)
  
-        self._export_airfoils    = fromDict (dataDict, "export_airfoils", True)
+        self._export_airfoils     = fromDict (dataDict, "export_airfoils", True)
+        self._always_as_cubic_fit = fromDict(dataDict, "always_as_cubic_fit", False)
 
 
     def _as_dict (self) -> dict:
@@ -1130,6 +1371,8 @@ class Exporter_DXF (Exporter_Abstract):
         export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
         toDict (d, "export_dir",        export_dir) 
         toDict (d, "export_airfoils",   self._export_airfoils) 
+        if self.always_as_cubic_fit:
+            toDict(d, "always_as_cubic_fit", self.always_as_cubic_fit)
         d.update(self.exporter_airfoils._as_dict())
         return d
 
@@ -1142,6 +1385,19 @@ class Exporter_DXF (Exporter_Abstract):
     def dxf_filename(self): 
         return self._wing.parm_fileName_stem + '_wing.dxf'
 
+    @property
+    def always_as_cubic_fit(self) -> bool:
+        return self._always_as_cubic_fit
+
+    def set_always_as_cubic_fit(self, aBool: bool):
+        self._always_as_cubic_fit = aBool
+
+
+    @property
+    def is_le_te_bezier (self) -> bool:
+        """returns True if le and te can be represented as a Bezier, otherwise False"""
+        return self.planform.le_te_as_bezier() is not None
+
 
     def do_it (self): 
         """ 
@@ -1149,27 +1405,22 @@ class Exporter_DXF (Exporter_Abstract):
         Returns a message string what was done 
         """
 
+        # sanity strak
+        self.planform.wingSections.do_strak (geometry_class=GEO_SPLINE)               # ensure strak airfoils are uptodate and splined (quality) 
+
         self._ensure_export_dir()
 
         # plot the different parts in a dxf document 
 
-        dxf = self.Dxf_Artist(self._wing)
-
-        self.planform.wingSections.do_strak (geometry_class=GEO_SPLINE)               # ensure strak airfoils are uptodate and splined (quality) 
-
-        dxf.plot_planform()
-        dxf.plot_hingeLine ()
-        dxf.plot_wingSections (use_nick=self.exporter_airfoils.use_nick_name )
-        dxf.plot_flapLines()
-        dxf.plot_title ()
-        dxf.plot_warning_polyline () 
-
-        te_gap_mm = self.exporter_airfoils.te_gap_mm if self.exporter_airfoils.adapt_te_gap else None
-        dxf.plot_airfoils (te_gap_mm=te_gap_mm)
+        artist = Dxf_Wing_Artist(self._wing,
+                                 use_nick  = self.exporter_airfoils.use_nick_name,
+                                 te_gap_mm = self.exporter_airfoils.te_gap_mm ,
+                                 always_as_cubic_fit = self.always_as_cubic_fit)
+        artist.plot()
 
         # save dxf document  
 
-        dxf.doc.saveas(os.path.join (self.export_dir_abs, self.dxf_filename))  
+        artist.save(os.path.join (self.export_dir_abs, self.dxf_filename))  
 
         # export airfoils 
 
@@ -1181,325 +1432,5 @@ class Exporter_DXF (Exporter_Abstract):
         logger.info ("DXF file " + self.dxf_filename + " written to " + self.export_dir_abs) 
 
         return n_airfoils
-
-
-
-    class Dxf_Artist:
-        """ 
-        - open an dxf document 
-        - 'plots' different wing artefacts into dxf document 
-        - save dxf document to file   
-        """
-        def __init__(self, wing : Wing): 
-
-            self._wing = wing
-            self._planform = wing.planform
-
-            self.doc = ezdxf.new('R2010')
-            self.msp = self.doc.modelspace()
-            self._planform_export_is_polyline = True
-
-        @property
-        def planform (self) -> Planform:
-            return self._planform
-        
-        @property
-        def wingSections (self) -> WingSections:
-            """ wing sections without helper sections for paneling"""
-            return self.planform.wingSections.without_for_panels
-            
-
-        def cad_planform_entities (self, mirror_y=False) -> list[Cad_Line | Cad_Spline]:
-            """
-            CAD-native planform outline entities.
-
-            Returns an empty list when the active planform cannot be represented
-            natively and the caller should fall back to polyline export.
-            """
-
-            if self.planform.le_te_as_bezier() is not None:
-                return self._cad_planform_entities_bezier(mirror_y=mirror_y)
-
-            return []
-
-
-        def _cad_planform_entities_bezier (self, mirror_y=False) -> list[Cad_Line | Cad_Spline]:
-            """
-            Exact Bezier representation of a Bezier chord planform outline.
-
-            The LE/TE curves are built from the chord Bezier and the linear chord
-            reference without sampling the displayed/exported polyline.
-            """
-
-            planform = self.planform
-            bezier_data = planform.le_te_as_bezier()
-            if bezier_data is None:
-                return []
-
-            le_bezier, te_bezier = bezier_data
-            y_transform = (lambda y: planform.chord_root - y) if mirror_y else None
-
-            le_spline = Cad_Spline.from_bezier(le_bezier, name="Leading edge", y_transform=y_transform)
-            te_spline_rev = Cad_Spline.from_bezier(te_bezier, name="Trailing edge", y_transform=y_transform,
-                                                   reverse_control_points=True)
-
-            le_points = le_spline.control_points
-            te_points = list(reversed(te_spline_rev.control_points))
-
-            entities : list[Cad_Line | Cad_Spline] = [
-                Cad_Line([te_points[0], le_points[0]], name="Root chord"),
-                le_spline,
-            ]
-
-            if not (isclose(le_points[-1][0], te_points[-1][0], abs_tol=1e-8) and
-                    isclose(le_points[-1][1], te_points[-1][1], abs_tol=1e-8)):
-                entities.append(Cad_Line([le_points[-1], te_points[-1]], name="Tip chord"))
-
-            entities.append(te_spline_rev)
-
-            return entities
-
-
-        def _cad_points_from_coeffs (self, x, y) -> list[tuple[float, float]]:
-            """Convert Bezier coefficients to control points."""
-
-            points = []
-            for i, xi in enumerate(x):
-                points.append((round(float(xi), 10), round(float(y[i]), 10)))
-            return points
-
-
-        def cad_ref_line_entities (self, mirror_y=False) -> list[Cad_Line | Cad_Spline]:
-            """CAD-native reference line entity."""
-
-            ref_bezier : Bezier = self.planform.n_ref_line._ref_bezier
-            xn = np.asarray(ref_bezier.cpoints_x, dtype=float)
-            yn = np.asarray(ref_bezier.cpoints_y, dtype=float)
-
-            x, y = self.planform.t_ref_to_plan(xn, yn)
-            if mirror_y:
-                y = self.planform.chord_root - y
-
-            points = self._cad_points_from_coeffs(x, y)
-
-            if ref_bezier.ncp == 2:
-                return [Cad_Line(points, name="Reference line")]
-
-            return [Cad_Spline(points, degree=ref_bezier.ncp - 1, name="Reference line")]
-
-
-        def _arr_to_poly (self, x,y):
-            """ converts the two x,y arrays to an array of points (x,y) """
-            poly = []
-            for i, x in enumerate(x): 
-                poly.append ((x, y[i]))
-            return poly
-
-
-        def _y_mirror (self, y_arr : list) -> list: 
-            """ mirrors y values so that 
-            - te point of root will be at 0,0 
-            - le point of root will be at 0, rootchord"""
-            mirrored_y = np.empty (len(y_arr))
-            y_mirror = self.planform.chord_root / 2               # flip x  around half rootchord
-            for i, y in enumerate(y_arr):
-                mirrored_y [i] = y_mirror - (y - y_mirror)
-            return mirrored_y
-
-
-        def _plot_line_fromPoints (self, pointList ):
-            """plots a (poly) line defined by an array of points """
-
-            self.msp.add_lwpolyline (pointList)
-
-        def _plot_line_fromArray (self, x: list , y:list ):
-            """plots a (poly) line defined by two arrays x and y """
-
-            self._plot_line_fromPoints (self._arr_to_poly (x,y))
-
-
-        def _plot_cad_entity (self, entity : Cad_Line | Cad_Spline):
-            """Plot a CAD-native model entity."""
-
-            if isinstance(entity, Cad_Line):
-                self.msp.add_line(entity.points[0], entity.points[1])
-
-            elif isinstance(entity, Cad_Spline):
-                control_points = [(x, y, 0.0) for x, y in entity.control_points]
-
-                if entity.is_rational:
-                    self.msp.add_rational_spline (control_points, entity.weights,
-                                                  degree=entity.degree, knots=entity.knots)
-                else:
-                    self.msp.add_open_spline (control_points, degree=entity.degree, knots=entity.knots)
-
-
-        # --------  public ----------------
-
-        def plot_planform (self):
-
-            cad_entities = self.cad_planform_entities(mirror_y=True)
-            if cad_entities:
-                self._planform_export_is_polyline = False
-                for entity in cad_entities:
-                    self._plot_cad_entity(entity)
-                return
-            
-            x, le, te, = self.planform.le_te_polyline()
-
-            # mirror the lines along span so that root-te will be at 0,0 
-            le = self._y_mirror (le)
-            te = self._y_mirror (te)
-
-            # make a polygon for the planform contour from 0,0 - root - le - tip - te - root 
-            x_c = [0.0]
-            y_c = [0.0]
-            x_c.extend(x)
-            y_c.extend(le)
-            x  = np.flip(x)
-            te = np.flip(te)
-            x_c.extend(x)
-            y_c.extend(te)
-
-            # insert into dxf doc
-            self._plot_line_fromArray (x_c, y_c)
-
-
-        def plot_hingeLine (self):
-
-            if self.planform.flaps.hinge_equal_ref_line:
-                for entity in self.cad_ref_line_entities(mirror_y=True):
-                    self._plot_cad_entity(entity)
-                return
-
-            x, y = self.planform.flaps.hinge_polyline()
-
-            # mirror the lines along span so that root-te will be at 0,0 
-            y = self._y_mirror (y)
-            # insert into dxf doc
-            self._plot_line_fromArray (x, y)
-
-
-        def plot_flapLines (self):
-
-            flaps = self.planform.flaps.get()
-
-            flap : Flap
-            for i, flap in enumerate (flaps):
-                if i < (len (flaps) - 1):                           # no flap line at tip 
-
-                    x, y = flap.line_right ()                       # only one line of flap box needed
-                    y = self._y_mirror (y)
-                    # insert into dxf doc
-                    self._plot_line_fromArray (x, y)
-
-
-        def plot_wingSections (self, use_nick = False):
-            # plot a little vertical marker line at wing section station above le 
-            #  + airfoil nick name
-
-            fontsize = (self.planform.chord_root / 230.0) * 7.0
-
-            sec : WingSection
-            for sec in self.wingSections:
-
-                _, le_te = sec.line()               # le from sec line - we have to mirror 
-                y_m = self._y_mirror (le_te)[0] + 20  
-
-                x_m = sec.x
-                p1 = (x_m, y_m)
-                p2 = (x_m, y_m + 15) 
-                line = [p1,p2]
-                self._plot_line_fromPoints (line)
-
-                if use_nick and sec.airfoil_nick_name:
-                    self.msp.add_text(f"'{sec.airfoil_nick_name}'", height = fontsize).set_placement(
-                                        (x_m, y_m+35), align=enums.TextEntityAlignment.CENTER)
-                else:
-                    self.msp.add_text(f"{sec.airfoil.fileName_stem}", height = fontsize).set_placement(
-                                        (x_m, y_m+20), align=enums.TextEntityAlignment.CENTER)
-
-
-        def plot_airfoils (self, te_gap_mm = None):
-            # plot the airfoils in real size to the left of the planform 
-            # an absolute Te gap is set    
-
-            # ! here in dxf and airfoil coordinate system (not wing) !
-
-            airfoil: Airfoil
-            sec : WingSection
-            for sec in self.wingSections:
-
-                te_gap = None 
-
-                # te gap in mm? if yes scale it to normed ... do it
-                if not te_gap_mm is None and te_gap_mm >= 0.0: 
-                    te_gap  = te_gap_mm / sec.c
-                    airfoil = sec.airfoil.asCopy ()
-                    airfoil.geo.set_te_gap(te_gap)
-                else: 
-                    airfoil = sec.airfoil
-
-                x = airfoil.x
-                y = airfoil.y
-
-                # scale to real size 
-                x = x * sec.c
-                y = y * sec.c
-
-                x = x + sec.x - sec.c /4                # center t/4 above ypos of section 
-
-                _, le_te = sec.line()                   # le from sec line - we have to mirror 
-                y_m = self._y_mirror (le_te)[0] + 20 + 80 
-                y = y + y_m                             # shift upward 
-
-                self._plot_line_fromArray (x,y)
-
-                # plot te gap info if it was set 
-                if te_gap: 
-                    # just above te a small text marker 
-                    y_m = y[0] + 20 
-                    x_m = x[0]
-                    fontsize = 4 
-                    self.msp.add_text(f"TE gap  {te_gap_mm:.1f}mm", height = fontsize).set_placement(
-                                    (x_m, y_m), align=enums.TextEntityAlignment.CENTER)
-
-
-        def plot_title (self):
-            # plot wing name at the bottom
-            y_m = - self.planform.chord_root * 0.2
-            x_m = 0.0
-            fontsize = (self.planform.chord_root / 230.0) * 10.0
-            self.msp.add_text(self._wing.name, height = fontsize).set_placement(
-                                (x_m, y_m), align=enums.TextEntityAlignment.TOP_LEFT)
-
-            y_m = y_m - 20 
-            fontsize = (self.planform.chord_root / 230.0) * 5.0
-            self.msp.add_text("Generated by PlanformCreator2", height = fontsize).set_placement(
-                                (x_m, y_m), align=enums.TextEntityAlignment.TOP_LEFT)
-
-            today = date.today().isoformat()
-            y_m = y_m - fontsize - 5 
-            self.msp.add_text(f"{today}", height = fontsize).set_placement(
-                                (x_m, y_m), align=enums.TextEntityAlignment.TOP_LEFT)
-
-        def plot_warning_polyline (self):
-            # plot warning that the planform is idealized as polyline
-            if not self._planform_export_is_polyline:
-                return
-
-            y_m = self.planform.chord_root * 0.5
-            x_m = self.planform.span * 0.4
-
-            fontsize = (self.planform.chord_root / 230.0) * 5.0
-            msg  = "The planform is idealized as a polyline. Convert to a spline for further processing."
-            self.msp.add_text(msg, height = fontsize).set_placement(
-                                (x_m, y_m), align=enums.TextEntityAlignment.MIDDLE_CENTER)
-
-
-        def save (self, pathFileName):
-            """ save the current dxf document to pathFileName"""  
-            
-            self.doc.saveas(pathFileName)  
 
 

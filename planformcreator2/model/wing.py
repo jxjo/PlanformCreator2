@@ -1926,7 +1926,7 @@ class WingSection :
         if not self.airfoil.isBlendAirfoil and not self.airfoil.isExample and os.path.isfile (self.airfoil.pathFileName_abs):
             # replace with airfoils_dir variable if airfoil is in airfoils dir of wing
             if os.path.samefile(self.airfoil.pathName_abs, self._planform.wing.airfoils_dir):
-                pathFileName = f"{VAR_AIRFOILS_DIR}/{self.airfoil.pathFileName}"
+                pathFileName = f"{VAR_AIRFOILS_DIR}/{self.airfoil.fileName}"
             else:
                 # make relative path to working dir if possible
                 try:
@@ -2011,8 +2011,7 @@ class WingSection :
     def set_strak_airfoil (self):
         """ set airfoil of self as a strak (dummy) airfoil """
 
-        tmp_dir      = self._planform._wing.tmp_dir
-        airfoil = Airfoil (name=STRAK_AIRFOIL_NAME, geometry=GEO_BASIC, workingDir=tmp_dir)
+        airfoil = Airfoil (name=STRAK_AIRFOIL_NAME, geometry=GEO_BASIC)
         airfoil.set_isBlendAirfoil (True)
 
         self.set_airfoil (airfoil)
@@ -2039,28 +2038,28 @@ class WingSection :
             raise FileNotFoundError (f"{self} airfoil file {pathFileName_abs} not found")
 
         fileName = os.path.basename (pathFileName_abs)
+        airfoil_pathFileName_abs = pathFileName_abs
         
         # is airfoil already in airfoils dir of wing ?
         if into_airfoils_dir:
-            workingDir = self._planform.wing.airfoils_dir
-            pathFileName_in_airfoil_dir = os.path.join(workingDir, fileName)
+            pathFileName_in_airfoil_dir = os.path.join(self._planform.wing.airfoils_dir, fileName)
+            airfoil_pathFileName_abs = pathFileName_in_airfoil_dir
             if not os.path.isfile (pathFileName_in_airfoil_dir):
                 # copy airfoil file to airfoils dir of wing          
                 shutil.copy2 (pathFileName_abs, pathFileName_in_airfoil_dir)
-                logger.debug (f"{self} copied airfoil {fileName} to {self._planform.wing.airfoils_dir}")
+                logger.info (f"{self} copied airfoil {fileName} to {self._planform.wing.airfoils_dir}")
 
-        else: 
-            workingDir = os.path.dirname(pathFileName_abs)
-
-        airfoil = Airfoil (pathFileName= fileName, geometry=GEO_BASIC,
-                            workingDir=workingDir)
+        airfoil = Airfoil.onFileType (pathFileName=airfoil_pathFileName_abs, geometry=GEO_BASIC)
         airfoil.load()
 
         # ensure airfoil is normalized (for strak) - if not create tmp airfoil 
         if not airfoil.isNormalized:
             airfoil.normalize(mod_string='_norm')
             logger.debug (f"{self} normalize airfoil {airfoil.fileName}")
-            airfoil.saveAs (dir=self._planform.wing.airfoils_dir)
+            if into_airfoils_dir:
+                airfoil.save()
+            else:
+                airfoil.saveAs (dir=self._planform.wing.airfoils_dir)
 
         self.set_airfoil (airfoil)
 
@@ -2684,9 +2683,7 @@ class WingSections (list [WingSection]):
                         airfoil.set_name     (name, reset_original=True)  
 
                         fileName = f"{left.fileName_stem}{mods}_{right.fileName_stem}.dat"    
-                        airfoil.set_fileName   (fileName)
-                        airfoil.set_workingDir (tmp_dir) 
-                        airfoil.set_pathName   ('') 
+                        airfoil.set_pathFileName (os.path.join(tmp_dir, fileName), noCheck=True)
                         airfoil.set_isModified (False)           # avoid save and polar generation if file already exists
 
                     else:
@@ -3114,7 +3111,8 @@ class Flaps:
         # sanity - at least 2 points and strictly increasing ? 
 
         if len (x) < 2 or not np.all(np.diff(x) > 0):
-            logger.warning ("Hinge polyline definition is corrupted - will be reset")
+            if x or y:     # after switching hinge ref line, x,y can be []
+                logger.warning ("Hinge polyline definition is corrupted - will be reset")
             self.check_and_correct()
             x, y = self._get_hinge_points ()                                # try again 
 
@@ -3143,7 +3141,8 @@ class Flaps:
 
     @property
     def _wingSections (self) -> WingSections:
-        return self._planform.wingSections
+        """ the real wing sections without the extra sections for paneling """
+        return self._planform.wingSections.without_for_panels
         
     @property
     def hinge_equal_ref_line (self) -> bool: 
@@ -3167,7 +3166,7 @@ class Flaps:
         start_section  = None
         section : WingSection
 
-        for section in self._wingSections.without_for_panels:
+        for section in self._wingSections:
 
             if start_section is None and section.flap_group > 0:
                 start_section = section
@@ -3803,6 +3802,18 @@ class Planform:
         x, te_y = self.t_norm_to_plan (xn, te_yn)
 
         return x, le_y, te_y 
+
+
+    @property
+    def le_te_polyline_is_approximation (self) -> bool:
+        """ 
+        True if le_te_polyline is an approximation e.g. of Bezier or Banana function
+        """
+
+        is_approx = self.n_distrib.isBezier or \
+                    self.n_distrib.isElliptical or \
+                    not self.n_ref_line.is_straight_line()
+        return is_approx
 
 
     def le_te_as_bezier (self) -> tuple[Bezier, Bezier] | None:

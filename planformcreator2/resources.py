@@ -8,17 +8,42 @@ Supports both pip-installed packages and PyInstaller frozen executables.
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 # subdirectory for resources in PyInstaller frozen executable onedir mode
 FROZEN_RESOURCES_SUBDIR   = '_internal/planformcreator2'
 
-# directory for templates relative to resources directory
-TEMPLATES_DIR             = "templates"
-
-
 def _is_frozen() -> bool:
     """Check if running as PyInstaller frozen executable."""
     return getattr(sys, 'frozen', False)
+
+
+def _is_resource_root(path: Path) -> bool:
+    """A valid resource root contains at least one expected subdirectory."""
+    return any((path / subdir).is_dir() for subdir in ("icons", "assets", "templates"))
+
+
+def get_resources_root() -> Optional[Path]:
+    """Resolve the resource root for frozen, pip, and development layouts."""
+    if _is_frozen():
+        exe_dir = Path(sys.executable).parent
+        for candidate in (
+            exe_dir / FROZEN_RESOURCES_SUBDIR,
+            exe_dir / "_internal",
+            exe_dir,
+        ):
+            if _is_resource_root(candidate):
+                return candidate
+        return None
+
+    for candidate in (
+        Path(__file__).parent,
+        Path(__file__).parent.parent,
+    ):
+        if _is_resource_root(candidate):
+            return candidate
+
+    return None
 
 
 def _get_resources_dir_pyinstaller() -> Path:
@@ -55,17 +80,15 @@ def get_resource_path(resource_type: str, *path_parts: str) -> Path:
     Examples:
         >>> get_resource_path('icons', 'PC2.ico')
     """
-    if _is_frozen():
-        # PyInstaller: resources are in _internal directory
-        base = _get_resources_dir_pyinstaller()
-    else:
-        # Pip package: resources are at project root level
-        # (icons/, templates/ next to planformcreator2/)
-        base = _get_resources_dir_pip()
-
-        if not (base / resource_type).exists():
-            # Development mode: resources are in parent directory
-            base = _get_resources_dir_dev()
+    base = get_resources_root()
+    if base is None:
+        # Safe fallback keeps previous behavior for unexpected layouts.
+        if _is_frozen():
+            base = _get_resources_dir_pyinstaller()
+        else:
+            base = _get_resources_dir_pip()
+            if not (base / resource_type).exists():
+                base = _get_resources_dir_dev()
     
     resource_path = base / resource_type / Path(*path_parts) if path_parts else base / resource_type
 

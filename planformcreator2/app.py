@@ -33,8 +33,8 @@ from PyQt6.QtWidgets        import QGridLayout
 from PyQt6.QtGui            import QCloseEvent, QGuiApplication, QIcon
 
 # --- AE modules ---------------
-    
-from airfoileditor.resources            import get_icons_path as ae_icons_path
+
+from airfoileditor.resources            import get_resources_root as ae_get_resources_root
 from airfoileditor.base.common_utils    import * 
 from airfoileditor.base.widgets         import Icon, Widget
 from airfoileditor.base.panels          import Tab_Panel, Win_Util
@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 #-------------------------------------------------------------------------------
 
 APP_NAME         = "PlanformCreator2"
-__version__      = "4.0.2"                            # hatch "version dynamic" reads this version for build
+__version__      = "4.3.0"                            # hatch "version dynamic" reads this version for build
 
 
 class Main (QMainWindow):
@@ -108,7 +108,8 @@ class Main (QMainWindow):
 
         logger.info (f"Initialize UI")
  
-        self._set_win_style (ae_icons_path(), 'PC2.ico')
+        ae_resources_root = ae_get_resources_root()
+        self._set_win_style (str(ae_resources_root) if ae_resources_root else None, 'PC2.ico')
         self._set_win_title ()
         self._set_win_geometry ()
 
@@ -162,13 +163,14 @@ class Main (QMainWindow):
         self.setWindowTitle (APP_NAME + "  v" + str(__version__) + "  [" + pc2_file + "]")
 
 
-    def _set_win_style (self, icons_path : Path = None, app_icon_name : str  = None):
+    def _set_win_style (self, resources_dir : Path | str | None = None, app_icon_name : str  = None):
         """ 
         Set window style according to settings
         """
 
         # set resources dir for Icons
-        Icon.ICONS_PATH = icons_path
+        if resources_dir is not None:
+            Icon.RESOURCES_DIR = str(resources_dir)
 
         # get and set app icon  
         app_icon_path = get_icon_path(app_icon_name) 

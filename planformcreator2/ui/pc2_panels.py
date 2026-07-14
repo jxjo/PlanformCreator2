@@ -12,13 +12,13 @@ import sys
 
 import logging
 
-from PyQt6.QtWidgets        import QMenu, QDialog, QFileDialog, QMessageBox
-from PyQt6.QtGui            import QDesktopServices
+from PyQt6.QtWidgets        import QMenu, QFileDialog, QMessageBox
+from PyQt6.QtGui            import QDesktopServices, QCursor
 from PyQt6.QtCore           import QUrl
 
 from airfoileditor.base.widgets         import * 
 from airfoileditor.base.panels          import Edit_Panel, MessageBox, Disabled_Overlay
-from airfoileditor.model.airfoil        import Airfoil, GEO_BASIC
+from airfoileditor.model.airfoil        import Airfoil, GEO_BASIC, Airfoil_Bezier, Airfoil_BSpline
 
 from ..model.wing           import Wing, STRAK_AIRFOIL_NAME
 from ..model.wing           import (Planform, N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line,
@@ -372,6 +372,9 @@ class Panel_WingSection (Panel_Planform_Abstract):
     _width  = (680, None)
 
     def __init__(self, *args, **kwargs):
+
+        self._airfoil_issues = None
+
         super().__init__(*args, **kwargs)
 
         # ensure header is not disabled (for section is_for_paneling)
@@ -388,6 +391,9 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
     @override
     def refresh (self, **kwargs):
+
+        self._airfoil_issues = None         # reset airfoil issues cache 
+
         super().refresh(**kwargs)
 
         # ensure header is not disabled (for section is_for_paneling)
@@ -416,6 +422,55 @@ class Panel_WingSection (Panel_Planform_Abstract):
                       disable=lambda: self.wingSection.is_root_or_tip,
                       toolTip='Delete selected wing section')
         l_head.addStretch(3)
+
+    @property
+    def wingSections_list (self) -> list[str]:
+        sec_list = [section.name_short for section in self.wingSections_to_show]
+        return sec_list 
+
+    @property
+    def wingSection (self) -> WingSection:
+        """ Dispatcher for current WingSection between Edit and Diagram """
+        return self.app_model.cur_wingSection
+
+    @property
+    def wingSection_name (self) -> str:
+        return self.wingSection.name_short
+    
+    def set_wingSection_name (self, aSection : WingSection| str):
+        """ set cur wingSection by name """
+        self.app_model.set_cur_wingSection (aSection)
+
+
+    @property
+    def airfoil (self) -> Airfoil | None:
+        """ Airfoil of the winSection - return None if 'strak' """
+        airfoil = self.wingSection.airfoil
+        return airfoil if not airfoil.isBlendAirfoil else None
+
+
+    @property
+    def airfoil_name (self) -> str:
+        """ get airfoil file name or 'strak' at section"""
+        if self.airfoil is not None:
+            return self.airfoil.fileName
+        else:
+            return STRAK_AIRFOIL_NAME
+
+    @property
+    def airfoil_issues (self) -> list[str]:
+        """ get issues of airfoil at section"""
+        if self._airfoil_issues is None:
+            if self.airfoil is not None:
+                self._airfoil_issues = self.airfoil.geo.assess_quality()
+            else:
+                self._airfoil_issues = []
+        return self._airfoil_issues
+        
+    @property
+    def airfoil_is_good_quality (self) -> bool:
+        """ True if airfoil at section has no issues"""
+        return len(self.airfoil_issues) == 0
 
 
     def _init_layout (self): 
@@ -457,7 +512,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
         p_foil = QWidget()
         l_foil = QGridLayout (p_foil)
         Field  (l_foil,0,0,   lab="Airfoil",
-                get=lambda: self._airfoil_name,                 # name as strak fileName can be long
+                get=lambda: self.airfoil_name,                 # name as strak fileName can be long
                 toolTip=lambda: self.wingSection.airfoil.info_as_html)
 
         ToolButton (l_foil,0,2, icon=Icon.OPEN, set=self._open_airfoil, 
@@ -468,13 +523,27 @@ class Panel_WingSection (Panel_Planform_Abstract):
         ToolButton (l_foil,0,4, icon=Icon.AE,   set=self._edit_airfoil,   
                     toolTip="Edit airfoil with the AirfoilEditor", 
                     disable=lambda: self.wingSection.airfoil.isBlendAirfoil)
-        
+
+        Label      (l_foil,0,6, icon=Icon.WARNING, width=20,
+                    hide=lambda: self.airfoil_is_good_quality)
+        Label      (l_foil,0,7, get=lambda: self.airfoil_issues[0] if self.airfoil_issues else "", 
+                    style=style.COMMENT)
+
+        ToolButton (l_foil,0,8, width=50,
+                    text = lambda: f"{len(self.airfoil_issues)-1} More",
+                    set = self._show_airfoil_issues_popup,
+                    hide=lambda: self.airfoil_is_good_quality or len(self.airfoil_issues) == 1,
+                    always_enabled=True,
+                    toolTip=lambda: '\n'.join(self.airfoil_issues))
+
         l_foil.setContentsMargins (QMargins(0, 0, 0, 0)) 
         l_foil.setSpacing (2)
         l_foil.setColumnMinimumWidth (0,70)
         l_foil.setColumnMinimumWidth (1,215)
-        l_foil.setColumnStretch (5,5)
-        l.addWidget (p_foil, r, c, 1, 7)
+        l_foil.setColumnMinimumWidth (5,15)
+        l_foil.setColumnStretch (7,1)
+        l_foil.setColumnStretch (9,2)
+        l.addWidget (p_foil, r, c, 1, 12)
 
         l.setColumnMinimumWidth (0,70)
         l.setColumnMinimumWidth (2,10)
@@ -512,23 +581,18 @@ class Panel_WingSection (Panel_Planform_Abstract):
         return l 
 
 
-    @property
-    def wingSections_list (self) -> list[str]:
-        sec_list = [section.name_short for section in self.wingSections_to_show]
-        return sec_list 
+    def _show_airfoil_issues_popup (self):
+        """Show all current quality issues in a compact popup menu."""
 
-    @property
-    def wingSection (self) -> WingSection:
-        """ Dispatcher for current WingSection between Edit and Diagram """
-        return self.app_model.cur_wingSection
+        if self.airfoil_is_good_quality:
+            return
 
-    @property
-    def wingSection_name (self) -> str:
-        return self.wingSection.name_short
-    
-    def set_wingSection_name (self, aSection : WingSection| str):
-        """ set cur wingSection by name """
-        self.app_model.set_cur_wingSection (aSection)
+        menu = QMenu(self)
+        for issue in self.airfoil_issues:
+            action = menu.addAction(issue)
+            action.setEnabled(False)
+
+        menu.exec(QCursor.pos())
 
 
     def _delete_wingSection (self):
@@ -570,20 +634,19 @@ class Panel_WingSection (Panel_Planform_Abstract):
             text = ""
         return text 
 
-    @property
-    def _airfoil_name (self) -> str:
-        """ get airfoil file name or 'strak' at section"""
-        airfoil = self.wingSection.airfoil
-        return STRAK_AIRFOIL_NAME if airfoil.isBlendAirfoil else airfoil.fileName
-
 
     def _open_airfoil (self):
         """ open a new airfoil and load it"""
 
         airfoil = self.wingSection.airfoil
 
-        filters   = "Airfoil files (*.dat);;Bezier files (*.bez);;Hicks Henne files (*.hicks)"
+        extensions = f"*{Airfoil.Extension} *{Airfoil_Bezier.Extension} *{Airfoil_BSpline.Extension}"
+        filters    = f"Airfoil files ({extensions});;All files (*.*)"
+
         directory = self.wing.airfoils_dir if airfoil.isBlendAirfoil else airfoil.pathName_abs
+        # Validate directory, ensure caption - QFileDialog tends to crash with native WIndows Dialog
+        if not (directory and os.path.isdir(directory)):
+            directory = ""
 
         newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters, directory=directory)
 
@@ -603,13 +666,28 @@ class Panel_WingSection (Panel_Planform_Abstract):
         
         # Run AirfoilEditor as a separate Python process
 
+        overlay = None
+        parent_window = self.window()
+
         try:
-            overlay = Disabled_Overlay (self.window())
-            self.window().setEnabled(False)                 # Disable main window to simulate modal behavior
+            overlay = Disabled_Overlay(parent_window)
+            parent_window.setEnabled(False)                 # Disable main window to simulate modal behavior
             QApplication.processEvents()                    # ensure overlay is shown
 
-            process = subprocess.Popen([sys.executable, '-m', 'airfoileditor', airfoil.pathFileName_abs])
-            process.wait()  # Wait for the process to complete (modal behavior)
+            process = subprocess.run(
+                [sys.executable, '-m', 'airfoileditor', airfoil.pathFileName_abs],
+                capture_output=True,
+                text=True)
+
+            if process.returncode != 0:
+                details = (process.stderr or process.stdout or '').strip()
+                if details:
+                    details = details[:1200]
+                    text = f"AirfoilEditor exited with error code {process.returncode}.\n\n{details}"
+                else:
+                    text = f"AirfoilEditor exited with error code {process.returncode}."
+                MessageBox.error(self, 'Edit Airfoil', text, min_height=90)
+                return
 
         except FileNotFoundError as e:
             MessageBox.error(self, 'Edit Airfoil', f"Could not open AirfoilEditor.\n\n{e}", min_height=60)
@@ -618,10 +696,12 @@ class Panel_WingSection (Panel_Planform_Abstract):
             MessageBox.error(self, 'Edit Airfoil', f"Error launching AirfoilEditor.\n\n{e}", min_height=60)
             return
         finally:
-            self.window().setEnabled(True)                  # Re-enable main window
-            overlay.hide()                                  # Hide immediately
-            overlay.close()                                 # Close and trigger closeEvent
-            overlay.deleteLater()                           # Schedule for deletion
+            if parent_window is not None:
+                parent_window.setEnabled(True)              # Re-enable main window
+            if overlay is not None:
+                overlay.hide()                              # Hide immediately
+                overlay.close()                             # Close and trigger closeEvent
+                overlay.deleteLater()                       # Schedule for deletion
 
         # After editing, reload the airfoil to reflect any changes - reset strak
         self._set_airfoil_by_file (airfoil.pathFileName_abs)
