@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## 4.3.0
+
+This release is primarily a port to AirfoilEditor v4.3.0, which includes major refactoring.
+
+### Added
+
+- DXF export:
+  - Export Bezier-based planforms as B-splines (Thanks to Michael!)
+  - Export Bezier-based airfoils as B-splines, and .dat-based airfoils as cubic splines
+
+
+### Fixed
+
+- Various minor bugs and usability issues
+
 
 ## 4.0.2
 

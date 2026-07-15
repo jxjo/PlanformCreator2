@@ -23,6 +23,7 @@
 import fnmatch
 import os
 import numpy as np
+import numpy.typing as npt
 import bisect
 import shutil
 from typing                 import override
@@ -50,6 +51,7 @@ logger = logging.getLogger(__name__)
 type Array      = list[float]
 type Polyline   = tuple[Array, Array]
 type Polylines  = tuple[Array, Array, Array]
+type FloatArray = npt.NDArray[np.float64]
 
 
 # ---- Model --------------------------------------
@@ -958,30 +960,30 @@ class N_Chord_Reference:
         """ returns a data dict with the parameters of self"""
 
         d = {}
-        toDict (d, "p0y",        self._cr_bezier.points_y[0])
-        toDict (d, "p1y",        self._cr_bezier.points_y[1])
+        toDict (d, "p0y",        self._cr_bezier.cpoints_y[0])
+        toDict (d, "p1y",        self._cr_bezier.cpoints_y[1])
         return d
 
 
     @property 
     def cr_root (self) -> float:
         """ cr value at root - typically 0.75"""
-        return self._cr_bezier.points_y[0]
+        return self._cr_bezier.cpoints_y[0]
     
     def set_cr_root (self, aVal : float):
-        px, _ = self._cr_bezier.points[0]
+        px, _ = self._cr_bezier.cpoints[0]
         py    = clip (aVal, 0.0, 1.0)
-        self._cr_bezier.set_point (0, px, py)
+        self._cr_bezier.set_cpoint (0, px, py)
 
     @property 
     def cr_tip (self) -> float:
         """ cr value at root - typically 0.75"""
-        return self._cr_bezier.points_y[-1]
+        return self._cr_bezier.cpoints_y[-1]
     
     def set_cr_tip (self, aVal : float):
-        px, _ = self._cr_bezier.points[-1]
+        px, _ = self._cr_bezier.cpoints[-1]
         py    = clip (aVal, 0.0, 1.0)
-        self._cr_bezier.set_point (-1, px, py)
+        self._cr_bezier.set_cpoint (-1, px, py)
 
 
 
@@ -1010,9 +1012,9 @@ class N_Chord_Reference:
             - in normed coordinates 
         """
         jpoints = []
-        n = len (self._cr_bezier.points)
+        n = len (self._cr_bezier.cpoints)
 
-        for i, point in enumerate(self._cr_bezier.points):
+        for i, point in enumerate(self._cr_bezier.cpoints):
 
             jpoint = JPoint (point)           
 
@@ -1044,7 +1046,7 @@ class N_Chord_Reference:
             py.append(jpoint.y)
 
         # update bezier 
-        self._cr_bezier.set_points (px, py)
+        self._cr_bezier.set_cpoints (px, py)
 
 
 
@@ -1103,8 +1105,8 @@ class N_Reference_Line:
         """ returns a data dict with the parameters of self"""
 
         d = {}
-        toDict (d, "px", self._ref_bezier.points_x)
-        toDict (d, "py", self._ref_bezier.points_y)
+        toDict (d, "px", self._ref_bezier.cpoints_x)
+        toDict (d, "py", self._ref_bezier.cpoints_y)
         return d
 
 
@@ -1114,7 +1116,7 @@ class N_Reference_Line:
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
         if isinstance (xn, float) or isinstance (xn, int):
-            if self._ref_bezier.npoints == 2:                       # optimize straight line 
+            if self._ref_bezier.ncp == 2:                       # optimize straight line 
                 return 0.0 
             else: 
                 return self._ref_bezier.eval_y_on_x (xn, fast=fast) 
@@ -1132,12 +1134,12 @@ class N_Reference_Line:
         returns True if Bezier is either a Line 
         or the 3 control points define (nearly a line)"""
 
-        if self._ref_bezier.npoints == 2:
+        if self._ref_bezier.ncp == 2:
             return True
         else:
 
-            px = self._ref_bezier.points_x
-            py = self._ref_bezier.points_y
+            px = self._ref_bezier.cpoints_x
+            py = self._ref_bezier.cpoints_y
 
             # check if the middle bezier points is on line between the two outer
             for i, px_i in enumerate (px [1:-1]):
@@ -1154,7 +1156,7 @@ class N_Reference_Line:
         True if reference line is not a straight line but a curve meaning 
         banana function 
         """ 
-        return self._ref_bezier.npoints > 2
+        return self._ref_bezier.ncp > 2
 
 
     def set_is_banana (self, aBool):
@@ -1162,8 +1164,8 @@ class N_Reference_Line:
         set the reference line to a Bezier curve and not a straight line
           meaning banana function (Bezier is n>2) 
         """ 
-        px = self._ref_bezier.points_x
-        py = self._ref_bezier.points_y
+        px = self._ref_bezier.cpoints_x
+        py = self._ref_bezier.cpoints_y
 
         if len(px) > 2 and aBool == False:
 
@@ -1171,16 +1173,16 @@ class N_Reference_Line:
             px = [px[0], px[-1]]
             py = [py[0], py[-1]]
 
-            self._ref_bezier.set_points (px, py)
+            self._ref_bezier.set_cpoints (px, py)
 
         elif len(px) == 2 and aBool == True:
 
             # add control point in the middle 
             px_new = 0.5
             py_new = interpolate (px[0], px[1], py[0], py[1], px_new)
-            points = self._ref_bezier.points
+            points = self._ref_bezier.cpoints
             points.insert (1, (px_new, py_new))
-            self._ref_bezier.set_points (points)
+            self._ref_bezier.set_cpoints (points)
 
 
     def polyline (self) -> tuple [Array, Array]:
@@ -1203,9 +1205,9 @@ class N_Reference_Line:
             - in normed coordinates 
         """
         jpoints = []
-        n = len (self._ref_bezier.points)
+        n = len (self._ref_bezier.cpoints)
 
-        for i, point in enumerate(self._ref_bezier.points):
+        for i, point in enumerate(self._ref_bezier.cpoints):
 
             jpoint = JPoint (point)           
 
@@ -1234,7 +1236,7 @@ class N_Reference_Line:
             px.append(jpoint.x )
             py.append(jpoint.y)
 
-        self._ref_bezier.set_points (px, py)
+        self._ref_bezier.set_cpoints (px, py)
 
 
 
@@ -1388,8 +1390,8 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         """ returns a data dict with the parameters of self"""
 
         d = super()._as_dict()
-        toDict (d, "px", np.round(self._bezier.points_x, 6).tolist())
-        toDict (d, "py", np.round(self._bezier.points_y, 6).tolist())
+        toDict (d, "px", np.round(self._bezier.cpoints_x, 6).tolist())
+        toDict (d, "py", np.round(self._bezier.cpoints_y, 6).tolist())
 
         return d
 
@@ -1401,7 +1403,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
             Higher Precision is achieved with interpolation of the curve (fast=False) 
         """
 
-        xn_bezier_start = self._bezier.points_x[0]
+        xn_bezier_start = self._bezier.cpoints_x[0]
 
         # xn either on straight line or on Bezier 
                            
@@ -1426,13 +1428,13 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         if cn > 1.0: 
             logger.warning (f"{self} cn={cn:.3f} clipped")
             return 0.0  
-        elif cn < self._bezier.points_y [-1]:
+        elif cn < self._bezier.cpoints_y [-1]:
             logger.warning (f"{self} cn={cn:.3f} clipped")
             return 1.0
 
         # cn either on straight line or on Bezier 
 
-        cn_bezier_start = self._bezier.points_y[0]
+        cn_bezier_start = self._bezier.cpoints_y[0]
 
         if cn > cn_bezier_start:         
             xn_line, cn_line = self.line_from_root ()
@@ -1447,15 +1449,15 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         """ set normed chord at tip via Bezier curve """   
 
         # set Bezier tip control point 
-        px, _ = self._bezier.points[-1]
+        px, _ = self._bezier.cpoints[-1]
         py    = clip (aVal,0.01,0.9)
-        self._bezier.set_point (-1, px, py)
+        self._bezier.set_cpoint (-1, px, py)
 
         # ensure y tip tangent control point is > y tip 
-        tx, ty = self._bezier.points[-2]
+        tx, ty = self._bezier.cpoints[-2]
         if ty < py:
             ty = py * 1.01
-            self._bezier.set_point (-2, tx, ty)
+            self._bezier.set_cpoint (-2, tx, ty)
 
 
     def polyline (self) -> Polyline:
@@ -1486,14 +1488,14 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
             cn: normalized chord
         """
 
-        xn_bezier_start = self._bezier.points_x[0]
+        xn_bezier_start = self._bezier.cpoints_x[0]
                                                 
         if xn_bezier_start == 0.0:
             xn = np.empty(0)
             cn = np.empty(0)
         else:
             xn = np.linspace (0.0, xn_bezier_start, npoints)
-            cn = np.linspace (1.0, self._bezier.points_y[0], npoints)
+            cn = np.linspace (1.0, self._bezier.cpoints_y[0], npoints)
         return xn, cn
 
 
@@ -1505,9 +1507,9 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         """
 
         jpoints = []
-        n = len(self._bezier.points)
+        n = len(self._bezier.cpoints)
 
-        for i, point in enumerate(self._bezier.points):
+        for i, point in enumerate(self._bezier.cpoints):
 
             jpoint = JPoint (point)   
 
@@ -1560,7 +1562,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
             px.append(xn)
             py.append(yn)
 
-        self._bezier.set_points (px, py)
+        self._bezier.set_cpoints (px, py)
 
 
 
@@ -1924,7 +1926,7 @@ class WingSection :
         if not self.airfoil.isBlendAirfoil and not self.airfoil.isExample and os.path.isfile (self.airfoil.pathFileName_abs):
             # replace with airfoils_dir variable if airfoil is in airfoils dir of wing
             if os.path.samefile(self.airfoil.pathName_abs, self._planform.wing.airfoils_dir):
-                pathFileName = f"{VAR_AIRFOILS_DIR}/{self.airfoil.pathFileName}"
+                pathFileName = f"{VAR_AIRFOILS_DIR}/{self.airfoil.fileName}"
             else:
                 # make relative path to working dir if possible
                 try:
@@ -2009,8 +2011,7 @@ class WingSection :
     def set_strak_airfoil (self):
         """ set airfoil of self as a strak (dummy) airfoil """
 
-        tmp_dir      = self._planform._wing.tmp_dir
-        airfoil = Airfoil (name=STRAK_AIRFOIL_NAME, geometry=GEO_BASIC, workingDir=tmp_dir)
+        airfoil = Airfoil (name=STRAK_AIRFOIL_NAME, geometry=GEO_BASIC)
         airfoil.set_isBlendAirfoil (True)
 
         self.set_airfoil (airfoil)
@@ -2037,28 +2038,28 @@ class WingSection :
             raise FileNotFoundError (f"{self} airfoil file {pathFileName_abs} not found")
 
         fileName = os.path.basename (pathFileName_abs)
+        airfoil_pathFileName_abs = pathFileName_abs
         
         # is airfoil already in airfoils dir of wing ?
         if into_airfoils_dir:
-            workingDir = self._planform.wing.airfoils_dir
-            pathFileName_in_airfoil_dir = os.path.join(workingDir, fileName)
+            pathFileName_in_airfoil_dir = os.path.join(self._planform.wing.airfoils_dir, fileName)
+            airfoil_pathFileName_abs = pathFileName_in_airfoil_dir
             if not os.path.isfile (pathFileName_in_airfoil_dir):
                 # copy airfoil file to airfoils dir of wing          
                 shutil.copy2 (pathFileName_abs, pathFileName_in_airfoil_dir)
-                logger.debug (f"{self} copied airfoil {fileName} to {self._planform.wing.airfoils_dir}")
+                logger.info (f"{self} copied airfoil {fileName} to {self._planform.wing.airfoils_dir}")
 
-        else: 
-            workingDir = os.path.dirname(pathFileName_abs)
-
-        airfoil = Airfoil (pathFileName= fileName, geometry=GEO_BASIC,
-                            workingDir=workingDir)
+        airfoil = Airfoil.onFileType (pathFileName=airfoil_pathFileName_abs, geometry=GEO_BASIC)
         airfoil.load()
 
         # ensure airfoil is normalized (for strak) - if not create tmp airfoil 
         if not airfoil.isNormalized:
             airfoil.normalize(mod_string='_norm')
             logger.debug (f"{self} normalize airfoil {airfoil.fileName}")
-            airfoil.saveAs (dir=self._planform.wing.airfoils_dir)
+            if into_airfoils_dir:
+                airfoil.save()
+            else:
+                airfoil.saveAs (dir=self._planform.wing.airfoils_dir)
 
         self.set_airfoil (airfoil)
 
@@ -2682,9 +2683,7 @@ class WingSections (list [WingSection]):
                         airfoil.set_name     (name, reset_original=True)  
 
                         fileName = f"{left.fileName_stem}{mods}_{right.fileName_stem}.dat"    
-                        airfoil.set_fileName   (fileName)
-                        airfoil.set_workingDir (tmp_dir) 
-                        airfoil.set_pathName   ('') 
+                        airfoil.set_pathFileName (os.path.join(tmp_dir, fileName), noCheck=True)
                         airfoil.set_isModified (False)           # avoid save and polar generation if file already exists
 
                     else:
@@ -3112,7 +3111,8 @@ class Flaps:
         # sanity - at least 2 points and strictly increasing ? 
 
         if len (x) < 2 or not np.all(np.diff(x) > 0):
-            logger.warning ("Hinge polyline definition is corrupted - will be reset")
+            if x or y:     # after switching hinge ref line, x,y can be []
+                logger.warning ("Hinge polyline definition is corrupted - will be reset")
             self.check_and_correct()
             x, y = self._get_hinge_points ()                                # try again 
 
@@ -3141,7 +3141,8 @@ class Flaps:
 
     @property
     def _wingSections (self) -> WingSections:
-        return self._planform.wingSections
+        """ the real wing sections without the extra sections for paneling """
+        return self._planform.wingSections.without_for_panels
         
     @property
     def hinge_equal_ref_line (self) -> bool: 
@@ -3165,7 +3166,7 @@ class Flaps:
         start_section  = None
         section : WingSection
 
-        for section in self._wingSections.without_for_panels:
+        for section in self._wingSections:
 
             if start_section is None and section.flap_group > 0:
                 start_section = section
@@ -3801,6 +3802,59 @@ class Planform:
         x, te_y = self.t_norm_to_plan (xn, te_yn)
 
         return x, le_y, te_y 
+
+
+    @property
+    def le_te_polyline_is_approximation (self) -> bool:
+        """ 
+        True if le_te_polyline is an approximation e.g. of Bezier or Banana function
+        """
+
+        is_approx = self.n_distrib.isBezier or \
+                    self.n_distrib.isElliptical or \
+                    not self.n_ref_line.is_straight_line()
+        return is_approx
+
+
+    def le_te_as_bezier (self) -> tuple[Bezier, Bezier] | None:
+        """
+        Exact Bezier LE/TE representation if the active planform allows it.
+
+        Returns:
+            (le_bezier, te_bezier) in planform coordinates, or None.
+        """
+
+        if not self.n_distrib.isBezier or not self.n_ref_line.is_straight_line():
+            return None
+
+        chord_bezier : Bezier = self.n_distrib._bezier
+        xn = np.asarray(chord_bezier.cpoints_x, dtype=float)
+        cn = np.asarray(chord_bezier.cpoints_y, dtype=float)
+
+        # The model supports a straight root segment before the Bezier chord starts.
+        # Keep exact Bezier output focused on the common full-span curve case.
+        if not isclose(float(xn[0]), 0.0, abs_tol=1e-10):
+            return None
+
+        degree = (len(xn) - 1) * 2
+        xn_elev = bernstein_elevate(xn, degree)
+        cn_elev = bernstein_elevate(cn, degree)
+        xn_cn = bernstein_product(xn, cn)
+
+        cr_root  = self.n_chord_ref.cr_root
+        cr_delta = self.n_chord_ref.cr_tip - cr_root
+
+        shear_factor = 1 / np.tan((90 - self.sweep_angle) * np.pi / 180)
+        x_plan = self.span * xn_elev
+
+        const = np.ones(degree + 1)
+        le_y: FloatArray = self.chord_root * (cr_root * const - cr_root * cn_elev - cr_delta * xn_cn) + shear_factor * x_plan
+        te_y: FloatArray = self.chord_root * (cr_root * const + (1 - cr_root) * cn_elev - cr_delta * xn_cn) + shear_factor * x_plan
+
+        le_bezier = Bezier(x_plan.tolist(), le_y.tolist())
+        te_bezier = Bezier(x_plan.tolist(), te_y.tolist())
+
+        return le_bezier, te_bezier
 
 
     def polygon (self) -> Polyline:
@@ -4596,8 +4650,6 @@ class Planform_Paneled (Planform):
 
     def _optimize_cn_diff (self):
         """ insert new sections until chord difference is below max value """
-
-        # if not self.is_cn_diff_exceeded: return 
 
         i_cycle = 1
         section_inserted = True 

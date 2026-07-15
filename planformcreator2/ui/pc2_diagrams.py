@@ -29,7 +29,7 @@ from ..model.VLM_wing   import VLM_OpPoint, OpPoint_Var, VLM_Wing
 
 from .pc2_artists       import *
 from .pc2_dialogs       import (Dialog_Edit_Image, Dialog_Edit_Paneling, Dialog_Export_Xflr5,
-                                Dialog_Export_FLZ, Dialog_Export_CSV, Dialog_Export_Airfoil, Dialog_Export_DXF)
+                                Dialog_Export_FLZ, Dialog_Export_CSV, Dialog_Export_Airfoils, Dialog_Export_DXF)
 
 from ..app_model        import App_Model
 
@@ -842,7 +842,7 @@ class Item_VLM_Result (Item_Abstract):
         return self._section_panel 
 
 
-    def _edit_polar_def (self, polar_def: Polar_Definition = None, silent: bool=False):
+    def _edit_polar_def (self, polar_def: Polar_Definition = None):
         """ edit polar definition - currently only re number"""
 
         if polar_def is None:   
@@ -851,20 +851,27 @@ class Item_VLM_Result (Item_Abstract):
         chord = self.wing.planform.chord_root
 
         # currently only mini dialog for re number
-        dialog = Calc_Reynolds_Dialog (self.section_panel, re_asK=polar_def.re_asK, fixed_chord=chord,
+        dialog = Calc_Reynolds_Dialog (self.section_panel, polar_def.re_asK, fixed_chord=chord,
                                        title="Set Reynolds Number for Polar Definition",
-                                       parentPos=(1.1, 0.5), dialogPos=(0,0.5))
+                                       parentPos=(1.0, 0.5), dialogPos=(0,0.7))
 
-        dialog.exec()     
+        dialog.show()     
 
-        if dialog.has_been_set:
-            polar_def.set_re_asK (dialog.re_asK)
+        dialog.sig_changed.connect (polar_def.set_re_asK)
+        dialog.sig_final_changed.connect (self._on_polar_def_changed)
+
+
+    def _on_polar_def_changed (self):
+        """ handle changed polar def - inform parent"""
 
         # sort polar definitions ascending re number 
         self.wing.polar_definitions.sort (key=lambda aDef : aDef.re)
 
-        if not silent:
-            self.app_model.notify_polar_definitions_changed ()
+        # ensure if only 1 polar def, this has to be active 
+        if len(self.wing.polar_definitions) == 1 and not self.wing.polar_definitions[0].active:
+            self.wing.polar_definitions[0].set_active(True)
+
+        self.app_model.notify_polar_definitions_changed ()
 
 
     def _delete_polar_def (self):
@@ -896,7 +903,7 @@ class Item_VLM_Result (Item_Abstract):
         self.wing.polar_definitions.append (new_polar_def)
 
         # open edit dialog for new def 
-        self._edit_polar_def (polar_def=new_polar_def, silent=True)     # silent to avoid double notify
+        self._edit_polar_def (polar_def=new_polar_def)     # silent to avoid double notify
 
         # set new current - will signal change 
         self.app_model.set_cur_polar_def (new_polar_def)                
@@ -1741,8 +1748,8 @@ class Diagram_Planform (Diagram_Abstract):
 
     def __init__(self, *args,  **kwargs):
 
-        self._general_panel = None                          # panel with general settings  
-        self._export_panel  = None                          # panel with export buttons
+        self._panel_general = None                          # panel with general settings  
+        self._panel_export  = None                          # panel with export buttons
 
         super().__init__(*args,  **kwargs)
 
@@ -1846,16 +1853,16 @@ class Diagram_Planform (Diagram_Abstract):
 
         layout : QVBoxLayout = self._viewPanel.layout()
 
-        layout.insertWidget (0, self.general_panel, stretch=0)          # general at top
+        layout.insertWidget (0, self.panel_general, stretch=0)          # general at top
         layout.addStretch   (3)
-        layout.addWidget    (self.export_panel, stretch=0)              # export at bottom
+        layout.addWidget    (self.panel_export, stretch=0)              # export at bottom
 
 
     @property 
-    def general_panel (self) -> Edit_Panel | None:
+    def panel_general (self) -> Edit_Panel | None:
         """ additional section panel with common settings"""
 
-        if self._general_panel is None:
+        if self._panel_general is None:
 
             l = QGridLayout()
             r,c = 0, 0
@@ -1878,9 +1885,9 @@ class Diagram_Planform (Diagram_Abstract):
             l.setColumnStretch (2,5)
             l.setRowStretch (r+1,3)
 
-            self._general_panel = Edit_Panel (title="Common Options", layout=l, auto_height=True,
+            self._panel_general = Edit_Panel (title="Common Options", layout=l, auto_height=True,
                                               switchable=False, switched_on=True)
-        return self._general_panel 
+        return self._panel_general 
 
 
 
@@ -1947,10 +1954,10 @@ class Diagram_Planform (Diagram_Abstract):
 
 
     @property 
-    def export_panel (self) -> Edit_Panel | None:
+    def panel_export (self) -> Edit_Panel | None:
         """ additional section panel with export buttons"""
 
-        if self._export_panel is None:
+        if self._panel_export is None:
 
             l = QGridLayout()
             r,c = 0, 0
@@ -1959,24 +1966,24 @@ class Diagram_Planform (Diagram_Abstract):
             r += 1
             Button      (l,r,c, text="Export CSV", width=100, set=self.export_csv)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l,  
+            self._panel_export = Edit_Panel (title="Export", layout=l,  
                                              auto_height=True, main_margins = (10, 5,10, 10),
                                              switchable=False, switched_on=True)
-        return self._export_panel 
+        return self._panel_export 
 
 
     def export_dxf (self):
         """open export planform to dxf dialog """
 
-        dialog = Dialog_Export_DXF (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
+        dialog = Dialog_Export_DXF (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))  
         dialog.exec()     
 
 
     def export_csv (self):
         """ export wing to csv file"""
 
-        dialog = Dialog_Export_CSV (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
-        dialog.exec() 
+        dialog = Dialog_Export_CSV (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))
+        dialog.exec()
 
 
     def _open_planform_ref_pc2 (self):
@@ -2464,7 +2471,7 @@ class Diagram_Airfoils (Diagram_Abstract):
     def export_airfoils (self):
         """open export airfoils of wing dialog """
 
-        dialog = Dialog_Export_Airfoil (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
+        dialog = Dialog_Export_Airfoils (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))  
         dialog.exec()    
 
 
@@ -2480,8 +2487,8 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
     def __init__(self, *args, **kwargs):
 
         self._airfoil_panel      = None         
-        self._export_panel       = None                     # export to xflr5 ...
-        self._general_panel      = None                     # panel with general settings  
+        self._panel_export       = None                     # export to xflr5 ...
+        self._panel_general      = None                     # panel with general settings  
 
         super().__init__(*args, **kwargs)
 
@@ -2530,9 +2537,9 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             if item.section_panel is not None: 
                 layout.addWidget (item.section_panel,stretch=0)
 
-        layout.insertWidget (0, self.general_panel, stretch=0)          # common settings
+        layout.insertWidget (0, self.panel_general, stretch=0)          # common settings
         layout.addStretch (1)
-        layout.addWidget (self.export_panel)                            # export xflr5 panel 
+        layout.addWidget (self.panel_export)                            # export xflr5 panel 
 
         self._viewPanel = Container_Panel()
         self._viewPanel.setLayout (layout)
@@ -2554,7 +2561,7 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
     
     def set_show_airfoils (self, aBool : bool): 
         self._show_artist (Airfoil_Name_Artist, aBool)
-        self.general_panel.refresh()                                # enable blended checkbox 
+        self.panel_general.refresh()                                # enable blended checkbox 
 
         item = self._get_items (Item_VLM_Panels)[0]
         item.setup_viewRange()                                      # ensure airfoil names fit in current view 
@@ -2562,10 +2569,10 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
 
 
     @property 
-    def general_panel (self) -> Edit_Panel | None:
+    def panel_general (self) -> Edit_Panel | None:
         """ additional section panel with common settings"""
 
-        if self._general_panel is None:
+        if self._panel_general is None:
 
             l = QGridLayout()
             r,c = 0, 0
@@ -2579,17 +2586,17 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
             l.setColumnStretch (0,2)
 
-            self._general_panel = Edit_Panel (title="Common Options", layout=l, auto_height=True,
+            self._panel_general = Edit_Panel (title="Common Options", layout=l, auto_height=True,
                                               switchable=False, switched_on=True)
-        return self._general_panel 
+        return self._panel_general 
 
 
 
     @property 
-    def export_panel (self) -> Edit_Panel | None:
+    def panel_export (self) -> Edit_Panel | None:
         """ additional section panel with export buttons"""
 
-        if self._export_panel is None:
+        if self._panel_export is None:
 
             l = QGridLayout()
             r,c = 0, 0
@@ -2603,10 +2610,10 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
             l.setColumnMinimumWidth (1,12)
             l.setColumnStretch (3,2)
 
-            self._export_panel = Edit_Panel (title="Export", layout=l, 
+            self._panel_export = Edit_Panel (title="Export", layout=l, 
                                              auto_height=True, main_margins = (10, 5,10, 10),
                                              switchable=False, switched_on=True)
-        return self._export_panel 
+        return self._panel_export 
 
 
     # --- public slots ---------------------------------------------------
@@ -2643,13 +2650,13 @@ class Diagram_Wing_Analysis (Diagram_Abstract):
     def export_xflr5 (self): 
         """ export wing to xflr5"""
 
-        dialog = Dialog_Export_Xflr5 (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
+        dialog = Dialog_Export_Xflr5 (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))  
         dialog.exec()   
 
     def export_flz (self): 
         """ export wing to flz"""
 
-        dialog = Dialog_Export_FLZ (self, self.wing, parentPos=(0.2,0.7), dialogPos=(0,1))  
+        dialog = Dialog_Export_FLZ (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))  
         dialog.exec() 
     
 
@@ -2789,33 +2796,33 @@ class Item_Making_Of_Welcome (Item_Making_Of_Abstract):
     def _welcome_message (self) -> str: 
         # use Notepad++ or https://froala.com/online-html-editor/ to edit 
 
-        message = """
-<span style="font-size: 18pt; color: whitesmoke">Welcome to <strong>Planform<span style="color:deeppink">Creator2</span></strong></span>
+        version = self.app_model._version
 
+        message = f"""
+<span style="font-size: 18pt; color: whitesmoke">Welcome to <strong>Planform<span style="color:deeppink">Creator2</span></strong></span>
+    <span style="font-size: 12pt">{version}</span>  <br>
 <span style="font-size: 10pt; color: darkgray">
 <p>
-    You can use the app to design the planform of a wing either just <br>
-    as a draft for CAD processing or as the input for Xflr5 and FLZ_vortex <br>
-    for further aerodynamic assessment.
-    <p> 
-    The base element of PlanformCreator2 is the <span style="color: whitesmoke">Chord Distribution</span>, <br>
-    which is defined first and which will essentially determine the aero<br>
-    properties of a wing regardless of how the planform is later distorted <br>
-    within the app, this chord distribution is retained.
-    </p> 
-    <p> 
-    This overview shows the individual steps of how the final planform <br>
-    is constructed out the <span style="color: whitesmoke">Chord Distribution</span> and the <span style="color: whitesmoke">Chord Reference</span>.
-    </p> 
-    <p> 
-    Try out the functionality or <em>Open</em>
-    an existing PlanformCreator2 file.
-    </p> 
-    <p> 
-    Use the little <span style="color: orange">mouse helper points</span> in the diagrams to play around ...
-    </p> 
+    Design a wing planform for CAD drafting or as input for Xflr5 or FLZ_vortex<br>
+    aerodynamic analysis.
 </p>
 <p>
+    The key concept in PlanformCreator2 is the <span style="color: whitesmoke">Chord Distribution</span>. <br>
+    You define it first, and it largely determines the aerodynamic behavior<br>
+    of the wing. Even when the planform geometry is later distorted in the app,<br>
+    this chord distribution is retained.
+</p>
+<p>
+    This overview shows how the final planform is constructed from <br>
+    <span style="color: whitesmoke">Chord Distribution</span> and <span style="color: whitesmoke">Chord Reference</span>.
+</p>
+<p>
+    Try the functionality, or <em>Open</em> an existing
+    PlanformCreator2 file.
+</p>
+<p>
+    Use the little <span style="color: orange">mouse helper points</span> in the diagrams to explore the geometry.
+</p>
 </span>
 """
         return message
@@ -3008,21 +3015,18 @@ class Panel_Polar_Defs (Edit_Panel):
         return l 
 
 
-    def edit_polar_def (self, id : int = None, polar_def : Polar_Definition = None):
+    def edit_polar_def (self, id : int = None, polar_def : Polar_Definition = None, is_new=False):
         """ edit polar definition with index idef"""
 
 
         if isinstance (id, int):
             polar_def = self.polar_defs[id]
 
-        diag = Polar_Definition_Dialog (self, polar_def, 
+        diag = Polar_Definition_Dialog (self, polar_def, is_new=is_new,
                                         parentPos=(1.1, 0.5), dialogPos=(0,0.5), fixed_chord=self.chord)
-        diag.exec()
+        diag.show()
 
-        # sort polar definitions ascending re number 
-        self.polar_defs.sort (key=lambda aDef : aDef.re)
-
-        self._on_polar_def_changed ()
+        diag.sig_final_changed.connect (self._on_polar_def_changed)
 
 
     def delete_polar_def (self, id : int):
@@ -3052,11 +3056,14 @@ class Panel_Polar_Defs (Edit_Panel):
 
         # open edit dialog for new def 
 
-        self.edit_polar_def (polar_def=new_polar_def)
+        self.edit_polar_def (polar_def=new_polar_def, is_new=True)
 
 
     def _on_polar_def_changed (self):
         """ handle changed polar def - inform parent"""
+
+        # sort polar definitions ascending re number 
+        self.polar_defs.sort (key=lambda aDef : aDef.re)
 
         # ensure if only 1 polar def, this has to be active 
         if len(self.polar_defs) == 1 and not self.polar_defs[0].active:

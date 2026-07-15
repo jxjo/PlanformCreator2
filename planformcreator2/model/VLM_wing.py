@@ -1052,13 +1052,14 @@ class VLM_OpPoint:
 
         with open(pathFileName, 'w', newline='') as csvfile:
             fieldnames = ['y pos', 'Alpha ind', 'Alpha eff', 'Cl']
+            meta_writer = csv.writer(csvfile, dialect='excel')
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames, dialect='excel')
 
-            writer.writer.writerow(["PlanformCreator2"])
-            writer.writer.writerow([f"Wing Name :", f"{self.wing._planform_paneled.wing.name}"])
-            writer.writer.writerow([f"Speed :", f"{self.polar.vtas:.1f}"])
-            writer.writer.writerow([f"Alpha :", f"{self.alpha:.1f}"])
-            writer.writer.writerow([ ])
+            meta_writer.writerow(["PlanformCreator2"])
+            meta_writer.writerow([f"Wing Name :", f"{self.wing._planform_paneled.wing.name}"])
+            meta_writer.writerow([f"Speed :", f"{self.polar.vtas:.1f}"])
+            meta_writer.writerow([f"Alpha :", f"{self.alpha:.1f}"])
+            meta_writer.writerow([ ])
 
             writer.writeheader()
 
@@ -1318,8 +1319,9 @@ class VLM_OpPoint:
             # interpolate cl value in airfoil polar base on alpha_eff
             Cl = np.interp(alpha_eff, airfoil_polar.alpha, airfoil_polar.cl)  # 'normal' alpha0 of polar'
 
-            # calaculate the inviscid equivalence alpha0 based on '2*pi' 
-            alpha0 = alpha_eff - Cl / 0.1097
+            # calaculate the inviscid equivalence alpha0 based on '2*pi'
+            INVISCID_LIFT_SLOPE = 0.1097   # Cl per degree (2*pi per radian = 0.1097 per degree) 
+            alpha0 = alpha_eff - Cl / INVISCID_LIFT_SLOPE
 
             sections_alpha0.append(alpha0)
 

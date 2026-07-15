@@ -201,7 +201,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
 
 
 
-    class Movable_Ref_Line_Bezier (Movable_Bezier):
+    class Movable_Ref_Line_Bezier (Movable_Curve):
         """
         pg.PlotCurveItem representing a Bezier based reference line. 
 
@@ -210,7 +210,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
             - add/delete 3rd point 
         """
 
-        class Movable_Ref_Line_Point (Movable_Bezier_Point):
+        class Movable_Ref_Line_Point (Movable_Curve_Point):
             """ 
             Represents one control point of Movable_Ref_Line_Bezier
                 - subclassed to get individual label 
@@ -534,7 +534,7 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
 
 
 
-    class Movable_Chord_Bezier (Movable_Bezier):
+    class Movable_Chord_Bezier (Movable_Curve):
         """
         pg.PlotCurveItem/UIGraphicsItem which represents 
         a Bezier based chord distribution. 
@@ -567,10 +567,10 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
             """ slot - point is moved by mouse """
             # overridden to check if planform is still tapered
 
-            points_sav =  self.bezier.points[:]             # save for rollback
+            points_sav =  self.curve.cpoints[:]             # save for rollback
 
-            self.bezier.set_points(*self.points_xy())       # update of bezier
-            x,y = self.bezier.eval(self.u)
+            self.curve.set_cpoints(*self.points_xy())       # update of bezier
+            x,y = self.curve.eval(self.u)
 
             # tapered planform? - check if slope (dy) of Bezier becomes positive 
 
@@ -580,22 +580,22 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
             if np.amax (dy) > 0.0 or np.amin (dx) < 0.0:
                 # roll back 
                 i = aPoint.id 
-                self.bezier.set_points (points_sav)
+                self.curve.set_cpoints (points_sav)
                 aPoint.setPos_silent   (points_sav[i])
                 return
             else: 
                 super()._moving_point (aPoint)
 
         @override
-        def _update_bezier_item (self):
+        def _update_curve_item (self):
             """ update bezier curve item from bezier"""
 
             # a straight line segment from root is added to bezier 
-            if self._bezier_item: 
-                x,y = self.bezier.eval(self.u)                  
+            if self._curve_item: 
+                x,y = self.curve.eval(self.u)                  
                 x,y = np.concatenate([[0.0],x]), np.concatenate([[1.0],y])
-                self._bezier_item.setData (x, y)
-                self._bezier_item.show()
+                self._curve_item.setData (x, y)
+                self._curve_item.show()
 
 
         @override
@@ -1346,7 +1346,7 @@ class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
 
 
 
-    class Movable_Ref_Chord_Bezier (Movable_Bezier):
+    class Movable_Ref_Chord_Bezier (Movable_Curve):
         """
         pg.PlotCurveItem representing a Bezier based chord reference. 
 
@@ -1355,7 +1355,7 @@ class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
             - add/delete 3rd point 
         """
 
-        class Movable_Ref_Chord_Point (Movable_Bezier_Point):
+        class Movable_Ref_Chord_Point (Movable_Curve_Point):
             """ 
             Represents one control point of Movable_Ref_Chord_Bezier
                 - subclassed to get individual label 
