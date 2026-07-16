@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 4.3.1
+
+### Fixed
+
+- Windows installer: AirfoilEditor.exe is now installed beside PlanformCreator2.exe, so AirfoilEditor can be opened from PC2.
+- AirfoilEditor 4.3.1: Change signal in modeless dialogs was lost.
+
+
 ## 4.3.0
 
 This release is primarily a port to AirfoilEditor v4.3.0, which includes major refactoring.
