@@ -9,6 +9,7 @@ UI panels
 
 import subprocess
 import sys
+import os
 
 import logging
 
@@ -20,6 +21,7 @@ from airfoileditor.base.widgets         import *
 from airfoileditor.base.panels          import Edit_Panel, MessageBox, Disabled_Overlay
 from airfoileditor.model.airfoil        import Airfoil, GEO_BASIC, Airfoil_Bezier, Airfoil_BSpline
 
+from ..resources           import _is_frozen
 from ..model.wing           import Wing, STRAK_AIRFOIL_NAME
 from ..model.wing           import (Planform, N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line,
                                     Flaps, WingSections, WingSection)
@@ -668,6 +670,18 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         overlay = None
         parent_window = self.window()
+        if _is_frozen():
+            candidate = os.path.join(os.path.dirname(sys.executable), 'AirfoilEditor.exe')
+            command = [candidate, airfoil.pathFileName_abs] if os.path.isfile(candidate) else None
+            if command is None:
+                text = (
+                    f"Could not find AirfoilEditor.exe in {os.path.dirname(sys.executable)}.<br><br>"
+                    "Reinstall the application<br>")
+                MessageBox.error(self, 'Edit Airfoil', text, min_height=110)
+                return
+        else:
+            command = [sys.executable, '-m', 'airfoileditor', airfoil.pathFileName_abs]
+
 
         try:
             overlay = Disabled_Overlay(parent_window)
@@ -675,7 +689,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
             QApplication.processEvents()                    # ensure overlay is shown
 
             process = subprocess.run(
-                [sys.executable, '-m', 'airfoileditor', airfoil.pathFileName_abs],
+                command,
                 capture_output=True,
                 text=True)
 
