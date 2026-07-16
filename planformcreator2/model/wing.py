@@ -1732,9 +1732,18 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
         xn, cn = [], []
         section : WingSection
         for section in self.parent_planform.wingSections:
-            if self.cn_tip_min is None or  (round(section.cn,3) >= self.cn_tip_min) :
+            if self.cn_tip_min is None or  (round(section.cn,2) >= self.cn_tip_min) :
                 xn.append(section.xn)
                 cn.append(section.cn)
+
+        # sanity check - at least 2 sections must be available
+        if len(xn) < 2:
+            section = self.parent_planform.wingSections[-1]
+            logger.warning (f"{self} polyline - cn_tip_min={self.cn_tip_min} is too high - only {len(xn)} sections available")
+            xn.append(section.xn)
+            cn.append(section.cn)
+            self.set_cn_tip_min (section.cn)        
+
 
         return np.round(xn,10), np.round(cn,10) 
 
