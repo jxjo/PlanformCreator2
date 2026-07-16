@@ -5,6 +5,9 @@ set CUR_DIR=%cd%
 if not exist pyproject.toml cd ..
 if not exist pyproject.toml goto end
 
+py -3 dev\win_build.py check
+if %errorlevel% neq 0 goto end
+
 echo.
 echo ------  Upload package to PyPi using Hatch  ...
 echo.

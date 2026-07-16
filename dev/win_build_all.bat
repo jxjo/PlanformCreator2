@@ -5,7 +5,7 @@ set CUR_DIR=%cd%
 if not exist pyproject.toml cd ..
 if not exist pyproject.toml goto error_no_project
 
-py -3 dev\win_build.py exe
+py -3 dev\win_build.py all
 if %errorlevel% neq 0 goto end
 
 goto end

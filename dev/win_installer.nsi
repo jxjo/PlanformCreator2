@@ -15,6 +15,7 @@
 !searchparse "${VERSION}" "" VERSIONMAJOR "." VERSIONMINOR "." VERSIONPATCH
 
 !define COMPANYNAME "Jochen Guenzel"
+!define AE_NAME "AirfoilEditor"
 
 ; These will be set dynamically by the build script
 !define HELPURL "https://github.com/jxjo/${APP_NAME}"
@@ -45,6 +46,8 @@ InstallDirRegKey HKLM "Software\${APP_NAME}" "Install_Dir"
 Var Dialog
 Var AssocDatPC2
 Var CheckDatPC2
+Var AssocDatBez
+Var CheckDatBez
 
 ; Pages
 !insertmacro MUI_PAGE_LICENSE "..\LICENSE"
@@ -82,18 +85,27 @@ Function FileAssocPage
     Abort
   ${EndIf}
   
-  ${NSD_CreateLabel} 0 0 100% 20u "Select the file types you want to open with ${APP_NAME}:"
+  ${NSD_CreateLabel} 0 0 100% 12u "Select the file types you want to open with ${APP_NAME}:"
   Pop $0
   
-  ${NSD_CreateCheckbox} 10u 30u 100% 12u "Associate .pc2 (PlanformCreator2 project files)"
+  ${NSD_CreateCheckbox} 10u 16u 100% 12u "Associate .pc2 (${APP_NAME} project files)"
   Pop $CheckDatPC2
   ${NSD_SetState} $CheckDatPC2 $AssocDatPC2
+
+  
+  ${NSD_CreateLabel} 0 40u 100% 12u "Select the file types you want to open with the included ${AE_NAME}:"
+  Pop $0
+
+  ${NSD_CreateCheckbox} 10u 56u 100% 12u "Associate .dat and .bez airfoil files"
+  Pop $CheckDatBez
+  ${NSD_SetState} $CheckDatBez $AssocDatBez
     
   nsDialogs::Show
 FunctionEnd
 
 Function FileAssocPageLeave
   ${NSD_GetState} $CheckDatPC2 $AssocDatPC2
+  ${NSD_GetState} $CheckDatBez $AssocDatBez
 FunctionEnd
 
 Section "Install"
@@ -129,10 +141,23 @@ Section "Install"
     WriteRegStr HKCR "${APP_NAME}.pc2file\DefaultIcon" "" "$INSTDIR\${APP_NAME}.exe,0"
     WriteRegStr HKCR "${APP_NAME}.pc2file\shell\open\command" "" '"$INSTDIR\${APP_NAME}.exe" "%1"'
   ${EndIf}
+
+  ${If} $AssocDatBez == ${BST_CHECKED}
+    WriteRegStr HKCR ".dat" "" "${AE_NAME}.datfile"
+    WriteRegStr HKCR "${AE_NAME}.datfile" "" "Airfoil Data File"
+    WriteRegStr HKCR "${AE_NAME}.datfile\DefaultIcon" "" "$INSTDIR\${AE_NAME}.exe,0"
+    WriteRegStr HKCR "${AE_NAME}.datfile\shell\open\command" "" '"$INSTDIR\${AE_NAME}.exe" "%1"'
+
+    WriteRegStr HKCR ".bez" "" "${AE_NAME}.bezfile"
+    WriteRegStr HKCR "${AE_NAME}.bezfile" "" "Airfoil Bezier File"
+    WriteRegStr HKCR "${AE_NAME}.bezfile\DefaultIcon" "" "$INSTDIR\${AE_NAME}.exe,0"
+    WriteRegStr HKCR "${AE_NAME}.bezfile\shell\open\command" "" '"$INSTDIR\${AE_NAME}.exe" "%1"'
+  ${EndIf}
   
   
   ; Notify Windows of file association changes
   ${If} $AssocDatPC2 == ${BST_CHECKED}
+  ${OrIf} $AssocDatBez == ${BST_CHECKED}
     System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'
   ${EndIf}
   
@@ -151,6 +176,18 @@ Section "Uninstall"
     DeleteRegKey HKCR ".pc2"
   ${EndIf}
   DeleteRegKey HKCR "${APP_NAME}.pc2file"
+
+  ReadRegStr $0 HKCR ".dat" ""
+  ${If} $0 == "${AE_NAME}.datfile"
+    DeleteRegKey HKCR ".dat"
+  ${EndIf}
+  DeleteRegKey HKCR "${AE_NAME}.datfile"
+
+  ReadRegStr $0 HKCR ".bez" ""
+  ${If} $0 == "${AE_NAME}.bezfile"
+    DeleteRegKey HKCR ".bez"
+  ${EndIf}
+  DeleteRegKey HKCR "${AE_NAME}.bezfile"
   
   ; Notify Windows of file association changes and clear icon cache
   System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'
