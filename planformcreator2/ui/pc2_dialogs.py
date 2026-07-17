@@ -1396,18 +1396,21 @@ class Dialog_Edit_Paneling (Dialog_Modal):
                         hide= lambda: not bool(self.planform.width_min_targ))  
 
         Label       (l,r,c+5, get=lambda: f"currently {self.planform.width_min_cur:.1%}", colSpan=2, 
-                            style=style.COMMENT)
+                        style=style.COMMENT,
+                        hide= lambda: not bool(self.planform.width_min_targ))
         r += 1
         
         # minimum tip chord
 
         CheckBox    (l,r,c, text="Set a minimum chord for tip", colSpan=4,
-                        obj=self, prop=Dialog_Edit_Paneling.activated_cn_tip_min)
+                        obj=self, prop=Dialog_Edit_Paneling.activated_cn_tip_min,
+                        disable= lambda: not self.is_cn_tip_min_possible)
         FieldF      (l,r,c+4, width=70, step=1, lim=(1, 50), dec=1, unit="%", 
                         obj=self.planform, prop=Planform_Paneled.cn_tip_min,
                         hide= lambda: not bool(self.planform.cn_tip_min))
         Label       (l,r,c+5, get=lambda: f"currently {self.planform.cn_tip_cur:.1%}", colSpan=2, 
-                            style=style.COMMENT)
+                        style=style.COMMENT,
+                        hide= lambda: not bool(self.planform.cn_tip_min))
 
         l.setColumnMinimumWidth (0,20)
         l.setColumnMinimumWidth (4,40)
@@ -1436,6 +1439,11 @@ class Dialog_Edit_Paneling (Dialog_Modal):
             self.planform.set_cn_tip_min (0.0)                  # will be recalc
         elif not aBool:
             self.planform.set_cn_tip_min (None)   
+
+    @property
+    def is_cn_tip_min_possible (self) -> bool:
+        """ True if a minimum tip chord is possible"""
+        return len(self.planform.wingSections) > 2
 
 
     @property

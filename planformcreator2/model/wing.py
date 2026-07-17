@@ -1707,6 +1707,11 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
     def set_cn_tip_min (self, aVal : float | None):
         """ set minimum - it can't be smaller than parent tip section cn"""
 
+        # sanity check
+        if len(self.parent_planform.wingSections) <= 2:
+            self._cn_tip_min = None
+            return
+
         if aVal == 0.0:
             self._cn_tip_min = round(self.parent_planform.wingSections[-1].cn + 0.005,2)     # round up
         elif aVal is not None:
@@ -1742,7 +1747,7 @@ class N_Distrib_Paneled (N_Distrib_Abstract):
             logger.warning (f"{self} polyline - cn_tip_min={self.cn_tip_min} is too high - only {len(xn)} sections available")
             xn.append(section.xn)
             cn.append(section.cn)
-            self.set_cn_tip_min (section.cn)        
+            self.set_cn_tip_min (None)           # remove cn_tip_min to avoid further issues 
 
 
         return np.round(xn,10), np.round(cn,10) 
@@ -4387,7 +4392,7 @@ class Planform_Paneled (Planform):
         # is there a section having cn < cn_tip_min
         isec_cutted = None 
         for isec, section in enumerate (self.wingSections):
-            if self.cn_tip_min and round(section.cn,3) < self.cn_tip_min :
+            if self.cn_tip_min and round(section.cn,2) < self.cn_tip_min :
                 isec_cutted = isec
                 break
 
