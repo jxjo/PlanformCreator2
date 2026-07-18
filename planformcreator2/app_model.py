@@ -404,7 +404,7 @@ class App_Model (QObject):
         """ notify self that polar definitions have changed """
 
         # as polar definitions could have changed, ensure a new initialized polarSet 
-        self.wing.planform.wingSections.refresh_polar_sets (ensure=True)
+        self.wing.planform.wingSections.refresh_polar_sets (reset=True)
         self.sig_polar_set_changed.emit()
 
         # reset alpha - may angle won't be available anymore

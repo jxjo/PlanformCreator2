@@ -477,7 +477,7 @@ class Wing:
                 self.planform.wingSections.do_strak (geometry_class=GEO_BASIC)
 
             # ensure all wingSections have a polar with the current re
-            self.planform.wingSections.refresh_polar_sets (ensure=False)
+            self.planform.wingSections.refresh_polar_sets (reset=False)
 
         return self._vlm_wing
 
@@ -2875,7 +2875,7 @@ class WingSections (list [WingSection]):
         return None
 
 
-    def refresh_polar_sets (self, ensure=True):
+    def refresh_polar_sets (self, reset=True):
         """ refresh polar set of wingSections airfoil"""
 
         polar_defs = self._planform.wing.polar_definitions
@@ -2883,14 +2883,16 @@ class WingSections (list [WingSection]):
         for section in self:
             airfoil = section.airfoil
             if airfoil :
-                polarSet : Polar_Set = airfoil.polarSet
+                airfoil_polarSet : Polar_Set = airfoil.polarSet
+                actual_polarSet = Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn)
 
-                if polarSet and isclose (polarSet._re_scale, section.cn, rel_tol=0.01) and not ensure:
-                    # there is already a polarSet which is scaled approx.
-                    pass
-                else:
+                if reset or not airfoil_polarSet:
                     # create new, fresh polarSet
-                    airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
+                    airfoil.set_polarSet (actual_polarSet)
+                
+                elif not airfoil_polarSet.is_equal_to (actual_polarSet) :
+                    # create new, fresh polarSet
+                    airfoil.set_polarSet (actual_polarSet)
 
 
         
@@ -3580,7 +3582,7 @@ class Planform:
          
         # late setting of polar sets as chord is needed for reynolds factor 
         
-        self._wingSections.refresh_polar_sets (ensure=False)
+        self._wingSections.refresh_polar_sets (reset=True)        # refresh polar set of wingSections airfoil
 
 
 
