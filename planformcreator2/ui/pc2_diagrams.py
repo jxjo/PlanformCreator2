@@ -1821,6 +1821,9 @@ class Diagram_Planform (Diagram_Abstract):
 
     def set_show_ref_planforms (self, aBool : bool): 
         self._show_artist (Ref_Planforms_Artist, aBool)
+
+        if not aBool:
+            self._show_artist (Image_Artist, False)   # if ref planforms are not shown, also switch off background image
                                       
 
     def create_diagram_items (self):
