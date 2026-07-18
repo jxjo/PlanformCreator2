@@ -156,6 +156,8 @@ class Item_Abstract (Diagram_Item):
                 artist.refresh()            
             for artist in self._get_artist (Flaps_Artist):
                 artist.refresh()            
+            for artist in self._get_artist (Airfoil_Name_Artist):
+                artist.refresh()            
 
 
     def _setup_artists_slots (self):
@@ -1824,6 +1826,8 @@ class Diagram_Planform (Diagram_Abstract):
 
         if not aBool:
             self._show_artist (Image_Artist, False)   # if ref planforms are not shown, also switch off background image
+        # as there is no separate state for background image, we do not switch on automatically 
+        # if ref planforms are switched on again, as it would be always switched on then, which is not desired
                                       
 
     def create_diagram_items (self):
