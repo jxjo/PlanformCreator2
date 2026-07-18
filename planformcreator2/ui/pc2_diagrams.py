@@ -2026,7 +2026,6 @@ class Diagram_Planform (Diagram_Abstract):
         if newPathFilename: 
             self.wing.background_image.set_pathFilename (newPathFilename)
             self._edit_background_image ()  
-            self.background_image_artist.set_show(True)
 
 
     def _remove_background_image (self):
@@ -2046,6 +2045,7 @@ class Diagram_Planform (Diagram_Abstract):
                                     parentPos=(1.1,0.5), dialogPos=(0,0.5)) 
         dialog.exec()   
 
+        self.background_image_artist.set_show(True)
         self.refresh()  
 
 
