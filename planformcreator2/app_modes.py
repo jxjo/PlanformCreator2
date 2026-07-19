@@ -163,6 +163,12 @@ class Mode_Abstract (QObject):
         logger.debug(f"Exiting {self.__class__.__name__}")
 
 
+    def confirm_close(self) -> bool:
+        """ Default close confirmation for modes that do not need special handling. """
+
+        return True
+
+
     def prepare_check_enter(self, on_arg=None) -> object:
         """ Check if the mode can be entered. Prepare and Return initial object. """
         # to be overridden in subclasses if needed.
@@ -252,10 +258,11 @@ class Mode_Modify (Mode_Abstract):
         super().on_leave()
 
 
-    def _on_leaving_planform (self) -> bool:
+    @override
+    def confirm_close (self) -> bool:
         """ 
-        Do checks and handle if user wants to leave current planform.
-        Returns True if leaving ok, False if cancelled 
+        Do checks and handle if user wants to close or leave the current planform.
+        Returns True if leaving ok, False if cancelled.
         """
 
         leave = True
@@ -280,7 +287,7 @@ class Mode_Modify (Mode_Abstract):
                 leave = False
 
         if leave:
-            self.app_model.cleanup_wing (all = clean_up_all)
+            self.app_model.cleanup_wing (all = clean_up_all or self.wing.is_new_wing)
 
         return leave
 
@@ -288,7 +295,7 @@ class Mode_Modify (Mode_Abstract):
     def open (self):
         """ open a new wing definition and load it"""
 
-        if not self._on_leaving_planform ():                                    # changes made? user cancelled?
+        if not self.confirm_close ():                                           # changes made? user cancelled?
             return
         
         filters    = "PlanformCreator2 files (*.pc2)"
@@ -341,7 +348,7 @@ class Mode_Modify (Mode_Abstract):
     def new (self):
         """ reset - and start with example definition"""
 
-        if not self._on_leaving_planform ():                                    # changes made? user cancelled?
+        if not self.confirm_close ():                                           # changes made? user cancelled?
             return
 
         # select a new template 
@@ -399,14 +406,7 @@ class Mode_Modify (Mode_Abstract):
     def exit (self):
         """ User action: leave current mode and app. """
 
-        leave = self._on_leaving_planform ()            # changes made? user cancelled?
-
-        if leave:
-            # still new wing? - remove temp dir of airfoil strak etc
-            if self.wing.is_new_wing:
-                self.app_model.cleanup_wing (all = True)
-
-            self.sig_exit_requested.emit ()
+        self.sig_exit_requested.emit ()
 
     
     @property
@@ -631,7 +631,6 @@ class Modes_Manager (QObject):
 
     def exit(self):
         """ exit mode and close app if in view mode """
-
         if self.current_mode is not None:
             self.current_mode.on_leave()
 
