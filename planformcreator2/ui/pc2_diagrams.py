@@ -1299,6 +1299,9 @@ class Item_Airfoils (Item_Abstract):
         self.wing.set_airfoil_nick_base (aVal)
         self.refresh_diagram()
     
+    def set_real_size (self, aBool : bool):
+        self.airfoil_artist.set_real_size (aBool)
+        self.refresh_diagram(also_viewRange=True)
     
 
     @property
@@ -1311,11 +1314,15 @@ class Item_Airfoils (Item_Abstract):
             r += 1
             CheckBox (l,r,c, text="In real size", colSpan=4,
                         get=lambda: self.airfoil_artist.real_size,
-                        set=self.airfoil_artist.set_real_size) 
+                        set=self.set_real_size) 
             r += 1
             CheckBox (l,r,c, text="Show maximum thickness", colSpan=4,
                         get=lambda: self.airfoil_artist.show_thick,
                         set=self.airfoil_artist.set_show_thick) 
+            r += 1
+            CheckBox (l,r,c, text="Show camber line", colSpan=4,
+                        get=lambda: self.airfoil_artist.show_camber,
+                        set=self.airfoil_artist.set_show_camber) 
             r += 1
             CheckBox (l,r,c, text="Use airfoils nick name", colSpan=4,
                         obj=self, prop=Item_Airfoils.airfoil_use_nick) 

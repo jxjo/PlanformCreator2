@@ -20,6 +20,7 @@ from airfoileditor.base.artist                import *
 from airfoileditor.base.common_utils          import *
 from airfoileditor.model.airfoil              import GEO_BASIC
 from airfoileditor.model.polar_set            import *
+from airfoileditor.ui.ae_artists              import _linestyle_of
 
 from ..model.wing               import (Wing, Planform, N_Distrib_Bezier, 
                                         WingSection, WingSections, Flaps, Flap, Image_Definition)
@@ -2256,6 +2257,7 @@ class Airfoil_Artist (Abstract_Artist_Planform):
         self._show_strak    = show_strak                    # show also straked airfoils 
         self._real_size     = real_size                     # plot airfoils in real size
         self._show_thick    = False                         # show max thickness
+        self._show_camber   = False                         # show camber line
         self._mini_mode     = mini_mode                     # mini mode for overview 
 
         super().__init__ (*args, **kwargs)
@@ -2275,7 +2277,6 @@ class Airfoil_Artist (Abstract_Artist_Planform):
         return self._real_size
     def set_real_size (self, aBool : bool):
         self._real_size = aBool == True
-        self.refresh()
 
 
     @property
@@ -2284,6 +2285,15 @@ class Airfoil_Artist (Abstract_Artist_Planform):
         return self._show_thick
     def set_show_thick (self, aBool : bool):
         self._show_thick = aBool == True
+        self.refresh()
+
+
+    @property
+    def show_camber (self) -> bool:
+        """ true - plot camber line """
+        return self._show_camber
+    def set_show_camber (self, aBool : bool):
+        self._show_camber = aBool == True
         self.refresh()
 
 
@@ -2306,18 +2316,16 @@ class Airfoil_Artist (Abstract_Artist_Planform):
             if (airfoil.isLoaded) and not (not self.show_strak and airfoil.isBlendAirfoil):
 
                 if self.real_size:
-
                     # the coordinate transformation (mode) can't be used because 
                     # airfoils y_coordinates are z-axis in wing...  
-                    line_x, line_y = section.line()                         # get section as line 
+                    _, line_y = section.line()                         # get section as line 
                     le_x, te_x = line_y[0],  line_y[1]
                     chord = te_x - le_x
-
-                    x, y = airfoil.x * chord + le_x, airfoil.y * chord
-
                 else:
+                    chord = 1.0
+                    le_x  = 0.0
 
-                    x, y = airfoil.x, airfoil.y
+                x, y = airfoil.x * chord + le_x, airfoil.y * chord
 
                 color : QColor = colors[i]
 
@@ -2339,30 +2347,74 @@ class Airfoil_Artist (Abstract_Artist_Planform):
 
                 self._plot_dataItem  (x, y, name=label, pen = pen, antialias = True, zValue=2)
                 
-                # plot thickness highpoint with max thickness line 
+                # plot thickness / camber highpoint  
 
                 if self.show_thick:
-                    x,t = airfoil.geo.thickness.highpoint.xy
-                    t_x = x
-                    y_u = airfoil.geo.upper.yFn (x)                               # thickness highpoint on upper line 
-                    y_l = airfoil.geo.lower.yFn (x)                               # thickness highpoint on lower line 
-                    if self.real_size:
-                        x   = x *   chord + le_x 
-                        y_u = y_u * chord 
-                        y_l = y_l * chord 
-                        t   = t *   chord
-                        t_x = t_x * chord 
-                        label = f"{t:.1f}mm @ {t_x:.0f}mm"
-                    else: 
-                        label = f"{t:.1%} @ {t_x:.0%}"
+                    self._plot_thickness (airfoil, chord, le_x, color)
+                if self.show_camber:
+                    self._plot_camber (airfoil, chord, le_x, color)
 
-                    self._plot_point (x,y_u, symbol='+', color=color, text=label)
 
-                    line_x = [x,x]
-                    line_y = [y_l, y_u]
-                    pen = pg.mkPen(color.darker(150), width=1)
+    def _plot_thickness (self, airfoil : Airfoil, chord: float, le_x: float, color : QColor):
+        """ plot thickness highpoint with max thickness line """
 
-                    self._plot_dataItem  (line_x, line_y, pen = pen, antialias = False, zValue=1)
+        x,t = airfoil.geo.thickness.highpoint.xy
+        t_x = x
+        y_u = airfoil.geo.upper.yFn (x)                               # thickness highpoint on upper line 
+        y_l = airfoil.geo.lower.yFn (x)                               # thickness highpoint on lower line 
+        if self.real_size:
+            x   = x *   chord + le_x 
+            y_u = y_u * chord 
+            y_l = y_l * chord 
+            t   = t *   chord
+            t_x = t_x * chord 
+            label = f"{t:.1f}mm @ {t_x:.0f}mm"
+        else: 
+            label = f"{t:.1%} @ {t_x:.0%}"
+
+        self._plot_point (x,y_u, symbol='+', color=color, text=label, textFill=pg.mkBrush (0,0,0,100))
+
+        line_x = [x,x]
+        line_y = [y_l, y_u]
+        pen = pg.mkPen(color.darker(150), width=1)
+
+        self._plot_dataItem  (line_x, line_y, pen = pen, antialias = False, zValue=1)
+
+
+    def _plot_camber (self, airfoil : Airfoil, chord: float, le_x: float, color : QColor):
+        """ plot camber highpoint with max camber line """
+
+        # plot camber line 
+        c_line = airfoil.geo.camber
+
+        x = c_line.x * chord + le_x
+        y = c_line.y * chord
+
+        style = _linestyle_of(c_line._type)
+        pen   = pg.mkPen(color, width=1, style=style)
+
+        self._plot_dataItem (x, y, pen = pen, name = c_line.name, zValue=1)
+
+
+        # plot camber value at highpoint 
+        x, y = c_line.highpoint.xy
+        c_x, c_y = x, y
+
+        if not self.real_size:
+            label = f"{c_y:.1%} @ {c_x:.0%}"
+        else: 
+            x   = x *   chord + le_x
+            y   = y *   chord
+            label = f"{y:.1f}mm @ {x:.0f}mm"
+
+        self._plot_point (x,y, symbol='x', color=color, text=label, textFill=pg.mkBrush (0,0,0,100))
+
+        line_x = [x,x]
+        line_y = [0.0, y]
+        pen = pg.mkPen(color.darker(150), width=1)
+
+        self._plot_dataItem  (line_x, line_y, pen = pen, antialias = False, zValue=1)
+
 
 
 
