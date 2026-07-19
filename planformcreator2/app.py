@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 #-------------------------------------------------------------------------------
 
 APP_NAME         = "PlanformCreator2"
-__version__      = "4.3.1"                            # hatch "version dynamic" reads this version for build
+__version__      = "4.3.2"                            # hatch "version dynamic" reads this version for build
 
 
 class Main (QMainWindow):
@@ -219,6 +219,11 @@ class Main (QMainWindow):
     @override
     def closeEvent  (self, event : QCloseEvent):
         """ main window is closed """
+
+        current_mode = self._modes_manager.current_mode if self._modes_manager else None
+        if current_mode is not None and not current_mode.confirm_close():
+            event.ignore()
+            return
 
         # terminate polar watchdog thread, clean up working dir 
         self._app_model.close()                           
