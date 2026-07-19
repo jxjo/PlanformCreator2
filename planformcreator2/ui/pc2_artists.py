@@ -2403,11 +2403,11 @@ class Airfoil_Artist (Abstract_Artist_Planform):
         if not self.real_size:
             label = f"{c_y:.1%} @ {c_x:.0%}"
         else: 
-            x   = x *   chord + le_x
+            x   = x *   chord 
             y   = y *   chord
             label = f"{y:.1f}mm @ {x:.0f}mm"
 
-        self._plot_point (x,y, symbol='x', color=color, text=label, textFill=pg.mkBrush (0,0,0,100))
+        self._plot_point (x+ le_x,y, symbol='x', color=color, text=label, textFill=pg.mkBrush (0,0,0,100))
 
         line_x = [x,x]
         line_y = [0.0, y]
