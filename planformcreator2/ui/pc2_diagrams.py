@@ -147,6 +147,15 @@ class Item_Abstract (Diagram_Item):
         return self.wing.planform
 
 
+    def refresh_diagram (self, also_viewRange=True):
+        """ refresh the parent diagram so all diagram items are updated """
+
+        if self._parent is not None:
+            self._parent.refresh(also_viewRange=also_viewRange)
+        else:
+            self.refresh()
+
+
     def _on_wingSection_changed (self):
         """ slot when wingSection changed - refresh only relevant artists """
 
@@ -267,7 +276,7 @@ class Item_Planform (Item_Abstract):
 
     def set_airfoil_use_nick (self, aBool : bool):
         self.wing.set_airfoil_use_nick (aBool)
-        self.refresh()
+        self.refresh_diagram()
 
 
     @property
@@ -1044,12 +1053,6 @@ class Item_Wing (Item_Abstract):
     def set_show_flaps (self, aBool : bool): 
         self._show_artist (Flaps_Artist, aBool)
 
-    @property
-    def airfoil_use_nick (self) -> bool:
-        return self.wing.airfoil_use_nick
-    def set_airfoil_use_nick (self, aBool : bool):
-        self.wing.set_airfoil_use_nick (aBool)
-        self.refresh()
 
     @property
     def airfoil_name_artist (self) -> Airfoil_Name_Artist:
@@ -1098,10 +1101,6 @@ class Item_Wing (Item_Abstract):
             r += 1
             CheckBox (l,r,c, text="Airfoils", 
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
-            CheckBox (l,r,c+1, text="Use nick name",  
-                        obj=self, prop=Item_Wing.airfoil_use_nick,
-                        hide=lambda: not self.show_airfoils,
-                        toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
             r += 1
             l.setColumnMinimumWidth (0,70)
             l.setColumnMinimumWidth (1,80)
@@ -1167,7 +1166,7 @@ class Item_Wing_Airfoils (Item_Abstract):
         return self.wing.airfoil_use_nick
     def set_airfoil_use_nick (self, aBool : bool):
         self.wing.set_airfoil_use_nick (aBool)
-        self.refresh()
+        self.refresh_diagram()
 
     @property
     def section_panel (self) -> Edit_Panel:
@@ -1185,7 +1184,7 @@ class Item_Wing_Airfoils (Item_Abstract):
                         get=lambda: self.airfoil_artist.show_strak,
                         set=self.airfoil_artist.set_show_strak) 
             r += 1
-            CheckBox (l,r,c, text="Use nick name", 
+            CheckBox (l,r,c, text="Use airfoils nick name", 
                         obj=self, prop=Item_Airfoils.airfoil_use_nick,
                         toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
             r += 1
@@ -1284,21 +1283,21 @@ class Item_Airfoils (Item_Abstract):
         return self.wing.airfoil_use_nick
     def set_airfoil_use_nick (self, aBool : bool):
         self.wing.set_airfoil_use_nick (aBool)
-        self.refresh()
+        self.refresh_diagram()
 
     @property 
     def airfoil_nick_prefix (self) -> str:
         return self.wing.airfoil_nick_prefix
     def set_airfoil_nick_prefix (self, aVal : str):
         self.wing.set_airfoil_nick_prefix (aVal)
-        self.refresh()
+        self.refresh_diagram()
     
     @property 
     def airfoil_nick_base (self) -> str:
         return self.wing.airfoil_nick_base
     def set_airfoil_nick_base (self, aVal : str):
         self.wing.set_airfoil_nick_base (aVal)
-        self.airfoil_artist.refresh()
+        self.refresh_diagram()
     
     
 

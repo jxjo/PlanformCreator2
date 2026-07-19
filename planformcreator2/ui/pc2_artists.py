@@ -2803,7 +2803,10 @@ class Polar_Artist (Abstract_Artist_Planform):
                     # generate increasing color hue value for the polars of an airfoil 
                     color = color_in_series (color_airfoil, iPolar, len(polars_to_plot), delta_hue=0.1)
 
-                    label_airfoil =  f"{airfoil.name} @ {section.name_short}" 
+                    if self.wing.airfoil_use_nick:
+                        label_airfoil =  f"{section.airfoil_nick_name} @ {section.name_short}" 
+                    else: 
+                        label_airfoil =  f"{airfoil.name} @ {section.name_short}" 
 
                     self._plot_polar (airfoil.isBlendAirfoil, section.is_for_panels, label_airfoil, polar, color)
 
