@@ -660,42 +660,90 @@ class Wing:
 
     # ---Methods --------------------- 
 
-    def _copy_airfoils_dir (self, newDir : str) -> bool:
-        """ copy the airfoils dir of this wing to newDir without polars and tmp files
+    def _copy_background_image (self, target_dir : Path) -> bool:
+        """ 
+        Copy the background image of this wing to newDir
+        - only if the current imgae path is relative to the current working dir
+
         Args:
-            newDir: absolute or relative path of the new directory 
+            target_dir: directory of the new parameter file
         Returns:
             True if succeeded, False if failed
         """
 
-        if not os.path.isdir (self.airfoils_dir):
-            logger.error (f"Cannot copy airfoils - source dir '{self.airfoils_dir}' does not exist")
+        if not self.background_image.pathFilename:
+            return True             # no background image defined - nothing to do 
+
+        target_path = target_dir
+
+        current_dir_path = Path(self.parm_pathFileName_abs).parent
+        current_dir_abs  = current_dir_path.resolve(strict=False)
+        target_dir_abs   = target_path.resolve(strict=False)
+
+        if os.path.normcase(str(current_dir_abs)) == os.path.normcase(str(target_dir_abs)):
+            return True             # same dir - nothing to do 
+
+        source_image_path = Path(self.background_image.pathFilename_abs)
+        if not source_image_path.is_file():
+            logger.error (f"Cannot copy background image - source file '{self.background_image.pathFilename_abs}' does not exist")
             return False 
 
-        if not os.path.isabs (newDir):
-            newDir = os.path.join (self.workingDir, newDir)
+        image_rel_path = Path(self.background_image.pathFilename)
+        if image_rel_path.is_absolute():
+            logger.info (f"Cannot copy background image - source file '{self.background_image.pathFilename}' is absolute path")
+            return True             # do not copy absolute path - just keep the path as is
 
-        if os.path.isdir(newDir) and os.path.samefile(self.airfoils_dir, newDir):
+        try:
+            new_image_path = target_dir_abs / image_rel_path
+            new_image_path.parent.mkdir(parents=True, exist_ok=True)
+            if not new_image_path.is_file():
+                shutil.copy2(source_image_path, new_image_path)
+            logger.info (f"Copied background image '{self.background_image.pathFilename_abs}' to '{target_dir_abs}'")
+            return True 
+
+        except Exception as e:
+            logger.error (f"Copying background image '{self.background_image.pathFilename_abs}' to '{target_path}' failed: {e}")
+            return False
+
+
+
+    def _copy_airfoils_dir (self, target_dir : Path) -> bool:
+        """ copy the airfoils dir of this wing to target_dir without polars and tmp files
+        Args:
+            target_dir: absolute directory path for copied airfoil files
+        Returns:
+            True if succeeded, False if failed
+        """
+
+        source_dir = Path(self.airfoils_dir)
+        if not source_dir.is_dir():
+            logger.error (f"Cannot copy airfoils - source dir '{source_dir}' does not exist")
+            return False 
+
+        target_path = target_dir
+
+        if target_path.is_dir() and source_dir.samefile(target_path):
             # same dir - nothing to do 
             return True 
 
         try:
-            if os.path.isdir (newDir):
-                shutil.rmtree(newDir, ignore_errors=True)
-            os.mkdir (newDir)
+            if target_path.is_dir():
+                shutil.rmtree(target_path, ignore_errors=True)
+            target_path.mkdir(parents=True, exist_ok=False)
 
             # copy all airfoil files except polars and tmp dir
-            dat_files = fnmatch.filter(os.listdir(self.airfoils_dir), '*.dat')
-            bez_files = fnmatch.filter(os.listdir(self.airfoils_dir), '*.bez')
-            hh_files  = fnmatch.filter(os.listdir(self.airfoils_dir), '*.hicks')
+            dat_files = [p.name for p in source_dir.glob('*.dat')]
+            bez_files = [p.name for p in source_dir.glob('*.bez')]
+            hh_files  = [p.name for p in source_dir.glob('*.hicks')]
             airfoil_files = dat_files + bez_files + hh_files
 
             for fname in airfoil_files:
-                shutil.copy2(os.path.join(self.airfoils_dir,fname), newDir)
+                shutil.copy2(source_dir / fname, target_path)
+            logger.info (f"Copied airfoils dir '{source_dir}' to '{target_path}'")
             return True 
 
         except Exception as e:
-            logger.error (f"Copying airfoils dir '{self.airfoils_dir}' to '{newDir}' failed: {e}")
+            logger.error (f"Copying airfoils dir '{source_dir}' to '{target_path}' failed: {e}")
             return False
 
 
@@ -759,13 +807,15 @@ class Wing:
         """
         parms = self._save()
 
-        # save dict to new file
+        # get new absolute path and filename of the parameter file
         if newPathFilename is None:
-            pathFileName_abs = self.parm_pathFileName_abs
+            pathFileName_abs = Path(self.parm_pathFileName_abs)
         else:
-            pathFileName_abs = newPathFilename if os.path.isabs(newPathFilename) else os.path.join (self.workingDir, newPathFilename)
-
-        parms.set_pathFileName (pathFileName_abs)
+            new_path = Path(newPathFilename)
+            pathFileName_abs = new_path if new_path.is_absolute() else Path(self.workingDir) / new_path
+ 
+        # set new location of parms file and save parms 
+        parms.set_pathFileName (str(pathFileName_abs))
 
         try:
             parms.save()
@@ -781,31 +831,24 @@ class Wing:
 
             if newPathFilename:
 
-                target_dir = os.path.dirname(pathFileName_abs)
+                target_dir  = pathFileName_abs.parent
 
                 # copy airfoils to new airfoils dir if file name changed
-                new_airfoils_dir = os.path.join (target_dir, Path(newPathFilename).stem + AIRFOILS_DIR_SUFFIX)
-                copy_ok = self._copy_airfoils_dir (new_airfoils_dir)
-                if not copy_ok:
-                    logger.error (f"Saving wing parameters succeeded but copying airfoils to new dir '{new_airfoils_dir}' failed")
+                new_airfoils_dir = target_dir / (Path(newPathFilename).stem + AIRFOILS_DIR_SUFFIX)
+                self._copy_airfoils_dir (new_airfoils_dir)
 
-                # copy background image if existing and not an absolute path
-                if self.background_image.pathFilename and not os.path.isabs(self.background_image.pathFilename):
-                    cur_pathFileName_abs = self.background_image.pathFilename_abs
-                    if os.path.isfile(cur_pathFileName_abs):
-                        new_pathFileName_abs = os.path.join(target_dir, self.background_image.pathFilename)
-                        if not os.path.isfile(new_pathFileName_abs):
-                            shutil.copy2(cur_pathFileName_abs, new_pathFileName_abs)
-                    self._background_image = None                       # reset to reload from new location
+                # copy background image only when saving into a new directory
+                self._copy_background_image (target_dir)
 
                 # set the current working Dir to the dir of the new saved parameter file            
-                self.pathHandler.set_workingDirFromFile (pathFileName_abs)
-                self._parm_pathFileName = os.path.basename(pathFileName_abs)  # only the file name relative to working dir
+                self.pathHandler.set_workingDirFromFile (str(pathFileName_abs))
+                self._parm_pathFileName = pathFileName_abs.name         # only the file name relative to working dir
 
                 # reinit planform with wing sections having new airfoils 
                 self._planform = Planform (self, parms)
                 self._planform_paneled = None                           # reset paneled planform
                 self._vlm_wing = None                                   # reset VLM wing
+                self._background_image = None                           # reset to reload from new working dir and/or location
 
         return save_ok
 
@@ -4731,14 +4774,23 @@ class Image_Definition:
         d = {}
         if self.pathFilename:
 
-            # ensure relative path to working dir 
-            if os.path.isabs (self._pathFilename):
-                relPath = PathHandler(workingDir= self._working_dir).relFilePath(self.pathFilename)
+            working_dir = Path(self._working_dir).resolve(strict=False)
+            file_path = Path(self._pathFilename)
+
+            if file_path.is_absolute():
+                # Convert absolute path to relative only when it points into working_dir.
+                abs_path = file_path.resolve(strict=False)
+                if abs_path.is_relative_to(working_dir):
+                    path_to_store = abs_path.relative_to(working_dir)
+                else:
+                    path_to_store = abs_path
             else:
-                relPath = self.pathFilename
-            
-            # Convert to forward slashes for cross-platform storage
-            relPath = relPath.replace(os.sep, '/')
+                # Keep relative paths relative and normalize lexically to shortest form.
+                # Do not force absolute resolution here, because upward relative paths
+                # like '../../../Desktop/...' are valid and must retain their meaning.
+                path_to_store = Path(os.path.normpath(str(file_path)))
+
+            relPath = path_to_store.as_posix()
 
             toDict (d, "file",                  relPath) 
             toDict (d, "mirrored_horizontal",   self.mirrored_horizontal) 
