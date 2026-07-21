@@ -684,7 +684,8 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
 
         try:
-            overlay = Disabled_Overlay(parent_window)
+            text_to_show="Temporarily disabled while AirfoilEditor is running.\n\nClose AirfoilEditor to continue."
+            overlay = Disabled_Overlay(parent_window, text_to_show=text_to_show)
             parent_window.setEnabled(False)                 # Disable main window to simulate modal behavior
             QApplication.processEvents()                    # ensure overlay is shown
 
