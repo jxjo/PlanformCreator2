@@ -446,10 +446,8 @@ class Item_VLM_Panels (Item_Abstract):
 
         # connect to app model signals to refresh - new wing is handled in Diagram_Abstract
         self.app_model.sig_paneling_changed.connect     (self.refresh)
-        self.app_model.sig_vlm_opPoint_changed.connect  (self.refresh)
+        self.app_model.sig_vlm_changed.connect          (self.refresh)
         self.app_model.sig_new_polars.connect           (self.refresh)
-        self.app_model.sig_vlm_polar_reset.connect      (self.refresh)          
-        self.app_model.sig_vlm_polar_changed.connect    (self.section_panel.refresh)    # cp checkbox enable/disable
 
 
     def _is_vlm_data_available (self) -> bool:
@@ -593,9 +591,8 @@ class Item_VLM_Result (Item_Abstract):
         self.setContentsMargins ( 0,30,50,10)
 
         # connect to app model signals to refresh - new wing is handled in Diagram_Abstract
-        self.app_model.sig_vlm_opPoint_changed.connect  (self.refresh)
+        self.app_model.sig_vlm_changed.connect          (self.refresh)
         self.app_model.sig_new_polars.connect           (self.refresh)
-        self.app_model.sig_vlm_polar_reset.connect      (self.refresh)          # will result in new VLM calculation
         self.app_model.sig_polar_set_changed.connect    (self.section_panel.refresh)  # first step just refresh of panel
 
 
@@ -763,30 +760,32 @@ class Item_VLM_Result (Item_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            Label    (l,r,c, colSpan=4, get=f"Choose airfoil T1 polar of root", style=style.COMMENT)
+            Label    (l,r,c, colSpan=4, get=f"Choose T1 polar for root airfoil", style=style.COMMENT)
             r += 1
             ComboBox (l,r,c, width=None, obj=self, prop=Item_VLM_Result.polar_def_name, colSpan=4,
-                         options=lambda: self.polar_def_list)
-            ToolButton (l,r,c+4, icon=Icon.ADD, set=self._add_polar_def,
-                        disable=lambda: not self._is_vlm_data_available(), # wait until VLM ended
-                        toolTip="Add a polar definition <br><br>" +
-                                "Currently the polar has to differ in Re number not only Ncrit or Mach "+
-                                "to be handled correctly by the VLM viscous calculation - sorry!")                              
+                        options=lambda: self.polar_def_list)
+            ToolButton (l,r,c+4, icon=Icon.EDIT,   set=self._edit_polar_def, 
+                        disable=lambda: not self._is_vlm_data_available(),      # wait until VLM ended
+                        toolTip="Change the settings of this polar definition")                              
             ToolButton (l,r,c+5, icon=Icon.DELETE, set=self._delete_polar_def,
                         disable=lambda: not self._is_vlm_data_available() or  
-                                        len(self.polar_def_list) <= 1,           # wait until VLM ended
+                                        len(self.polar_def_list) <= 1,          # wait until VLM ended
                         toolTip="Delete this polar definition")                              
             r += 1
-            SpaceR   (l,r, height=10,stretch=0)
+            ToolButton (l,r,c, icon=Icon.ADD, set=self._add_polar_def,
+                        toolTip="Add a polar definition <br><br>" +
+                        "The root polar and the wing-section Reynolds number are used to match " +
+                        "the VLM polar of the airfoil at the wing section.")                              
             r += 1
             Label    (l,r,c, colSpan=4, get=f"Define operating point", style=style.COMMENT)
             r += 1
-            CheckBox (l,r,c, text="Set close to Alpha max", colSpan=4,
+            CheckBox (l,r,c, text="Set alpha close to alpha max", colSpan=4,
                         obj=self, prop=Item_VLM_Result.alpha_fixed_to_max,
                         disable=lambda: not self._is_vlm_data_available(),
-                        toolTip="Operating point of wing is set to alpha_max of current polar")
+                        toolTip="The operating point alpha is set to the current polar’s alpha max.")
             r +=1
-            FieldF   (l,r,c, lab="Alpha", lim=(-20,20), step=0.5, width=60, unit="°", dec=1, 
+            FieldF   (l,r,c,  lim=(-20,20), step=0.5, width=60, unit="°", dec=1, 
+                        lab="Alpha",
                         obj=self, prop=Item_VLM_Result.vlm_alpha,
                         disable=lambda: self.alpha_fixed_to_max or not self._is_vlm_data_available()) 
             r += 1
@@ -801,9 +800,6 @@ class Item_VLM_Result (Item_Abstract):
                          disable=lambda: not self._is_vlm_data_available(),
                          toolTip="Choose variable to show along span in diagram")
 
-            r += 1
-            l.setRowStretch (r,1)
-
             # dev mode 
             # r += 1
             # CheckBox (l,r,c, text="Viscous loop (dev)", colSpan=3,
@@ -814,7 +810,7 @@ class Item_VLM_Result (Item_Abstract):
             l.setColumnStretch (3,2)
             l.setColumnMinimumWidth (0,50)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, height =260,
+            self._section_panel = Edit_Panel (title=self.name, layout=l, 
                                               switchable  = True,
                                               switched_on = lambda: self.show,  
                                               on_switched = lambda aBool: self.set_show(aBool))
@@ -853,26 +849,25 @@ class Item_VLM_Result (Item_Abstract):
         return self._section_panel 
 
 
-    def _edit_polar_def (self, polar_def: Polar_Definition = None):
+    def _edit_polar_def (self, polar_def: Polar_Definition = None, is_new=False):
         """ edit polar definition - currently only re number"""
 
         if polar_def is None:   
             polar_def = self.app_model.cur_polar_def
-
         chord = self.wing.planform.chord_root
 
-        # currently only mini dialog for re number
-        dialog = Calc_Reynolds_Dialog (self.section_panel, polar_def.re_asK, fixed_chord=chord,
-                                       title="Set Reynolds Number for Polar Definition",
-                                       parentPos=(1.0, 0.5), dialogPos=(0,0.7))
+        diag = Polar_Definition_Dialog (self.section_panel, polar_def, 
+                                        is_new=is_new, 
+                                        fixed_chord=chord, 
+                                        polar_type_fixed=True,
+                                        allow_transition=False,
+                                        parentPos=(0.95, 0.5), dialogPos=(0,0.5))
 
-        dialog.show()     
-
-        dialog.sig_changed.connect (polar_def.set_re_asK)
-        dialog.sig_final_changed.connect (self._on_polar_def_changed)
+        diag.sig_final_changed.connect (self._on_polar_def_changed)
+        diag.show()
 
 
-    def _on_polar_def_changed (self):
+    def _on_polar_def_changed (self, polar_def : Polar_Definition):
         """ handle changed polar def - inform parent"""
 
         # sort polar definitions ascending re number 
@@ -883,6 +878,9 @@ class Item_VLM_Result (Item_Abstract):
             self.wing.polar_definitions[0].set_active(True)
 
         self.app_model.notify_polar_definitions_changed ()
+
+        # polar_def could have been added
+        self.app_model.set_cur_polar_def (polar_def)        # will signal change to update diagram and section panel
 
 
     def _delete_polar_def (self):
@@ -903,21 +901,19 @@ class Item_VLM_Result (Item_Abstract):
         """ add a new polar definition"""
 
         # increase re number for the new polar definition
-        if self.wing.polar_definitions:
-            new_polar_def  = deepcopy (self.wing.polar_definitions[-1])
+        polar_defs_T1 = self.app_model.polar_definitions_T1
+        if polar_defs_T1:
+            new_polar_def  = deepcopy (polar_defs_T1[-1])
             new_polar_def.set_is_mandatory (False)                  # parent could have been mandatory
             new_polar_def.set_re (new_polar_def.re + 100000)
             new_polar_def.set_active(True)
         else: 
-            new_polar_def = Polar_Definition()
+            new_polar_def = Polar_Definition()                      # create default T1 polar definition
 
         self.wing.polar_definitions.append (new_polar_def)
 
         # open edit dialog for new def 
-        self._edit_polar_def (polar_def=new_polar_def)     # silent to avoid double notify
-
-        # set new current - will signal change 
-        self.app_model.set_cur_polar_def (new_polar_def)                
+        self._edit_polar_def (polar_def=new_polar_def, is_new=True)     # silent to avoid double notify
 
 
 
@@ -2417,7 +2413,7 @@ class Diagram_Airfoils (Diagram_Abstract):
                             obj=self, prop=Diagram_Airfoils.min_re_asK,
                             hide=lambda: not self.apply_min_re)
             r += 1
-            CheckBox    (l,r,c, text="VLM polars (forced transition)", colSpan=5,
+            CheckBox    (l,r,c, text="Forced transistion versions (VLM)", colSpan=5,
                             obj=self, prop=Diagram_Airfoils.show_VLM_polars,
                             toolTip="Show VLM polars with a forced transition close to leading edge,\n" + \
                                 "instead of the defined polars without forced transition.\n" + \

@@ -70,9 +70,7 @@ class App_Model (QObject):
     sig_new_polars              = pyqtSignal()          # new polars generated
     sig_paneling_changed        = pyqtSignal()          # paneling definition changed
 
-    sig_vlm_polar_reset         = pyqtSignal()          # VLM reset - new polar will be generated on demand
-    sig_vlm_polar_changed       = pyqtSignal()          # current VLM polar changed
-    sig_vlm_opPoint_changed     = pyqtSignal()          # current VLM operating point changed
+    sig_vlm_changed             = pyqtSignal()          # current VLM polar/op-point changed
 
 
     def __init__(self, workingDir_default: str = None):
@@ -111,6 +109,23 @@ class App_Model (QObject):
     def __repr__(self):
         """ nice representation of self """
         return f"<App_Model {self.wing}>"
+
+
+    def _set_cur_polar_def_default(self, silent: bool = False):
+        """Initialize or repair the current polar definition explicitly."""
+
+        new_polar_def = self.cur_polar_def
+        if new_polar_def == self._cur_polar_def:
+            return
+
+        self._cur_polar_def = new_polar_def
+        logger.debug (f"{self} set cur_polar_def to {new_polar_def}")
+
+        if self.vlm_alpha_fixed_to_max:
+            self._cur_vlm_alpha = None
+
+        if not silent:
+            self.sig_vlm_changed.emit()
 
 
     def _init_watchdog (self):
@@ -272,35 +287,29 @@ class App_Model (QObject):
     def cur_polar_def (self) -> Polar_Definition:
         """ selected T1 polar definition of wingSection at root"""
 
-        new_polar_def = self._cur_polar_def
+        if self._cur_polar_def in self.polar_definitions_T1:
+            return self._cur_polar_def
 
-        # ensure current polar def is in existing polar definitions
-        if self._cur_polar_def not in self.polar_definitions_T1:
-            new_polar_def = None
+        if self.polar_definitions_T1:
+            return self.polar_definitions_T1[0]
 
-        if self._cur_polar_def is None and self.polar_definitions_T1:
-            new_polar_def = self.polar_definitions_T1[0] 
-
-        if new_polar_def != self._cur_polar_def:
-            self._cur_polar_def = new_polar_def
-            logger.debug (f"{self} set cur_polar_def to {new_polar_def}")
-
-            # reset current VLM opPoint 
-            self._cur_vlm_alpha = None if self.vlm_alpha_fixed_to_max else 0.0
-            self.sig_vlm_opPoint_changed.emit()
-
-        return self._cur_polar_def
+        return None
 
 
     def set_cur_polar_def (self, polar_def : Polar_Definition):
         """ set selected polar definition of wingSection at root"""
 
-        if polar_def != self._cur_polar_def and polar_def in self.wing.polar_definitions:
-            self._cur_polar_def = polar_def
-            logger.debug (f"{self} set cur_polar_def to {polar_def}")
+        if polar_def in self.wing.polar_definitions:
+            if polar_def != self._cur_polar_def:
+                self._cur_polar_def = polar_def
+                logger.debug (f"{self} set cur_polar_def to {polar_def}")
 
-            # reset current VLM opPoint 
-            self.notify_polar_definitions_changed ()    
+                if self.vlm_alpha_fixed_to_max:
+                    self._cur_vlm_alpha = None
+
+                self.sig_vlm_changed.emit()
+            else:
+                self.sig_vlm_changed.emit()
  
 
     @property
@@ -311,16 +320,15 @@ class App_Model (QObject):
 
     @property
     def cur_vlm_polar (self) -> VLM_Polar:
-        """ current VLM polar based on cur polar_def at root chord """
+        """ current VLM polar based on the selected root polar definition """
 
         if self.wing.vlm_wing and self.cur_polar_def:
-            v = self.cur_polar_def.calc_v_for_chord(self.wing.planform.chord_root)
-            new_polar =  self.wing.vlm_wing.polar_at (v) 
+            new_polar = self.wing.vlm_wing.polar_at (self.cur_polar_def)
             # do change detection for signal  
             if new_polar != self._cur_vlm_polar:
                 self._cur_vlm_polar = new_polar
                 logger.debug (f"{self} set cur_vlm_polar to {new_polar}")
-                self.sig_vlm_polar_changed.emit()
+                self.sig_vlm_changed.emit()
             return new_polar
         else:
             return None
@@ -338,7 +346,7 @@ class App_Model (QObject):
         aVal = clip (aVal, -20, 20)
         if self._cur_vlm_alpha != aVal:
             self._cur_vlm_alpha = aVal
-            self.sig_vlm_opPoint_changed.emit()
+            self.sig_vlm_changed.emit()
 
     @property
     def vlm_alpha_fixed_to_max (self) -> bool:
@@ -352,7 +360,7 @@ class App_Model (QObject):
             if aBool:                                               # try to set to max now  
                 self._cur_vlm_alpha = self._get_vlm_alpha_max ()
             
-            self.sig_vlm_opPoint_changed.emit()
+            self.sig_vlm_changed.emit()
 
     @property
     def cur_vlm_opPoint (self) -> VLM_OpPoint:
@@ -380,6 +388,7 @@ class App_Model (QObject):
         self._cur_wingSection = None
         self._cur_vlm_alpha   = None
         self._cur_polar_def   = None
+        self._set_cur_polar_def_default(silent=True)
 
         self.sig_new_wing.emit()
 
@@ -405,12 +414,11 @@ class App_Model (QObject):
 
         # as polar definitions could have changed, ensure a new initialized polarSet 
         self.wing.planform.wingSections.refresh_polar_sets (reset=True)
+        self._set_cur_polar_def_default(silent=True)
         self.sig_polar_set_changed.emit()
 
-        # reset alpha - may angle won't be available anymore
-        self._cur_vlm_alpha = None if self.vlm_alpha_fixed_to_max else 0.0
- 
-        QTimer.singleShot(0, self.sig_vlm_polar_reset.emit)         # notify after current events processed
+
+        QTimer.singleShot(0, self.sig_vlm_changed.emit)             # notify after current events processed
 
 
     def notify_planform_changed (self):
@@ -446,7 +454,7 @@ class App_Model (QObject):
         if self.vlm_alpha_fixed_to_max:
             self._cur_vlm_alpha = None 
 
-        QTimer.singleShot(0, self.sig_vlm_polar_reset.emit)   # notify after current events processed
+        QTimer.singleShot(0, self.sig_vlm_changed.emit)       # notify after current events processed
 
 
     def notify_fileName_changed (self):

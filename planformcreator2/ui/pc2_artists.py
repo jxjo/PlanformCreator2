@@ -1061,7 +1061,7 @@ class VLM_Result_Artist (Abstract_Artist_Planform):
         # sanity VLM polar needed
         
         if self.polar is None:  
-            self._plot_text (f"Calculating VLM-Polar...", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
+            self._plot_text (f"No VLM T1 polar available", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
             return
 
         # strak airfoils if needed to have polars

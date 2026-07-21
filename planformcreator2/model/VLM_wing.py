@@ -19,17 +19,22 @@ Wing build with VLM_Panels based on Planform_Paneled
                 |-- VLM_OpPoint         - angle of attack 
         !-- aerogrid                    - input data structure of PanelAero 
 """
-        
+from __future__                     import annotations  # for forward type references in annotations (wingSection, Planform_Paneled)
+
 import numpy as np
+from copy                           import copy
 from enum                           import StrEnum
 from typing                         import NamedTuple, TYPE_CHECKING
 from math                           import isclose, degrees, radians
 
 from .VLM                           import calc_Qjj
-from airfoileditor.model.polar_set  import Polar_Set, RE_SCALE_ROUND_TO, re_from_v, Polar
+from airfoileditor.model.polar_set  import Polar_Set, RE_SCALE_ROUND_TO, polarType, Polar, Polar_Definition
 
 if TYPE_CHECKING:
     from .wing                      import Planform_Paneled, WingSection           # avoid circular import
+
+
+VLM_Polar_CacheEntry = tuple[Polar_Definition, 'VLM_Polar']
 
 import logging
 logger = logging.getLogger(__name__)
@@ -227,7 +232,7 @@ class VLM_Wing:
         self._b_stripes     = None                  # width of stripes 
 
         self._y_sections    = None                  # y position of wing sections in m
-        self._polars        = {}                    # dict of polars
+        self._polars: list[VLM_Polar_CacheEntry] = []    # list of (root polar def, VLM polar)
 
 
     def __repr__(self) -> str:
@@ -235,7 +240,7 @@ class VLM_Wing:
         return f"<{type(self).__name__}>"
 
     @property
-    def wingSections(self) -> list :
+    def wingSections(self) -> list [WingSection]:
         """ wing sections of self._planform_paneled"""
 
         planform_paneled : Planform_Paneled = self._planform_paneled
@@ -350,34 +355,46 @@ class VLM_Wing:
 
 
 
-    def polar_at (self, vtas: float) -> 'VLM_Polar':
-        """ returns polar for air speed vtas"""
+    def _get_cached_polar (self, root_polar_def: Polar_Definition) -> 'VLM_Polar | None':
+        """ return cached VLM polar for a matching root polar definition """
 
-        if not isinstance (vtas, (int, float)) or vtas <= 0.0:
+        for cached_root_polar_def, polar in self._polars:
+            if cached_root_polar_def.is_equal_to (root_polar_def):
+                return polar
+        return None
+
+
+    def polar_at (self, root_polar_def: Polar_Definition) -> 'VLM_Polar':
+        """ returns polar for a root airfoil polar definition """
+
+        if not isinstance (root_polar_def, Polar_Definition):
             return None
 
-        v = round (vtas, 1)                         #  ensure clean key for dict
-
-        polar = self._polars.get (v, None)          # already exisiting 
+        polar = self._get_cached_polar (root_polar_def)          # already exisiting 
         
         if not polar:
-            polar = VLM_Polar (self, v)             # calculate new Polar and opPoints 
-            self._polars[v] = polar 
+            polar_def_copy = copy (root_polar_def)               # polar_def in cache must be inmutable 
+            polar = VLM_Polar (self, polar_def_copy)             # calculate new Polar and opPoints 
+            self._polars.append ((polar_def_copy, polar)) 
             
         return polar 
+
 
     def has_polars (self) -> bool:
         """ True if at least one polar is existing"""
         return bool (self._polars)
 
 
-    def remove_polar_at (self, vtas: float):
-        """ removes polar for air speed vtas - will be calculated new on next request"""
-        if not isinstance (vtas, (int, float)) or vtas <= 0.0:
+    def remove_polar_at (self, root_polar_def: Polar_Definition):
+        """ removes polar for a root airfoil polar definition - will be calculated new on next request"""
+
+        if not isinstance (root_polar_def, Polar_Definition):
             return 
 
-        v = round (vtas, 1)                         # ensure clean key for dict
-        self._polars.pop(v, None)                   # remove existing, None if not found
+        for i, (cached_root_polar_def, _) in enumerate (self._polars):
+            if cached_root_polar_def.is_equal_to (root_polar_def):
+                self._polars.pop (i)
+                break
 
 
 
@@ -544,13 +561,19 @@ class VLM_Polar:
     VLM solution for certain velocity 
     """
 
-    def __init__ (self, wing: VLM_Wing, vtas: float ):
+    def __init__ (self, wing: VLM_Wing, root_polar_def: Polar_Definition):
 
-        self.vlm_wing       = wing 
-        self.vtas           = vtas                      # true air speed
+        self.vlm_wing        = wing                     # my parent wing
 
-        self._opPoints      = {}                        # dict of operating points
-        self._error_reason  = []                        # list of error messages eg polar couldn't be loaded 
+        # sanity - only T1 polars allowed for VLM calculation
+        if not isinstance (root_polar_def, Polar_Definition) or not root_polar_def.type == polarType.T1:
+            raise ValueError ("root polar definition must be a T1 polar definition")
+
+        self._root_polar_def = root_polar_def           # polar definition of root airfoil (wingSection 0) 
+
+        self._vtas                      = None          # true air speed (derived from root polar def)
+        self._opPoints                  = {}            # dict of operating points
+        self._error_reason              = []            # list of error messages eg polar couldn't be loaded 
         self._generating_airfoil_polars = False         # airfoil polars are currently generated 
         self._use_viscous_loop          = True          # in opPoint calculation
 
@@ -571,6 +594,20 @@ class VLM_Polar:
     def __repr__(self) -> str:
         # overwrite to get a nice print string 
         return f"<{type(self).__name__} {self.vtas:.1f}m/s >"
+
+
+    @property
+    def vtas (self) -> float:
+        """ true air speed of self"""
+
+        if isinstance (self._root_polar_def, Polar_Definition) and self._vtas is None:
+
+            # calc v from airfoil polar and chord of root section
+            root_chord = self.vlm_wing.wingSections[0].c
+            self._vtas = self._root_polar_def.calc_v_for_chord(root_chord)
+
+        return self._vtas
+
 
     @property
     def name (self) -> str:
@@ -774,6 +811,25 @@ class VLM_Polar:
     # ---- private ----
 
 
+    def _get_matching_polar (self, airfoil_polarSet: Polar_Set, section_re: float) -> Polar | None:
+        """ return the VLM polar that best matches root polar definition and section Re """
+
+        polar_def_target = copy (self._root_polar_def)
+        polar_def_target.set_re (section_re)
+
+        matching_polar = None
+        best_re_delta  = float("inf")
+
+        for polar in airfoil_polarSet.polars_VLM:
+            if polar.is_equal_to (polar_def_target, ignore_active=True, ignore_xtrip=True, re_abs_tolerance=RE_SCALE_ROUND_TO):
+                re_delta = abs (polar.re - section_re)
+                if re_delta < best_re_delta:
+                    matching_polar = polar
+                    best_re_delta = re_delta
+
+        return matching_polar
+
+
     def _get_airfoil_polars (self) -> list [Polar] | None:
         """ loads for all wingSections polar of airfoil"""
 
@@ -782,7 +838,7 @@ class VLM_Polar:
 
         # get airfoil polars for all wingSections
         airfoil_polars = []
-        section : WingSection
+
         for section in self.vlm_wing.wingSections:
 
             if not section.airfoil.isLoaded: 
@@ -806,26 +862,21 @@ class VLM_Polar:
 
             # find polar with matching Re of this wing section
 
-            section_re = re_from_v (self.vtas, section.c / 1000, round_to=RE_SCALE_ROUND_TO)
+            section_re = self._root_polar_def.re * section.cn
+            matching_polar = self._get_matching_polar (airfoil_polarSet, section_re)
 
-            for polar in airfoil_polarSet.polars_VLM:
-
-                if isclose (polar.re, section_re, abs_tol=RE_SCALE_ROUND_TO):
-                    if polar.isLoaded:
-
-                        # there is a polar that fits to Re of wingSection
-                        airfoil_polars.append(polar)
-
+            if matching_polar is not None:
+                if matching_polar.isLoaded:
+                    # there is a polar that fits to Re of wingSection
+                    airfoil_polars.append(matching_polar)
+                else: 
+                    if matching_polar.error_occurred: 
+                        self._error_reason.append (matching_polar.error_reason)
                     else: 
-                        if polar.error_occurred: 
-                            self._error_reason.append (polar.error_reason)
-                        else: 
-                            self._generating_airfoil_polars = True 
-                    break
-
-            if not isclose (polar.re, section_re, abs_tol=RE_SCALE_ROUND_TO): 
-                polars_re_list = [f"{p.re:.0f}" for p in airfoil_polarSet.polars_VLM]
-                msg = f"No polar with Re = {section_re:.0f} in Polarset of {section} with polars: {polars_re_list}" 
+                        self._generating_airfoil_polars = True 
+            else:
+                msg = (f"No VLM polar matching root definition within ±{RE_SCALE_ROUND_TO:.0f} Re "
+                       f"for section {section.id} (target Re={section_re:.0f}) " )
                 logger.error (msg)
                 self._error_reason.append (msg)
                  
