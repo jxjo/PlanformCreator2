@@ -1,6 +1,6 @@
 ![PC2](https://github.com/jxjo/PlanformCreator2/blob/main/images/PC2_logo.png?raw=true)
 
-# v4.3.0
+# v4.3.2
 
 **PlanformCreator2** (PC2) is an app for designing wing planforms, with a focus on model planes.
 

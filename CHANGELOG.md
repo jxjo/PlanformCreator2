@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## 4.3.2
+
+### Fixed 
+
+- App: Closing via the window close button now handles unsaved changes the same way as the Exit button.
+- Wing Analysis: Simple trapezoid planforms are now paneled correctly.
+- Wing Analysis: VLM now distinguishes airfoil polars that share the same Re number but differ in additional properties such as flap setting.
+- Airfoils: Polars near "Re excluded" no longer overwrite each other.
+- Airfoils: Airfoil nicknames are now set and refreshed correctly.
+- Planform: Background images now switch off correctly.
+- Planform: After editing, the background image is shown again reliably.
+- Planform: Background image file paths are now stored as relative paths when possible.
+- Planform: Airfoil names are now shown when a wing section is added.
+- AirfoilEditor: Opening AirfoilEditor now shows a hint that the app is disabled.
+
+### Added
+
+- Airfoils: Airfoil camber lines can now be shown optionally.
+
+### Thanks
+
+- Special thanks to Christian for his huge support in finding bugs and improving the app.
+
+
+
+
 ## 4.3.1
 
 ### Fixed
