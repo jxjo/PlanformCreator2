@@ -34,7 +34,7 @@ from .model.VLM_wing         import VLM_OpPoint, VLM_Polar
 
 import logging
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 
 
 # -----------------------------------------------------------------------------
@@ -66,6 +66,7 @@ class App_Model (QObject):
     sig_planform_changed        = pyqtSignal()          # planform geometry changed
     sig_wingSection_selected    = pyqtSignal()          # current wing section selected
     sig_wingSection_changed     = pyqtSignal()          # current wing section changed
+    sig_airfoil_changed         = pyqtSignal()          # airfoil in wing section changed
     sig_polar_set_changed       = pyqtSignal()          # new polar sets attached to airfoil
     sig_new_polars              = pyqtSignal()          # new polars generated
     sig_paneling_changed        = pyqtSignal()          # paneling definition changed
@@ -111,21 +112,26 @@ class App_Model (QObject):
         return f"<App_Model {self.wing}>"
 
 
-    def _set_cur_polar_def_default(self, silent: bool = False):
-        """Initialize or repair the current polar definition explicitly."""
+    def _ensure_cur_polar_def (self):
+        """
+        Initialize or repair the current polar definition explicitly.
+        after changing wing or polar data to ensure the current polar def is consistent."""
 
-        new_polar_def = self.cur_polar_def
-        if new_polar_def == self._cur_polar_def:
-            return
+        # all fine
+        if self._cur_polar_def in self.polar_definitions_T1:
+            return 
 
-        self._cur_polar_def = new_polar_def
-        logger.debug (f"{self} set cur_polar_def to {new_polar_def}")
+        # current doesn't exist, take first available T1 polar definition
+        if self.polar_definitions_T1:
+            self._cur_polar_def = self.polar_definitions_T1[0]
+            logger.debug (f"{self} set cur_polar_def to {self._cur_polar_def}")
+        else:
+            self._cur_polar_def = None
+            logger.warning (f"{self}: no T1 polar definitions available")
 
         if self.vlm_alpha_fixed_to_max:
             self._cur_vlm_alpha = None
 
-        if not silent:
-            self.sig_vlm_changed.emit()
 
 
     def _init_watchdog (self):
@@ -287,19 +293,16 @@ class App_Model (QObject):
     def cur_polar_def (self) -> Polar_Definition:
         """ selected T1 polar definition of wingSection at root"""
 
-        if self._cur_polar_def in self.polar_definitions_T1:
-            return self._cur_polar_def
+        # ensure that the current polar definition is valid
+        self._ensure_cur_polar_def()
 
-        if self.polar_definitions_T1:
-            return self.polar_definitions_T1[0]
-
-        return None
+        return self._cur_polar_def
 
 
     def set_cur_polar_def (self, polar_def : Polar_Definition):
         """ set selected polar definition of wingSection at root"""
 
-        if polar_def in self.wing.polar_definitions:
+        if polar_def in self.polar_definitions_T1:
             if polar_def != self._cur_polar_def:
                 self._cur_polar_def = polar_def
                 logger.debug (f"{self} set cur_polar_def to {polar_def}")
@@ -307,9 +310,9 @@ class App_Model (QObject):
                 if self.vlm_alpha_fixed_to_max:
                     self._cur_vlm_alpha = None
 
-                self.sig_vlm_changed.emit()
-            else:
-                self.sig_vlm_changed.emit()
+                self.sig_vlm_changed.emit()                    
+        else:
+            logger.error (f"{self}: tried to set cur_polar_def to {polar_def}, but it's not in the available polar definitions")
  
 
     @property
@@ -323,13 +326,7 @@ class App_Model (QObject):
         """ current VLM polar based on the selected root polar definition """
 
         if self.wing.vlm_wing and self.cur_polar_def:
-            new_polar = self.wing.vlm_wing.polar_at (self.cur_polar_def)
-            # do change detection for signal  
-            if new_polar != self._cur_vlm_polar:
-                self._cur_vlm_polar = new_polar
-                logger.debug (f"{self} set cur_vlm_polar to {new_polar}")
-                self.sig_vlm_changed.emit()
-            return new_polar
+            return self.wing.vlm_wing.polar_at (self.cur_polar_def)
         else:
             return None
 
@@ -388,7 +385,7 @@ class App_Model (QObject):
         self._cur_wingSection = None
         self._cur_vlm_alpha   = None
         self._cur_polar_def   = None
-        self._set_cur_polar_def_default(silent=True)
+        self._ensure_cur_polar_def()
 
         self.sig_new_wing.emit()
 
@@ -412,11 +409,21 @@ class App_Model (QObject):
     def notify_polar_definitions_changed (self):
         """ notify self that polar definitions have changed """
 
-        # as polar definitions could have changed, ensure a new initialized polarSet 
-        self.wing.planform.wingSections.refresh_polar_sets (reset=True)
-        self._set_cur_polar_def_default(silent=True)
-        self.sig_polar_set_changed.emit()
+        polar_defs = self.wing.polar_definitions
 
+        # sort polar definitions ascending re number 
+        polar_defs.sort (key=lambda aDef : aDef.re)
+
+        # ensure if only 1 polar def, this has to be active 
+        if len(polar_defs) == 1 and not polar_defs[0].active:
+            polar_defs[0].set_active(True)
+
+        # as polar definitions could have changed, ensure a new initialized polarSet of airfoils
+        self.wing.planform.wingSections.refresh_polar_sets (reset=True)
+
+        self._ensure_cur_polar_def()
+
+        self.sig_polar_set_changed.emit()
 
         QTimer.singleShot(0, self.sig_vlm_changed.emit)             # notify after current events processed
 
@@ -430,10 +437,6 @@ class App_Model (QObject):
     def notify_wingSection_changed (self):
         """ notify self that wing section changed """
 
-        # recalc paneled planform - helper sections may have changed
-        if self.wing._planform_paneled:
-            self.wing.planform_paneled.optimize()
-
         if self.wing.planform.chord_defined_by_sections:
             # if wingSections define planform - do master notify
             self.notify_planform_changed ()
@@ -443,6 +446,15 @@ class App_Model (QObject):
             self.sig_wingSection_changed.emit()
             # just handle new paneling
             self.notify_paneling_changed ()
+
+
+    def notify_airfoil_changed (self):
+        """ notify self that airfoil in wing sectionchanged """
+
+        self.wing.handle_airfoil_change ()
+
+        self.sig_airfoil_changed.emit()
+        self.sig_vlm_changed.emit()         # inform VLM diagram of new polar
 
 
     def notify_paneling_changed (self):

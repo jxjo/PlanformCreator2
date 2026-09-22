@@ -54,7 +54,7 @@ from .app_model              import App_Model, Mode_Id
 from .app_modes              import Modes_Manager, Mode_Modify
 
 from .ui.pc2_diagrams        import (Diagram_Wing, Diagram_Planform, Diagram_Airfoils, Diagram_Making_Of,
-                                    Diagram_Wing_Analysis)
+                                    Diagram_Paneling, Diagram_Aero_Analysis)
 
 
 logger = logging.getLogger(__name__)
@@ -241,8 +241,9 @@ class Main (QMainWindow):
         diagrams.append (Diagram_Making_Of     (self, self._app_model))
         diagrams.append (Diagram_Wing          (self, self._app_model))
         diagrams.append (Diagram_Planform      (self, self._app_model))
+        diagrams.append (Diagram_Paneling      (self, self._app_model))
         diagrams.append (Diagram_Airfoils      (self, self._app_model))
-        diagrams.append (Diagram_Wing_Analysis (self, self._app_model))
+        diagrams.append (Diagram_Aero_Analysis (self, self._app_model))
         tab_panel = Tab_Panel (parent=self)
         for diagram in diagrams:
             tab_panel.add_tab(diagram)

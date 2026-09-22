@@ -29,7 +29,8 @@ from airfoileditor.base.dxf_artist        import Dxf_Artist, Cad_Line, Cad_PolyL
 from airfoileditor.model.airfoil          import Airfoil, GEO_SPLINE, Flap_Definition
 from airfoileditor.model.airfoil_exports  import Dxf_Airfoil_Artist
 
-from .wing                   import Wing, Planform, Planform_Paneled, WingSection, WingSections, Flap
+from .wing                                import Wing, Planform, WingSection, WingSections, Flap
+from planformcreator2.model.planform_mesh import Mesh_Strategy_Trapezoidal, Planform_Mesh
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
@@ -386,10 +387,16 @@ class Exporter_Xflr5 (Exporter_Abstract):
     distrib_name_map ["sine"]    = "SINE"
     distrib_name_map ["cosine"]  = "COSINE"
 
-    def __init__(self, wing: Wing, planform_paneled : Planform_Paneled, dataDict: dict = None): 
+    def __init__(self, wing: Wing, planform_mesh : Planform_Mesh, dataDict: dict = None):
         super().__init__(wing, dataDict=dataDict)
 
-        self._planform_paneled  = planform_paneled
+        self._planform_mesh  = planform_mesh
+
+
+    @property
+    def trapezoidal_mesh (self) -> Mesh_Strategy_Trapezoidal:
+        """Return the section-wise mesh used by XFLR5 exports."""
+        return self._planform_mesh.strategy_trapezoidal
 
 
     def _as_dict (self) -> dict:
@@ -405,7 +412,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
     @property
     def _wingSections_reduced (self) -> list[WingSection]:
-        return self._planform_paneled.wingSections_reduced()
+        return self.planform_mesh.wingSections_reduced()
 
     @property
     def xflr5_filename(self): 
@@ -425,7 +432,11 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
         # ensure all airfoils are up to date and splined (quality) 
 
-        self.planform.wingSections.do_strak (geometry_class=GEO_SPLINE)          
+        self.planform.wingSections.do_strak (geometry_class=GEO_SPLINE)    
+
+        # settings for airfoils export
+
+        self.exporter_airfoils.set_adapt_te_gap (False)     # ensure no TE gap adaptation
 
         # export wing 
 
@@ -506,18 +517,18 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
             # x
             for x_number_of_panels in newSectionXml.iter('x_number_of_panels'):
-                x_number_of_panels.text = str(self._planform_paneled.wx_panels)
+                x_number_of_panels.text = str(self.trapezoidal_mesh.wx_panels)
             for x_panel_distribution in newSectionXml.iter('x_panel_distribution'):
                 # map to xflr5 distribution names 
-                xflr5_dist = self.distrib_name_map[self._planform_paneled.wx_dist]
+                xflr5_dist = self.distrib_name_map[self.trapezoidal_mesh.wx_dist]
                 x_panel_distribution.text = str(xflr5_dist)
 
             # y
             for y_number_of_panels in newSectionXml.iter('y_number_of_panels'):
-                y_number_of_panels.text = str(self._planform_paneled.nx_panels_of_section (iSec))
+                y_number_of_panels.text = str(self.trapezoidal_mesh.ny_panels_of_section (iSec))
             for y_panel_distribution in newSectionXml.iter('y_panel_distribution'):
                 # map to xflr5 distribution names 
-                xflr5_dist = self.distrib_name_map[self._planform_paneled.wy_dist]
+                xflr5_dist = self.distrib_name_map[self.trapezoidal_mesh.wy_dist]
                 y_panel_distribution.text = str(xflr5_dist)
 
             for yPosition in newSectionXml.iter('y_position'):
@@ -628,10 +639,16 @@ class Exporter_FLZ (Exporter_Abstract):
     distrib_name_map ["cosine"]  = "COS"
 
 
-    def __init__(self, wing : Wing, planform_paneled : Planform_Paneled, dataDict: dict = None):
+    def __init__(self, wing : Wing, planform_mesh : Planform_Mesh, dataDict: dict = None):
         super().__init__(wing, dataDict=dataDict)
 
-        self._planform_paneled  = planform_paneled
+        self._planform_mesh  = planform_mesh
+
+
+    @property
+    def trapezoidal_mesh (self) -> Mesh_Strategy_Trapezoidal:
+        """Return the section-wise mesh used by FLZ exports."""
+        return self._planform_mesh.strategy_trapezoidal
 
 
     def _as_dict (self) -> dict:
@@ -647,7 +664,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
     @property
     def _wingSections_reduced (self) -> list[WingSection]:
-        return self._planform_paneled.wingSections_reduced()
+        return self.planform_mesh.wingSections_reduced()
 
     @property
     def use_nick(self) -> bool: return self._use_nick
@@ -684,7 +701,7 @@ class Exporter_FLZ (Exporter_Abstract):
         # let FLUGZEUG write to stream all the data 
 
         fileStream = open(pathFileName, 'w')
-        Exporter_FLZ.FLUGZEUG (self._wing, self._planform_paneled).write(fileStream)
+        Exporter_FLZ.FLUGZEUG (self._wing, self._planform_mesh).write(fileStream)
         fileStream.close()
 
         logger.info ("FLZ_vortex file written to %s." % pathFileName)
@@ -725,16 +742,21 @@ class Exporter_FLZ (Exporter_Abstract):
 
     class FLZ_Element: 
 
-        def __init__(self, wing : Wing, planform_paneled : Planform_Paneled, index = None):
+        def __init__(self, wing : Wing, planform_mesh : Planform_Mesh, index = None):
     
             self._wing        = wing
             self._working_dir  = wing.workingDir  
-            self._planform_paneled  = planform_paneled
+            self._planform_mesh  = planform_mesh
             self._index = index
 
         @property
+        def trapezoidal_mesh (self) -> Mesh_Strategy_Trapezoidal:
+            """Return the section-wise mesh used by this FLZ element."""
+            return self._planform_mesh.strategy_trapezoidal
+
+        @property
         def _wingSections (self) -> list[WingSection]:
-            return self._planform_paneled.wingSections_reduced()
+            return self._planform_mesh.wingSections_reduced()
 
         @property
         def start_tag(self): 
@@ -849,7 +871,7 @@ class Exporter_FLZ (Exporter_Abstract):
             # MASSE=0.20000
             # [PROFIL]....
 
-            distrib = Exporter_FLZ.distrib_name_map [self._planform_paneled.wx_dist]
+            distrib = Exporter_FLZ.distrib_name_map [self.trapezoidal_mesh.wx_dist]
             mass    = 3                                                             # kg
 
             self._write (aStream, self.start_tag)
@@ -858,7 +880,7 @@ class Exporter_FLZ (Exporter_Abstract):
             self._write (aStream, "BEZEICHNUNG=%s"      % self._wing.name)
             self._write (aStream, "PROFILTIEFE=%.5f"    % (self._wing.planform.chord_root/1000))
             self._write (aStream, "BEZUGSPUNKT_PROFILTIEFE=%.5f"    % (0.0))
-            self._write (aStream, "ANZAHL PANELS X=%d"  % self._planform_paneled.wx_panels)
+            self._write (aStream, "ANZAHL PANELS X=%d"  % self.trapezoidal_mesh.wx_panels)
             self._write (aStream, "VERTEILUNG=%s"       % distrib)
             self._write (aStream, "ANZAHL PANELS VOLUMENDARSTELLUNG=%s" % 30)
             self._write (aStream, "MASSE=%.5f"          % mass)
@@ -875,9 +897,9 @@ class Exporter_FLZ (Exporter_Abstract):
 
     class SEGMENT (FLZ_Element):
 
-        def __init__(self, wing : Wing, planform_paneled : Planform_Paneled, 
+        def __init__(self, wing : Wing, planform_mesh : Planform_Mesh,
                      left_section: WingSection, right_section: WingSection, index= None):
-            super().__init__(wing, planform_paneled, index)
+            super().__init__(wing, planform_mesh, index)
 
             self.left_section  = left_section
             self.right_section = right_section
@@ -885,9 +907,9 @@ class Exporter_FLZ (Exporter_Abstract):
             # geht the right airfoil according to FLZ sequenze 
 
             if left_section.xn < right_section.xn:
-                self.profil = Exporter_FLZ.PROFIL (wing, planform_paneled, right_section)
+                self.profil = Exporter_FLZ.PROFIL (wing, planform_mesh, right_section)
             else: 
-                self.profil = Exporter_FLZ.PROFIL (wing, planform_paneled, left_section)
+                self.profil = Exporter_FLZ.PROFIL (wing, planform_mesh, left_section)
 
         def write (self, aStream):
 
@@ -903,16 +925,16 @@ class Exporter_FLZ (Exporter_Abstract):
             # KLAPPENTIEFE LINKS,RECHTS=25.00000 25.00000
             # KLAPPENGRUPPE=0
 
-            distrib  = Exporter_FLZ.distrib_name_map[self._planform_paneled.wy_dist]
+            distrib  = Exporter_FLZ.distrib_name_map[self.trapezoidal_mesh.wy_dist]
 
             if self.left_section.x < self.right_section.x:                     # right halfwing
                 chord     = self.right_section.c / 1000
                 flapGroup = self.left_section.flap_group
-                wy_panels = self._planform_paneled.nx_panels_of_section (self.left_section.index())
+                wy_panels = self.trapezoidal_mesh.ny_panels_of_section (self.left_section.index())
             else:                                                               # left halfwing 
                 chord     = self.left_section.c / 1000
                 flapGroup = self.right_section.flap_group
-                wy_panels = self._planform_paneled.nx_panels_of_section (self.right_section.index())
+                wy_panels = self.trapezoidal_mesh.ny_panels_of_section (self.right_section.index())
                 # we have to flip FLZ SIN_R - SIN_L  on left side 
                 if   distrib == "SIN_R": distrib = "SIN_L"
                 elif distrib == "SIN_L": distrib = "SIN_R"
@@ -954,8 +976,8 @@ class Exporter_FLZ (Exporter_Abstract):
 
         use_nick_name : bool = False
 
-        def __init__(self, wing, planform_paneled, section: WingSection):
-            super().__init__ (wing, planform_paneled)
+        def __init__(self, wing, planform_mesh, section: WingSection):
+            super().__init__ (wing, planform_mesh)
 
             self._index = None
             self._airfoil = section.airfoil

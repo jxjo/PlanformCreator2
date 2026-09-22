@@ -10,6 +10,7 @@ UI panels
 import subprocess
 import sys
 import os
+import fnmatch        
 
 import logging
 
@@ -452,7 +453,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
 
     @property
-    def airfoil_name (self) -> str:
+    def airfoil_fileName (self) -> str:
         """ get airfoil file name or 'strak' at section"""
         if self.airfoil is not None:
             return self.airfoil.fileName
@@ -513,9 +514,17 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         p_foil = QWidget()
         l_foil = QGridLayout (p_foil)
-        Field  (l_foil,0,0,   lab="Airfoil",
-                get=lambda: self.airfoil_name,                 # name as strak fileName can be long
-                toolTip=lambda: self.wingSection.airfoil.info_as_html)
+        Field      (l_foil,0,0,   lab="Airfoil",                       # no other files in dir 
+                    get=lambda: self.airfoil_fileName,                 
+                    hide=lambda: len(self._airfoil_fileNames_sameDir()) >= 2 and self.airfoil,
+                    toolTip=lambda: self.wingSection.airfoil.info_as_html)
+        ComboBox   (l_foil,0,0,   lab="Airfoil",                       # selection of airfoil from same dir as current airfoil
+                    get=lambda: self.airfoil_fileName,                  
+                    set=self._set_airfoil_by_file,
+                    options=self._airfoil_fileNames_sameDir,
+                    signal=False,                                      # do not signal (would be double refresh)
+                    hide=lambda: len(self._airfoil_fileNames_sameDir()) < 2 or self.airfoil is None,
+                    toolTip=lambda: self.wingSection.airfoil.info_as_html)
 
         ToolButton (l_foil,0,2, icon=Icon.OPEN, set=self._open_airfoil, 
                         toolTip="Select an airfoil for this wing section")
@@ -637,6 +646,31 @@ class Panel_WingSection (Panel_Planform_Abstract):
         return text 
 
 
+    def _airfoil_fileNames_sameDir (self) -> list[str]: 
+        """ 
+        Returns list of airfoil file names in the same directory as airfoil
+            airfoil can be either an Airfoil or a subdirectory
+        Returns all .dat, .bez, .bsp, .cst and .hicks files 
+        """
+
+        if self.airfoil is None: return []
+
+        if self.airfoil.pathFileName_abs is not None: 
+            airfoil_dir = os.path.dirname(self.airfoil.pathFileName_abs) 
+        else:
+            return [] 
+
+        if os.path.isdir (airfoil_dir):
+            dat_files = fnmatch.filter(os.listdir(airfoil_dir), '*.dat')
+            bez_files = fnmatch.filter(os.listdir(airfoil_dir), '*.bez')
+            bsp_files = fnmatch.filter(os.listdir(airfoil_dir), '*.bsp')
+            cst_files = fnmatch.filter(os.listdir(airfoil_dir), '*.cst')
+            hh_files  = fnmatch.filter(os.listdir(airfoil_dir), '*.hicks')
+            airfoil_files = dat_files + bez_files + bsp_files + cst_files + hh_files
+            return sorted (airfoil_files, key=str.casefold)
+        else:
+            return []
+
     def _open_airfoil (self):
         """ open a new airfoil and load it"""
 
@@ -727,6 +761,11 @@ class Panel_WingSection (Panel_Planform_Abstract):
         Set new airfoil for current section by file name 
             - handles copying to airfoils dir and normalization """
 
+        # if pathFileName is just fileName take dir from current airfoil location
+        if pathFileName and not os.path.isabs(pathFileName):
+            if self.airfoil is None: return
+            pathFileName = os.path.join(self.airfoil.pathName_abs, pathFileName)
+
         new_pathFileName = self.wingSection.get_airfoil_file (pathFileName)
 
         if new_pathFileName is None:
@@ -782,7 +821,8 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         # do it - will assign polarSet and reset strak 
         self.wingSections.create_airfoil_for (self.wingSection, new_pathFileName, into_airfoils_dir=do_copy)
-        self.app_model.notify_wingSection_changed ()
+
+        self.app_model.notify_airfoil_changed ()
 
 
 

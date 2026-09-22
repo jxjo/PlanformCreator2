@@ -17,11 +17,12 @@ import pyqtgraph as pg
 from pyqtgraph.GraphicsScene.mouseEvents   import MouseClickEvent
 
 from airfoileditor.base.widgets         import * 
-from airfoileditor.base.panels          import MessageBox, Dialog_Modal, Dialog_Modeless
+from airfoileditor.base.panels          import Edit_Panel, MessageBox, Dialog_Modal, Dialog_Modeless
 from airfoileditor.base.diagram         import Diagram, Diagram_Item
 from airfoileditor.base.artist          import Artist
 
-from ..model.wing                       import Wing, Planform, Image_Definition, Planform_Paneled, WingSections
+from ..model.wing                       import Wing, Planform, Image_Definition, WingSections
+from ..model.planform_mesh              import Mesh_Strategy, Mesh_Strategy_Smooth, Mesh_Strategy_Trapezoidal, Planform_Mesh
 from ..model.wing_exports               import (Exporter_Airfoils, Exporter_DXF, Exporter_Xflr5, 
                                                 Exporter_FLZ, Exporter_CSV)
 
@@ -1301,8 +1302,8 @@ class Dialog_Edit_Paneling (Dialog_Modal):
     Dialog to edit / define paneling options of a Paneled Planform
     """
 
-    _width  = 460
-    _height = 330
+    _width  = 400
+    # _height = 400
 
     name = "Define Paneling"
 
@@ -1313,6 +1314,8 @@ class Dialog_Edit_Paneling (Dialog_Modal):
     def __init__ (self, *args, **kwargs): 
 
         self._close_btn  : QPushButton = None 
+        self._panel_header : Edit_Panel = None
+        self._panel_strategy : Edit_Panel = None
 
         super().__init__ ( *args, **kwargs)
 
@@ -1321,154 +1324,256 @@ class Dialog_Edit_Paneling (Dialog_Modal):
         self._reset_btn.clicked.connect  (self._on_reset)
 
         # connect widgets change to signal parent
-        for w in self.widgets:
-            w.sig_changed.connect (self._on_field_changed)
+        # for w in self.widgets:
+        #     w.sig_changed.connect (self._on_field_changed)
 
 
     @property
-    def planform (self) -> Planform_Paneled:
+    def mesh (self) -> Planform_Mesh:
             return self.dataObject
 
     @property
     def wingSections (self) -> WingSections:
-            return self.planform.wingSections
+            return self.mesh.wingSections
+
 
     @property
-    def is_parent_trapezoidal (self) -> bool:
+    def is_planform_trapezoidal (self) -> bool:
         """ True if parent planform is (already) trapezoidal"""
 
-        return self.planform.parent_planform._n_distrib.isTrapezoidal
+        return self.mesh.parent_planform._n_distrib.isTrapezoidal
 
     # -------------------------------------------------------------------
 
     def _init_layout(self) -> QLayout:
 
-        l = QGridLayout()   
-        r,c = 0, 0 
-        Label       (l,r,c, height=40, colSpan=7,
-                     get="Define number of panels along chord (x) and per section of wing (y)",
-                     style=style.COMMENT)
-        r += 1
-        c += 1
-        FieldI      (l,r,c, width=70, lab="x-Panels", step=1, lim=(1, 20),
-                        obj=self.planform, prop=Planform_Paneled.wx_panels)
-        r += 1
-        Label       (l,r,c, get="x-Distribution")
-        ComboBox    (l,r,c+1, width=70,
-                        obj=self.planform, prop=Planform_Paneled.wx_dist,
-                        options=self.planform.wx_distribution_fns_names)
-        r = 1
-        FieldI      (l,r,c+4, width=70, lab="y-Panels", step=1, lim=(2, 20),
-                        obj=self.planform, prop=Planform_Paneled.wy_panels)
-        r += 1
-        Label       (l,r,c+4, get="y-Distribution")
-        ComboBox    (l,r,c+5, width=70,
-                        obj=self.planform, prop=Planform_Paneled.wy_dist,
-                        options=self.planform.wy_distribution_fns_names)
+        l = QVBoxLayout()
 
-        # optimization settings 
+        l.addWidget (self.panel_header)
+        l.addWidget (self.panel_strategy)
 
-        c = 0 
-        r += 1
-        Label       (l,r,c, height=40, colSpan=5, get="Optimize paneling for an evenly mesh",
-                     style=style.COMMENT)            
-        r += 1
-        c += 1
+        l.addStretch (1)
+        return l
 
-        # define max. deviation of chord - only if Bezier etc.
 
-        if not self.is_parent_trapezoidal:
-            CheckBox    (l,r,c, text="Minimize deviation of chord", colSpan=4,
-                                obj=self, prop=Dialog_Edit_Paneling.activated_cn_diff_max)
-            FieldF      (l,r,c+4, width=70, step=0.5, lim=(0.5, 50), dec=1, unit="%", 
-                            obj=self.planform, prop=Planform_Paneled.cn_diff_max, 
-                            hide= lambda: not bool(self.planform.cn_diff_max))
-            Label       (l,r,c+5, get=lambda: f"currently {self.planform.cn_diff:.1%}", colSpan=2, 
-                            style=style.COMMENT)
-            r +=1
-        
-        # minimum panel width
+    @property
+    def panel_header (self) -> Edit_Panel:
+        """Return paneling controls specific to the header."""
 
-        CheckBox    (l,r,c, text="Set a minimum panel width", colSpan=4,
-                            obj=self, prop=Dialog_Edit_Paneling.activated_width_min_targ)
-        FieldF      (l,r,c+4, width=70,  step=0.5, lim=(0.5, 10), dec=1, unit="%", 
-                        obj=self.planform, prop=Planform_Paneled.width_min_targ,
-                        hide= lambda: not bool(self.planform.width_min_targ))  
+        if self._panel_header is None:
 
-        Label       (l,r,c+5, get=lambda: f"currently {self.planform.width_min_cur:.1%}", colSpan=2, 
-                        style=style.COMMENT,
-                        hide= lambda: not bool(self.planform.width_min_targ))
-        r += 1
-        
-        # minimum tip chord
+            l = QGridLayout()
+            r, c = 0, 0
 
-        CheckBox    (l,r,c, text="Set a minimum chord for tip", colSpan=4,
-                        obj=self, prop=Dialog_Edit_Paneling.activated_cn_tip_min,
-                        disable= lambda: not self.is_cn_tip_min_possible)
-        FieldF      (l,r,c+4, width=70, step=1, lim=(1, 50), dec=1, unit="%", 
-                        obj=self.planform, prop=Planform_Paneled.cn_tip_min,
-                        hide= lambda: not bool(self.planform.cn_tip_min))
-        Label       (l,r,c+5, get=lambda: f"currently {self.planform.cn_tip_cur:.1%}", colSpan=2, 
-                        style=style.COMMENT,
-                        hide= lambda: not bool(self.planform.cn_tip_min))
+            Label       (l,r,c, height=40, colSpan=3,
+                        get="Select mesh type ",
+                        style=style.COMMENT)
+            r += 1
+            Label       (l,r,c, get="Mesh type")
+            tip = lambda: ("Only trapezoidal mesh is possible for trapezoidal planforms."
+                           if self.is_planform_trapezoidal else
+                           "Use smooth for best results with Bezier-based planforms.\n"
+                           "Use trapezoidal for export to XFLR5 or FLZ Vortex.")
+            ComboBox    (l,r,c+1, width=100,
+                        obj=self.mesh, prop=Planform_Mesh.strategy_name,
+                        options=self.mesh.strategy_names,
+                        disable=lambda: self.is_planform_trapezoidal,
+                        toolTip=tip)
 
-        l.setColumnMinimumWidth (0,20)
-        l.setColumnMinimumWidth (4,40)
-        l.setColumnStretch (8,5)
+            l.setColumnMinimumWidth (0,80)
+            l.setColumnStretch (2, 2)
 
-        l.setRowStretch (r+1, 1)
-        
-        return l 
+            self._panel_header = Edit_Panel (
+                    layout=l, auto_height=True, has_head=False,
+                    main_margins=(0, 0, 0, 0),
+                    panel_margins=(0, 0, 0, 0),)
+
+        return self._panel_header
+
+
+    @property
+    def panel_strategy (self) -> Edit_Panel:
+        """Return controls for the active mesh strategy."""
+
+        if self._panel_strategy is None:
+
+            trapezoidal = self.mesh.strategy_trapezoidal
+            smooth = self.mesh.strategy_smooth
+            strategy = lambda: self.mesh.strategy
+
+            l = QGridLayout()
+            r, c = 0, 0
+
+            r += 1
+            Label (l,r,c, height=40, colSpan=5,
+                get="Number of panels along chord (x) and span (y)",
+                style=style.COMMENT)
+
+            r += 1
+            FieldI (l, r, 0, width=60, lab="x-Panels", step=1, lim=(1, 20),
+                obj=strategy, prop=Mesh_Strategy.wx_panels)
+            Label  (l, r, 3, get="Distribution")
+            ComboBox (l, r, 4, width=70,
+                obj=strategy, prop=Mesh_Strategy.wx_dist,
+                options=smooth.wx_distribution_fns_names)
+            r += 1
+            FieldI (l, r, 0, width=60, lab="y-Panels", step=1, lim=(2, 20),
+                obj=lambda: trapezoidal, prop=Mesh_Strategy_Trapezoidal.wy_panels,
+                hide=lambda: not self.mesh.strategy.is_trapezoidal)
+            FieldI (l, r, 0, width=60, lab="y-Panels / span", step=1, lim=(5, 100),
+                obj=lambda: smooth, prop=Mesh_Strategy_Smooth.wy_panels_span,
+                hide=lambda: not self.mesh.strategy.is_smooth)
+            Label  (l, r, 3, get="Distribution")
+            ComboBox (l, r, 4, width=70,
+                obj=strategy, prop=Mesh_Strategy.wy_dist,
+                options=smooth.wy_distribution_fns_names)
+
+            l.setColumnMinimumWidth (0,80)
+            l.setColumnMinimumWidth (2,20)
+            l.setColumnMinimumWidth (3,80)
+
+            r += 1
+            Label (l,r,c, height=40, colSpan=5,
+                get="Optimize panel distribution along span",
+                style=style.COMMENT)
+            r += 1
+
+            tip = ("Insert panel-only wing sections when the next section chord is smaller\n"
+                         "than the selected percentage of the previous section chord.\n\n"
+                         "This improves VLM polar interpolation over Reynolds-number dependent\n"
+                         "airfoil polars. The extra sections are used only for paneling/VLM export\n"
+                         "and do not change the real wing sections.")
+            CheckBox (l, r, 0, text="Set a minimum chord ratio between sections", colSpan=4,
+                    obj=self, prop=Dialog_Edit_Paneling.activated_cn_ratio_min,
+                    toolTip=tip)
+            FieldF (l, r, 4, width=70, step=5, lim=(5, 100), dec=0, unit="%",
+                    obj=strategy, prop=Mesh_Strategy.cn_ratio_min,
+                    hide=lambda: not bool(self.mesh.strategy.cn_ratio_min),
+                    toolTip=tip)
+            Label (l, r, 4, get=lambda: f"currently {self.mesh.strategy.cn_ratio_cur:.0%}",
+                    colSpan=2, style=style.COMMENT,
+                    hide=lambda: bool(self.mesh.strategy.cn_ratio_min))
+            r += 1
+
+            tip = ("Insert panel-only wing sections when the paneled trapezoid differs\n"
+                   "from the smooth parent planform by more than the selected chord amount.\n\n"
+                    "This keeps the exported panel mesh closer to the real planform.")
+            CheckBox (l, r, 0, text="Set maximum chord deviation of mesh", colSpan=4,
+                    obj=self, prop=Dialog_Edit_Paneling.activated_cn_diff_max,
+                    hide=lambda: self.mesh.strategy.is_smooth or self.is_planform_trapezoidal,
+                    toolTip=tip)
+            FieldF (l, r, 4, width=70, step=0.5, lim=(0.5, 50), dec=1, unit="%",
+                    obj=lambda: trapezoidal, prop=Mesh_Strategy_Trapezoidal.cn_diff_max,
+                    hide=lambda: self.mesh.strategy.is_smooth or self.is_planform_trapezoidal or not bool(trapezoidal.cn_diff_max),
+                    toolTip=tip)
+            Label (l, r, 4, get=lambda: f"currently {trapezoidal.cn_diff:.1%}",
+                    colSpan=2, style=style.COMMENT,
+                    hide=lambda: self.mesh.strategy.is_smooth or self.is_planform_trapezoidal or bool(trapezoidal.cn_diff_max))
+            r += 1
+
+            tip = ("Avoid very narrow spanwise panels by enforcing a minimum panel width.")
+            CheckBox (l, r, 0, text="Set a minimum panel width", colSpan=4,
+                    obj=self, prop=Dialog_Edit_Paneling.activated_width_min_targ,
+                    toolTip=tip)
+            FieldF (l, r, 4, width=70, step=0.5, lim=(0.5, 10), dec=1, unit="%",
+                    obj=strategy, prop=Mesh_Strategy.width_min_targ,
+                    hide=lambda: not bool(self.mesh.strategy.width_min_targ),
+                    toolTip=tip)
+            Label (l, r, 4, get=lambda: f"currently {self.mesh.strategy.width_min_cur:.1%}",
+                    colSpan=2, style=style.COMMENT,
+                    hide=lambda: bool(self.mesh.strategy.width_min_targ))
+            r += 1
+
+            tip = ("Cut off very small tip chords to avoid panels with very low Reynolds numbers.\n\n"
+                   "Xfoil polar data becomes unreliable at very low Reynolds numbers, often\n"
+                   "below about 20k, so VLM results near tiny tips can become misleading.")
+            CheckBox (l, r, 0, text="Set a minimum chord for tip", colSpan=4,
+                    obj=self, prop=Dialog_Edit_Paneling.activated_cn_tip_min,
+                    disable=lambda: not self.is_cn_tip_min_possible,
+                    toolTip=tip)
+            FieldF (l, r, 4, width=70, step=1, lim=(1, 50), dec=1, unit="%",
+                    obj=strategy, prop=Mesh_Strategy.cn_tip_min,
+                    hide=lambda: not bool(self.mesh.strategy.cn_tip_min),
+                    toolTip=tip)
+            Label (l, r, 4, get=lambda: f"currently {self.mesh.strategy.cn_tip_cur:.1%}",
+                    colSpan=2, style=style.COMMENT,
+                    hide=lambda: bool(self.mesh.strategy.cn_tip_min))
+
+            r += 1
+            l.setRowStretch (r, 1)
+            l.setColumnStretch (6, 1)
+
+            self._panel_strategy = Edit_Panel (
+                    has_head=False,
+                    layout=l, auto_height=True,
+                    main_margins=(0, 0, 0, 0),
+                    panel_margins=(0, 0, 0, 0),)
+            
+        return self._panel_strategy
 
     @property
     def activated_cn_diff_max (self) -> bool:
-        return self.planform.cn_diff_max is not None
+        return self.mesh.strategy_trapezoidal.cn_diff_max is not None
 
     def set_activated_cn_diff_max (self, aBool):
         if aBool and not self.activated_cn_diff_max:
-            self.planform.set_cn_diff_max (0.01)
+            self.mesh.strategy_trapezoidal.set_cn_diff_max (0.01)
         elif not aBool:
-            self.planform.set_cn_diff_max (None)   
+            self.mesh.strategy_trapezoidal.set_cn_diff_max (None)
 
     @property
     def activated_cn_tip_min (self) -> bool:
-        return self.planform.cn_tip_min is not None
+        return self.mesh.strategy.cn_tip_min is not None
 
     def set_activated_cn_tip_min (self, aBool):
         if aBool and not self.activated_cn_tip_min:
-            self.planform.set_cn_tip_min (0.0)                  # will be recalc
+            self.mesh.strategy.set_cn_tip_min (0.0)         # will be recalc
         elif not aBool:
-            self.planform.set_cn_tip_min (None)   
+            self.mesh.strategy.set_cn_tip_min (None)
+
+
+    @property
+    def activated_cn_ratio_min (self) -> bool:
+        return self.mesh.strategy.cn_ratio_min is not None
+
+
+    def set_activated_cn_ratio_min (self, aBool):
+        if aBool and not self.activated_cn_ratio_min:
+            self.mesh.strategy.set_cn_ratio_min (0.5)
+        elif not aBool:
+            self.mesh.strategy.set_cn_ratio_min (None)
 
     @property
     def is_cn_tip_min_possible (self) -> bool:
         """ True if a minimum tip chord is possible"""
-        return len(self.planform.wingSections) > 2
+        return len(self.mesh.wingSections) > 2
 
 
     @property
     def activated_width_min_targ (self) -> bool:
-        return self.planform.width_min_targ is not None
+        return self.mesh.strategy.width_min_targ is not None
 
     def set_activated_width_min_targ (self, aBool):
         if aBool and not self.activated_width_min_targ:
-            self.planform.set_width_min_targ (0.0)              # will be recalc
+            self.mesh.strategy.set_width_min_targ (0.0)  # will be recalc
         elif not aBool:
-            self.planform.set_width_min_targ (None)   
+            self.mesh.strategy.set_width_min_targ (None)
 
 
     def _on_reset (self, *_):
         """ reset paneling to default values"""
 
-        self.planform.reset ()
+        self.mesh.reset ()
         self.refresh ()
         self.sig_paneling_changed.emit()                        # refresh diagram
 
 
     @override
-    def _on_field_changed (self, *_):
-        """ slot for widget changes"""
-        self.refresh ()                                         # have 'soft' refresh when settings are changed
+    def _on_widget_changed (self,*_):
+        """ slot for change of widgets"""
+        self.panel_header.refresh ()
+        self.panel_strategy.refresh ()
+        # super()._on_widget_changed (*_)               
         self.sig_paneling_changed.emit()                        # refresh diagram
 
 

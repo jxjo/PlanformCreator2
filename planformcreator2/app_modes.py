@@ -57,6 +57,7 @@ class Data_Panel (Container_Panel):
         self.app_model.sig_planform_changed.connect     (self.refresh)
         self.app_model.sig_wingSection_changed.connect  (self.refresh)
         self.app_model.sig_wingSection_selected.connect (self.refresh)
+        self.app_model.sig_airfoil_changed.connect      (self.refresh)
 
     @property
     def mode (self) -> 'Mode_Abstract':
