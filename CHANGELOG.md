@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 5.0 - wip 
+
+### Added
+
+- Paneling
+  - Smooth paneling for Bezier-based planforms
+  - Automatically add helper wing sections when the chord difference between two neighboring wing sections is too large
+
+- VLM
+  - Added CD and CM
+  - Added a polar view of the wing
+
+
 ## 4.3.2
 
 ### Fixed 

@@ -81,6 +81,8 @@ class VLM_Var (StrEnum_Extended):
     DRAG_AIRFOIL_SPAN = "Drag airfoil per span [N/m]"       # airfoil drag contribution along span
     DRAG_SPAN       = "Drag per span [N/m]"                 # total drag contribution along span
 
+    CM_AIRFOIL      = "cm airfoil"                          # local airfoil moment coefficient
+
     WING_ALPHA      = "Alpha"                               # angle of attack of wing
     WING_LIFT       = "Lift [N]"                            # total lift of wing
     WING_CL         = "CL"                                  # total lift coefficient of wing
@@ -92,6 +94,7 @@ class VLM_Var (StrEnum_Extended):
     WING_CD_AIRFOIL = "CD airfoil"                          # total airfoil drag coefficient of wing
     WING_GLIDE      = "CL/CD"                               # total glide ratio of wing
     WING_GLIDE_AIRFOIL= "CL/CD airfoil"                     # total airfoil glide ratio of wing 
+    WING_CM_AIRFOIL = "CM airfoil"                          # total airfoil moment coefficient of wing
 
 
 class Point_3D (NamedTuple):
@@ -232,16 +235,22 @@ class VLM_Wing:
 
         self._invalidate_cached_results ()
 
+        self._sections      = None                  # cached wing sections of the actual mesh
         self._sections_y    = None                  # y position of wing sections in m
         self._polars: list[VLM_Polar_CacheEntry] = []    # list of (root polar def, VLM polar)
 
         # geometry data from real Wing - used for VLM calculation (not for plotting)
-
         wing_area, wing_ar, mac, np = wing.wing_data()
         self._wing_area = wing_area / 1_000_000.0
         self._wing_ar   = wing_ar
         self._mac       = mac
         self._np        = np
+
+        # get mesh, create panels for the right wing side
+        self._panels_right, self._has_distorted_panels = self._generate_panels_right ()
+
+        # get actual wing sections of the mesh 
+        self._sections = self._planform_mesh.wingSections_reduced()
 
 
     def __repr__(self) -> str:
@@ -277,13 +286,16 @@ class VLM_Wing:
         g = 9.80665  # m/s²
         return self._wing.mass * g / self.wing_area
 
-
+    @property
+    def mac (self) -> float:
+        """Mean aerodynamic chord of the wing in m."""
+        return self._mac
+    
 
     @property
     def sections (self) -> list [WingSection]:
-        """ wing sections of self._planform_mesh"""
-
-        return self._planform_mesh.wingSections_reduced()
+        """ wing sections of actual mesh"""
+        return self._sections
 
 
     @property
@@ -752,6 +764,13 @@ class Airfoil_Polar_Interpolated:
             return None
         return float (np.interp (cl, self.cl, self.cd))
 
+    def cm_at_cl (self, cl: float) -> float | None:
+        if not len (self.cl) or cl < np.min (self.cl) or cl > np.max (self.cl):
+            return None
+        return float (np.interp (cl, self.cl, self.cm))
+
+
+# ----------------------------------------------------------
 
 
 class VLM_Polar:
@@ -1001,6 +1020,12 @@ class VLM_Polar:
                      for polar, cl in zip (self.airfoil_polar_stripes_normal, stripes_cl)]
         return np.array ([cd if cd is not None else np.nan for cd in cd_values])
 
+
+    def cm_at_stripes (self, stripes_cl: np.ndarray) -> np.ndarray:
+        """Return moment coefficients from the interpolated normal stripe polars."""
+        cm_values = [polar.cm_at_cl (cl)
+                     for polar, cl in zip (self.airfoil_polar_stripes_normal, stripes_cl)]
+        return np.array ([cm if cm is not None else np.nan for cm in cm_values])
 
     # ---- private ----
 
@@ -1334,6 +1359,10 @@ class VLM_OpPoint:
             drag_results = self._calc_aero_drag ()
             self._aero_results.update (drag_results)
 
+            # add moment results to aero_results after viscous loop is finished
+            moment_results = self._calc_aero_moment ()
+            self._aero_results.update (moment_results)
+
         return self._aero_results  
 
 
@@ -1414,12 +1443,12 @@ class VLM_OpPoint:
 
         n        = self.wing.n_panels
         nx  	 = self.wing.nx_panels
-        ns       = int (n / nx)                                                 # n stripes 
+        ns       = int (n / nx)                                         # n stripes 
 
         # ---- lift per panel 
 
-        N = self.wing.panels_normal                                                 # normal vector per panel 
-        A = self.wing.panels_area                                          # area per panel 
+        N = self.wing.panels_normal                                     # normal vector per panel 
+        A = self.wing.panels_area                                       # area per panel 
 
         q_dyn       = self.polar.q_dyn
         lift_panels =  q_dyn * N[:, 2] * A * Cp
@@ -1433,14 +1462,13 @@ class VLM_OpPoint:
         dy          = self.wing.stripes_width                           # width of each stripe
         chord       = self.wing.stripes_chord                           # chord of each stripe
 
-
         # stripe lift and cl
 
         lift_panels_block = lift_panels.reshape (ns, nx)
-        lift              = lift_panels_block.sum (axis=1)               # lift of stripe
-        lift_per_span     = lift / dy                                    # lift per unit span
+        lift              = lift_panels_block.sum (axis=1)              # lift of stripe
+        lift_per_span     = lift / dy                                   # lift per unit span
 
-        cl_vlm            = lift_per_span / (q_dyn * chord)              # cl at span
+        cl_vlm            = lift_per_span / (q_dyn * chord)             # cl at span
 
         # build mask for > cl_max and vlm error
 
@@ -1505,7 +1533,8 @@ class VLM_OpPoint:
     def _calc_aero_drag (self) -> dict:
         """ calculate drag results from the final core VLM results """
 
-        half_wing_area= self.wing.A_ges 
+        wing_area     = self.wing.wing_area
+        half_wing_area= wing_area / 2.0
         chord         = self.wing.stripes_chord
         y             = self.wing.stripes_y
         dy            = self.wing.stripes_width
@@ -1513,16 +1542,16 @@ class VLM_OpPoint:
         # from aero results of viscous loop per stripe
 
         cl            = self.aero_results [VLM_Var.CL]
-        cl_vlm       = self.aero_results  [VLM_Var.CL_VLM]
+        cl_vlm        = self.aero_results [VLM_Var.CL_VLM]
         alpha_ind     = self.aero_results [VLM_Var.ALPHA_IND]
         alpha_ind_rad = np.deg2rad (alpha_ind)
         CL            = self.aero_results [VLM_Var.WING_CL]
 
         # drag coefficients per stripe
 
-        cd_ind = alpha_ind_rad * cl_vlm                         # use 3D VLM
-        cd_airfoil = self.polar.cd_at_stripes (cl)  # use 2D airfoil
-        cd = cd_airfoil + cd_ind
+        cd_ind        = alpha_ind_rad * cl_vlm                      # use 3D VLM
+        cd_airfoil    = self.polar.cd_at_stripes (cl)               # use 2D airfoil
+        cd            = cd_airfoil + cd_ind
 
         # normalized drag coefficients contribution per span unit [1/m]
 
@@ -1547,9 +1576,9 @@ class VLM_OpPoint:
         # total drag of wing
 
         if not np.isnan (cd_airfoil).any ():
-            Drag_ind         = CD_ind     * self.polar.q_dyn * half_wing_area * 2
-            Drag_airfoil     = CD_airfoil * self.polar.q_dyn * half_wing_area * 2
-            Drag             = CD         * self.polar.q_dyn * half_wing_area * 2
+            Drag_ind         = CD_ind     * self.polar.q_dyn * wing_area
+            Drag_airfoil     = CD_airfoil * self.polar.q_dyn * wing_area
+            Drag             = CD         * self.polar.q_dyn * wing_area
         else:
             Drag_ind         = np.nan
             Drag_airfoil     = np.nan
@@ -1576,6 +1605,54 @@ class VLM_OpPoint:
             VLM_Var.WING_GLIDE:        CL/CD if CD != 0 else np.nan,
             VLM_Var.WING_GLIDE_AIRFOIL:CL/CD_airfoil if CD_airfoil != 0 else np.nan
         }
+
+
+
+    def _calc_aero_moment (self) -> dict:
+        """ calculate moment results from the final core VLM results """
+
+        wing_area     = self.wing.wing_area
+        half_wing_area= wing_area / 2.0
+        chord         = self.wing.stripes_chord
+        mac           = self.wing.mac
+        y             = self.wing.stripes_y
+        dy            = self.wing.stripes_width
+
+        # from aero results of viscous loop per stripe
+
+        cl            = self.aero_results [VLM_Var.CL]
+
+        # moment coefficients per stripe
+
+        cm_airfoil    = self.polar.cm_at_stripes (cl)               # use 2D airfoil
+        dcm_airfoil   = (cm_airfoil * chord**2 * dy) / (mac * half_wing_area)
+
+        # total moment coefficient of wing
+
+        CM_airfoil     = np.sum(dcm_airfoil)
+
+        logger.debug (f"{self} CM_airfoil {CM_airfoil:.4f}")
+
+        # total moment of wing
+
+        # if not np.isnan (cd_airfoil).any ():
+        #     Drag_ind         = CD_ind     * self.polar.q_dyn * wing_area
+        #     Drag_airfoil     = CD_airfoil * self.polar.q_dyn * wing_area
+        #     Drag             = CD         * self.polar.q_dyn * wing_area
+        # else:
+        #     Drag_ind         = np.nan
+        #     Drag_airfoil     = np.nan
+        #     Drag             = np.nan
+
+        return {
+            VLM_Var.Y:                 y,
+            VLM_Var.CM_AIRFOIL:        cm_airfoil,
+            VLM_Var.WING_CM_AIRFOIL:   CM_airfoil,
+        }
+
+
+
+
 
     def _viscous_loop (self):
         """

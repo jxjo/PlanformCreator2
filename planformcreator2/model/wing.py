@@ -3953,14 +3953,14 @@ class Planform:
         t4_y_i = t4_y [:-1] + dt4_y / 2 
 
         # integral for geometric parms 
-        area   = np.sum(c_mean     * dx) 
-        c_int  = np.sum(c_mean **2 * dx) 
-        t4_int = np.sum(c_mean     * dx * t4_y_i)
-        x_int  = np.sum(c_mean     * dx * x_i)
-        np_x  = x_int  / area
+        area   = np.sum(c_mean * dx) 
 
-        mac   = c_int  / area
-        np_y  = t4_int / area
+        mac         = np.sum(c_mean **2 * dx)  / area
+        mac_le_y    = np.sum(le_y * c_mean **2 * dx)  / np.sum(c_mean **2 * dx) 
+        mac_c4_y    = mac_le_y + mac / 4
+
+        np_x  = np.sum(c_mean * dx * x_i)  / area
+        np_y  = np.sum(c_mean * dx * t4_y_i) / area
          
         return area, mac, (np_x, np_y) 
  

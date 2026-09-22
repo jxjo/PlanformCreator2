@@ -1082,6 +1082,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         "Cl along span" :               [VLM_Var.CL, VLM_Var.CL_MAX_AIRFOIL, VLM_Var.CL_MIN_AIRFOIL],
         # "CD contribution along span" :  [VLM_Var.CD_SPAN, VLM_Var.CD_IND_SPAN],
         "Cd along span" :               [VLM_Var.CD, VLM_Var.CD_IND, VLM_Var.CD_AIRFOIL],
+        "Cm along span" :               [VLM_Var.CM_AIRFOIL],
         "Alpha_eff along span" :        [VLM_Var.ALPHA_EFF, VLM_Var.ALPHA, VLM_Var.ALPHA_IND]
         }
 
