@@ -66,6 +66,31 @@ class Diagram_Abstract (Diagram):
         self.app_model.sig_new_wing.connect                 (self.refresh)
 
 
+    def _settings (self) -> dict:
+        """ return dictionary of self settings"""
+        s = {}
+
+        # get all items of self on/off  
+        for item in self.diagram_items:
+            item_class = item.__class__
+            show = self._show_item (item_class)
+            toDict (s, f"{item_class.name}", show)
+        return s
+
+
+    def _set_settings (self, s : dict):
+        """ set settings of self from dict """
+
+        # set all items of self on/off  
+        for item in self.diagram_items:
+            item_class = item.__class__
+            show = s.get(item_class.name, None)
+            if show is not None:                            # otherwise current default 
+                self._set_show_item (item_class, show, silent=True)
+
+        self._rebuild_grid_layout()
+
+
     @property
     def app_model (self) -> App_Model:
         """ application model """
@@ -644,6 +669,21 @@ class Item_VLM_OpPoint (Item_Abstract):
         self.app_model.sig_new_polars.connect           (self.refresh)
         self.app_model.sig_polar_set_changed.connect    (self.section_panel.refresh)  # first step just refresh of panel
 
+    @override
+    def _settings (self) -> dict:
+        """ return dictionary of self settings"""
+        d = {}
+        toDict (d, "plot", self.current_plot)
+        return d
+
+
+    @override
+    def _set_settings (self, d : dict):
+        """ set settings of self from dict """
+        plot = d.get('plot', None)                          
+        if plot is not None:
+            self.set_current_plot (plot)
+
 
     def plot_title(self, **kwargs):
 
@@ -818,6 +858,9 @@ class Item_VLM_OpPoint (Item_Abstract):
         elif VLM_Var.LIFT_SPAN in vars:
             range_max = 50 if max_val < 50 else (int (max_val/50) + 2) * 50
             range_min = 0   
+        elif VLM_Var.CM in vars:
+            range_max = 0.1  if max_val < 0.1  else (int (max_val/0.05) + 2) * 0.05
+            range_min = -0.1 if min_val > -0.1 else (int (min_val/0.05) - 1) * 0.05
         else:
             range_min = 0.0 if min_val > 0 else min_val
             range_max = max_val * 1.2 if max_val > 0 else 0
@@ -996,10 +1039,12 @@ class Item_VLM_Polar (Item_Abstract):
     def _btn_var_clicked (self, axis, pos : QPoint):
         """ slot - polar var button in diagram clicked - show menu list of variables"""
         menu = QMenu()
-       
+
+        possible_vars = VLM_Polar_Artist.possible_vars
+
         # Build popup menu 
-        for v in [VLM_Var.WING_CL, VLM_Var.WING_CD, VLM_Var.WING_ALPHA, 
-                  VLM_Var.WING_LIFT, VLM_Var.WING_DRAG]:
+        for v in possible_vars:
+            
             action = QAction (v.value, menu)
             action.setCheckable (True)
             if axis == "y":
@@ -2732,7 +2777,6 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         self._panel_aero         = None                     # master panel aero analysis 
         self._panel_polar        = None                     # panel with polar settings
 
-        self._show_chord         = True
         self._show_level_flight  = False
 
         super().__init__(*args, **kwargs)
@@ -2741,10 +2785,23 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         self.app_model.sig_vlm_changed.connect    (self._viewPanel.refresh)
 
 
+    @override
+    def showEvent (self, ev):
+        """ QShowEvent - self becomes visible  - Tab switch or first time"""
+
+        # first time - force vlm_polar to enable widgets 
+
+        if self._show_first_time and not self.wing.vlm_data_available:
+            self.app_model.cur_vlm_polar
+            self._viewPanel.refresh()
+
+        super().showEvent (ev) 
+
+
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
 
-        i = Item_Chord          (self, self.app_model, show=self.show_chord)
+        i = Item_Chord          (self, self.app_model, show=True)
         self._add_item (i, 0, 0, colspan=2, rowStretch=2)
 
         i = Item_VLM_OpPoint     (self, self.app_model, show=True)
@@ -2890,10 +2947,9 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
     @property
     def show_chord (self) -> bool:
         """ show panel with chord """
-        return self._show_chord
+        return self._show_item (Item_Chord)
     
     def set_show_chord (self, aBool : bool):
-        self._show_chord = aBool == True
         self._set_show_item (Item_Chord, aBool, silent=False)
 
 
@@ -2908,6 +2964,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         """ on/off for mouse helper of self - for global setting use class variable"""
         artist = self._get_artist (Norm_Chord_Artist)[0] 
         artist.set_show_mouse_helper (aBool)
+        artist.refresh()
 
 
     @property
@@ -3197,6 +3254,8 @@ class Item_Making_Of_Abstract (Item_Abstract):
     """ 
    Abstract Making Of Diagram (Plot) Item 
     """
+
+    name = "View Making Of"
 
     min_width   = 200                                   # min size needed - see below 
     min_height  = 100 

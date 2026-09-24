@@ -124,7 +124,6 @@ class App_Model (QObject):
         # current doesn't exist, take first available T1 polar definition
         if self.polar_definitions_T1:
             self._cur_polar_def = self.polar_definitions_T1[0]
-            logger.debug (f"{self} set cur_polar_def to {self._cur_polar_def}")
         else:
             self._cur_polar_def = None
             logger.warning (f"{self}: no T1 polar definitions available")

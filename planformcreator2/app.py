@@ -54,7 +54,7 @@ from .app_model              import App_Model, Mode_Id
 from .app_modes              import Modes_Manager, Mode_Modify
 
 from .ui.pc2_diagrams        import (Diagram_Wing, Diagram_Planform, Diagram_Airfoils, Diagram_Making_Of,
-                                    Diagram_Paneling, Diagram_Aero_Analysis)
+                                    Diagram_Paneling, Diagram_Aero_Analysis, Diagram_Abstract)
 
 
 logger = logging.getLogger(__name__)
@@ -147,6 +147,10 @@ class Main (QMainWindow):
 
         self._diagrams_panel = diagram
 
+        # apply diagram settings 
+
+        self._load_diagram_settings()
+
         # --- Enter event loop ---------------
 
         logger.info (f"{modes_manager.current_mode} ready")
@@ -213,7 +217,32 @@ class Main (QMainWindow):
 
         s.set ('current_diagram', self._diagrams_panel.current_tab_name)
 
+        # save settings of all Diagrams of Tab_Panel 
+
+        tab_panel = self._diagrams_panel
+        diagrams  = [tab_panel.widget(index) for index in range(tab_panel.count())]
+
+        diagram : Diagram_Abstract
+        for diagram in diagrams:
+            settings = diagram.settings()
+            if settings: toDict (s, f"{diagram.name}", settings)
+
         s.save()
+
+
+    def _load_diagram_settings (self):
+        """ load settings of all diagrams from app settings """
+
+        s = Settings()
+
+        tab_panel = self._diagrams_panel
+        diagrams  = [tab_panel.widget(index) for index in range(tab_panel.count())]
+
+        diagram : Diagram_Abstract
+        for diagram in diagrams:
+            settings = s.get(f"{diagram.name}", None)
+            if settings:
+                diagram.set_settings(settings)
 
 
     @override
