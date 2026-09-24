@@ -420,7 +420,7 @@ class Wing:
         self._fuselage_width = aVal 
 
 
-    def wing_data (self) -> tuple[float, float, float, float]:
+    def wing_data (self) -> tuple[float, float, float, float, float]:
         """
         derived wing data from geometry
             - all together for performance reasons
@@ -432,13 +432,13 @@ class Wing:
             np: geometric neutral point in chord direction (x,y) [mm]
         """
 
-        planform_area, mac, np = self.planform._calc_area_mac_np ()
+        planform_area, mac, mac_le_y, np = self.planform.calc_area_mac_np ()
         fuselage_area = self.fuselage_width * self.planform.chord_root
 
         wing_area     = planform_area * 2 + fuselage_area 
         wing_ar       = self.wingspan ** 2 / wing_area
 
-        return wing_area, wing_ar, mac, np
+        return wing_area, wing_ar, mac, mac_le_y, np
 
 
     @property
@@ -447,7 +447,7 @@ class Wing:
         if self._mass is None:
             # initialize mass from a typical model-aircraft wing loading
             typical_wing_loading = 50.0  # g/dm²
-            wing_area, _, _, _ = self.wing_data()
+            wing_area, _, _, _, _ = self.wing_data()
             self._mass = wing_area * typical_wing_loading / 10_000_000.0
         return self._mass
 
@@ -459,7 +459,7 @@ class Wing:
     @property
     def wing_loading (self) -> float:
         """Wing loading in g/dm²."""
-        wing_area_mm2, _, _, _ = self.wing_data()
+        wing_area_mm2, _, _, _, _ = self.wing_data()
         if wing_area_mm2 <= 0:
             return 0.0
         return self.mass * 1000.0 * 10_000.0 / wing_area_mm2
@@ -468,7 +468,7 @@ class Wing:
         """ set wing loading in g/dm² - will set mass accordingly"""
         if aVal is not None:
             aVal = clip (aVal, 1.0, 1000.0)
-            wing_area_mm2, _, _, _ = self.wing_data()
+            wing_area_mm2, _, _, _, _ = self.wing_data()
             if wing_area_mm2 > 0:
                 self._mass = aVal * wing_area_mm2 / (1000.0 * 10_000.0)
 
@@ -3906,27 +3906,18 @@ class Planform:
         
         half_area =  0.5*np.abs(main_area + correction)  
         return half_area
-
-
-    def _calc_mac (self, x : np.ndarray, le_y : np.ndarray, te_y : np.ndarray):
-        """calc mean aerodynamic chord """
-
-        # calc integral of square chord along span 
-        i_c2 = 0.0 
-        for i in range (len(x) -1):
-            dx = x[i+1] - x[i]
-            c_mean = (te_y[i] - le_y[i] + te_y[i+1] - le_y[i+1]) / 2.0          # chord mean value of dx 
-            i_c2 += c_mean **2 * dx
-
-        area = self._calc_planform_area (x, le_y, te_y )
-        mac  = i_c2 / area
-
-        return mac
  
 
 
-    def _calc_area_mac_np (self) -> tuple[float, float, tuple]:
-        """calc area, mean aerodynamic chord, neutral point"""
+    def calc_area_mac_np (self) -> tuple[float, float, float, tuple]:
+        """
+        Calculate area, mean aerodynamic chord, neutral point
+        returns:
+            area: planform area [mm²]
+            mac: mean aerodynamic chord [mm]
+            mac_le_y: y-coordinate of the leading edge of the mean aerodynamic chord [mm]
+            np: neutral point (x, y) [mm]
+        """
 
         # http://walter.bislins.ch/blog/index.asp?page=Berechnung%3A+Mittlere+Aerodynamische+Fl%FCgeltiefe+%28MAC%29 
 
@@ -3951,18 +3942,18 @@ class Planform:
         x_i    = x [:-1] + dx/2 
         c_mean = c [:-1] + dc/2 
         t4_y_i = t4_y [:-1] + dt4_y / 2 
+        le_y_mean = le_y[:-1] + np.diff(le_y)/2
 
         # integral for geometric parms 
         area   = np.sum(c_mean * dx) 
 
         mac         = np.sum(c_mean **2 * dx)  / area
-        mac_le_y    = np.sum(le_y * c_mean **2 * dx)  / np.sum(c_mean **2 * dx) 
-        mac_c4_y    = mac_le_y + mac / 4
+        mac_le_y    = np.sum(le_y_mean * c_mean **2 * dx)  / np.sum(c_mean **2 * dx) 
 
         np_x  = np.sum(c_mean * dx * x_i)  / area
         np_y  = np.sum(c_mean * dx * t4_y_i) / area
          
-        return area, mac, (np_x, np_y) 
+        return area, mac, mac_le_y, (np_x, np_y) 
  
 
     def box_polygon (self) -> Polyline:

@@ -58,8 +58,10 @@ COLOR_WARNING       = QColor ('gold')
 _VLM_VAR_BASE = {VLM_Var.CL, VLM_Var.CD,                                # 'plain/total' family vars
                  VLM_Var.LIFT_SPAN, VLM_Var.DRAG_SPAN,
                  VLM_Var.ALPHA_EFF,
+                 VLM_Var.CM, VLM_Var.MOMENT_SPAN, 
                  VLM_Var.WING_CL, VLM_Var.WING_DRAG,             
-                 VLM_Var.WING_CD, VLM_Var.WING_GLIDE}
+                 VLM_Var.WING_CD, VLM_Var.WING_GLIDE, 
+                 VLM_Var.WING_MOMENT, VLM_Var.WING_CM}
 
 _VLM_VAR_ALPHA_AXIS = {VLM_Var.Y, VLM_Var.WING_ALPHA}
 _VLM_VAR_CL_AXIS    = {VLM_Var.CL, VLM_Var.WING_CL, VLM_Var.WING_LIFT}
@@ -758,7 +760,7 @@ class Neutral_Point_Artist (Abstract_Artist_Planform):
 
     def _plot (self): 
 
-        _, _, _, np = self.wing.wing_data ()
+        _, _, _, _, np = self.wing.wing_data ()
 
         color = QColor ('mediumorchid')
 
@@ -1079,10 +1081,11 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
     available_plots = {
         "Lift distribution" :           [VLM_Var.LIFT_SPAN],
         "Drag distribution" :           [VLM_Var.DRAG_SPAN, VLM_Var.DRAG_IND_SPAN],
+        "Moment distribution" :         [VLM_Var.MOMENT_SPAN],
         "Cl along span" :               [VLM_Var.CL, VLM_Var.CL_MAX_AIRFOIL, VLM_Var.CL_MIN_AIRFOIL],
         # "CD contribution along span" :  [VLM_Var.CD_SPAN, VLM_Var.CD_IND_SPAN],
         "Cd along span" :               [VLM_Var.CD, VLM_Var.CD_IND, VLM_Var.CD_AIRFOIL],
-        "Cm along span" :               [VLM_Var.CM_AIRFOIL],
+        "Cm along span" :               [VLM_Var.CM, VLM_Var.CM_VLM, VLM_Var.CM_AIRFOIL],
         "Alpha_eff along span" :        [VLM_Var.ALPHA_EFF, VLM_Var.ALPHA, VLM_Var.ALPHA_IND]
         }
 
@@ -1173,15 +1176,14 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
             if var == VLM_Var.ALPHA_IND:
                 values = -values                            # xflr5 convention: show induced angle as negative
 
-            x_ext, y_ext = self._extend_to_root_and_tip (x, values)
+            xe, ye = self._extend_to_root_and_tip (x, values)
 
-            self._plot_dataItem  (x_ext, y_ext, pen=pen, name=str(var), antialias=antialias, zValue=1,
+            self._plot_dataItem  (xe, ye, pen=pen, name=str(var), antialias=antialias, zValue=1,
                                 fillLevel=0.0, fillBrush=brush) 
 
-            # take root/tip extent from the first var only 
+            # plot span border once for all variables of this plot 
             if i == 0:
-                x_left, x_right = x_ext[0], x_ext[-1]
-                y_left, y_right = y_ext[0], y_ext[-1]
+                self._plot_span_border (xe, ye)
 
             # plot additional infos 
             if var == VLM_Var.CL:
@@ -1205,17 +1207,8 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                     self._plot_critical_stripes (aero_results, aero_results [VLM_Var.ERROR_MASK],
                                                  "VLM error", "red")
 
-        # plot span border once for all variables of this plot 
-        if x_left is not None:
-            self._plot_span_border (x_left, x_right, y_left, y_right)
-
         # plot total wing values
         self._plot_wing_values (vars, aero_results)
-
-        # plot text for viscous loop or linear VLM
-        driver = "XFOIL" if True else "NeuralFoil" #todo: add neuralfoil driver
-        text = f"Viscous loop based on {driver}" if self.vlm_polar.use_viscous_loop else f"Linear VLM based on {driver}"
-        self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(50,-35),color="dimgray", fontSize=8)
 
 
     def _extend_to_root_and_tip (self, x : np.ndarray, y : np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -1233,8 +1226,11 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         return x_ext, y_ext
 
 
-    def _plot_span_border (self, x_left : float, x_right : float, y_left : float, y_right : float):
+    def _plot_span_border (self, x : np.ndarray, y : np.ndarray):
         """ plot vertical lines at x_left/x_right from y=0 to the respective y value (VLM_Panels color) """
+
+        x_left, x_right = x[0], x[-1]
+        y_left, y_right = y[0], y[-1]
 
         pen = pg.mkPen (COLOR_BOX, width=1, style=Qt.PenStyle.DotLine)
 
@@ -1385,11 +1381,34 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
             value = aero_results[VLM_Var.WING_CD]
             text  = f"Wing CD={value:.4f}" if ~np.isnan(value) else "Wing CD=?"
 
+        elif VLM_Var.CM in vars:
+            values = aero_results [VLM_Var.CM]
+            y     = np.nanmin (values) / 2 if not np.all (np.isnan (values)) else 0.0
+            value = aero_results[VLM_Var.WING_CM]
+            text  = f"Wing CM={value:.3f}" if ~np.isnan(value) else "Wing CM=?"
+
+        elif VLM_Var.MOMENT_SPAN in vars:
+            values = aero_results [VLM_Var.MOMENT_SPAN]
+            y     = np.nanmin (values) / 2 if not np.all (np.isnan (values)) else 0.0
+            value = aero_results[VLM_Var.WING_MOMENT]
+            text  = f"Wing M={value:.2f}Nm" if ~np.isnan(value) else "Wing M=?"
+
         if text:
+            self._plot_point (x, y, size=0, text=text, textFill="black", anchor=(1,0.5))
             if  np.isnan(values).any():
                 self._plot_text (f"Stall starting", color= "orangered", fontSize=self.SIZE_HEADER, 
                                  parentPos = (0.5,0.4), itemPos=(0.9, 1))
-            self._plot_point (x, y, size=0, text=text, textFill="black", anchor=(1,0.5))
+
+        # moment reference 
+        if VLM_Var.CM in vars or VLM_Var.MOMENT_SPAN in vars:
+            cm_ref_x = self.vlm_wing.cm_ref_x * 1000.0
+            self._plot_text (f"Moment reference x={cm_ref_x:.1f}mm ", color="dimgray", fontSize=8,
+                             parentPos = (0,0), itemPos=(0,0), offset=(55,45))
+
+        # plot text for viscous loop or linear VLM
+        driver = "XFOIL" if True else "NeuralFoil" #todo: add neuralfoil driver
+        text = f"Viscous loop based on {driver}" if self.vlm_polar.use_viscous_loop else f"Linear VLM based on {driver}"
+        self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-35),color="dimgray", fontSize=8)
 
         return
 
@@ -1398,6 +1417,10 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 class VLM_Polar_Artist (Abstract_Artist_Planform):
     """Plot the polars of an VLM Wing """
 
+    possible_vars = [VLM_Var.WING_CL, VLM_Var.WING_CD, VLM_Var.WING_CM, 
+                     VLM_Var.WING_ALPHA, 
+                     VLM_Var.WING_LIFT, VLM_Var.WING_DRAG, VLM_Var.WING_MOMENT]
+    
     additional_plots = {
         VLM_Var.WING_CD :           [VLM_Var.WING_CD_AIRFOIL],
         VLM_Var.WING_GLIDE:         [VLM_Var.WING_GLIDE_AIRFOIL],
@@ -1416,7 +1439,18 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
         self._xyVars        = xyVars                        # definition of x,y axis
         self._show_level_flight = False                     # show level flight point in polar
 
-    
+    @override
+    def refresh(self):
+        """
+        refresh current plots - only if PlotItem of self is visible 
+        """
+
+        #todo remove after changed in artist
+        if self.show and self._pi.isVisible_effective():
+
+            self.plot()
+
+
     @property
     def vlm_polar (self) -> VLM_Polar:
         """ current wing polar """
@@ -2953,7 +2987,7 @@ class Wing_Data_Artist (Abstract_Artist_Planform):
         x1 = 140
         dy = 25
 
-        wing_area, wing_ar, mac, np = self.wing.wing_data ()
+        wing_area, wing_ar, mac, mac_le, np = self.wing.wing_data ()
 
         y = 0 
         self._plot_text ("Wing Span",  parentPos=p0, offset=(0, y))
@@ -2977,6 +3011,11 @@ class Wing_Data_Artist (Abstract_Artist_Planform):
         y += dy
         self._plot_text ("MAC",  parentPos=p0, offset=(0, y))
         self._plot_text (f"{mac:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        self._plot_text ("mm", parentPos=p0, offset=(x1, y))
+
+        y += dy
+        self._plot_text ("MAC_LE",  parentPos=p0, offset=(0, y))
+        self._plot_text (f"{mac_le:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
         self._plot_text ("mm", parentPos=p0, offset=(x1, y))
 
         y += dy

@@ -412,7 +412,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
     @property
     def _wingSections_reduced (self) -> list[WingSection]:
-        return self.planform_mesh.wingSections_reduced()
+        return self._planform_mesh.wingSections_reduced()
 
     @property
     def xflr5_filename(self): 
@@ -664,7 +664,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
     @property
     def _wingSections_reduced (self) -> list[WingSection]:
-        return self.planform_mesh.wingSections_reduced()
+        return self._planform_mesh.wingSections_reduced()
 
     @property
     def use_nick(self) -> bool: return self._use_nick
