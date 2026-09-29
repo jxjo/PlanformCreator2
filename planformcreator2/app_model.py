@@ -312,7 +312,7 @@ class App_Model (QObject):
     @property
     def ref_wing_name (self) -> str:
         """ name of the reference wing """
-        return self.ref_wing.name if self.ref_wing else None
+        return self.ref_wing.name if self._ref_wing else None
 
 
     # --- VLM -----

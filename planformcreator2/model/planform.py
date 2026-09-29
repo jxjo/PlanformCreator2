@@ -2864,26 +2864,30 @@ class Planform:
         return x, y 
 
 
-    def _calc_planform_area (self, x : np.ndarray, le_y : np.ndarray, te_y : np.ndarray):
-        """ calc planform area based on le, te polyline """
 
-        # create planform polygon 
-        x, y = self._polygon (x, le_y, te_y) 
-
-        # see https://stackoverflow.com/questions/24467972/calculate-area-of-polygon-given-x-y-coordinates
-        correction = x[-1] * y[0] - y[-1]* x[0]
-        main_area = np.dot(x[:-1], y[1:]) - np.dot(y[:-1], x[1:])
+    def calc_area (self, normed = False) -> float:
+        """ planform area either normalized or absolute in [mm²]"""
         
-        half_area =  0.5*np.abs(main_area + correction)  
-        return half_area
- 
+        xn, cn = self.n_distrib.polyline()
+        dxn = np.diff (xn)
+        dcn = np.diff (cn)
+        cn_mean = cn [:-1] + dcn/2 
+
+        # integral for geometric parms 
+        arean   = np.sum(cn_mean * dxn) 
+
+        if normed:
+            area = arean 
+        else:
+            area = arean * self.span * self.chord_root
+
+        return area
 
 
-    def calc_area_mac_np (self) -> tuple[float, float, float, tuple]:
+    def calc_mac_np (self) -> tuple[float, float, tuple]:
         """
-        Calculate area, mean aerodynamic chord, neutral point
+        Calculate mean aerodynamic chord, neutral point
         returns:
-            area: planform area [mm┬▓]
             mac: mean aerodynamic chord [mm]
             mac_le_y: y-coordinate of the leading edge of the mean aerodynamic chord [mm]
             np: neutral point (x, y) [mm]
@@ -2923,7 +2927,7 @@ class Planform:
         np_x  = np.sum(c_mean * dx * x_i)  / area
         np_y  = np.sum(c_mean * dx * t4_y_i) / area
          
-        return area, mac, mac_le_y, (np_x, np_y) 
+        return mac, mac_le_y, (np_x, np_y) 
  
 
     def box_polygon (self) -> Polyline:

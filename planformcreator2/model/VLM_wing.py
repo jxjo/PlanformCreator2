@@ -255,10 +255,12 @@ class VLM_Wing:
         self._polars: list[VLM_Polar_CacheEntry] = []    # list of (root polar def, VLM polar)
 
         # geometry data from real Wing used for VLM calculation in [m]
-        plan_area, mac, mac_le_y, np = wing.planform.calc_area_mac_np()
+        plan_area       = wing.planform.calc_area()
         wing_span       = wing.planform.span * 2.0 
         self._wing_area = plan_area * 2.0 / 1_000_000.0
         self._wing_ar   = wing_span**2 / self._wing_area
+
+        mac, mac_le_y, np = wing.planform.calc_mac_np()
         self._mac       = mac / 1000.0
         self._mac_le_x  = mac_le_y / 1000.0
         self._np        = (np[0] / 1000.0, np[1] / 1000.0)

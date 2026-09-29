@@ -460,11 +460,13 @@ class Wing:
             np: geometric neutral point in chord direction (x,y) [mm]
         """
 
-        planform_area, mac, mac_le_y, np = self.planform.calc_area_mac_np ()
+        planform_area = self.planform.calc_area(normed=False)
         fuselage_area = self.fuselage_width * self.planform.chord_root
 
         wing_area     = planform_area * 2 + fuselage_area 
         wing_ar       = self.wingspan ** 2 / wing_area
+
+        mac, mac_le_y, np = self.planform.calc_mac_np ()
 
         return wing_area, wing_ar, mac, mac_le_y, np
 
@@ -1078,12 +1080,20 @@ class Reference_Wing (Wing):
                   **kwargs):
 
         self._parent_wing = parent_wing
-        self._area_factor = None
-        self._scale_mode  = Scale_Mode.NO_SCALE             # avoid recursion during initialization
+        self._area_normed = None
+
+         # avoid recursion during initialization
+        self._scale_mode  = Scale_Mode.NO_SCALE            
 
         super().__init__(parm_filePath, **kwargs)
 
+        self._area_normed = self.planform.calc_area (normed=True)
+
+        # now set the desired scale mode
         self._scale_mode  = Scale_Mode(scale_mode)
+
+        # apply updated polar sets (fitting to new scale)
+        self.planform.wingSections.refresh_polar_sets()
 
 
     @property
@@ -1097,14 +1107,6 @@ class Reference_Wing (Wing):
     def set_scale_mode (self, scale_mode: Scale_Mode):
         self._scale_mode = Scale_Mode(scale_mode)
 
-    @property
-    def area_factor (self) -> float:
-        """ Dimensionless planform area per halfspan-root-chord product"""
-        if self._area_factor is None:
-            self._area_factor = self.planform.calc_area_mac_np()[0] / (
-                super().halfspan * super().chord_root)
-        return self._area_factor
-
 
     @override
     @property
@@ -1116,8 +1118,8 @@ class Reference_Wing (Wing):
         elif self.scale_mode == Scale_Mode.MATCH_SPAN_AND_AREA:
             return self.parent_wing.halfspan
         elif self.scale_mode == Scale_Mode.MATCH_ROOT_CHORD_AND_AREA:
-            target_area = self.parent_wing.planform.calc_area_mac_np()[0]
-            span = target_area / (self._area_factor * self.parent_wing.chord_root)
+            parent_area_normed = self.parent_wing.planform.calc_area(normed=True)
+            span = (parent_area_normed / self._area_normed) * self.parent_wing.halfspan 
             return max(0.01, span)
         elif self.scale_mode == Scale_Mode.MATCH_ROOT_CHORD_AND_SPAN:
             return self.parent_wing.halfspan
@@ -1132,8 +1134,8 @@ class Reference_Wing (Wing):
         if self.scale_mode == Scale_Mode.NO_SCALE:
             return self._chord_root
         elif self.scale_mode == Scale_Mode.MATCH_SPAN_AND_AREA:
-            target_area = self.parent_wing.planform.calc_area_mac_np()[0]
-            chord = target_area / (self.area_factor * self.parent_wing.halfspan)
+            parent_area_normed = self.parent_wing.planform.calc_area(normed=True)
+            chord = (parent_area_normed / self._area_normed) * self.parent_wing.chord_root 
             return max(0.01, chord)
         elif self.scale_mode == Scale_Mode.MATCH_ROOT_CHORD_AND_AREA:
             return self.parent_wing.chord_root
