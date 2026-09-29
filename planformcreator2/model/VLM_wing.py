@@ -31,7 +31,8 @@ from .VLM                           import calc_Qjj
 from airfoileditor.model.polar_set  import Polar_Set, RE_SCALE_ROUND_TO, polarType, Polar, Polar_Definition
 
 if TYPE_CHECKING:
-    from .wing                      import Wing, WingSection                              # avoid circular import
+    from .wing                      import Wing                                        # avoid circular import
+    from .planform                  import WingSection
     from .planform_mesh             import Planform_Mesh
 
 
@@ -100,6 +101,15 @@ class VLM_Var (StrEnum_Extended):
     WING_GLIDE_AIRFOIL= "CL/CD airfoil"                     # total airfoil glide ratio of wing 
     WING_CM         = "CM"                                  # total moment coefficient of wing around cm_ref
     WING_MOMENT     = "Moment [N*m]"                        # total moment of wing around cm_ref
+
+
+class VLM_KPI (StrEnum_Extended):
+    """ Key Performance Indicators for VLM wing polar analysis """
+    MAX_CL          = "Max CL"
+    MIN_CD          = "Min CD"
+    MAX_LIFT        = "Max Lift"
+    MAX_GLIDE       = "Max Glide"
+    MIN_DRAG        = "Min Drag"
 
 
 class Point_3D (NamedTuple):
@@ -994,9 +1004,9 @@ class VLM_Polar:
         if cl_level is None:
             return None, None
 
-        cl = self._ofVar (VLM_Var.WING_CL)
+        cl = self._of_var (VLM_Var.WING_CL)
         x_var, y_var = xyVars
-        x_values, y_values = self.ofVars ((x_var, y_var))
+        x_values, y_values = self.of_vars ((x_var, y_var))
         x_level = float (np.interp (cl_level, cl, x_values))
         y_level = float (np.interp (cl_level, cl, y_values))
 
@@ -1045,6 +1055,68 @@ class VLM_Polar:
                      for polar, cl in zip (self.airfoil_polar_stripes_normal, stripes_cl)]
         return np.array ([cm if cm is not None else np.nan for cm in cm_values])
 
+
+    def kpi_in (self, kpi : VLM_KPI, xyvars : tuple [VLM_Var, VLM_Var]) -> tuple[VLM_Var | None, float | None, float | None, float | None]:
+        """Return the value of the specified KPI for the given xyvars tuple."""
+
+        if not kpi in VLM_KPI or not self._is_polar_generated:
+            return None, None, None, None
+
+        #  helper function: extremum (max or min) using a 3-point quadratic fit.
+
+        def extremum (x : np.ndarray, y : np.ndarray, mode="max") -> tuple[float, float]:
+
+            idx = np.argmax(y) if mode == "max" else np.argmin(y)
+            # Ensure we have neighbors for the 3-point fit
+            if idx == 0 or idx == len(y) - 1:
+                return x[idx], y[idx]
+            # Quadratic fit over three points
+            coeff = np.polyfit(x[idx-1:idx+2], y[idx-1:idx+2], 2)
+            a, b, c = coeff
+            # Vertex of the parabola
+            x_ext = -b / (2 * a)
+            y_ext = c - b*b / (4 * a)
+            return x_ext, y_ext
+
+        alpha = self._of_var (VLM_Var.WING_ALPHA)
+        if kpi == VLM_KPI.MAX_LIFT:
+            kpi_var = VLM_Var.WING_LIFT
+            lift    = self._of_var (kpi_var)
+            alpha_val, kpi_val = extremum (alpha, lift, mode="max")
+        elif kpi == VLM_KPI.MAX_GLIDE:
+            kpi_var = VLM_Var.WING_GLIDE
+            glide   = self._of_var (kpi_var)
+            alpha_val, kpi_val = extremum (alpha, glide, mode="max")
+        elif kpi == VLM_KPI.MIN_DRAG:
+            kpi_var = VLM_Var.WING_DRAG
+            drag    = self._of_var (kpi_var)
+            alpha_val, kpi_val = extremum (alpha, drag, mode="min")
+        elif kpi == VLM_KPI.MAX_CL:
+            kpi_var = VLM_Var.WING_CL
+            cl      = self._of_var (kpi_var)
+            alpha_val, kpi_val = extremum (alpha, cl, mode="max")
+        elif kpi == VLM_KPI.MIN_CD:
+            kpi_var = VLM_Var.WING_CD
+            cd      = self._of_var (kpi_var)
+            alpha_val, kpi_val = extremum (alpha, cd, mode="min")
+        else:
+            kpi_var = None
+            kpi_val = None
+
+        if kpi_val is None:
+            logger.warning (f"KPI {kpi} could not be determined for {self}")
+            return None, None, None, None
+
+        # get x,y values of extremum in the context of the requested xyvars
+        xvar, yvar = xyvars
+
+        x,y = self.of_vars ((xvar, yvar))
+
+        kpi_base_x = np.interp (alpha_val, alpha, x)
+        kpi_base_y = np.interp (alpha_val, alpha, y)
+
+        return kpi_var, kpi_val, kpi_base_x, kpi_base_y
+   
     # ---- private ----
 
 
@@ -1165,17 +1237,17 @@ class VLM_Polar:
             return self.opPoint_at (alpha)
 
 
-    def ofVars (self, xyVars: Tuple[VLM_Var, VLM_Var]) -> Tuple[np.ndarray, np.ndarray]:
+    def of_vars (self, xyVars: Tuple[VLM_Var, VLM_Var]) -> Tuple[np.ndarray, np.ndarray]:
         """ returns x,y polar of the tuple xyVars"""
     
         if isinstance(xyVars, tuple):
-            x, y = self._ofVar (xyVars[0]), self._ofVar (xyVars[1])
+            x, y = self._of_var (xyVars[0]), self._of_var (xyVars[1])
         else:
             x, y = np.array([]), np.array([])
         return x,y 
 
 
-    def _ofVar (self, polar_var: VLM_Var) -> np.ndarray:
+    def _of_var (self, polar_var: VLM_Var) -> np.ndarray:
         """ return cached values for a polar variable """
 
         # collect values of existing opPoints for the requested polar_var
@@ -1230,15 +1302,15 @@ class VLM_Polar:
         print (f"  {len(self._opPoints)} opPoints")
         print (f"  {'Alpha':>8s} {'CL':>8s} {'Lift':>8s} {'CD':>8s} {'CD_i':>8s} {'Drag':>8s} {'Glide':>8s} {'CM':>8s} {'Moment':>8s}")
 
-        alpha = self._ofVar (VLM_Var.WING_ALPHA)
-        cl    = self._ofVar (VLM_Var.WING_CL)
-        lift  = self._ofVar (VLM_Var.WING_LIFT)
-        cd    = self._ofVar (VLM_Var.WING_CD)
-        cd_i  = self._ofVar (VLM_Var.WING_CD_IND)
-        drag  = self._ofVar (VLM_Var.WING_DRAG)
-        glide = self._ofVar (VLM_Var.WING_GLIDE)
-        cm    = self._ofVar (VLM_Var.WING_CM)
-        moment = self._ofVar (VLM_Var.WING_MOMENT)
+        alpha = self._of_var (VLM_Var.WING_ALPHA)
+        cl    = self._of_var (VLM_Var.WING_CL)
+        lift  = self._of_var (VLM_Var.WING_LIFT)
+        cd    = self._of_var (VLM_Var.WING_CD)
+        cd_i  = self._of_var (VLM_Var.WING_CD_IND)
+        drag  = self._of_var (VLM_Var.WING_DRAG)
+        glide = self._of_var (VLM_Var.WING_GLIDE)
+        cm    = self._of_var (VLM_Var.WING_CM)
+        moment = self._of_var (VLM_Var.WING_MOMENT)
         for i in range(len(alpha)):
             print (f"  {alpha[i]:8.1f} {cl[i]:8.3f} {lift[i]:8.1f} {cd[i]:8.3f} {cd_i[i]:8.3f} {drag[i]:8.2f} {glide[i]:8.2f} {cm[i]:8.3f} {moment[i]:8.3f}")
 
@@ -1623,7 +1695,7 @@ class VLM_OpPoint:
             VLM_Var.WING_DRAG_AIRFOIL: Drag_airfoil,
             VLM_Var.WING_DRAG:         Drag,
             VLM_Var.WING_GLIDE:        CL/CD if CD != 0 else np.nan,
-            VLM_Var.WING_GLIDE_AIRFOIL:CL/CD_airfoil if CD_airfoil != 0 else np.nan
+            VLM_Var.WING_GLIDE_AIRFOIL:CL/CD_airfoil if CD_airfoil != 0 else np.nan,
         }
 
 

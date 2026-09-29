@@ -15,12 +15,13 @@ The App Model is needed as the 'real' model is QObject agnostic and stateless.
 """
 
 import os
+from pathlib                import Path
 from enum                   import Enum, auto
 from typing                 import override
 from PyQt6.QtCore           import pyqtSignal, QObject, QThread, QTimer
 
 from airfoileditor.resources                import get_assets_dir as ae_assets_dir
-from airfoileditor.base.common_utils        import Parameters, clip
+from airfoileditor.base.common_utils        import clip
 from airfoileditor.base.app_utils           import Settings
 from airfoileditor.model.airfoil_examples   import Example
 from airfoileditor.model.xo2_driver         import Worker
@@ -28,7 +29,8 @@ from airfoileditor.model.polar_set          import Polar_Task, Polar_Definition,
 
 # --- the real model imports
 
-from .model.wing             import Wing, WingSection, FILENAME_NEW
+from .model.wing             import Wing, Reference_Wing, Scale_Mode, FILENAME_NEW
+from .model.planform         import WingSection
 from .model.VLM_wing         import VLM_OpPoint, VLM_Polar
 
 
@@ -89,8 +91,11 @@ class App_Model (QObject):
         self._wing : Wing                   = None      # actual wing model
         self._cur_wingSection : WingSection = None      # current selected wing section
 
-        self._cur_vlm_alpha : float        = None       # current VLM opPoint alpha
-        self._cur_vlm_polar : VLM_Polar    = None       # for change detection current VLM polar
+        self._ref_wing_path : Path          = None      # path to the reference wing file
+        self._ref_wing : Wing               = None      # reference wing of the current planform    
+
+        self._cur_vlm_alpha : float         = None      # current VLM opPoint alpha
+        self._cur_vlm_polar : VLM_Polar     = None      # for change detection current VLM polar
         self._cur_polar_def : Polar_Definition = None   # current polar definition
         self._vlm_alpha_fixed_to_max : bool = False     # is vlm alpha fixed to max lift alpha
 
@@ -286,6 +291,30 @@ class App_Model (QObject):
             self.notify_wingSection_changed ()
 
 
+    @property
+    def ref_wing_path (self) -> Path | None:
+        """ path to the reference wing file """
+
+        if self._ref_wing_path is None and self.wing.ref_pc2_file:
+            self._ref_wing_path = Path(self.wing.ref_pc2_file)
+        return self._ref_wing_path
+
+
+    @property
+    def ref_wing (self) -> Wing:
+        """ reference wing of the current planform """
+
+        if self._ref_wing is None and self.ref_wing_path:
+            self._ref_wing = Reference_Wing (self.ref_wing_path, self.wing,
+                                             scale_mode=Scale_Mode.MATCH_SPAN_AND_AREA)
+        return self._ref_wing
+
+    @property
+    def ref_wing_name (self) -> str:
+        """ name of the reference wing """
+        return self.ref_wing.name if self.ref_wing else None
+
+
     # --- VLM -----
 
     @property
@@ -367,7 +396,28 @@ class App_Model (QObject):
             return self.cur_vlm_polar.opPoint_at (self.cur_vlm_alpha)
         else:
             return None
-    
+
+
+    @property
+    def ref_vlm_polar (self) -> VLM_Polar:
+        """ reference VLM polar based on the selected root polar definition """
+
+        if self.ref_wing and self.cur_vlm_polar: 
+            return self.ref_wing.vlm_wing.polar_at (self.cur_polar_def)
+        else:
+            return None
+
+    @property
+    def ref_vlm_opPoint (self) -> VLM_OpPoint:
+        """ reference VLM operating point based on the selected root polar definition """
+
+        if self.ref_vlm_polar and self.ref_wing.planform.wingSections.strak_done:
+            return self.ref_vlm_polar.opPoint_at (self.cur_vlm_alpha)
+        else:
+            return None
+        
+    # --- model methods -----
+
 
     def load_wing (self, pathFilename, as_new = False): 
         """ creates / loads new wing as current"""
@@ -419,6 +469,8 @@ class App_Model (QObject):
 
         # as polar definitions could have changed, ensure a new initialized polarSet of airfoils
         self.wing.planform.wingSections.refresh_polar_sets (reset=True)
+        if self.ref_wing:
+            self.ref_wing.planform.wingSections.refresh_polar_sets (reset=True)
 
         self._ensure_cur_polar_def()
 
@@ -429,7 +481,14 @@ class App_Model (QObject):
 
     def notify_planform_changed (self):
         """ notify self that planform changed """
+
+        # if there is a reference wing, we have to reset its vlm_wing to be recalculated
+        if self.ref_wing:
+            self.ref_wing.vlm_wing_reset()
+
         self.sig_planform_changed.emit()
+
+        # also paneling has to be updated
         self.notify_paneling_changed ()
 
 

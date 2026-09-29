@@ -21,7 +21,9 @@ from airfoileditor.base.panels          import Edit_Panel, MessageBox, Dialog_Mo
 from airfoileditor.base.diagram         import Diagram, Diagram_Item
 from airfoileditor.base.artist          import Artist
 
-from ..model.wing                       import Wing, Planform, Image_Definition, WingSections
+from ..model.wing                       import Wing
+from ..model.planform                   import Planform, WingSections
+from ..model.image_definition           import Image_Definition
 from ..model.planform_mesh              import Mesh_Strategy, Mesh_Strategy_Smooth, Mesh_Strategy_Trapezoidal, Planform_Mesh
 from ..model.wing_exports               import (Exporter_Airfoils, Exporter_DXF, Exporter_Xflr5, 
                                                 Exporter_FLZ, Exporter_CSV)

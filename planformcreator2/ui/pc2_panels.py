@@ -22,9 +22,9 @@ from airfoileditor.base.widgets         import *
 from airfoileditor.base.panels          import Edit_Panel, MessageBox, Disabled_Overlay
 from airfoileditor.model.airfoil        import Airfoil, GEO_BASIC, Airfoil_Bezier, Airfoil_BSpline
 
-from ..resources           import _is_frozen
-from ..model.wing           import Wing, STRAK_AIRFOIL_NAME
-from ..model.wing           import (Planform, N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line,
+from ..resources            import _is_frozen
+from ..model.wing           import Wing
+from ..model.planform       import (Planform, N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line,
                                     Flaps, WingSections, WingSection)
 
 from ..app_model            import App_Model
@@ -458,7 +458,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
         if self.airfoil is not None:
             return self.airfoil.fileName
         else:
-            return STRAK_AIRFOIL_NAME
+            return Wing.STRAK_AIRFOIL_NAME
 
     @property
     def airfoil_issues (self) -> list[str]:

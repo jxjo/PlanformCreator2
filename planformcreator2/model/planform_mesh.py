@@ -13,7 +13,7 @@ import numpy as np
 from airfoileditor.base.common_utils import clip, fromDict, toDict
 
 if TYPE_CHECKING:
-    from .wing import Planform, WingSection, WingSections
+    from .planform import Planform, WingSection, WingSections
 
 
 logger = logging.getLogger(__name__)

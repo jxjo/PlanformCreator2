@@ -24,7 +24,8 @@ from airfoileditor.ui.util_dialogs      import Polar_Definition_Dialog, Calc_Rey
 
 # ---- pc2 modules  
 
-from ..model.wing       import Wing, Planform
+from ..model.wing       import Wing
+from ..model.planform   import Planform
 from ..model.VLM_wing   import VLM_OpPoint, VLM_Var, VLM_Wing
 
 from .pc2_artists       import *
@@ -172,6 +173,22 @@ class Item_Abstract (Diagram_Item):
     def planform (self) -> Planform:
         return self.wing.planform
 
+    @property
+    def ref_wing (self) -> Wing | None:
+        """ returns the reference wing if available """
+        return self.app_model.ref_wing
+
+
+    @property
+    def ref_planforms (self) -> list[Planform]:
+
+        refs = []
+
+        refs.append (self.wing.planform_elliptical)
+        if self.app_model.ref_wing :
+            refs.append (self.app_model.ref_wing.planform)
+        return refs
+
 
     def refresh_diagram (self, also_viewRange=True):
         """ refresh the parent diagram so all diagram items are updated """
@@ -246,7 +263,9 @@ class Item_Planform (Item_Abstract):
                                                  wingSection_fn=lambda: self.cur_wingSection))
         self._add_artist (Flaps_Artist          (self, lambda: self.planform, show=False ,show_legend=True))
         self._add_artist (Airfoil_Name_Artist   (self, lambda: self.planform, show=False, show_legend=False))
-        self._add_artist (Ref_Planforms_Artist  (self, lambda: self.planform, show=False, show_legend=True))
+        self._add_artist (Ref_Planforms_Artist  (self, lambda: self.planform, 
+                                                       ref_planforms_fn=lambda: self.ref_planforms, 
+                                                       show=False, show_legend=True))
         self._add_artist (Image_Artist          (self, lambda: self.planform, show=False, 
                                                        image_def=lambda: self.wing.background_image,
                                                        as_background=True))
@@ -987,6 +1006,10 @@ class Item_VLM_Polar (Item_Abstract):
         """ current VLM polar """
         return self.app_model.cur_vlm_polar
 
+    @property
+    def ref_vlm_polar (self) -> VLM_Polar:
+        """ reference VLM polar """
+        return self.app_model.ref_vlm_polar
 
     @override
     def _settings (self) -> dict:
@@ -1170,6 +1193,7 @@ class Item_VLM_Polar (Item_Abstract):
 
         a = VLM_Polar_Artist     (self, lambda: self.planform,
                                   polar_fn=lambda: self.vlm_polar,
+                                  ref_polar_fn=lambda: self.ref_vlm_polar,
                                   xyVars=self._xyVars, 
                                   show_legend=True)
         self._add_artist (a)
@@ -2192,20 +2216,20 @@ class Diagram_Planform (Diagram_Abstract):
             # toggle fields for pc2 reference planform 
             r += 1
             CheckBox   (l,r,c, text="Another PC2 Planform", 
-                        hide = lambda: bool(self.wing.reference_pc2_file))
+                        hide = lambda: bool(self.wing.ref_pc2_file))
             Button     (l,r,c+1, text="Select", width=50, colSpan=4,
                         set=self._open_planform_ref_pc2, toolTip="Select another PC2 Planform as reference",
-                        hide = lambda: bool(self.wing.reference_pc2_file))
+                        hide = lambda: bool(self.wing.ref_pc2_file))
 
-            CheckBox   (l,r,c, text=lambda: self.wing.planform_ref_pc2_name, 
+            CheckBox   (l,r,c, text=lambda: self.app_model.ref_wing_name, 
                         get=lambda: self.show_ref_pc2, set=self.set_show_ref_pc2, 
-                        hide = lambda: not bool(self.wing.reference_pc2_file)) 
+                        hide = lambda: not bool(self.wing.ref_pc2_file)) 
             ToolButton (l,r,c+2, icon=Icon.OPEN, 
                         set=self._open_planform_ref_pc2, toolTip="Open new PC2 Planform",
-                        hide = lambda: not bool(self.wing.reference_pc2_file))
+                        hide = lambda: not bool(self.wing.ref_pc2_file))
             ToolButton (l,r,c+3, icon=Icon.DELETE, 
                         set=self._remove_planform_ref_pc2, toolTip="Remove PC2 Planform",
-                        hide = lambda: not bool(self.wing.reference_pc2_file))
+                        hide = lambda: not bool(self.wing.ref_pc2_file))
 
 
             # toggle fields for background image
@@ -2282,7 +2306,7 @@ class Diagram_Planform (Diagram_Abstract):
                                                          caption="Open PlanformCreator file")
 
         if newPathFilename: 
-            self.wing.set_reference_pc2_file (newPathFilename)
+            self.wing.set_ref_pc2_file (newPathFilename)
             self.set_show_ref_pc2 (True)
             self.refresh ()  
 
@@ -2290,7 +2314,7 @@ class Diagram_Planform (Diagram_Abstract):
     def _remove_planform_ref_pc2 (self):
         """ remove reference pc2 file """
 
-        self.wing.set_reference_pc2_file (None)
+        self.wing.set_ref_pc2_file (None)
         self.set_show_ref_pc2 (False)
         self.refresh ()  
 
@@ -2777,8 +2801,6 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         self._panel_aero         = None                     # master panel aero analysis 
         self._panel_polar        = None                     # panel with polar settings
 
-        self._show_level_flight  = False
-
         super().__init__(*args, **kwargs)
 
         # Diagram refresh is handled in Diagram_Items - but view panel is owned by this class
@@ -2991,14 +3013,26 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
     @property
     def show_level_flight (self) -> bool:
         """ show level flight point in polar """
-        return self._show_level_flight
+        artist : VLM_Polar_Artist = self._get_artist (VLM_Polar_Artist)[0] 
+        return artist.show_level_flight if artist else False
 
     def set_show_level_flight (self, aBool : bool):
-        self._show_level_flight = aBool == True
         artist : VLM_Polar_Artist
         for artist in self._get_artist (VLM_Polar_Artist):
             artist.set_show_level_flight (aBool)
         self.panel_polar.refresh()        # ensure mass field is shown/hidden
+
+    @property
+    def show_kpis (self) -> bool:
+        """ show key performance indicators (KPIs) in polar """
+        artist : VLM_Polar_Artist = self._get_artist (VLM_Polar_Artist)[0] 
+        return artist.show_kpis if artist else False
+
+    def set_show_kpis (self, aBool : bool):
+        artist : VLM_Polar_Artist
+        for artist in self._get_artist (VLM_Polar_Artist):
+            artist.set_show_kpis (aBool)
+        self.panel_polar.refresh()        # ensure KPIs are shown/hidden
 
 
     @property 
@@ -3067,6 +3101,10 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
                     get="Choose polar variables in diagram")
             r += 1
             SpaceR (l,r, height=5)
+            r += 1
+            CheckBox (l,r,c, colSpan=4, 
+                      get=lambda: self.show_kpis, set=self.set_show_kpis,
+                      text="Show key performance indicators")
             r += 1
             CheckBox (l,r,c, colSpan=4, 
                       get=lambda: self.show_level_flight, set=self.set_show_level_flight,

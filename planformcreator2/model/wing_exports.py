@@ -29,7 +29,8 @@ from airfoileditor.base.dxf_artist        import Dxf_Artist, Cad_Line, Cad_PolyL
 from airfoileditor.model.airfoil          import Airfoil, GEO_SPLINE, Flap_Definition
 from airfoileditor.model.airfoil_exports  import Dxf_Airfoil_Artist
 
-from .wing                                import Wing, Planform, WingSection, WingSections, Flap
+from .wing                                import Wing
+from .planform                            import Planform, WingSection, WingSections, Flap
 from planformcreator2.model.planform_mesh import Mesh_Strategy_Trapezoidal, Planform_Mesh
 
 logger = logging.getLogger(__name__)

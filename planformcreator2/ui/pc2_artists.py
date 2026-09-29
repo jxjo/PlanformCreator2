@@ -22,9 +22,11 @@ from airfoileditor.model.airfoil              import GEO_BASIC
 from airfoileditor.model.polar_set            import *
 from airfoileditor.ui.ae_artists              import _linestyle_of
 
-from ..model.wing               import (Wing, Planform, N_Distrib_Bezier, 
-                                        WingSection, WingSections, Flaps, Flap, Image_Definition)
-from ..model.VLM_wing           import VLM_OpPoint, VLM_Polar, VLM_Var, VLM_Wing
+from ..model.wing               import Wing
+from ..model.planform           import (Planform, N_Distrib_Bezier,
+                                        WingSection, WingSections, Flaps, Flap)
+from ..model.image_definition   import Image_Definition
+from ..model.VLM_wing           import VLM_OpPoint, VLM_Polar, VLM_Var, VLM_Wing, VLM_KPI
 from ..model.planform_mesh      import Planform_Mesh, Mesh_Strategy
 
 
@@ -67,7 +69,7 @@ _VLM_VAR_ALPHA_AXIS = {VLM_Var.Y, VLM_Var.WING_ALPHA}
 _VLM_VAR_CL_AXIS    = {VLM_Var.CL, VLM_Var.WING_CL, VLM_Var.WING_LIFT}
 
 
-def pen_vlm_var (xyvars : tuple[VLM_Var, VLM_Var]) -> QPen:
+def pen_vlm_var (xyvars : tuple[VLM_Var, VLM_Var], is_reference=False) -> QPen:
     """ return a QPen for a xyvars pair - styled by whichever var is not the axis var """
 
     x_var, y_var = xyvars
@@ -89,7 +91,8 @@ def pen_vlm_var (xyvars : tuple[VLM_Var, VLM_Var]) -> QPen:
         main_var = y_var if priority (y_var) >= priority (x_var) else x_var
 
     if main_var in _VLM_VAR_BASE:
-        color, width, alphaF = 'whitesmoke', 2.0, 1.0
+        width = 1.5 if is_reference else 2.0
+        color, width, alphaF = 'whitesmoke', width, 1.0
     elif 'IND' in main_var.name:
         color, width, alphaF = 'red', 1.0, 1.0
     elif 'AIRFOIL' in main_var.name:
@@ -99,7 +102,13 @@ def pen_vlm_var (xyvars : tuple[VLM_Var, VLM_Var]) -> QPen:
     else:
         color, width, alphaF = 'gray', 1.0, 1.0
 
-    style = Qt.PenStyle.DashLine if ('MAX' in main_var.name or 'MIN' in main_var.name) else Qt.PenStyle.SolidLine
+    if ('MAX' in main_var.name or 'MIN' in main_var.name):
+        style = Qt.PenStyle.DashLine
+    elif is_reference:
+        style = Qt.PenStyle.DotLine
+    else:
+        style =  Qt.PenStyle.SolidLine
+
     qcolor = QColor (color)
     qcolor.setAlphaF (alphaF)
 
@@ -1417,12 +1426,12 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 class VLM_Polar_Artist (Abstract_Artist_Planform):
     """Plot the polars of an VLM Wing """
 
-    possible_vars = [VLM_Var.WING_CL, VLM_Var.WING_CD, VLM_Var.WING_CM, 
+    possible_vars = [VLM_Var.WING_CL, VLM_Var.WING_CD, VLM_Var.WING_GLIDE, VLM_Var.WING_CM, 
                      VLM_Var.WING_ALPHA, 
                      VLM_Var.WING_LIFT, VLM_Var.WING_DRAG, VLM_Var.WING_MOMENT]
     
     additional_plots = {
-        VLM_Var.WING_CD :           [VLM_Var.WING_CD_AIRFOIL],
+        VLM_Var.WING_CD :           [VLM_Var.WING_CD_AIRFOIL, VLM_Var.WING_CD_IND],
         VLM_Var.WING_GLIDE:         [VLM_Var.WING_GLIDE_AIRFOIL],
         VLM_Var.WING_DRAG:          [VLM_Var.WING_DRAG_AIRFOIL, VLM_Var.WING_DRAG_IND],
         }
@@ -1431,13 +1440,18 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
     def __init__ (self, *args, 
                   xyVars = (VLM_Var.WING_CD, VLM_Var.WING_CL), 
                   polar_fn = None,
+                  ref_polar_fn = None,
                   **kwargs):
         super().__init__ (*args, **kwargs)
 
         self._polar_fn      = polar_fn                      # bound method to get current polar
+        self._ref_polar_fn  = ref_polar_fn                  # bound method to get reference polar
+
         self._show_points   = False                         # show point marker 
         self._xyVars        = xyVars                        # definition of x,y axis
         self._show_level_flight = False                     # show level flight point in polar
+        self._show_kpis     = False                         # show key performance indicators (KPIs)
+        self._show_ref      = True                          # show reference polar
 
     @override
     def refresh(self):
@@ -1457,9 +1471,11 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
         return self._polar_fn() if callable(self._polar_fn) else None
 
     @property
-    def vlm_wing (self) -> VLM_Wing:
-        """ vlm wing of wing"""
-        return self.wing.vlm_wing 
+    def ref_vlm_polar (self) -> VLM_Polar:
+        """ reference VLM polar """
+        if self.show_ref:
+            return self._ref_polar_fn() if callable(self._ref_polar_fn) else None
+        return None
 
     @property
     def xyVars(self): return self._xyVars
@@ -1482,6 +1498,20 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
         self._show_level_flight = show
         self.refresh()
 
+    @property
+    def show_kpis(self) -> bool:
+        return self._show_kpis
+    def set_show_kpis(self, show: bool):
+        self._show_kpis = show
+        self.refresh()
+
+    @property
+    def show_ref(self) -> bool:
+        return self._show_ref
+    def set_show_ref(self, show: bool):
+        self._show_ref = show
+        self.refresh()
+
 
 
     def _plot (self): 
@@ -1491,39 +1521,51 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
             self._plot_text (f"Wing not ready... ", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
             return
 
-        # is polar ready to show results - all section polars generated and loaded?
-        if not self.vlm_polar.is_ready:
-            n_running = Polar_Task.get_total_n_polars_running()
-            if n_running > 0:
-                self._plot_text (f"Generating airfoil polars... ({n_running} running)", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
-            elif self.vlm_polar.error_reason:
-                text = '<br>'.join (self.vlm_polar.error_reason)          
-                self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
-            else:
-                self._plot_text (f"Polar not ready for opPoint - this should not happen", color= "red",  itemPos=(0.5, 1))
-            return   
+        # collect main polar and reference polar (if defined)
+        vlm_polars = [(self.vlm_polar, False)]
+        if self.ref_vlm_polar is not None:
+            vlm_polars.append ((self.ref_vlm_polar, True))
 
-        # generate polars if needed
-        self.vlm_polar.generate_polar()
-
-        # get additional plots like cd_induced, cd_airfoil etc. depending on selected x,y variables
-        xyVars_list = self._get_additional_plots()
-
-        symbol = "o" if self.show_points else None
-
-        for xyVars in xyVars_list:
+        for vlm_polar, is_reference in vlm_polars:
             
-            # plot the polar curve
-            pen    = pen_vlm_var (xyVars)
-            label  = xyVars[1].value + " vs " + xyVars[0].value
+            # is polar ready to show results - all section polars generated and loaded?
+            if not vlm_polar.is_ready:
+                n_running = Polar_Task.get_total_n_polars_running()
+                if n_running > 0:
+                    self._plot_text (f"Generating airfoil polars... ({n_running} running)", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
+                elif vlm_polar.error_reason:
+                    text = '<br>'.join (vlm_polar.error_reason)          
+                    self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
+                else:
+                    self._plot_text (f"Polar not ready for opPoint - this should not happen", color= "red",  itemPos=(0.5, 1))
+                return   
 
-            x,y = self.vlm_polar.ofVars (xyVars)
+            # generate polars if needed
+            vlm_polar.generate_polar()
 
-            self._plot_dataItem  (x, y, name=label, pen = pen, 
-                                    symbol=symbol, antialias = True, zValue=1)
+            # get additional plots like cd_induced, cd_airfoil etc. depending on selected x,y variables
+            xyVars_list = self._get_additional_plots()
+
+            symbol = "o" if self.show_points else None
+
+            for xyVars in xyVars_list:
+                
+                # plot the polar curve
+                pen    = pen_vlm_var (xyVars, is_reference)
+                label  = xyVars[1].value + " vs " + xyVars[0].value
+                if is_reference:
+                    label = "(Ref) " + label
+
+                x,y = vlm_polar.of_vars (xyVars)
+
+                self._plot_dataItem  (x, y, name=label, pen = pen, 
+                                        symbol=symbol, antialias = True, zValue=1)
 
         if self.show_level_flight:
             self._plot_level_flight_point ()
+
+        if self.show_kpis:
+            self._plot_kpis()
 
 
     def _plot_level_flight_point (self):
@@ -1534,9 +1576,15 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
             return
 
         cl = self.vlm_polar.cl_level_flight
-        text = f"Level flight CL={cl:.3f}"
-        self._plot_point (x_level, y_level, symbol='s', size=8, color='red',  brush="black",
-                          text=text, textFill=pg.mkBrush ('black'), anchor=(-0.1, 0.5))
+        text = f"Level flight CL: {cl:.3f}"
+
+        color       = QColor('turquoise')
+        brush_color = QColor('black')
+        # brush_color.setAlphaF (0.8); 
+
+        self._plot_point (x_level, y_level, symbol='s', size=9, color=color,  brush=brush_color,
+                          text=text, textFill=pg.mkBrush ('black'), 
+                          textOffset=(5, 0),anchor=(0, 0.5))
 
 
     def _get_additional_plots (self) -> list[Tuple[VLM_Var, VLM_Var]]:
@@ -1552,6 +1600,91 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
             xyVars_list.append ((x_var, add_var))
 
         return xyVars_list
+
+
+    def _plot_kpis (self):
+        """Plot the key performance indicators (KPIs) for the currently selected polar axes."""
+
+        def is_plot_like (xvars : list, yvar: VLM_Var) -> bool:
+            # True if self.xyVars matches the given xvars and yvar or reversed
+            return (self.xyVars[0] in xvars and self.xyVars[1] == yvar) or (self.xyVars[0] == yvar and self.xyVars[1] in xvars)
+
+        kpis = []
+
+        # which kpis should be plotted based on the current xyVars?
+        if is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_CD):
+            kpis = [VLM_KPI.MIN_CD, VLM_KPI.MAX_GLIDE]
+        elif is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_GLIDE):
+            kpis = [VLM_KPI.MAX_GLIDE]
+        elif is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_CL):
+            kpis = [VLM_KPI.MAX_CL]
+        elif is_plot_like ([VLM_Var.WING_DRAG, VLM_Var.WING_ALPHA], VLM_Var.WING_LIFT):
+            kpis = [VLM_KPI.MIN_DRAG, VLM_KPI.MAX_GLIDE]
+        elif is_plot_like ([VLM_Var.WING_LIFT, VLM_Var.WING_ALPHA], VLM_Var.WING_GLIDE):
+            kpis = [VLM_KPI.MAX_GLIDE]
+        elif is_plot_like ([VLM_Var.WING_LIFT, VLM_Var.WING_ALPHA], VLM_Var.WING_LIFT):
+            kpis = [VLM_KPI.MAX_LIFT]
+
+        for kpi in kpis:
+
+            # calc the KPI value and corresponding x and y values
+
+            kpi_var, kpi_val, x_val, y_val = self.vlm_polar.kpi_in (kpi, self.xyVars)
+
+            if kpi_val is not None:
+                xvar, yvar = self.xyVars
+                x_val_rnd   = self._round_var(xvar, x_val)
+                y_val_rnd   = self._round_var(yvar, y_val)
+                kpi_val_rnd = self._round_var(kpi_var, kpi_val)
+
+                if kpi_var == xvar:
+                    at_text = f"@ {yvar.value}: {y_val_rnd}"
+                elif kpi_var == yvar:
+                    at_text = f"@ {xvar.value}: {x_val_rnd}"
+                else:
+                    at_text = f"@ {xvar.value}: {x_val_rnd}, {yvar.value}: {y_val_rnd}"
+                text = f"{kpi.value}: {kpi_val_rnd} {at_text}" 
+
+                if kpi_var in [VLM_Var.WING_CL, VLM_Var.WING_LIFT]:
+                    anchor = (1.0, 0.5)
+                else:
+                    anchor =  (0, 0.5)
+
+                color       = QColor('lightgray')
+                brush_color = QColor('black')
+                # brush_color.setAlphaF (0.8); 
+                brush = pg.mkBrush (brush_color)
+                self._plot_point (x_val, y_val, symbol='s', size=9, color=color, brush=brush,
+                                  text=text, textFill=pg.mkBrush ('black'), 
+                                  textOffset=(5, 0), anchor=anchor)
+
+                # if there is a ref polar, plot the delta between the current and reference KPI values
+
+                if self.ref_vlm_polar is not None:
+                    _, ref_kpi_val, _, _ = self.ref_vlm_polar.kpi_in (kpi, self.xyVars)
+
+                if  ref_kpi_val is not None:
+                    improve = (kpi_val - ref_kpi_val) / kpi_val
+                    better = improve >= 0.0 if "max" in kpi.value.lower() else improve <= 0.0
+                    delta_text  = f"Δ: {improve:+.1%}"
+                    delta_color = "limegreen" if better else "red"
+
+                    self._plot_point (x_val, y_val, size=0, color=delta_color,
+                                      text=delta_text, textColor=delta_color,
+                                      textOffset=(5, -14), anchor=anchor)
+
+
+    def _round_var (self, var: VLM_Var, value) -> float:
+        """Round the value based on the variable type."""
+
+        if var in [VLM_Var.WING_CL, VLM_Var.WING_ALPHA]:
+            return round(value, 2)
+        elif var in [VLM_Var.WING_DRAG, VLM_Var.WING_LIFT, VLM_Var.WING_GLIDE]:
+            return round(value, 2)
+        elif var in [VLM_Var.WING_CD]:
+            return round(value, 4)
+        else:
+            return round(value, 3)
 
 
 class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
@@ -1680,12 +1813,14 @@ class Ref_Planforms_Artist (Abstract_Artist_Planform):
         - mode PLANFORM
     """
     def __init__ (self, *args, 
+                  ref_planforms_fn = None,
                   show_chord = False,                               #  planform as outline 
                   **kwargs):
 
         self._show_chord = show_chord           
         self._show_elliptical = True           
         self._show_ref_pc2    = True
+        self._ref_planforms_fn = ref_planforms_fn
 
         super().__init__ (*args, **kwargs)
 
@@ -1708,11 +1843,14 @@ class Ref_Planforms_Artist (Abstract_Artist_Planform):
     def ref_planforms (self) -> list[Planform]:
 
         refs = []
+        if callable(self._ref_planforms_fn):
 
-        if self.show_elliptical:
-            refs.append (self.wing.planform_elliptical)
-        if self.wing.planform_ref_pc2 and self.show_ref_pc2:
-            refs.append (self.wing.planform_ref_pc2)
+            ref : Planform
+            for ref in self._ref_planforms_fn():
+                if self.show_elliptical and ref.n_distrib.isElliptical:
+                    refs.append(ref)
+                elif self.show_ref_pc2 and not ref.n_distrib.isElliptical:
+                    refs.append(ref)
         return refs
 
 
@@ -1726,12 +1864,12 @@ class Ref_Planforms_Artist (Abstract_Artist_Planform):
             else:
                 x, y = planform.polygon () 
 
+            name  = f"{planform.name}"
+
             if planform.n_distrib.isElliptical:
                 color = COLOR_REF_ELLI
-                name  = f"{planform.name}" 
             else:  
                 color = COLOR_REF_PC2
-                name  = f"{self.wing.planform_ref_pc2_name}"
 
             pen   = pg.mkPen(color, width=1)
 
