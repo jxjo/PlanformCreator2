@@ -22,7 +22,7 @@ from airfoileditor.model.airfoil              import GEO_BASIC
 from airfoileditor.model.polar_set            import *
 from airfoileditor.ui.ae_artists              import _linestyle_of
 
-from ..model.wing               import Wing
+from ..model.wing               import Wing, Reference_Wing
 from ..model.planform           import (Planform, N_Distrib_Bezier,
                                         WingSection, WingSections, Flaps, Flap)
 from ..model.image_definition   import Image_Definition
@@ -50,7 +50,6 @@ COLOR_BANANA        = QColor ('khaki')
 COLOR_SECTION       = QColor ('deeppink')
 COLOR_EXTRA_SECTION = QColor ('gold').darker (120)
 
-COLOR_REF_ELLI      = QColor ('dodgerblue')
 COLOR_REF_PC2       = QColor ('magenta').darker(120)
 
 COLOR_WARNING       = QColor ('gold')
@@ -245,7 +244,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
             x, y = self.planform.n_ref_line.polyline ()
 
         pen   = pg.mkPen(COLOR_REF_LINE, width=1.5)
-        self._plot_dataItem  (x, y, name="Reference Line", pen = pen, antialias = True, zValue=4)
+        self._plot_dataItem  (x, y, name="Chord Reference Line", pen = pen, antialias = True, zValue=4)
 
         # mouse helper to change ref line Bezier - only Bezier may have Banana
 
@@ -377,6 +376,8 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
 
     def _plot (self): 
 
+        if not self.show_mouse_helper: return
+
         x, y = self.planform.box_polygon ()
 
         color = COLOR_BOX
@@ -386,19 +387,17 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
 
         # movable root chord and tip  
 
-        if self.show_mouse_helper:       
+        pt = self.Movable_Chord_Root    (self._pi, self.planform, color=color,
+                                        on_changed=self.sig_planform_changed.emit)
+        self._add (pt) 
+        pt = self.Movable_Span          (self._pi, self.planform, color=color, 
+                                        on_changed=self.sig_planform_changed.emit)
+        self._add (pt) 
+        pt = self.Movable_Angle         (self._pi, self.planform, color=color, 
+                                        on_changed=self.sig_planform_changed.emit)
+        self._add (pt) 
 
-            pt = self.Movable_Chord_Root    (self._pi, self.planform, color=color,
-                                            on_changed=self.sig_planform_changed.emit)
-            self._add (pt) 
-            pt = self.Movable_Span          (self._pi, self.planform, color=color, 
-                                            on_changed=self.sig_planform_changed.emit)
-            self._add (pt) 
-            pt = self.Movable_Angle         (self._pi, self.planform, color=color, 
-                                            on_changed=self.sig_planform_changed.emit)
-            self._add (pt) 
-
-            self.set_help_message ("Planform: Use control points of the enclosing box to modify root chord, span and sweep angle")
+        self.set_help_message ("Planform: Use control points of the enclosing box to modify root chord, span and sweep angle")
 
 
     class Movable_Box_Point (Movable_Point):
@@ -749,16 +748,18 @@ class Planform_Artist (Abstract_Artist_Planform):
         else: 
             x, le_y, te_y = self.planform.le_te_polyline () 
 
-            brush_le, brush_te = None, None
-            fillLevel = 0 
-
-            # plot le and te 
-
-            self._plot_dataItem  (x, le_y, pen=pg.mkPen(COLOR_LE, width=2), antialias=True, zValue=3,
-                                name=f"Leading edge", fillLevel=fillLevel, fillBrush=brush_le)
+            le_item = self._plot_dataItem  (x, le_y, pen=pg.mkPen(COLOR_LE, width=2), antialias=True, 
+                                  zValue=3, name=f"Leading edge")
             
-            self._plot_dataItem  (x, te_y, pen=pg.mkPen(COLOR_TE, width=2), antialias=True, zValue=3,
-                                name=f"Trailing edge", fillLevel=fillLevel, fillBrush=brush_te)
+            te_item = self._plot_dataItem  (x, te_y, pen=pg.mkPen(COLOR_TE, width=2), antialias=True, 
+                                  zValue=3, name=f"Trailing edge")
+
+            # fill area between leading and trailing edge
+
+            brush = pg.mkBrush(QColor(COLOR_LE).darker(800))
+            fill_item = pg.FillBetweenItem(le_item, te_item, brush=brush)
+            fill_item.setZValue(0)
+            self._add (fill_item)
 
 
 
@@ -849,9 +850,10 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
 
         if not self.planform._n_distrib.isTrapezoidal:
             x, le_y, te_y = self.wing.planform.le_te_polyline () 
-            pen = pg.mkPen (COLOR_PLANFORM.darker(150), width=1, style=Qt.PenStyle.DashLine)
-            self._plot_dataItem  (x, le_y, pen=pen, antialias=False, name="Planform", zValue=1)        
-            self._plot_dataItem  (x, te_y, pen=pen, antialias=False, zValue=1)
+            color = COLOR_PLANFORM.darker(150) if not self.wing.is_reference_wing else COLOR_PLANFORM.darker(250)
+            pen = pg.mkPen (color, width=1, style=Qt.PenStyle.DashLine)
+            self._plot_dataItem  (x, le_y, pen=pen, antialias=False, name="Planform", zValue=2)        
+            self._plot_dataItem  (x, te_y, pen=pen, antialias=False, zValue=2)
 
         # plot vertical lines indicating to much delta between paneled chord and parent chord 
 
@@ -875,8 +877,8 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
             self._plot_text (text, color=QColor("red").darker(120), parentPos = (0.5,0.9), itemPos=(0.5,0.5)) #qcolors.ERROR
             self._plot_panels_distorted ()
 
-
-        self.set_help_message ("Paneling of the wing can be customized with 'Paneling Options'")
+        if not self.wing.is_reference_wing:
+            self.set_help_message ("Paneling of the wing can be customized with 'Paneling Options'")
 
 
     def _plot_panels (self):
@@ -885,7 +887,8 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         vlm_wing = self.wing.vlm_wing
         # prepare coloring 
 
-        panels = vlm_wing.panels_right
+        panels_by_stripe = vlm_wing.panels_by_stripe
+        n_panels = vlm_wing.n_panels
 
         if self.show_cp_in_panels and self.is_ready_for_opPoint:
 
@@ -896,15 +899,25 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
             # get cp value of panels
             z_panel    = self.opPoint.Cp_viscous_panels
             colorMap   = pg.colormap.get ('viridis')
-            edgecolors = pg.mkPen(COLOR_BOX)
         else: 
             if self.is_ready_for_opPoint and self.opPoint:
-                z_panel = self._get_z_critical_panels (len(panels))
+                z_panel = self._get_z_critical_panels (n_panels)
             else:
-                z_panel = np.zeros (len(panels))
+                z_panel = np.zeros (n_panels)
                 # colorMap   = pg.colormap.get ('CET-C5s')
             colorMap   = pg.colormap.get ('CET-L13')
+            if not self.show_cp_in_panels:
+                positions, colors = colorMap.getStops('byte')
+                colors[:, 3] = 100
+                colorMap = pg.ColorMap(positions, colors)
+
+        if self.wing.is_reference_wing:
+            edgecolors = pg.mkPen(COLOR_REF_PC2.darker(150))
+            zValue     = 0  
+        else:   
             edgecolors = pg.mkPen (COLOR_BOX)
+            zValue     = 1
+        
 
         # build 2d mesh array for PColorMeshItem
         # 
@@ -920,49 +933,33 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         nx = vlm_wing.nx_panels
         ny = vlm_wing.ny_panels
 
-        x = []
-        y = []
-        z = []
+        corners = np.asarray ([[(panel.p0, panel.p1, panel.p2, panel.p3)
+                    for panel in stripe]
+                       for stripe in panels_by_stripe])
+        p0 = corners[:, :, 0, :]
+        p1 = corners[:, :, 1, :]
+        p2 = corners[:, :, 2, :]
+        p3 = corners[:, :, 3, :]
 
-        i = 0
-        for iy in range (ny):
-            y_vals = [panels[i].p0[1]] * (nx+1) 
-            x_vals = []
-            z_vals = []  
+        x = np.concatenate((p0[:, :, 0], p1[:, -1:, 0]), axis=1)
+        y = np.repeat(p0[:, :1, 1], nx + 1, axis=1)
 
-            for ix in range (nx): 
-                x_vals.append (panels[i].p0[0])
-                z_vals.append (z_panel[i])
-                i += 1
-            x_vals.append (panels[i-1].p1[0])
-
-            x.append (x_vals)
-            y.append (y_vals)
-            z.append (z_vals)
-
-        # last station at tip ny + 1
-
-        i = (ny - 1) * nx  
-        y_vals = [panels[i].p3[1]] * (nx+1) 
-        x_vals = []
-        for ix in range (nx): 
-            x_vals.append (panels[i].p3[0])
-            i += 1
-        x_vals.append (panels[i-1].p2[0])
-
-        x.append(x_vals)
-        y.append(y_vals)
+        x_tip = np.concatenate((p3[-1, :, 0], p2[-1, -1:, 0]))
+        y_tip = np.full(nx + 1, p3[-1, 0, 1])
+        x = np.vstack((x, x_tip))
+        y = np.vstack((y, y_tip))
+        z = np.asarray(z_panel).reshape(ny, nx)
 
         # plot it - change coordinate system 
 
-        y_mm = np.array(x) * 1000
-        x_mm = np.array(y) * 1000
-        z    = np.array(z) 
+        y_mm = x * 1000
+        x_mm = y * 1000
 
         p = pg.PColorMeshItem (x_mm,y_mm,z, edgecolors=edgecolors, enableAutoLevels=False, width=1)
 
         p.setLevels (self._get_mesh_levels (z, max_default=3))
         p.setColorMap (colorMap)
+        p.setZValue (zValue)
 
         self._add (p)
 
@@ -1066,17 +1063,17 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         """ highlight all istorted panels """
 
 
-        for panel in self.wing.vlm_wing.panels_right: 
-            if panel.is_distorted:
+        for stripe in self.wing.vlm_wing.panels_by_stripe:
+            for panel in stripe:
+                if panel.is_distorted:
 
-                x,y = panel.polygon_2D ()
+                    x,y = panel.polygon_2D ()
 
-                x_mm = y * 1000
-                y_mm = x * 1000
+                    x_mm = y * 1000
+                    y_mm = x * 1000
 
-                color = QColor ("red").darker(120)  
-                # color.setAlphaF (0.8)
-                self._plot_dataItem  (x_mm, y_mm, pen=pg.mkPen(color, width=4), name="Distorted panel", antialias=False, zValue=2)       
+                    color = QColor ("red").darker(120)  
+                    self._plot_dataItem  (x_mm, y_mm, pen=pg.mkPen(color, width=4), name="Distorted panel", antialias=False, zValue=2)       
 
 
 
@@ -1554,7 +1551,7 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
                 pen    = pen_vlm_var (xyVars, is_reference)
                 label  = xyVars[1].value + " vs " + xyVars[0].value
                 if is_reference:
-                    label = "(Ref) " + label
+                    label = "Ref: " + label
 
                 x,y = vlm_polar.of_vars (xyVars)
 
@@ -1613,7 +1610,7 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
 
         # which kpis should be plotted based on the current xyVars?
         if is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_CD):
-            kpis = [VLM_KPI.MIN_CD, VLM_KPI.MAX_GLIDE]
+            kpis = [VLM_KPI.MIN_CD, VLM_KPI.MAX_GLIDE, VLM_KPI.MAX_CL]
         elif is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_GLIDE):
             kpis = [VLM_KPI.MAX_GLIDE]
         elif is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_CL):
@@ -1632,18 +1629,19 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
             kpi_var, kpi_val, x_val, y_val = self.vlm_polar.kpi_in (kpi, self.xyVars)
 
             if kpi_val is not None:
-                xvar, yvar = self.xyVars
-                x_val_rnd   = self._round_var(xvar, x_val)
-                y_val_rnd   = self._round_var(yvar, y_val)
+                # xvar, yvar = self.xyVars
+                # x_val_rnd   = self._round_var(xvar, x_val)
+                # y_val_rnd   = self._round_var(yvar, y_val)
                 kpi_val_rnd = self._round_var(kpi_var, kpi_val)
 
-                if kpi_var == xvar:
-                    at_text = f"@ {yvar.value}: {y_val_rnd}"
-                elif kpi_var == yvar:
-                    at_text = f"@ {xvar.value}: {x_val_rnd}"
-                else:
-                    at_text = f"@ {xvar.value}: {x_val_rnd}, {yvar.value}: {y_val_rnd}"
-                text = f"{kpi.value}: {kpi_val_rnd} {at_text}" 
+                # if kpi_var == xvar:
+                #     at_text = f"@ {yvar.value}: {y_val_rnd}"
+                # elif kpi_var == yvar:
+                #     at_text = f"@ {xvar.value}: {x_val_rnd}"
+                # else:
+                #     at_text = f"@ {xvar.value}: {x_val_rnd}, {yvar.value}: {y_val_rnd}"
+                # text = f"{kpi.value}: {kpi_val_rnd} {at_text}" 
+                text = f"{kpi.value}: {kpi_val_rnd}" 
 
                 if kpi_var in [VLM_Var.WING_CL, VLM_Var.WING_LIFT]:
                     anchor = (1.0, 0.5)
@@ -1663,15 +1661,15 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
                 if self.ref_vlm_polar is not None:
                     _, ref_kpi_val, _, _ = self.ref_vlm_polar.kpi_in (kpi, self.xyVars)
 
-                if  ref_kpi_val is not None:
-                    improve = (kpi_val - ref_kpi_val) / kpi_val
-                    better = improve >= 0.0 if "max" in kpi.value.lower() else improve <= 0.0
-                    delta_text  = f"Δ: {improve:+.1%}"
-                    delta_color = "limegreen" if better else "red"
+                    if  ref_kpi_val is not None:
+                        improve = (kpi_val - ref_kpi_val) / kpi_val
+                        better = improve >= 0.0 if "max" in kpi.value.lower() else improve <= 0.0
+                        delta_text  = f"Δ: {improve:+.1%}"
+                        delta_color = "limegreen" if better else "red"
 
-                    self._plot_point (x_val, y_val, size=0, color=delta_color,
-                                      text=delta_text, textColor=delta_color,
-                                      textOffset=(5, -14), anchor=anchor)
+                        self._plot_point (x_val, y_val, size=0, color=delta_color,
+                                        text=delta_text, textColor=delta_color,
+                                        textOffset=(5, -14), anchor=anchor)
 
 
     def _round_var (self, var: VLM_Var, value) -> float:
@@ -1807,73 +1805,34 @@ class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
 
 
 
-class Ref_Planforms_Artist (Abstract_Artist_Planform):
+class Ref_Planform_Artist (Abstract_Artist_Planform):
     """
     Plot the planform contour of reference planforms 
         - mode PLANFORM
     """
     def __init__ (self, *args, 
-                  ref_planforms_fn = None,
-                  show_chord = False,                               #  planform as outline 
+                  show_chord = False,                               #  planform in chord distribution 
                   **kwargs):
 
         self._show_chord = show_chord           
-        self._show_elliptical = True           
-        self._show_ref_pc2    = True
-        self._ref_planforms_fn = ref_planforms_fn
 
         super().__init__ (*args, **kwargs)
-
-    @property
-    def show_elliptical (self) -> bool: return self._show_elliptical
-
-    def set_show_elliptical (self, aBool : bool):
-        self._show_elliptical = aBool
-        self.refresh()
-
-    @property
-    def show_ref_pc2 (self) -> bool: return self._show_ref_pc2
-
-    def set_show_ref_pc2 (self, aBool : bool):
-        self._show_ref_pc2 = aBool
-        self.refresh()
-
-
-    @property
-    def ref_planforms (self) -> list[Planform]:
-
-        refs = []
-        if callable(self._ref_planforms_fn):
-
-            ref : Planform
-            for ref in self._ref_planforms_fn():
-                if self.show_elliptical and ref.n_distrib.isElliptical:
-                    refs.append(ref)
-                elif self.show_ref_pc2 and not ref.n_distrib.isElliptical:
-                    refs.append(ref)
-        return refs
 
 
     def _plot (self): 
 
-        planform : Planform 
-        for planform in self.ref_planforms:
+        if self.planform is None:
+            return
 
-            if self._show_chord:
-                x, y = planform.cn_polyline () 
-            else:
-                x, y = planform.polygon () 
+        if self._show_chord:
+            x, y = self.planform.cn_polyline () 
+        else:
+            x, y = self.planform.polygon () 
 
-            name  = f"{planform.name}"
+        name  = f"Ref: {self.wing.name}"
+        pen   = pg.mkPen(COLOR_REF_PC2, width=1)
 
-            if planform.n_distrib.isElliptical:
-                color = COLOR_REF_ELLI
-            else:  
-                color = COLOR_REF_PC2
-
-            pen   = pg.mkPen(color, width=1)
-
-            self._plot_dataItem  (x, y, name=name, pen = pen, antialias = False, zValue=1)
+        self._plot_dataItem  (x, y, name=name, pen = pen, antialias = False, zValue=1)
 
 
 
@@ -2208,8 +2167,6 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
             # check if mouse point is between neighbor sections
             x = self.x
-            left_x, right_x = self._section.x_limits()
-            x = clip (x, left_x, right_x)
             y = self.y
 
             if   self._move_by_pos:
@@ -2223,13 +2180,9 @@ class WingSections_Artist (Abstract_Artist_Planform):
                 if self._mode == mode.DEFAULT:
                     _, te_y = self._section.le_te ()
                     c  = te_y - y                                   # calculate new c from trailing edge
-                    lower_c, upper_c = self._section.c_limits()     # c shouldn't be more than left neighbor
-                    c = clip (c, lower_c, upper_c)
                     self._section.set_c (c)                         # update section chord
                 else: 
                     cn = yn                                         # yn is chord 
-                    lower_cn, upper_cn = self._section.cn_limits()  # cn shouldn't be more than left neighbor
-                    cn = clip (cn, lower_cn, upper_cn)
                     self._section.set_cn (cn)                       # update section chord
 
 
@@ -2331,6 +2284,34 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
             self._changed()
 
+
+
+
+class Ref_WingSections_Artist (Abstract_Artist_Planform):
+    """
+    Plot the wing sections of reference wingeither
+        - mode NORM
+        - mode SPAN_NORM
+        - mode NORM_PLANFORM
+        - mode PLANFORM
+    """
+
+    def _plot (self): 
+
+        m     = self._mode 
+
+        for section in self.wingSections_to_show:
+
+            if   m == mode.NORM_NORM or m == mode.NORM_TO_SPAN:
+                x,y = section.line_in_chord ()
+            elif m == mode.REF_TO_NORM  or m == mode.REF_TO_SPAN:
+                x,y = section.line_in_chord_ref ()
+            else: 
+                x,y = section.line ()
+
+            pen   = pg.mkPen(COLOR_REF_PC2, width=1.0,style=Qt.PenStyle.DotLine)
+
+            self._plot_dataItem  (x, y,  pen = pen, antialias = False, zValue=3)
 
 
 
@@ -2674,7 +2655,8 @@ class Airfoil_Artist (Abstract_Artist_Planform):
         return self._real_size
     def set_real_size (self, aBool : bool):
         self._real_size = aBool == True
-
+        self.refresh()
+    
 
     @property
     def show_thick (self) -> bool:

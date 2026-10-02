@@ -29,6 +29,7 @@ from time                           import perf_counter
 
 from .VLM                           import calc_Qjj
 from airfoileditor.model.polar_set  import Polar_Set, RE_SCALE_ROUND_TO, polarType, Polar, Polar_Definition
+from airfoileditor.model.airfoil    import GEO_BASIC
 
 if TYPE_CHECKING:
     from .wing                      import Wing                                        # avoid circular import
@@ -232,10 +233,6 @@ class VLM_Wing:
     def __init__ (self, wing: Wing):
 
         self._wing          = wing
-        self._planform_mesh: Planform_Mesh = wing.planform_mesh
-
-        self._panels_right  = None                  # VLM_Panels of the right wing side 
-        self._has_distorted_panels = False          # indicate distored (bad) panels 
 
         self._aerogrid      = None                  # input datastructure of VLM calculation 
         self._Qjj           = None                  # matrix of aerodynamic influence coefficients
@@ -248,49 +245,46 @@ class VLM_Wing:
         self._stripes_chord = None                  # chord of stripes
         self._stripes_area  = None                  # area of stripes
 
-        self._invalidate_cached_results ()
-
-        self._sections      = None                  # cached wing sections of the actual mesh
-        self._sections_y    = None                  # y position of wing sections in m
-        self._polars: list[VLM_Polar_CacheEntry] = []    # list of (root polar def, VLM polar)
-
         # geometry data from real Wing used for VLM calculation in [m]
-        plan_area       = wing.planform.calc_area()
-        wing_span       = wing.planform.span * 2.0 
-        self._wing_area = plan_area * 2.0 / 1_000_000.0
-        self._wing_ar   = wing_span**2 / self._wing_area
 
-        mac, mac_le_y, np = wing.planform.calc_mac_np()
-        self._mac       = mac / 1000.0
-        self._mac_le_x  = mac_le_y / 1000.0
-        self._np        = (np[0] / 1000.0, np[1] / 1000.0)
+        plan_area           = wing.planform.calc_area()
+        wing_span           = wing.planform.span * 2.0 
+        mac, mac_le_y, np   = wing.planform.calc_mac_np()
+
+        self._wing_area     = plan_area * 2.0 / 1_000_000.0
+        self._wing_ar       = wing_span**2 / self._wing_area
+        self._mac           = mac / 1000.0
+        self._mac_le_x      = mac_le_y / 1000.0
+        self._np            = (np[0] / 1000.0, np[1] / 1000.0)
 
         # get mesh, create panels for the right wing side
-        self._panels_right, self._has_distorted_panels = self._generate_panels_right ()
 
-        # get actual wing sections of the mesh 
-        self._sections = self._planform_mesh.wingSections_reduced()
+        y_stations, x_stations, sections  = wing.planform_mesh.create_mesh()
+
+        panels_by_stripe, distorted = self._generate_panels (y_stations, x_stations)
+
+        self._panels_by_stripe = panels_by_stripe   # panels indexed by span stripe, then chordwise
+        self._has_distorted = distorted             # indicate distorted (bad) panels
+        self._sections      = sections              # cached wing sections of the actual mesh
+        self._sections_y    = None                  # y position of wing sections in m
+
+        # ensure all wing sections have straked airfoils
+
+        self._polars: list[VLM_Polar_CacheEntry] = []    # list of (root polar def, VLM polar)
+
+        wing_sections = wing.planform.wingSections
+        if not wing_sections.strak_done:
+            wing_sections.do_strak (geometry_class=GEO_BASIC)
+    
+        # ensure all wingSections have a polar with the current re
+
+        wing_sections.refresh_polar_sets (reset=False)
 
 
     def __repr__(self) -> str:
         # overwrite to get a nice print string
         return f"<{type(self).__name__}>"
 
-    def _invalidate_cached_results (self):
-        """Clear downstream VLM results when the mesh is rebuilt."""
-        self._panels_right  = None
-        self._aerogrid      = None
-        self._Qjj           = None
-        self._BJJ           = None
-        self._Gamma         = None
-        self._Q_ind         = None
-        self._A_ges         = None
-        self._stripes_y     = None
-        self._stripes_width = None
-        self._stripes_chord = None
-        self._stripes_area  = None
-        self._sections_y    = None
-        self._polars        = []
 
     @property
     def wing_area (self) -> float:
@@ -333,51 +327,50 @@ class VLM_Wing:
         """ y position of wing sections in m"""
 
         if self._sections_y is None: 
-            y = []
-            section : WingSection
-            for section in self.sections:
-                y.append (section.x / 1000)
+            y = [section.x / 1000 for section in self.sections]
             self._sections_y = np.array(y)
         return self._sections_y
 
 
     @property
-    def panels_right (self) -> list [VLM_Panel]:
-        """ panels of right half wing"""
+    def panels (self) -> list [VLM_Panel]:
+        """Panels of the right half wing in stripe-major order."""
+        return [panel for stripe in self.panels_by_stripe for panel in stripe]
 
-        if self._panels_right is None:
-            t0 = perf_counter()
-            self._panels_right, self._has_distorted_panels = self._generate_panels_right ()
-            dt = perf_counter() - t0
-            logger.debug (f"{self} panel rebuild: {dt:.4f}s ({len(self._panels_right)} panels)")
-        return self._panels_right
+
+    @property
+    def panels_by_stripe (self) -> list[list[VLM_Panel]]:
+        """Panels grouped by spanwise stripe, then chordwise position."""
+        return self._panels_by_stripe
 
 
     @property 
     def has_distorted_panels (self) -> bool: 
         """ True if some panels are too much distorted for VLM"""
-        return self._has_distorted_panels
+        return self._has_distorted
     
     @property
     def n_panels (self) -> int:
         """ number of panels"""
-        return len(self.panels_right)
+        return sum (len (stripe) for stripe in self.panels_by_stripe)
 
     @property
     def nx_panels (self) -> int:
         """ number of panels in x direction"""
-        return self._planform_mesh.strategy.wx_panels
+        if not self.panels_by_stripe:
+            return 0
+        return len (self.panels_by_stripe[0])
 
     @property
     def ny_panels (self) -> int:
         """ number of panels in y span direction"""
-        return int (len(self.panels_right) / self.nx_panels) 
+        return len (self.panels_by_stripe)
 
     @property
     def aerogrid (self) -> dict:
         """ aerogrid datastructure as input for VLM calculation"""
         if self._aerogrid is None: 
-            self._aerogrid = self._build_aeorogrid (self.panels_right)
+            self._aerogrid = self._build_aeorogrid (self.panels_by_stripe)
         return self._aerogrid 
 
     @property
@@ -421,10 +414,7 @@ class VLM_Wing:
         """ y position of panel stripes (middle of panel)"""
 
         if self._stripes_y is None: 
-            y_pos = []
-            for i in range (0, self.n_panels, self.nx_panels):
-                y_pos.append (self.panels_right[i].offset_k[1])          # middle of panel in y direction
-            self._stripes_y = np.array(y_pos)
+            self._stripes_y = np.array ([stripe[0].offset_k[1] for stripe in self.panels_by_stripe])
         return self._stripes_y
 
 
@@ -433,10 +423,7 @@ class VLM_Wing:
         """ width of panel stripes"""
 
         if self._stripes_width is None: 
-            b = []
-            for i in range (0, self.n_panels, self.nx_panels):
-                b.append (self.panels_right[i].b)
-            self._stripes_width = np.array(b)
+            self._stripes_width = np.array ([stripe[0].b for stripe in self.panels_by_stripe])
         return self._stripes_width
 
     @property
@@ -444,11 +431,8 @@ class VLM_Wing:
         """ chord of the spanwise stripes, summed over all panels in each stripe"""
 
         if self._stripes_chord is None:
-            chord = []
-            for i in range (0, self.n_panels, self.nx_panels):
-                strip_panels = self.panels_right[i:i + self.nx_panels]
-                chord.append (sum(panel.l for panel in strip_panels))
-            self._stripes_chord = np.array(chord)
+            self._stripes_chord = np.array ([sum (panel.l for panel in stripe)
+                                             for stripe in self.panels_by_stripe])
         return self._stripes_chord
 
     @property
@@ -456,21 +440,9 @@ class VLM_Wing:
         """ area of the spanwise stripes, summed over all panels in each stripe"""
 
         if self._stripes_area is None:
-            area = []
-            for i in range (0, self.n_panels, self.nx_panels):
-                strip_panels = self.panels_right[i:i + self.nx_panels]
-                area.append (sum(panel.A for panel in strip_panels))
-            self._stripes_area = np.array(area)
+            self._stripes_area = np.array ([sum (panel.A for panel in stripe)
+                                            for stripe in self.panels_by_stripe])
         return self._stripes_area
-
-
-    def _get_cached_polar (self, root_polar_def: Polar_Definition) -> 'VLM_Polar | None':
-        """ return cached VLM polar for a matching root polar definition """
-
-        for cached_root_polar_def, polar in self._polars:
-            if cached_root_polar_def.is_equal_to (root_polar_def):
-                return polar
-        return None
 
 
     def polar_at (self, root_polar_def: Polar_Definition) -> 'VLM_Polar':
@@ -479,26 +451,17 @@ class VLM_Wing:
         if not isinstance (root_polar_def, Polar_Definition):
             return None
 
-        polar = self._get_cached_polar (root_polar_def)          # already exisiting 
-        
-        if not polar:
-            polar_def_copy = copy (root_polar_def)               # polar_def in cache must be inmutable 
-            polar = VLM_Polar (self, polar_def_copy)             # calculate new Polar and opPoints 
-            self._polars.append ((polar_def_copy, polar)) 
+        # polar already exisiting in locasl cache ?
+        for cached_polar_def, polar in self._polars:
+            if cached_polar_def.is_equal_to (root_polar_def):
+                return polar
+
+        # create new polar for this root polar definition
+        polar_def_copy = copy (root_polar_def)               # polar_def in cache must be inmutable 
+        polar = VLM_Polar (self, polar_def_copy)             # calculate new Polar and opPoints 
+        self._polars.append ((polar_def_copy, polar)) 
             
         return polar 
-
-
-    def remove_polar_at (self, root_polar_def: Polar_Definition):
-        """ removes polar for a root airfoil polar definition - will be calculated new on next request"""
-
-        if not isinstance (root_polar_def, Polar_Definition):
-            return 
-
-        for i, (cached_root_polar_def, _) in enumerate (self._polars):
-            if cached_root_polar_def.is_equal_to (root_polar_def):
-                self._polars.pop (i)
-                break
 
 
     def handle_airfoil_change (self):
@@ -518,9 +481,11 @@ class VLM_Wing:
     # ----- private --------------------------------------------------
       
 
-    def _generate_panels_right (self) -> tuple[list [VLM_Panel], bool]:
+    def _generate_panels (self, y_stations : np.ndarray, x_stations : np.ndarray) -> tuple[list[list[VLM_Panel]], bool]:
         """ 
-        Generate and return all panels of right half wing 
+        Generate and return all panels of right half wing based on y and x station arrays of the mesh.
+
+        The mesh is in [mm] - VLM uses [m]
         
         Returns:
             panels 
@@ -538,8 +503,9 @@ class VLM_Wing:
 
         has_distorted_panels = False                                    # are there distorted panels  
 
-        panels = []
-        y_stations, x_stations  = self._planform_mesh.create_mesh()
+        t0 = perf_counter()
+
+        panels_by_stripe = []
         y_stations  /= 1000
         x_stations  /= 1000
         nx_stations = x_stations.shape[1]
@@ -553,6 +519,7 @@ class VLM_Wing:
 
             x1_arr = x_stations [iy]
             x2_arr = x_stations [iy+1]
+            stripe_panels = []
 
             # create n-1 panels of the stripe starting at le towards 
 
@@ -564,20 +531,24 @@ class VLM_Wing:
                 p3 = Point_3D (x2_arr[ip],   y2, 0.0)
                 panel = VLM_Panel (p0, p1, p2, p3) 
 
-                panels.append(panel)
+                stripe_panels.append (panel)
 
                 if panel.is_distorted:
                     has_distorted_panels = True 
 
-        logger.debug (f"{self} created {len(panels)} panels")
+            panels_by_stripe.append (stripe_panels)
 
-        return panels, has_distorted_panels 
+        dt = perf_counter() - t0
+        n_panels = sum (len (stripe) for stripe in panels_by_stripe)
+        logger.debug (f"{self} {n_panels} panels created in {dt:.4f}s")
+
+        return panels_by_stripe, has_distorted_panels 
         
 
-    def _build_aeorogrid (self, panels : list [VLM_Panel]) -> dict: 
+    def _build_aeorogrid (self, panels_by_stripe : list[list[VLM_Panel]]) -> dict: 
         """ build the aeorgrid datastructure out of panel data """
 
-        n = len(panels)
+        n = sum (len (stripe) for stripe in panels_by_stripe)
 
         l, b, A   = np.zeros (n), np.zeros (n), np.zeros (n)
         N         = np.zeros ((n,3)) 
@@ -587,17 +558,20 @@ class VLM_Wing:
         offset_P1 = np.zeros ((n,3))
         offset_P3 = np.zeros ((n,3)) 
 
-        for i, panel in enumerate (panels): 
+        i = 0
+        for stripe in panels_by_stripe:
+            for panel in stripe:
                 
-            l [i] = panel.l
-            b [i] = panel.b
-            A [i] = panel.A
-            N [i] = panel.N
-            offset_l [i]  = panel.offset_l                
-            offset_k [i]  = panel.offset_k                
-            offset_j [i]  = panel.offset_j                
-            offset_P1 [i] = panel.offset_P1                
-            offset_P3 [i] = panel.offset_P3                
+                l [i] = panel.l
+                b [i] = panel.b
+                A [i] = panel.A
+                N [i] = panel.N
+                offset_l [i]  = panel.offset_l                
+                offset_k [i]  = panel.offset_k                
+                offset_j [i]  = panel.offset_j                
+                offset_P1 [i] = panel.offset_P1                
+                offset_P3 [i] = panel.offset_P3
+                i += 1
 
         aerogrid = { 
             'l': l,
@@ -615,7 +589,7 @@ class VLM_Wing:
         # logger.debug (f"{self} build aerogrid")
 
         return aerogrid 
-    
+
 
     def test_calculation (self):
 
@@ -636,22 +610,20 @@ class VLM_Wing:
 
         Fxyz : np.ndarray = q_dyn * N_T * A_m2 * cp
 
-        n  = len(self.panels_right) 
-        nx = self.nx_panels
-
         lift = []
         y_pos = []
         Fz : np.ndarray = Fxyz[2]
 
-        for i in range (0, n, nx):
-
-            lift_stripe = Fz[i:(i+nx)].sum() 
-            y_stripe    = self.aerogrid['offset_l'][i][1]
-            A_stripe    = A_m2[i:(i+nx)].sum()
-            b_stripe    = self.aerogrid['b'][i]
+        Fz_by_stripe = Fz.reshape (self.ny_panels, self.nx_panels)
+        area_by_stripe = A_m2.reshape (self.ny_panels, self.nx_panels)
+        for stripe_index, stripe in enumerate (self.panels_by_stripe):
+            lift_stripe = Fz_by_stripe[stripe_index].sum ()
+            y_stripe    = stripe[0].offset_l[1]
+            A_stripe    = area_by_stripe[stripe_index].sum ()
+            b_stripe    = stripe[0].b
             lift_local  = lift_stripe / b_stripe
             cl_local    = lift_stripe / A_stripe
-            logger.debug (f"{i:3} y={y_stripe:.1f}  lift={lift_local:.4f}  cl?={cl_local:.4f}")
+            logger.debug (f"{stripe_index:3} y={y_stripe:.1f}  lift={lift_local:.4f}  cl?={cl_local:.4f}")
             lift.append  (cl_local) 
             y_pos.append (y_stripe)
 
@@ -1066,15 +1038,22 @@ class VLM_Polar:
 
         #  helper function: extremum (max or min) using a 3-point quadratic fit.
 
-        def extremum (x : np.ndarray, y : np.ndarray, mode="max") -> tuple[float, float]:
+        def extremum (x : np.ndarray, y : np.ndarray, mode="max") -> tuple[float | None, float | None]:
+            valid = np.isfinite (x) & np.isfinite (y)
+            x_valid = x[valid]
+            y_valid = y[valid]
+            if len (y_valid) == 0:
+                return None, None
 
-            idx = np.argmax(y) if mode == "max" else np.argmin(y)
+            idx = np.argmax (y_valid) if mode == "max" else np.argmin (y_valid)
             # Ensure we have neighbors for the 3-point fit
-            if idx == 0 or idx == len(y) - 1:
-                return x[idx], y[idx]
+            if idx == 0 or idx == len (y_valid) - 1:
+                return x_valid[idx], y_valid[idx]
             # Quadratic fit over three points
-            coeff = np.polyfit(x[idx-1:idx+2], y[idx-1:idx+2], 2)
+            coeff = np.polyfit (x_valid[idx-1:idx+2], y_valid[idx-1:idx+2], 2)
             a, b, c = coeff
+            if not np.isfinite (coeff).all () or np.isclose (a, 0.0):
+                return x_valid[idx], y_valid[idx]
             # Vertex of the parabola
             x_ext = -b / (2 * a)
             y_ext = c - b*b / (4 * a)
@@ -1114,8 +1093,10 @@ class VLM_Polar:
 
         x,y = self.of_vars ((xvar, yvar))
 
-        kpi_base_x = np.interp (alpha_val, alpha, x)
-        kpi_base_y = np.interp (alpha_val, alpha, y)
+        x_valid = np.isfinite (alpha) & np.isfinite (x)
+        y_valid = np.isfinite (alpha) & np.isfinite (y)
+        kpi_base_x = np.interp (alpha_val, alpha[x_valid], x[x_valid]) if np.any (x_valid) else None
+        kpi_base_y = np.interp (alpha_val, alpha[y_valid], y[y_valid]) if np.any (y_valid) else None
 
         return kpi_var, kpi_val, kpi_base_x, kpi_base_y
    
@@ -1158,9 +1139,17 @@ class VLM_Polar:
         for section in self.vlm_wing.sections:
 
             if not section.airfoil.isLoaded: 
-                msg = f"{self} section {section} airfoil {section.airfoil} not loaded"
+                msg = f"{self} {section} airfoil {section.airfoil} not loaded"
                 logger.debug (msg)
                 self._error_reason.append (msg)
+                break
+
+            section_re = self._root_polar_def.re * section.cn
+
+            if section_re <= 1000:
+                msg = f"{self} section {section} has too low Re ({section_re:.0f})"
+                logger.error (msg)
+                self._error_reason.append(msg)
                 break
 
             airfoil_polarSet : Polar_Set = section.airfoil.polarSet
@@ -1179,7 +1168,6 @@ class VLM_Polar:
 
             # find polar with matching Re of this wing section
 
-            section_re = self._root_polar_def.re * section.cn
             matching_polar = self._get_matching_polar (airfoil_polarSet, section_re, is_vlm)
 
             if matching_polar is not None:
@@ -1261,7 +1249,7 @@ class VLM_Polar:
         return np.array(vals)
 
 
-    def generate_polar (self, alpha_start = -3.0, alpha_max :float = 25.0, step = 0.5):
+    def generate_polar (self, alpha_start = -3.0, alpha_max :float = 25.0, step = 0.25):
         """ 
         Generate polar data alpha, Cl, Lift 
             - if alpha_end is omitted, the polar ends when CL_Max is almost reached       

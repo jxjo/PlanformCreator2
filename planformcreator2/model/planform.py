@@ -788,7 +788,7 @@ class N_Distrib_Elliptical (N_Distrib_Abstract):
         """ 
         Main chord function - returns cn at xn
         """
-
+        xn = clip(xn, 0.0, 1.0)
         cn = np.sqrt(1.0 - (xn ** 2))                       # Pythagoras
         return round (cn,10) 
 
@@ -797,13 +797,14 @@ class N_Distrib_Elliptical (N_Distrib_Abstract):
         """ 
         returns xn at normed chord cn
         """
+        cn = clip(cn, 0.0, 1.0) 
         xn = np.sqrt(1.0 - (cn ** 2))                       # Pythagoras
         return round (xn,10) 
 
 
     def polyline (self) -> Polyline:
         """ 
-        Normalized polyline of elliptical chord along xn
+        Normalized polyline of elliptical chord along xn 0..1
             At root it is: cn [0]  = 1.0  
             At tip  it is: cn [-1] = 0.0  
 
@@ -814,8 +815,8 @@ class N_Distrib_Elliptical (N_Distrib_Abstract):
         alphas = np.linspace (0, 1, 50)
         alphas = alphas * alphas * np.pi /2                     # achieve smaller angles at tip by **2 
         
-        xn = np.cos (alphas)
-        cn = np.sin (alphas)
+        xn = np.sin (alphas)
+        cn = np.cos (alphas)
 
         return np.round(xn,10), np.round(cn,10) 
 
@@ -925,19 +926,22 @@ class WingSection :
         if self.is_for_panels:
             toDict (d, "is_for_panels", self.is_for_panels)
 
-        if not self.airfoil.isBlendAirfoil and not self.airfoil.isExample and os.path.isfile (self.airfoil.pathFileName_abs):
-            # replace with airfoils_dir variable if airfoil is in airfoils dir of wing
-            if os.path.samefile(self.airfoil.pathName_abs, self._planform.wing.airfoils_dir):
-                pathFileName = f"{self._planform.wing.VAR_AIRFOILS_DIR}/{self.airfoil.fileName}"
-            else:
-                # make relative path to working dir if possible
-                try:
-                    pathFileName = os.path.relpath(self.airfoil.pathFileName_abs, self.workingDir)
-                    pathFileName = pathFileName.replace(os.sep, '/')  # Convert to forward slashes for cross-platform storage
-                except (ValueError, TypeError):
-                    pathFileName = self.airfoil.pathFileName_abs
-                    pathFileName = pathFileName.replace(os.sep, '/')  # Convert to forward slashes for cross-platform storage
-            toDict (d, "airfoil",    pathFileName)
+        if self.has_real_airfoil:
+            airfoil_path = Path(self.airfoil.pathFileName_abs)
+            if not self.airfoil.isExample and airfoil_path.is_file():
+                # replace with airfoils_dir variable if airfoil is in airfoils dir of wing
+                airfoil_dir = Path(self._planform.wing.airfoils_dir)
+                if Path(self.airfoil.pathName_abs).samefile(airfoil_dir):
+                    pathFileName = f"{self._planform.wing.VAR_AIRFOILS_DIR}/{self.airfoil.fileName}"
+                else:
+                    # Store a relative path only when it stays within the working directory.
+                    airfoil_path = airfoil_path.resolve(strict=False)
+                    working_dir = self._planform.wing.workingDir_path
+                    try:
+                        pathFileName = airfoil_path.relative_to(working_dir).as_posix()
+                    except ValueError:
+                        pathFileName = airfoil_path.as_posix()
+                toDict (d, "airfoil",    pathFileName)
         return d
 
 
@@ -1009,6 +1013,11 @@ class WingSection :
             self._strak_info = None
         else:
             raise TypeError (f"{self} set_airfoil - invalid airfoil type {type(airfoil)}")
+
+    @property
+    def has_real_airfoil (self) -> bool:
+        """ return True if the wing section has a real (non-strak) airfoil """
+        return self.airfoil is not None and not self.airfoil.isBlendAirfoil
 
 
     def set_strak_airfoil (self):
@@ -1108,7 +1117,8 @@ class WingSection :
         if aVal is None:
             self._xn = None
         else:  
-            aVal = clip (aVal, 0.0, 1.0)
+            xn_min, xn_max = self._planform.wingSections.xn_cn_limits_of (self) [0]
+            aVal = clip (aVal, xn_min, xn_max)
             self._xn = round(aVal,10)
 
         if not self.defines_cn and self.is_xn_fix:                  # reset cn 
@@ -1152,7 +1162,8 @@ class WingSection :
         elif self.is_tip and not self.defines_cn:                   # set tip chord via Bezier
             self._planform.set_cn_tip (aVal)
         else:                                                       # normal case
-            aVal = clip (aVal, 0.0, 1.0)
+            cn_min, cn_max = self._planform.wingSections.xn_cn_limits_of (self) [1]
+            aVal = clip (aVal, cn_min, cn_max)
             self._cn = round(aVal,10)
 
         if not self.defines_cn: 
@@ -1269,25 +1280,6 @@ class WingSection :
         else:
             return f"{n_main}.{n_add}"
         
-
-    def xn_limits (self) -> tuple:
-         """ xn limits as tuple of self before touching the neighbor section """
-         return self._planform.wingSections.xn_cn_limits_of (self) [0]
-
-    def x_limits (self) -> tuple:
-         """ x limits as tuple of self before touching the neighbor section """
-         xn_limits = self.xn_limits()
-         return xn_limits[0] * self._planform.span, xn_limits[1] * self._planform.span
-
-    def cn_limits (self) -> tuple:
-         """ cn limits as tuple of self before touching the neighbor section """
-         return self._planform.wingSections.xn_cn_limits_of (self) [1]
-
-    def c_limits (self) -> tuple:
-         """ c chord limits as tuple of self before touching the neighbor section """
-         cn_limits = self.cn_limits()
-         return cn_limits[0] * self._planform.chord_root, cn_limits[1] * self._planform.chord_root
-
 
     @property
     def name_short (self) -> str:
@@ -1453,6 +1445,10 @@ class WingSections (list [WingSection]):
                     |-- WingSection
 
     """
+
+    MIN_XN_DISTANCE    = 0.01                              # minimum distance between wing sections
+    MIN_CN_DIFFERENCE  = 0.001                             # minimum chord difference between wing sections
+
 
     def __init__ (self, planform: 'Planform', sectionsDict: dict = {}):
         super().__init__ ([])
@@ -1626,6 +1622,81 @@ class WingSections (list [WingSection]):
         self.reset_strak ()
 
 
+    def do_strak_section (self, section: WingSection, geometry_class  = None) -> bool:
+        """
+        straks the airfoil of a single wing section having a Strak-Airfoil which is 
+        created by blending with its real neighbors
+
+        Args: 
+            section: the wing section to be straked
+            geometry_class: optional - the desired geometry of the new straked airfoil 
+                            either GEO_BASIC or GEO_SPLINE
+        """
+        has_been_straked = False
+
+        if not section.airfoil.isBlendAirfoil:
+            return has_been_straked
+
+        self._planform._wing.create_tmp_dir()
+
+        tmp_dir    = self._planform._wing.tmp_dir
+        polar_defs = self._planform.wing.polar_definitions
+
+        airfoil = section.airfoil
+
+        # get the neighbor wing sections  with real airfoils 
+
+        left_sec, right_sec = self.neighbors_having_airfoil(section) 
+        left, right = left_sec.airfoil, right_sec.airfoil
+
+        if left_sec.airfoil.name == right_sec.airfoil.name:
+            # both are the same airfoil -> dummy blend 
+            blendBy = 0.0 
+
+        elif right_sec.cn == left_sec.cn:
+            # rectangular planform - no chord difference - take pos difference
+            blendBy  = (section.xn - left_sec.xn) / (right_sec.xn - left_sec.xn)
+
+        else: 
+            # blend value is defined by chord relation to left and right              
+            blendBy  = (section.cn - left_sec.cn) / (right_sec.cn - left_sec.cn)
+
+        blendBy = round (blendBy,2)                             # ensure 1% steps 
+
+        # was it already straked? - skip 
+
+        strak_info = f"{left.name}{right.name}{blendBy}"
+
+        if section._strak_info != strak_info:
+
+            if blendBy > 0.0:
+
+                #todo implement 5.0: ensure "fast" blend
+                airfoil.do_blend (left, right, blendBy, geometry_class)
+
+                mods = airfoil.geo.modifications_as_label
+                has_been_straked = True
+
+                name = f"{self._planform.wing.STRAK_AIRFOIL_NAME} {left.fileName_stem}{mods}" # build long unique name  
+                airfoil.set_name     (name, reset_original=True)  
+
+                fileName = f"{left.fileName_stem}{mods}_{right.fileName_stem}.dat"    
+                airfoil.set_pathFileName (os.path.join(tmp_dir, fileName), noCheck=True)
+                airfoil.set_isModified (False)           # avoid save and polar generation if file already exists
+
+            else:
+
+                section.set_airfoil (left.asCopy())       # no blend - take left airfoil
+                airfoil = section.airfoil
+                airfoil.set_isBlendAirfoil (True)
+
+            airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
+
+            logger.debug (f"{self} section {section} strak info: {strak_info}")
+
+        return has_been_straked
+
+
     def do_strak (self, geometry_class  = None): 
         """
         straks the airfoil of all wing sections having a Strak-Airfoil which is 
@@ -1637,74 +1708,21 @@ class WingSections (list [WingSection]):
         """
 
         t0 = perf_counter ()
-        self._planform._wing.create_tmp_dir()
 
-        tmp_dir = self._planform._wing.tmp_dir
-        polar_defs = self._planform.wing.polar_definitions
         n_straked = 0 
-
-        if not os.path.isdir (tmp_dir):
-            os.mkdir(tmp_dir)
 
         for section in self:
 
-            airfoil = section.airfoil
-            if airfoil.isBlendAirfoil: 
+            has_been_straked = self.do_strak_section(section, geometry_class=geometry_class)
 
-                # get the neighbor wing sections  with real airfoils 
-
-                left_sec, right_sec = self.neighbors_having_airfoil(section) 
-                left, right = left_sec.airfoil, right_sec.airfoil
-
-                if left_sec.airfoil.name == right_sec.airfoil.name:
-                    # both are the same airfoil -> dummy blend 
-                    blendBy = 0.0 
-
-                elif right_sec.cn == left_sec.cn:
-                    # rectangular planform - no chord difference - take pos difference
-                    blendBy  = (section.xn - left_sec.xn) / (right_sec.xn - left_sec.xn)
-
-                else: 
-                    # blend value is defined by chord relation to left and right              
-                    blendBy  = (section.cn - left_sec.cn) / (right_sec.cn - left_sec.cn)
-
-                blendBy = round (blendBy,2)                             # ensure 1% steps 
-
-                # was it already straked? - skip 
-
-                strak_info = f"{left.name}{right.name}{blendBy}"
-
-                if section._strak_info != strak_info:
-
-                    if blendBy > 0.0:
-
-                        #todo implement 5.0: ensure "fast" blend
-                        airfoil.do_blend (left, right, blendBy, geometry_class)
-
-                        mods = airfoil.geo.modifications_as_label
-                        n_straked += 1
-
-                        name = f"{self._planform.wing.STRAK_AIRFOIL_NAME} {left.fileName_stem}{mods}" # build long unique name  
-                        airfoil.set_name     (name, reset_original=True)  
-
-                        fileName = f"{left.fileName_stem}{mods}_{right.fileName_stem}.dat"    
-                        airfoil.set_pathFileName (os.path.join(tmp_dir, fileName), noCheck=True)
-                        airfoil.set_isModified (False)           # avoid save and polar generation if file already exists
-
-                    else:
-
-                        section.set_airfoil (left.asCopy())       # no blend - take left airfoil
-                        airfoil = section.airfoil
-                        airfoil.set_isBlendAirfoil (True)
-
-                    airfoil.set_polarSet (Polar_Set (airfoil, polar_def=polar_defs, re_scale=section.cn))
-
-                    section._strak_info = strak_info
+            if has_been_straked:
+                n_straked += 1
 
         if n_straked > 0:
-            logger.info (f"{self} straked {n_straked} airfoils in {tmp_dir}")
+            logger.info (f"{self} straked {n_straked} airfoils")
 
         self._strak_done = True 
+
         dt = perf_counter () - t0
         logger.debug (f"{self} strak calculation: {dt:.4f}s ({n_straked} regenerated, {len(self)} sections)")
 
@@ -1746,13 +1764,17 @@ class WingSections (list [WingSection]):
                 logger.warning (f"{section} removed - duplicate root/tip section") 
                 self.delete (section, protect_root_tip=False)
 
-        # Re-sort wing sections to an ascending xn pos. 
-        # When changing major wing parms sections could become out of sort order when
-        #    they have fixed xn and chord mixed    
+        sorted_sections = sorted (self, key=lambda section: section.xn)
+        self.clear ()
+        self.extend (sorted_sections)
 
-        tmp = sorted (self, key=lambda sec: sec.xn) 
-        self.clear()
-        self.extend (tmp)
+        # warn about sections that are too close to their neighbors
+        for section in self [1:-1]:
+            left_sec, right_sec = self.neighbors_of (section)
+            if left_sec and section.xn - left_sec.xn < self.MIN_XN_DISTANCE:
+                logger.warning (f"{section} is too close to neighboring section {left_sec}")
+            if right_sec and right_sec.is_tip and right_sec.xn - section.xn < self.MIN_XN_DISTANCE:
+                logger.warning (f"{right_sec} is too close to neighboring section {section}")
 
         # there must be root and tip 
         if not self[0].is_root or not self[-1].is_tip:
@@ -1787,30 +1809,32 @@ class WingSections (list [WingSection]):
         cn = aSection.cn
 
         if aSection.is_tip and aSection.defines_cn:                             # special case trapezoid - tip section defines chord 
-            left_sec, right_sec = self.neighbors_of (aSection)     
-            return (xn,xn), (0.01, left_sec.cn) 
+            left_sec, right_sec = self.neighbors_of (aSection) 
+            cn_max = left_sec.cn if left_sec.is_xn_fix else left_sec.cn - self.MIN_CN_DIFFERENCE
+            return (xn,xn), (0.01, cn_max) 
         if aSection.is_root_or_tip:                                             # normally root and tip fixed 
             return (xn,xn), (cn,cn) 
+
+        left_sec, right_sec = self.neighbors_of (aSection)                      # keep a safety distance to next section
+        if left_sec: 
+            left_xn = left_sec.xn
+            left_cn = left_sec.cn
         else:
-            left_sec, right_sec = self.neighbors_of (aSection)                 # keep a safety distance to next section
-            safety = self[-1].xn / 500.0 
-            if left_sec: 
-                left_xn = left_sec.xn
-                left_cn = left_sec.cn
-            else:
-                left_xn = xn
-                left_cn = cn
-            if right_sec: 
-                right_xn = right_sec.xn
-                right_cn = right_sec.cn
-            else:
-                right_xn = xn
-                right_cn = cn
-            if left_cn < right_cn:
-                lower_cn, upper_cn = left_cn, right_cn
-            else:  
-                lower_cn, upper_cn = right_cn, left_cn
-            return (left_xn + safety, right_xn - safety), (lower_cn, upper_cn)
+            left_xn = xn
+            left_cn = cn
+        if right_sec: 
+            right_xn = right_sec.xn
+            right_cn = right_sec.cn
+        else:
+            right_xn = xn
+            right_cn = cn
+        left_safety  = clip (self.MIN_XN_DISTANCE, 0.0, max (0.0, xn - left_xn) / 2)
+        right_safety = clip (self.MIN_XN_DISTANCE, 0.0, max (0.0, right_xn - xn) / 2)
+        if left_cn < right_cn:
+            lower_cn, upper_cn = left_cn, right_cn
+        else:  
+            lower_cn, upper_cn = right_cn, left_cn
+        return (left_xn + left_safety, right_xn - right_safety), (lower_cn, upper_cn)
 
 
 
@@ -2112,7 +2136,7 @@ class Flaps:
 
             x, y = [], []
             section : WingSection
-            for section in self._wingSections:                          # collect all hinge xn definitions in sections
+            for section in self.wingSections:                          # collect all hinge xn definitions in sections
                 if section.defines_hinge: 
                     x.append (section.x)
                     y.append (section.hinge_y)
@@ -2140,7 +2164,7 @@ class Flaps:
 
             xn, cn = [], []
             section : WingSection
-            for section in self._wingSections:                          # collect all hinge xn definitions in sections
+            for section in self.wingSections:                           # collect all hinge xn definitions in sections
                 if section.defines_hinge: 
                     xn.append (section.xn)
                     cn.append (section.hinge_cn)
@@ -2149,7 +2173,7 @@ class Flaps:
 
 
     @property
-    def _wingSections (self) -> WingSections:
+    def wingSections (self) -> WingSections:
         """ the real wing sections without the extra sections for paneling """
         return self._planform.wingSections.without_for_panels
         
@@ -2167,7 +2191,7 @@ class Flaps:
         returns the flap objects based on wing sections flap group
         """
         flapList = []
-        if not self._wingSections: return flapList 
+        if not self.wingSections: return flapList 
 
         # all succeeding sections with the same flap group define a new flap
         #   flap_group == 0 means no flap  
@@ -2175,13 +2199,13 @@ class Flaps:
         start_section  = None
         section : WingSection
 
-        for section in self._wingSections:
+        for section in self.wingSections:
 
             if start_section is None and section.flap_group > 0:
                 start_section = section
             elif start_section is None and section.flap_group == 0:
                 pass
-            elif (section.flap_group != start_section.flap_group or section == self._wingSections[-1]) :
+            elif (section.flap_group != start_section.flap_group or section == self.wingSections[-1]) :
                 
                 flapList.append(Flap(self, start_section, section))
                 if section.flap_group > 0:
@@ -2204,7 +2228,7 @@ class Flaps:
 
         i = 0 
         sec : WingSection
-        for sec in self._wingSections:                               # find section with hinge definition #index 
+        for sec in self.wingSections:                               # find section with hinge definition #index 
             if sec.hinge_cn: 
                 if i == index:
                     return True 
@@ -2216,7 +2240,7 @@ class Flaps:
     def check_and_correct (self):
         """ check consistency of wingSections flap definition and correct if possible"""
 
-        sections = self._wingSections
+        sections = self.wingSections
 
         root_sec : WingSection = sections[0]
         tip_sec  : WingSection = sections[-1]
@@ -2329,7 +2353,7 @@ class Flaps:
         """
 
         section : WingSection
-        for section in self._wingSections:
+        for section in self.wingSections:
 
             found_jpoint = None
             for jpoint in jpoints:
@@ -2400,63 +2424,12 @@ class Flaps:
         return x / self._planform.span, depth
 
 
-
-
-    # def rel_depth_as_jpoints (self)  -> list[JPoint]:
-    #     """ 
-    #     relative depth of flaps at section as JPoints with limits and fixed property
-    #         x values 0..1
-    #         y values scaled to chord - fixed as it is on wingSection
-    #     """
-
-    #     jpoints = []
-    #     y_arr, x_arr = self.hinge_polyline ()
-    #     for i, y in enumerate(y_arr):
-
-    #         x = x_arr[i]
-    #         le_x, te_x = self._planform._planform_at (y)
-    #         rel_depth = (te_x - x) / (te_x - le_x)
-
-    #         jpoint = JPoint (y, rel_depth)                          # change to display coordinate system       
-
-    #         jpoint.set_x_limits ((y, y))                    # fix
-    #         jpoint.set_y_limits ((0, 1))
-
-    #         if i == 0:                                      # root fixed
-    #             jpoint.set_name ('Flap Root')
-    #         elif i == (len(y_arr)-1):                                     
-    #             jpoint.set_name ('Flap Tip')
-    #         else:                                           
-    #             jpoint.set_name ('Flap')
-    #         jpoints.append(jpoint)
-
-    #     return jpoints
-
-
-    # def rel_depth_from_jpoints (self, jpoints: list[JPoint]):
-    #     """ 
-    #     set hinge from relative depth definition JPoints - updates winSection hinge_xn 
-    #     """
-
-    #     for jpoint in jpoints:
-
-    #         y, x = jpoint.xy
-             
-    #         section = self._wingSections.at_y (y)
-
-    #         if section is None: 
-    #             raise ValueError (f"No section found at y position {jpoint.x}")
-    #         else: 
-    #             xn = 1.0 - x
-    #             section.set_hinge_xn (xn) 
-
-
     def insert_hinge_point_at (self, x : float) -> bool:
         """ 
         try to add a hinge 'break' at a section, which should be at x
             Return True if successful 
         """ 
-        section = self._wingSections.at_x (x, tolerance = 0.01) 
+        section = self.wingSections.at_x (x, tolerance = 0.01) 
 
         if section is not None: 
             if not section.defines_hinge:
@@ -2511,10 +2484,7 @@ class Planform:
 
     def __init__(self, 
                  wing : Wing, 
-                 dataDict: dict = None,
-                 chord_style : str = None, 
-                 chord_ref : N_Chord_Reference = None,
-                 ref_line : N_Reference_Line = None):
+                 dataDict: dict = None):
                 
         self._wing = wing
 
@@ -2524,8 +2494,7 @@ class Planform:
 
         chord_dict = fromDict(dataDict, "chord_distribution", {})
         
-        if chord_style is None: 
-            chord_style = fromDict (chord_dict, "chord_style", N_Distrib_Bezier.name)
+        chord_style = fromDict (chord_dict, "chord_style", N_Distrib_Bezier.name)
 
         if chord_style == N_Distrib_Bezier.name:
             self._n_distrib = N_Distrib_Bezier (chord_dict)
@@ -2539,27 +2508,22 @@ class Planform:
         else:
             raise ValueError (f"Chord style {chord_style} not supported")
 
-        # init chord reference function either new from dataDict or as argument of self 
+        # init chord reference function either new from dataDict 
 
-        if chord_ref is None:
-            self._n_chord_ref = N_Chord_Reference (dataDict=fromDict(dataDict, "chord_reference", {}))
+        self._n_chord_ref = N_Chord_Reference (dataDict=fromDict(dataDict, "chord_reference", {}))
+
+        # init reference line either new from dataDict 
+
+        if chord_style == N_Distrib_Bezier.name:                    # only Distrib_Bezier may have Banana
+            self._n_ref_line = N_Reference_Line (dataDict=fromDict(dataDict, "reference_line", {}))
         else: 
-            self._n_chord_ref = chord_ref 
-
-        # init reference line either new from dataDict or as argument of self
-
-        if ref_line is None:
-            if chord_style == N_Distrib_Bezier.name:                # only Distrib_Bezier may have Banana
-                self._n_ref_line = N_Reference_Line (dataDict=fromDict(dataDict, "reference_line", {}))
-            else: 
-                self._n_ref_line = N_Reference_Line (dataDict={})
-        else: 
-            self._n_ref_line = ref_line 
+            self._n_ref_line = N_Reference_Line (dataDict={})
 
         # init wing sections 
         
         self._wingSections = WingSections (self, sectionsDict=fromDict(dataDict, "wingSections", {}))
-        self._wingSections.check_n_repair ()        # sanity check (after ._wingSections are initialized!)
+
+        self._wingSections.check_n_repair ()                        # sanity check (after wingSections are initialized!)
 
         # init flaps
 
@@ -2567,7 +2531,7 @@ class Planform:
          
         # late setting of polar sets as chord is needed for reynolds factor 
         
-        self._wingSections.refresh_polar_sets (reset=True)        # refresh polar set of wingSections airfoil
+        self._wingSections.refresh_polar_sets (reset=True)          # refresh polar set of wingSections airfoil
 
 
 

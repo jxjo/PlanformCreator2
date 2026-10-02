@@ -24,7 +24,7 @@ from airfoileditor.ui.util_dialogs      import Polar_Definition_Dialog, Calc_Rey
 
 # ---- pc2 modules  
 
-from ..model.wing       import Wing
+from ..model.wing       import Wing, Scale_Mode, Reference_Wing_Elliptical
 from ..model.planform   import Planform
 from ..model.VLM_wing   import VLM_OpPoint, VLM_Var, VLM_Wing
 
@@ -150,7 +150,7 @@ class Item_Abstract (Diagram_Item):
         self.setContentsMargins ( 0,50,0,20)                # default set margins (inset) of self 
 
         # connect to app model signals to refresh - new wing is handled in Diagram_Abstract
-        self.app_model.sig_planform_changed.connect         (self.refresh)
+        self.app_model.sig_planform_changed.connect         (self._on_planform_changed)
         self.app_model.sig_wingSection_changed.connect      (self._on_wingSection_changed)
         self.app_model.sig_wingSection_selected.connect     (self._on_wingSection_changed)
         self.app_model.sig_airfoil_changed.connect          (self._on_airfoil_changed)
@@ -178,16 +178,10 @@ class Item_Abstract (Diagram_Item):
         """ returns the reference wing if available """
         return self.app_model.ref_wing
 
-
     @property
-    def ref_planforms (self) -> list[Planform]:
-
-        refs = []
-
-        refs.append (self.wing.planform_elliptical)
-        if self.app_model.ref_wing :
-            refs.append (self.app_model.ref_wing.planform)
-        return refs
+    def ref_planform (self) -> Planform | None:
+        """ returns the reference planform if available """
+        return self.app_model.ref_wing.planform if self.app_model.ref_wing else None
 
 
     def refresh_diagram (self, also_viewRange=True):
@@ -219,6 +213,15 @@ class Item_Abstract (Diagram_Item):
             logger.debug (f"{self} _on_airfoil_changed refresh relevant artists")
             for artist in self._get_artist (Airfoil_Name_Artist):
                 artist.refresh()            
+
+
+    def _on_planform_changed (self):
+        """ slot when planform changed - refresh only relevant artists """
+
+        if self.isVisible_effective():
+            self.refresh()  
+            if self.viewBox.autoRangeEnabled():  
+                self.setup_viewRange()                  # fit to screen
 
 
     def _setup_artists_slots (self):
@@ -263,9 +266,10 @@ class Item_Planform (Item_Abstract):
                                                  wingSection_fn=lambda: self.cur_wingSection))
         self._add_artist (Flaps_Artist          (self, lambda: self.planform, show=False ,show_legend=True))
         self._add_artist (Airfoil_Name_Artist   (self, lambda: self.planform, show=False, show_legend=False))
-        self._add_artist (Ref_Planforms_Artist  (self, lambda: self.planform, 
-                                                       ref_planforms_fn=lambda: self.ref_planforms, 
-                                                       show=False, show_legend=True))
+
+        self._add_artist (Ref_Planform_Artist   (self, lambda: self.ref_planform, show=False, show_legend=True))
+        self._add_artist (Ref_WingSections_Artist (
+                                                 self, lambda: self.ref_planform, show=False, show_legend=True))
         self._add_artist (Image_Artist          (self, lambda: self.planform, show=False, 
                                                        image_def=lambda: self.wing.background_image,
                                                        as_background=True))
@@ -302,6 +306,14 @@ class Item_Planform (Item_Abstract):
 
 
     @property
+    def show_ref_line (self) -> bool: 
+        return self._get_artist (Ref_Line_Artist) [0].show
+    
+    def set_show_ref_line (self, aBool : bool): 
+        self._show_artist (Ref_Line_Artist, aBool)
+
+
+    @property
     def show_np (self) -> bool: 
         return self._get_artist (Neutral_Point_Artist)[0].show
     
@@ -318,13 +330,6 @@ class Item_Planform (Item_Abstract):
 
 
     @property
-    def show_bounding_box (self) -> bool: 
-        return self._get_artist (Planform_Box_Artist) [0].show
-    
-    def set_show_bounding_box (self, aBool : bool): 
-        self._show_artist (Planform_Box_Artist, aBool)
-
-    @property
     def airfoil_use_nick (self) -> bool:
         return self.wing.airfoil_use_nick
 
@@ -334,38 +339,104 @@ class Item_Planform (Item_Abstract):
 
 
     @property
+    def show_background_image (self) -> bool:
+        return self._get_artist (Image_Artist) [0].show
+
+    def set_show_background_image (self, aBool : bool):
+        self._show_artist (Image_Artist, aBool)
+        self.section_panel.refresh()
+
+
+    @property
     def section_panel (self) -> Edit_Panel:
         """ return section panel within view panel"""
 
         if self._section_panel is None:    
             l = QGridLayout()
             r,c = 0, 0
-            CheckBox (l,r,c, text="Bounding Box", colSpan=2,
-                      get=lambda: self.show_bounding_box, set=self.set_show_bounding_box)
+            CheckBox (l,r,c, text="Chord Reference Line",  colSpan=3,
+                        get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
             r += 1
             CheckBox (l,r,c, text="Neutral Point (geometric)", colSpan=3, 
                       get=lambda: self.show_np, set=self.set_show_np) 
             r += 1
-            CheckBox (l,r,c, text="Airfoils", 
+            CheckBox (l,r,c, text="Airfoils", colSpan=3,
                       get=lambda: self.show_airfoils, set=self.set_show_airfoils)
-            CheckBox (l,r,c+1, text="Use nick name", colSpan=3,
+            r += 1
+            CheckBox (l,r,c+1, text="Use nick name", colSpan=2,
                         obj=self, prop=Item_Airfoils.airfoil_use_nick,
                         hide=lambda: not self.show_airfoils,
                         toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
             r += 1
-            CheckBox (l,r,c+1, text="Also blended", 
+            CheckBox (l,r,c+1, text="Also blended", colSpan=2,
                         get=lambda: self.show_strak, set=self.set_show_strak,
                         hide=lambda: not self.show_airfoils)    
 
-            l.setColumnMinimumWidth (0,70)
-            l.setColumnStretch (3,5)
-            l.setRowStretch    (r+1,2)
+            # toggle fields for background image
+            r += 1
+            CheckBox   (l,r,c, text="Background Image", colSpan=3,
+                        get=lambda: self.show_background_image, 
+                        set=self.set_show_background_image, 
+                        disable=lambda: not bool(self.wing.background_image.filename)) 
+            Button     (l,r,c+2, text="Select", width=50, colSpan=4,
+                        set=self._open_background_image, toolTip="Open background image as reference",
+                        hide = lambda: self.wing.background_image.filename)
+            r += 1
+            Field      (l,r,c+1, 
+                        get=lambda: self.wing.background_image.filename, 
+                        hide = lambda: not self.show_background_image) 
+            ToolButton (l,r,c+2, icon=Icon.EDIT, 
+                        set=self._edit_background_image, toolTip="Edit background image settings",
+                        hide = lambda: not self.show_background_image) 
+            ToolButton (l,r,c+3, icon=Icon.OPEN, 
+                        set=self._open_background_image, toolTip="Open new background image",
+                        hide = lambda: not self.show_background_image) 
+            ToolButton (l,r,c+4, icon=Icon.DELETE, 
+                        set=self._remove_background_image, toolTip="Remove background image",
+                        hide = lambda: not self.show_background_image)
+
+            l.setColumnMinimumWidth (0,15)
+            l.setColumnStretch (1,5)
                      
             self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True, 
                                               switchable  = True,
                                               switched_on = lambda: self.show,  
                                               on_switched = lambda aBool: self.set_show(aBool))
         return self._section_panel 
+
+    
+    def _open_background_image (self):
+        """ open background image file  """
+
+        filters  = "Image files (*.png *.jpg *.bmp)"
+        newPathFilename, _ = QFileDialog.getOpenFileName(self.section_panel, filter=filters, 
+                                                         directory=self.app_model.workingDir,
+                                                         caption="Open background image")
+
+        if newPathFilename: 
+            self.wing.background_image.set_pathFilename (newPathFilename)
+            self._edit_background_image ()  
+
+
+    def _remove_background_image (self):
+        """ remove background image file  """
+
+        self.wing.background_image.set_pathFilename (None)
+        self.set_show_background_image(False)
+        self.refresh ()  
+
+
+    def _edit_background_image (self):
+        """ edit settings of background image   """
+
+        self.wing.background_image._qimage = None
+
+        dialog = Dialog_Edit_Image (self.section_panel, self.wing.background_image, 
+                                    parentPos=(1.1,0.5), dialogPos=(0,0.5)) 
+        dialog.exec()   
+
+        self.set_show_background_image(True)
+        self.refresh()  
 
 
 
@@ -387,8 +458,8 @@ class Item_Chord (Item_Abstract):
         self._add_artist (Norm_Chord_Artist     (self, lambda: self.planform, show_legend=True))
         self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.NORM_TO_SPAN, show=False, show_legend=True,
                                                  wingSection_fn=lambda: self.cur_wingSection))
-        self._add_artist (Ref_Planforms_Artist  (self, lambda: self.planform, show_chord=True,
-                                                 show_legend=True, show=False))
+        self._add_artist (Ref_Planform_Artist   (self, lambda: self.ref_planform, show_chord=True,
+                                                 show_legend=True, show=True))
         self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.NORM_TO_SPAN, show=False, show_legend=True))
 
         self._add_artist (Airfoil_Name_Artist   (self, lambda: self.planform, mode=mode.NORM_TO_SPAN, 
@@ -529,6 +600,8 @@ class Item_VLM_Panels (Item_Abstract):
         
         self._add_artist (VLM_Panels_Artist     (self, lambda: self.planform, 
                                                  opPoint_fn=lambda: self.cur_vlm_opPoint, 
+                                                 show_legend=True))
+        self._add_artist (VLM_Panels_Artist     (self, lambda: self.ref_planform, 
                                                  show_legend=True))
         self._add_artist (WingSections_Artist   (self, lambda: self.planform, 
                                                  wingSection_fn=lambda: self.cur_wingSection,
@@ -1461,7 +1534,7 @@ class Item_Wing_Airfoils (Item_Abstract):
             l = QGridLayout()
             r,c = 0, 0 
             r += 1
-            CheckBox (l,r,c, text="Real size", 
+            CheckBox (l,r,c, text="In real size", 
                         get=lambda: self.airfoil_artist.real_size,
                         set=self.airfoil_artist.set_real_size) 
             r += 1
@@ -2066,38 +2139,18 @@ class Diagram_Planform (Diagram_Abstract):
     
     def set_show_wingSections (self, aBool : bool): 
         self._show_artist (WingSections_Artist, show=aBool)
+        self._show_artist (Ref_WingSections_Artist, show=aBool and self.show_ref_wing)
 
 
     @property
-    def show_ref_line (self) -> bool: 
-        return self._get_artist (Ref_Line_Artist) [0].show
-    
-    def set_show_ref_line (self, aBool : bool): 
-        self._show_artist (Ref_Line_Artist, aBool)
+    def show_ref_wing (self) -> bool: 
+        """ return show_ref_wing state of first artist"""
+        artist : Ref_Planform_Artist = self._get_artist (Ref_Planform_Artist) [0]
+        return artist.show
 
-
-    @property
-    def show_elliptical (self) -> bool: 
-        """ return show_elliptical state of first artist"""
-        artist : Ref_Planforms_Artist = self._get_artist (Ref_Planforms_Artist) [0]
-        return artist.show_elliptical
-
-    def set_show_elliptical (self, aBool : bool):
-        artist : Ref_Planforms_Artist
-        for artist in self._get_artist (Ref_Planforms_Artist): 
-            artist.set_show_elliptical (aBool) 
-
-
-    @property
-    def show_ref_pc2 (self) -> bool: 
-        """ return show_ref_pc2 state of first artist"""
-        artist : Ref_Planforms_Artist = self._get_artist (Ref_Planforms_Artist) [0]
-        return artist.show_ref_pc2
-
-    def set_show_ref_pc2 (self, aBool : bool):
-        artist : Ref_Planforms_Artist
-        for artist in self._get_artist (Ref_Planforms_Artist): 
-            artist.set_show_ref_pc2 (aBool) 
+    def set_show_ref_wing (self, aBool : bool):
+        self._show_artist (Ref_Planform_Artist, aBool)
+        self._show_artist (Ref_WingSections_Artist, show=aBool and self.show_wingSections)
 
 
     @property
@@ -2119,20 +2172,7 @@ class Diagram_Planform (Diagram_Abstract):
         artist : Flaps_Artist
         for artist in self._get_artist (Flaps_Artist):
             artist.set_show_depth (aBool)
-
-
-    @property
-    def background_image_artist (self) -> Image_Artist:
-        return self._get_artist (Image_Artist) [0]
-
-    def set_show_ref_planforms (self, aBool : bool): 
-        self._show_artist (Ref_Planforms_Artist, aBool)
-
-        if not aBool:
-            self._show_artist (Image_Artist, False)   # if ref planforms are not shown, also switch off background image
-        # as there is no separate state for background image, we do not switch on automatically 
-        # if ref planforms are switched on again, as it would be always switched on then, which is not desired
-                                      
+                                    
 
     def create_diagram_items (self):
         """ create all plot Items and add them to the layout """
@@ -2180,11 +2220,14 @@ class Diagram_Planform (Diagram_Abstract):
             CheckBox (l,r,c, text="Show mouse helper", colSpan=2,
                         get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
             r += 1
-            CheckBox (l,r,c, text="Reference Line",  colSpan=2,
-                        get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
-            r += 1
             CheckBox (l,r,c, text="Wing Sections",  colSpan=2,
                         get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
+
+            r += 1
+            p = Panel_Reference_Wing (self, self.app_model)
+            p.sig_show_ref_wing.connect(self.set_show_ref_wing)
+            l.addWidget(p, r, c, 1, 2)
+
             r += 1
             CheckBox (l,r,c, text="Flaps", 
                         get=lambda: self.show_flaps, set=self.set_show_flaps) 
@@ -2199,69 +2242,6 @@ class Diagram_Planform (Diagram_Abstract):
             self._panel_general = Edit_Panel (title="Common Options", layout=l, auto_height=True,
                                               switchable=False, switched_on=True)
         return self._panel_general 
-
-
-
-    @property
-    def section_panel (self) -> Edit_Panel:
-        """ return section panel within view panel"""
-
-        if self._section_panel is None:
-        
-            l = QGridLayout()
-            r,c = 0, 0
-            CheckBox   (l,r,c, text="Elliptical", 
-                        get=lambda: self.show_elliptical, set=self.set_show_elliptical) 
-
-            # toggle fields for pc2 reference planform 
-            r += 1
-            CheckBox   (l,r,c, text="Another PC2 Planform", 
-                        hide = lambda: bool(self.wing.ref_pc2_file))
-            Button     (l,r,c+1, text="Select", width=50, colSpan=4,
-                        set=self._open_planform_ref_pc2, toolTip="Select another PC2 Planform as reference",
-                        hide = lambda: bool(self.wing.ref_pc2_file))
-
-            CheckBox   (l,r,c, text=lambda: self.app_model.ref_wing_name, 
-                        get=lambda: self.show_ref_pc2, set=self.set_show_ref_pc2, 
-                        hide = lambda: not bool(self.wing.ref_pc2_file)) 
-            ToolButton (l,r,c+2, icon=Icon.OPEN, 
-                        set=self._open_planform_ref_pc2, toolTip="Open new PC2 Planform",
-                        hide = lambda: not bool(self.wing.ref_pc2_file))
-            ToolButton (l,r,c+3, icon=Icon.DELETE, 
-                        set=self._remove_planform_ref_pc2, toolTip="Remove PC2 Planform",
-                        hide = lambda: not bool(self.wing.ref_pc2_file))
-
-
-            # toggle fields for background image
-            r += 1
-            CheckBox   (l,r,c, text="Background Image", get=False, 
-                        hide = lambda: bool(self.wing.background_image.filename)) 
-            Button     (l,r,c+1, text="Select", width=50, colSpan=4,
-                        set=self._open_background_image, toolTip="Open background image as reference",
-                        hide = lambda: bool(self.wing.background_image.filename))
-
-            CheckBox   (l,r,c, text=lambda: self.wing.background_image.filename,  
-                        get=lambda: self.background_image_artist.show, 
-                        set=self.background_image_artist.set_show, 
-                        hide = lambda: not bool(self.wing.background_image.filename)) 
-            ToolButton (l,r,c+1, icon=Icon.EDIT, 
-                        set=self._edit_background_image, toolTip="Edit background image settings",
-                        hide = lambda: not bool(self.wing.background_image.filename))
-            ToolButton (l,r,c+2, icon=Icon.OPEN, 
-                        set=self._open_background_image, toolTip="Open new background image",
-                        hide = lambda: not bool(self.wing.background_image.filename))
-            ToolButton (l,r,c+3, icon=Icon.DELETE, 
-                        set=self._remove_background_image, toolTip="Remove background image",
-                        hide = lambda: not bool(self.wing.background_image.filename))
-
-            l.setColumnStretch (0,3)
-
-            self._section_panel = Edit_Panel (title="Reference Planforms", layout=l, auto_height=True,
-                                              switchable=True, 
-                                              switched_on=False, 
-                                              on_switched=self.set_show_ref_planforms)
-
-        return self._section_panel 
 
 
     @property 
@@ -2295,62 +2275,6 @@ class Diagram_Planform (Diagram_Abstract):
 
         dialog = Dialog_Export_CSV (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))
         dialog.exec()
-
-
-    def _open_planform_ref_pc2 (self):
-        """ open reference pc2 file """
-
-        filters  = "PlanformCreator2 files (*.pc2)"
-        newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters,
-                                                         directory=self.app_model.workingDir,
-                                                         caption="Open PlanformCreator file")
-
-        if newPathFilename: 
-            self.wing.set_ref_pc2_file (newPathFilename)
-            self.set_show_ref_pc2 (True)
-            self.refresh ()  
-
-
-    def _remove_planform_ref_pc2 (self):
-        """ remove reference pc2 file """
-
-        self.wing.set_ref_pc2_file (None)
-        self.set_show_ref_pc2 (False)
-        self.refresh ()  
-
-    
-    def _open_background_image (self):
-        """ open background image file  """
-
-        filters  = "Image files (*.png *.jpg *.bmp)"
-        newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters, 
-                                                         directory=self.app_model.workingDir,
-                                                         caption="Open background image")
-
-        if newPathFilename: 
-            self.wing.background_image.set_pathFilename (newPathFilename)
-            self._edit_background_image ()  
-
-
-    def _remove_background_image (self):
-        """ remove background image file  """
-
-        self.wing.background_image.set_pathFilename (None)
-        self.background_image_artist.set_show(False)
-        self.refresh ()  
-
-
-    def _edit_background_image (self):
-        """ edit settings of background image   """
-
-        self.wing.background_image._qimage = None
-
-        dialog = Dialog_Edit_Image (self.section_panel, self.wing.background_image, 
-                                    parentPos=(1.1,0.5), dialogPos=(0,0.5)) 
-        dialog.exec()   
-
-        self.background_image_artist.set_show(True)
-        self.refresh()  
 
 
 
@@ -2984,9 +2908,10 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
 
     def set_show_mouse_helper (self, aBool : bool):
         """ on/off for mouse helper of self - for global setting use class variable"""
-        artist = self._get_artist (Norm_Chord_Artist)[0] 
-        artist.set_show_mouse_helper (aBool)
-        artist.refresh()
+        artist : Artist
+        for artist in self._get_artist ([Norm_Chord_Artist, WingSections_Artist]):
+            artist.set_show_mouse_helper (aBool)
+            artist.refresh()
 
 
     @property
@@ -3066,23 +2991,37 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            Label    (l,r,c, colSpan=4, get=f"T1 polar for root airfoil", style=style.COMMENT)
+
+            # Polar definition for root airfoil
+            
+            Label    (l,r,c, colSpan=4, get=f"T1 polar for root airfoil")
             r += 1
-            ComboBox (l,r,c, width=None, colSpan=4,
+            ComboBox (l,r,c, width=None, 
                         get=lambda: self.polar_def_name, set=self.set_polar_def_name,
                         options=lambda: self.polar_def_list)
-            ToolButton (l,r,c+4, icon=Icon.EDIT,   set=self._edit_polar_def, 
+            ToolButton (l,r,c+1, icon=Icon.EDIT,   set=self._edit_polar_def, 
                         disable=lambda: not self.wing.vlm_data_available,      # wait until VLM ended
                         toolTip="Change the settings of this polar definition")                              
-            ToolButton (l,r,c+5, icon=Icon.DELETE, set=self._delete_polar_def,
-                        disable=lambda: not self.wing.vlm_data_available or  
-                                        len(self.polar_def_list) <= 1,          # wait until VLM ended
-                        toolTip="Delete this polar definition")                              
-            r += 1
-            ToolButton (l,r,c, icon=Icon.ADD, set=self._add_polar_def,
+            # ToolButton (l,r,c+2, icon=Icon.DELETE, set=self._delete_polar_def,
+            #             disable=lambda: not self.wing.vlm_data_available or  
+            #                             len(self.polar_def_list) <= 1,          # wait until VLM ended
+            #             toolTip="Delete this polar definition")                              
+            # r += 1
+            ToolButton (l,r,c+2, icon=Icon.ADD, set=self._add_polar_def,
                         toolTip="Add a polar definition <br><br>" +
                         "The root polar and the wing-section Reynolds number are used to match " +
                         "the VLM polar of the airfoil at the wing section.")                              
+
+            # Reference wing 
+
+            r += 1
+            SpaceR (l,r, height=10)
+            r += 1
+            p = Panel_Reference_Wing (self, self.app_model)
+            # p.sig_show_ref_wing.connect(self.set_show_ref_wing)
+            l.addWidget(p, r, c, 1, 3)
+
+            l.setColumnStretch(0, 1)
 
             self._panel_aero = Edit_Panel (title="Aero Analysis", layout=l, auto_height=True,
                                            switchable=False)
@@ -3682,4 +3621,106 @@ class Panel_Polar_Defs (Edit_Panel):
         """ refreshes all Widgets on self """
 
         super().refresh(reinit_layout=True)                 # always reinit layout to reflect changed polar defs
+
+
+
+class Panel_Reference_Wing (Edit_Panel):
+    """ helper panel to activate and select a reference wing"""
+
+    sig_show_ref_wing = pyqtSignal(bool)                    # signal to show artists
+
+    def __init__(self, *args):
+
+        super().__init__(*args, 
+                         has_head=False,
+                         auto_height=True,
+                         main_margins=(0,0,0,0),
+                         panel_margins=(0,0,0,0))
+
+    @property
+    def app_model(self) -> App_Model:
+        return self.dataObject
+
+    @property
+    def show_ref(self) -> bool:
+        return bool(self.app_model.ref_wing_name)
+
+    def set_show_ref (self, aBool: bool):
+
+        # set inital reference wing if needed
+        if aBool and not self.app_model.ref_wing_name:
+            self.app_model.set_ref_wing_name(self.app_model.ref_wings_name[0] )
+        elif not aBool:
+            self.app_model.set_ref_wing_name(None)
+
+        self.sig_show_ref_wing.emit (aBool)
+
+        self.refresh()
+
+
+    def _init_layout (self):
+        """ initialize the layout of the panel """
+
+        l = QGridLayout()
+        r,c = 0, 0
+        CheckBox   (l,r,c, text="Reference Planform", colSpan=4,
+                    get=lambda: self.show_ref, set=self.set_show_ref)
+
+        l.setColumnMinimumWidth (0,15)
+        l.setColumnMinimumWidth (1,50)
+        l.setColumnStretch (2, 3)
+
+        r += 1
+
+        #todo  extend the api, that options can be a list of tuples, 
+        # with this switch to an extended mode and the setter returns again a tuple ...
+        # Make the tuple carry the visible label and the value passed to the setter, 
+        # e.g. (label, value), with an optional third tooltip field: (label, value, tooltip). 
+        # In extended mode, the selection callback receives the selected tuple, 
+        # while the getter returns the current tuple so the combo can restore the right item.
+
+        w = ComboBox   (l,r,c+1, colSpan=2, width=155,
+                    options=lambda: self.app_model.ref_wings_name, 
+                    get=lambda: self.app_model.ref_wing_name, 
+                    set=self.app_model.set_ref_wing_name,
+                    hide = lambda: not self.show_ref) 
+        w.sig_changed.connect(lambda: self.refresh())
+
+        ToolButton (l,r,c+3, icon=Icon.ADD, 
+                    set=self._add_ref_pc2, toolTip="Open and addnew PC2 Planform",
+                    disable=lambda: len(self.app_model.ref_wings_name) >= 10, 
+                    hide = lambda: not self.show_ref)
+        ToolButton (l,r,c+4, icon=Icon.DELETE, 
+                    set=self._remove_planform_ref_pc2, toolTip="Remove PC2 Planform",
+                    disable=lambda: self.app_model.ref_wing_name==Reference_Wing_Elliptical.name, 
+                    hide = lambda: not self.show_ref)
+        r += 1
+        Label      (l,r,c+1, get="Match", # width=50,
+                    hide = lambda: not self.show_ref)
+        ComboBox   (l,r,c+2, options=list(Scale_Mode), 
+                    get=lambda: str(self.app_model.ref_wing_scale_mode), 
+                    set=self.app_model.set_ref_wing_scale_mode,
+                    hide = lambda: not self.show_ref)
+        r += 1
+
+        return l
+
+
+    def _remove_planform_ref_pc2 (self):
+        """ remove reference pc2 file """
+
+        self.app_model.remove_ref_pc2_file()
+        self.refresh ()  
+
+
+    def _add_ref_pc2 (self):
+        """ add reference pc2 file """
+
+        filters  = "PlanformCreator2 files (*.pc2)"
+        newPathFilename, _ = QFileDialog.getOpenFileName(self, filter=filters,
+                                                         directory=self.app_model.workingDir,
+                                                         caption="Open PlanformCreator file")
+        if newPathFilename: 
+            self.app_model.add_ref_pc2_file (newPathFilename)
+            self.refresh ()  
 

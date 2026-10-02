@@ -163,7 +163,7 @@ class Main (QMainWindow):
     def _set_win_title (self):
         """ set window title with airfoil or case name """
 
-        pc2_file = self._app_model.wing.parm_fileName if self._app_model.wing is not None else "No Wing Loaded"
+        pc2_file = self._app_model.wing.parm_path.name if self._app_model.wing is not None else "No Wing Loaded"
         self.setWindowTitle (APP_NAME + "  v" + str(__version__) + "  [" + pc2_file + "]")
 
 
@@ -211,7 +211,7 @@ class Main (QMainWindow):
 
         wing = self._app_model.wing
         if wing and not wing.is_new_wing: 
-            s.set ('last_opened', wing.parm_pathFileName_abs)
+            s.set ('last_opened', str(wing.parm_path_abs.resolve(strict=False)))
         else:
             s.set ('last_opened', None)
 

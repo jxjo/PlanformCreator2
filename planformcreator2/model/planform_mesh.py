@@ -11,6 +11,7 @@ from time               import perf_counter
 import numpy as np
 
 from airfoileditor.base.common_utils import clip, fromDict, toDict
+from airfoileditor.model.airfoil     import GEO_BASIC
 
 if TYPE_CHECKING:
     from .planform import Planform, WingSection, WingSections
@@ -59,6 +60,11 @@ class Mesh_Strategy:
         self._from_dict (dataDict)
 
 
+    def __repr__(self) -> str:
+        # overwrite to get a nice print string
+        return f"<{type(self).__name__}>"
+
+
     def _as_dict (self) -> dict:
         """Serialize configuration shared by all mesh strategies."""
         data = {}
@@ -75,11 +81,13 @@ class Mesh_Strategy:
         """Load configuration shared by all mesh strategies."""
         if not data:
             data = {}
-        self._wx_panels = fromDict (data, "wx_panels", 4)
-        self._wx_dist = fromDict (data, "wx_distribution", "uniform")
-        self._wy_dist = fromDict (data, "wy_distribution", "uniform")
-        self.set_cn_tip_min (fromDict (data, "cn_tip_min", 0.0))
-        self.set_cn_ratio_min (fromDict (data, "cn_ratio_min", None))
+
+        self._wx_panels     = fromDict (data, "wx_panels", 4)
+        self._wx_dist       = fromDict (data, "wx_distribution", "uniform")
+        self._wy_dist       = fromDict (data, "wy_distribution", "uniform")
+
+        self.set_cn_tip_min     (fromDict (data, "cn_tip_min", 0.0))    
+        self.set_cn_ratio_min   (fromDict (data, "cn_ratio_min", None))
         self.set_width_min_targ (fromDict (data, "width_min", self.PANEL_WIDTH_MIN))
 
 
@@ -89,8 +97,8 @@ class Mesh_Strategy:
         if self.cn_tip_min is None:
             return
 
-        wingSections = self.wingSections(all=True)[:]
-        for section in wingSections:
+        # remove sections that are below the minimum tip chord
+        for section in self.wingSections_planform[:]:
             if section.is_for_panels and section.cn < self.cn_tip_min:
                 self.mesh.wingSections.remove(section)
 
@@ -173,32 +181,20 @@ class Mesh_Strategy:
         """Return the normalized chord below which the mesh tip is omitted."""
 
         if self._cn_tip_min is not None:
-
-            # sanity - ensure cn_tip_min is within the range of the last and second wing sections
-            wingSections = self.wingSections(all=True)
-            if len (wingSections) <= 2:
-                self._cn_tip_min = None
-                return None
-            cn_min = wingSections[-1].cn
-            cn_max = wingSections[1].cn
-            self._cn_tip_min = clip (self._cn_tip_min, cn_min, cn_max)
-            return round (self._cn_tip_min, 3)
-        
+            return round (self._cn_tip_min, 3)    
         return None
 
 
     def set_cn_tip_min (self, value: float | None):
         """Set and constrain the minimum normalized chord retained at the tip."""
 
-        wingSections = self.wingSections(all=True)
+        wingSections = self.wingSections_planform
 
-        if len (wingSections) <= 2:
-            self._cn_tip_min = None
-        elif value == 0.0:
-            self._cn_tip_min = round (wingSections[-1].cn + 0.005, 2)
+        if value == 0.0:
+            self._cn_tip_min = 0.1
         elif value is not None:
-            cn_min = wingSections[-1].cn
-            cn_max = wingSections[1].cn
+            cn_min = 0.01
+            cn_max = max (wingSections[1].cn, 0.5)
             self._cn_tip_min = clip (value, cn_min, cn_max)
         else:
             self._cn_tip_min = None
@@ -219,7 +215,7 @@ class Mesh_Strategy:
     def cn_ratio_cur (self) -> float:
         """Return the lowest chord ratio between adjacent retained sections."""
 
-        sections = self.wingSections(all_reduced=True)
+        sections = self.wingSections_mesh
         ratios = []
         for index in range (len (sections) - 1):
             cn_left  = sections[index].cn
@@ -241,16 +237,17 @@ class Mesh_Strategy:
 
         while section_inserted and cycle < 15:
 
-            sections = self.wingSections(all=True)
+            sections = self.wingSections_planform
             section_inserted = False
             for index in range (len (sections) - 1):
                 section_width = sections[index + 1].xn - sections[index].xn
                 cn_left  = sections[index].cn
                 cn_right = sections[index + 1].cn
                 if section_width >= 2 * self.SECTION_DIST_MIN and cn_left and cn_right / cn_left < self.cn_ratio_min:
-                    self.mesh.wingSections.create_after (index=index, is_for_panels=True)
+                    sections.create_after (index=index, is_for_panels=True)
                     section_inserted = True
                     break
+
             cycle += 1
 
 
@@ -295,7 +292,7 @@ class Mesh_Strategy:
         """Return the maximum normalized spanwise station for the mesh."""
 
         if self.cn_tip_min is not None:
-            for section in reversed (self.wingSections()):
+            for section in reversed (self.wingSections_mesh):
                 if section.cn >= self.cn_tip_min:
                     return section.xn
         return 1.0
@@ -321,38 +318,29 @@ class Mesh_Strategy:
         return le_x_stations[:, np.newaxis] + cn_stations * (te_x_stations - le_x_stations)[:, np.newaxis]
 
 
-    def wingSections (self, only_real = False, all = False, all_reduced = True) -> list[WingSection]:
-        """
-        list of wing sections depending on argument. Reduced sections are returned by default.
+    @property
+    def wingSections_planform (self) -> WingSections:
+        """ all wingSections of the planform"""
+        return self.mesh.wingSections
 
-        Args:
-            only_real: return only the real sections
-            all: return all sections
-            all_reduced: return all without the sections beyond cn_tip_min
-        """
-        if only_real:
-            sections =  [section for section in self.mesh.wingSections if not section.is_for_panels]
-        elif all:
-            sections = self.mesh.wingSections
-        elif all_reduced:
-            sections = self.mesh.wingSections
-            for index, section in enumerate (self.mesh.wingSections):
-                if self.cn_tip_min and round (section.cn, 2) < self.cn_tip_min:
-                    sections = sections[:index]
-                    break
-        else:
-            sections = []
-        return sections
+    @property
+    def wingSections_mesh (self) -> list[WingSection]:
+        """ all wingSections of the mesh"""
+        all_sections = self.wingSections_planform
+        for index, section in enumerate (all_sections):
+            if self.cn_tip_min and round (section.cn, 2) < self.cn_tip_min:
+                return all_sections[:index]
+        return all_sections
 
 
 
     def ny_panels_of_section (self, index: int) -> int:
         """Return the number of spanwise panels in the indexed wing section."""
         
-        left_y = self.wingSections()[index].x
-        if index < len (self.wingSections()) - 1:
-            right_y = self.wingSections()[index + 1].x
-        elif index == len (self.wingSections()) - 1:
+        left_y = self.wingSections_mesh[index].x
+        if index < len (self.wingSections_mesh) - 1:
+            right_y = self.wingSections_mesh[index + 1].x
+        elif index == len (self.wingSections_mesh) - 1:
             right_y = left_y
         else:
             raise ValueError (f"Index {index} to get wing section is to high")
@@ -437,11 +425,14 @@ class Mesh_Strategy_Trapezoidal (Mesh_Strategy):
         """
         yn, cn = [], []
 
-        wingSections = self.wingSections (all_reduced=True) if reduced else self.wingSections (all=True)
+        sections = self.wingSections_mesh if reduced else self.wingSections_planform
 
-        for section in wingSections:
+        for section in sections:
             yn.append (section.xn)
             cn.append (section.cn)
+
+        yn = np.array (yn)
+        cn = np.array (cn)
 
         return np.array (yn), np.array (cn)
 
@@ -515,7 +506,7 @@ class Mesh_Strategy_Trapezoidal (Mesh_Strategy):
 
         y, le_x, te_x = [], [], []
 
-        for section in self.wingSections(all_reduced=True):
+        for section in self.wingSections_mesh:
             y.append(section.x)
             le, te = section.le_te ()
             le_x.append(le)
@@ -531,7 +522,7 @@ class Mesh_Strategy_Trapezoidal (Mesh_Strategy):
 
         while section_inserted and cycle < 15:
 
-            sections = self.wingSections(all=True)
+            sections = self.wingSections_planform
             section_inserted = False
             for index in range (len (sections) - 1):
                 section_width = sections[index + 1].xn - sections[index].xn
@@ -541,7 +532,7 @@ class Mesh_Strategy_Trapezoidal (Mesh_Strategy):
                     cn_mesh   = self.cn_at (yn_mid)
                     cn_parent = self.mesh.parent_planform.n_distrib.at (yn_mid)
                     if cn_parent - cn_mesh > self.cn_diff_max:
-                        self.mesh.wingSections.create_after (index=index, is_for_panels=True)
+                        sections.create_after (index=index, is_for_panels=True)
                         section_inserted = True
                         break
             cycle += 1
@@ -579,6 +570,7 @@ class Mesh_Strategy_Smooth (Mesh_Strategy):
 
         self._wy_panels_span = None
         super().__init__ (mesh, dataDict)
+        pass
 
 
     def _as_dict (self) -> dict:
@@ -677,7 +669,7 @@ class Mesh_Strategy_Smooth (Mesh_Strategy):
     def _align_to_sections (self, yn_stations: np.ndarray) -> np.ndarray:
         """Move stations so that every wing section lies on a panel boundary."""
 
-        sections = self.wingSections (all_reduced=True)
+        sections = self.wingSections_mesh
         section_yn = np.array ([section.xn for section in sections])
 
         if len (section_yn) > len (yn_stations):
@@ -722,6 +714,9 @@ class Mesh_Strategy_Smooth (Mesh_Strategy):
         """Return globally distributed stations from root to the retained tip."""
 
         self._apply_cn_ratio_min ()
+
+        # remove sections that are below the minimum tip chord
+        self._clean_sections_cn_tip_min ()
 
         yn_max = self.yn_max() 
 
@@ -773,7 +768,7 @@ class Planform_Mesh:
 
     def __repr__(self) -> str:
         # overwrite to get a nice print string
-        return f"<{type(self).__name__}>"
+        return f"<{type(self).__name__} {self._strategy}>"
 
     def _as_dict (self) -> dict:
         """Serialize mesh settings for the owning wing's parameter data."""
@@ -815,10 +810,10 @@ class Planform_Mesh:
         """Return the parent planform's root chord."""
         return self.parent_planform.chord_root
 
-
-    def wingSections_reduced (self) -> list[WingSection]:
+    @property
+    def wingSections_mesh (self) -> list[WingSection]:
         """Return sections that remain within the mesh's configured tip extent."""
-        return self.strategy.wingSections (all_reduced=True)
+        return self.strategy.wingSections_mesh
 
 
     @property
@@ -868,13 +863,13 @@ class Planform_Mesh:
         return self._strategies[Mesh_Strategy_Smooth.name]
 
 
-    def create_mesh (self) -> tuple[np.ndarray, np.ndarray]:
+    def create_mesh (self) -> tuple[np.ndarray, np.ndarray, list]:
         """Return the full mesh as a tuple of spanwise and chordwise stations.
 
         Returns:
-            A tuple containing:
-                - Spanwise station coordinates in planform units from root to mesh tip.
-                - Chordwise station coordinates at every spanwise station, indexed as ``[y_station, x_station]``.
+            - Spanwise station coordinates in planform units from root to mesh tip.
+            - Chordwise station coordinates at every spanwise station, indexed as ``[y_station, x_station]``.
+            - List of sections used for mesh generation.
         """
 
         t0 = perf_counter ()
@@ -883,20 +878,16 @@ class Planform_Mesh:
         for section in self.wingSections[:]:
             if section.is_for_panels:
                 self.wingSections.delete (section)
-        wingSections_before = self.wingSections[:] 
 
         y_stations = self.strategy.y_stations ()
+
         t1 = perf_counter ()
+
         x_stations = self.strategy.x_stations_for (y_stations)
-
-
-        # Refresh polar sets if wing sections have changed
-        if wingSections_before != self.wingSections:
-            self.wingSections.refresh_polar_sets ()
 
         logger.debug (f"{self} create_mesh y: {t1 - t0:.5f}s x: {perf_counter () - t1:.5f}s")
 
-        return y_stations, x_stations
+        return y_stations, x_stations, self.wingSections_mesh
 
 
     def reset (self):

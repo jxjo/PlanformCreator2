@@ -742,7 +742,7 @@ class Dialog_Rename (Dialog_Modal):
             MessageBox.error (self, "Rename Planform", "Please enter a planform name without file extension '.pc2'.")
             return False
 
-        if fileName_new.lower() == self.wing.parm_fileName_stem.lower():
+        if fileName_new.lower() == self.wing.parm_path.stem.lower():
             MessageBox.error(self, "Rename Planform", "The new planform name is identical to the current name.")
             return False
 
@@ -769,18 +769,18 @@ class Dialog_Rename (Dialog_Modal):
         if not self._check_fileName_new (self.fileName_new):
             return
         
-        old_name = self.wing.parm_fileName
+        old_name = self.wing.parm_path.name
         self.wing.set_parm_fileName_new (self.fileName_new)
 
-        if old_name != self.wing.parm_fileName:
+        if old_name != self.wing.parm_path.name:
 
             self.close()
 
-            msg = f"Planform renamed from <b>{old_name}</b> to <b>{self.wing.parm_fileName}</b>"
+            msg = f"Planform renamed from <b>{old_name}</b> to <b>{self.wing.parm_path.name}</b>"
             self._toast_message(msg, toast_style=style.GOOD)
 
         else:
-            msg = f"Rename planform from <b>{old_name}</b> to <b>{self.wing.parm_fileName}</b> failed."
+            msg = f"Rename planform from <b>{old_name}</b> to <b>{self.wing.parm_path.name}</b> failed."
             MessageBox.error (self,"Rename Planform", msg, min_width=300)
             self.close()
 
@@ -1450,11 +1450,11 @@ class Dialog_Edit_Paneling (Dialog_Modal):
                     toolTip=tip)
             FieldF (l, r, 4, width=70, step=5, lim=(5, 100), dec=0, unit="%",
                     obj=strategy, prop=Mesh_Strategy.cn_ratio_min,
-                    hide=lambda: not bool(self.mesh.strategy.cn_ratio_min),
+                    hide=lambda: self.mesh.strategy.cn_ratio_min is None,
                     toolTip=tip)
             Label (l, r, 4, get=lambda: f"currently {self.mesh.strategy.cn_ratio_cur:.0%}",
                     colSpan=2, style=style.COMMENT,
-                    hide=lambda: bool(self.mesh.strategy.cn_ratio_min))
+                    hide=lambda: not self.mesh.strategy.cn_ratio_min is None)
             r += 1
 
             tip = ("Insert panel-only wing sections when the paneled trapezoid differs\n"
@@ -1466,11 +1466,11 @@ class Dialog_Edit_Paneling (Dialog_Modal):
                     toolTip=tip)
             FieldF (l, r, 4, width=70, step=0.5, lim=(0.5, 50), dec=1, unit="%",
                     obj=lambda: trapezoidal, prop=Mesh_Strategy_Trapezoidal.cn_diff_max,
-                    hide=lambda: self.mesh.strategy.is_smooth or self.is_planform_trapezoidal or not bool(trapezoidal.cn_diff_max),
+                    hide=lambda: self.mesh.strategy.is_smooth or self.is_planform_trapezoidal or trapezoidal.cn_diff_max is None,
                     toolTip=tip)
             Label (l, r, 4, get=lambda: f"currently {trapezoidal.cn_diff:.1%}",
                     colSpan=2, style=style.COMMENT,
-                    hide=lambda: self.mesh.strategy.is_smooth or self.is_planform_trapezoidal or bool(trapezoidal.cn_diff_max))
+                    hide=lambda: self.mesh.strategy.is_smooth or self.is_planform_trapezoidal or not trapezoidal.cn_diff_max is None)
             r += 1
 
             tip = ("Avoid very narrow spanwise panels by enforcing a minimum panel width.")
@@ -1479,11 +1479,11 @@ class Dialog_Edit_Paneling (Dialog_Modal):
                     toolTip=tip)
             FieldF (l, r, 4, width=70, step=0.5, lim=(0.5, 10), dec=1, unit="%",
                     obj=strategy, prop=Mesh_Strategy.width_min_targ,
-                    hide=lambda: not bool(self.mesh.strategy.width_min_targ),
+                    hide=lambda: self.mesh.strategy.width_min_targ is None,
                     toolTip=tip)
             Label (l, r, 4, get=lambda: f"currently {self.mesh.strategy.width_min_cur:.1%}",
                     colSpan=2, style=style.COMMENT,
-                    hide=lambda: bool(self.mesh.strategy.width_min_targ))
+                    hide=lambda: not self.mesh.strategy.width_min_targ is None)
             r += 1
 
             tip = ("Cut off very small tip chords to avoid panels with very low Reynolds numbers.\n\n"
@@ -1495,11 +1495,11 @@ class Dialog_Edit_Paneling (Dialog_Modal):
                     toolTip=tip)
             FieldF (l, r, 4, width=70, step=1, lim=(1, 50), dec=1, unit="%",
                     obj=strategy, prop=Mesh_Strategy.cn_tip_min,
-                    hide=lambda: not bool(self.mesh.strategy.cn_tip_min),
+                    hide=lambda: self.mesh.strategy.cn_tip_min is None,
                     toolTip=tip)
             Label (l, r, 4, get=lambda: f"currently {self.mesh.strategy.cn_tip_cur:.1%}",
                     colSpan=2, style=style.COMMENT,
-                    hide=lambda: bool(self.mesh.strategy.cn_tip_min))
+                    hide=lambda: not self.mesh.strategy.cn_tip_min is None)
 
             r += 1
             l.setRowStretch (r, 1)
@@ -1525,6 +1525,7 @@ class Dialog_Edit_Paneling (Dialog_Modal):
 
     @property
     def activated_cn_tip_min (self) -> bool:
+        print (f"activated_cn_tip_min: {self.mesh.strategy.cn_tip_min}")
         return self.mesh.strategy.cn_tip_min is not None
 
     def set_activated_cn_tip_min (self, aBool):

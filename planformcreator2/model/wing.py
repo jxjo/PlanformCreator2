@@ -38,9 +38,9 @@ from airfoileditor.model.polar_set          import Polar_Definition
 from airfoileditor.model.xo2_driver         import Worker
 
 from .VLM_wing                              import VLM_Wing
-from .planform_mesh                         import Planform_Mesh
+from .planform_mesh                         import Planform_Mesh, Mesh_Strategy_Smooth
 from .image_definition                      import Image_Definition
-from .planform                              import (Planform, N_Distrib_Bezier,
+from .planform                              import (Planform, N_Distrib_Bezier, WingSections,
                                                     N_Distrib_Trapezoid, N_Distrib_Elliptical)
 
 
@@ -60,6 +60,8 @@ type Array      = npt.NDArray[np.float64]
 AIRFOILS_DIR_SUFFIX     = "_airfoils"
 TEMP_STRAK_DIR          = "strak_temp"
 FILENAME_NEW            = "new.pc2"
+PARAMETER_FILE_VERSION  = 5
+
 
 class Wing:
     """ 
@@ -72,42 +74,58 @@ class Wing:
 
     unit = 'mm'
 
-    def __init__(self, parm_filePath : str|None, defaultDir : str|None = None):
+    is_reference_wing = False
+
+
+    def __init__(self, parm_filePath : str|None,
+                 parameters : Parameters | dict | None = None,
+                 defaultDir : str|None = None):
         """
         Init wing from parameters in parm_filePath
 
         Args:
             parm_filePath (str): Path to the parameter file
+            parameters (Parameters): alternative dict containing wing parameters
             defaultDir (str): Default directory if parm_filePath is None or not valid
         """
 
         if parm_filePath and not os.path.isfile(parm_filePath):
             # non existing pc2 file
             logger.error (f".pc2 file '{parm_filePath}' does not exist (anymore) - creating default wing")
-            self.pathHandler   = PathHandler (workingDir=defaultDir)
+            self._set_working_dir(defaultDir)
             self._parm_pathFileName = FILENAME_NEW
             p = {}
 
         else:
 
-            p = Parameters (parm_filePath)
+            # get parameter dict either from file or from parameters or None (default wing)
+            if parm_filePath is None and parameters is not None:
+                p = parameters
+            else:
+                p = Parameters (parm_filePath)
+
             if not p:
                 logger.info (f'No input data - a default wing will be created in: {defaultDir}')
-                # handler for the relative path to the parameter file (working directory)
-                self.pathHandler   = PathHandler (workingDir=defaultDir)
+                self._set_working_dir(defaultDir)
                 self._parm_pathFileName = FILENAME_NEW
             else: 
+                if parm_filePath:
+                    self._set_working_dir_from_file(parm_filePath)
+                    self._parm_pathFileName = parm_filePath
+                    from_text = parm_filePath 
+                else: 
+                    self._set_working_dir(defaultDir)
+                    self._parm_pathFileName = FILENAME_NEW
+                    from_text = "Parameter Dictionary"
+
                 parm_version = fromDict (p, "pc2_version", 1)
-                logger.info (f"Reading wing parameters from '{parm_filePath}' (file version: {parm_version})")
+                logger.info (f"Reading wing parameters from '{from_text}' (file version: {parm_version})")
 
                 if parm_version == 1:
                     p = self._convert_to_v2 (p)
                 elif parm_version == 2:
                     p = self._convert_to_v5 (p)
 
-                # handler for the relative path to the parameter file (working directory)
-                self.pathHandler = PathHandler (onFile=parm_filePath)
-                self._parm_pathFileName = parm_filePath
 
         # ensure airfoil dir (tmp dir will be created in strak)
         self.create_airfoils_dir()
@@ -134,13 +152,12 @@ class Wing:
 
         # reference planforms and background image  
 
-        self._planform_elliptical   = None
-        self._ref_pc2_file          = p.get ("reference_pc2_file", None)
+        self._ref_pc2_files         = self._ref_pc2_files_from_dict(p)
         self._background_image      = None
 
         # mesh derived from self planform
 
-        self._planform_mesh         = None
+        self._planform_mesh         = Planform_Mesh (self.planform, dataDict = fromDict (p, "panels", {}))
 
         # will hold the handler which manages export including its parameters
 
@@ -162,7 +179,7 @@ class Wing:
 
         # if new wing save initial dataDict for change detection on save 
 
-        if self.is_new_wing:
+        if self.is_new_wing and not self.is_reference_wing:
             self._parms = self._save()
         
         logger.info (str(self)  + ' created')
@@ -177,11 +194,9 @@ class Wing:
     def _save (self) -> Parameters:
         """ returns the parameters of self as new Parameters"""
 
-        VERSION = 5
-
         p = Parameters ()
 
-        p.set ("pc2_version", VERSION)
+        p.set ("pc2_version",        PARAMETER_FILE_VERSION)
         p.set ("wing_name",          self._name) 
         p.set ("description",        self._description) 
         p.set ("fuselage_width",     self._fuselage_width) 
@@ -190,10 +205,9 @@ class Wing:
         p.set ("airfoil_use_nick",   self._airfoil_use_nick)
         p.set ("airfoil_nick_prefix",self._airfoil_nick_prefix) 
         p.set ("airfoil_nick_base",  self._airfoil_nick_base) 
-        # Convert reference file path to forward slashes for cross-platform storage
-        reference_file = self._ref_pc2_file.replace(os.sep, '/') if self._ref_pc2_file else None
-        p.set ("reference_pc2_file", reference_file)
         p.set ("background_image",   self.background_image._as_dict())
+
+        p.set ("reference_pc2_files", self._ref_pc2_files_as_dict())
 
         # polar definitions - do not save if there is only a default definition 
         def_list = []
@@ -223,6 +237,30 @@ class Wing:
             p.set ("csv", self._exporter_csv._as_dict()) 
 
         return p
+
+
+    def _ref_pc2_files_as_dict (self) -> list[dict]:
+        """ Return reference PC2 files as dictionaries for saving. """
+
+        pc2_files = []
+        working_dir = self.workingDir_path
+
+        for ref_path, scale_mode in self.ref_pc2_files:
+            ref_path = Path(ref_path)
+            if not ref_path.is_absolute():
+                ref_path = working_dir / ref_path
+
+            ref_path_to_save = ref_path.resolve(strict=False)
+            try:
+                ref_path_to_save = ref_path_to_save.relative_to(working_dir)
+            except ValueError:
+                pass
+
+            pc2_files.append({
+                "path": ref_path_to_save.as_posix(),
+                "scale_mode": str(scale_mode)})
+
+        return pc2_files
 
 
     def _convert_to_v2 (self, dataDict :dict) -> dict:
@@ -377,6 +415,40 @@ class Wing:
         return dict_v5
 
 
+    def _ref_pc2_files_from_dict (self, dataDict: dict):
+        """ load reference PC2 files from dataDict """
+
+        pc2_files_list : list = fromDict (dataDict, "reference_pc2_files", [])
+
+        # compatibility for older version wth a single reference PC2 file specified as a string
+        if not pc2_files_list:
+            single_pc2_file = fromDict (dataDict, "reference_pc2_file", [])
+            if single_pc2_file:
+                pc2_files_list.append({"path": single_pc2_file, "scale_mode": Scale_Mode.NO_SCALE.value})
+
+        # read list and convert to tuples (path, scale_mode)
+        ref_pc2_files = []
+        item_dict : dict
+        for item_dict in pc2_files_list:
+            path       = Path(fromDict(item_dict, "path", ""))
+            scale_mode_str = fromDict(item_dict, "scale_mode", Scale_Mode.NO_SCALE.value)
+            if scale_mode_str not in {mode.value for mode in Scale_Mode}:
+                logger.warning (f"Invalid reference-wing scale mode '{scale_mode_str}' for '{path}'")
+                scale_mode = Scale_Mode.NO_SCALE
+            else:
+                scale_mode = Scale_Mode(scale_mode_str)
+            # check if path is relative 
+            if not path.is_absolute():
+                path = self.workingDir_path / path
+            if not path.exists():
+                logger.warning (f"Reference PC2 file not found: {path}")
+                continue
+            
+            ref_pc2_files.append((path, scale_mode))
+
+        return ref_pc2_files
+
+
     # ---Properties --------------------- 
 
     @property
@@ -388,7 +460,7 @@ class Wing:
     @property
     def is_new_wing(self) -> bool:
         """ True if wing has not been saved yet (new wing) """
-        return self.parm_fileName == FILENAME_NEW
+        return self.parm_path.name == FILENAME_NEW
 
     @property
     def description (self) -> str: 
@@ -505,34 +577,52 @@ class Wing:
 
     @property
     def planform_mesh (self) -> Planform_Mesh:
-        """ 
-        mesh derived from self.planform as the base for Xflr5, FLZ, and VLM"""
-
-        if self._planform_mesh is None:     
-            self._planform_mesh = Planform_Mesh (self.planform, dataDict = fromDict (self._parms, "panels", {})) 
-
+        """ mesh derived from self.planform as the base for Xflr5, FLZ, and VLM"""
         return self._planform_mesh
-
-
-    @property
-    def planform_elliptical (self) -> 'Planform':
-        """ an elliptical reference norm planform having same span and chord reference """
-
-        if self._planform_elliptical is None:      
-            self._planform_elliptical = Planform (self, dataDict = self._parms, 
-                                                        chord_style = N_Distrib_Elliptical.name,
-                                                        chord_ref = self.planform.n_chord_ref )
-        return self._planform_elliptical
     
 
     @property
-    def ref_pc2_file (self) -> str:
-        """ filename of optional PC2 reference planform"""
-        return self._ref_pc2_file
+    def ref_pc2_files (self) -> list[tuple[Path, 'Scale_Mode']]:
+        """ list of PC2 reference planforms as (Path, Scale_Mode) tuples"""
+        return self._ref_pc2_files
 
-    def set_ref_pc2_file (self, pathFilename : str) -> str:
-        if pathFilename is None or os.path.isfile (pathFilename):
-            self._ref_pc2_file = pathFilename
+    @property
+    def ref_wing_names (self) -> list[str]:
+        """ Available reference wings, with the built-in elliptical wing first. """
+        names = [path.name for path , _ in self.ref_pc2_files]
+        names.append (Reference_Wing_Elliptical.name)
+        return names
+
+
+    def get_ref_pc2_file (self, name: str) -> tuple[Path, 'Scale_Mode'] | None:
+        """ Return the configured reference PC2 file matching its filename stem. """
+
+        for ref_path, scale_mode in self.ref_pc2_files:
+            if ref_path.name == name:
+                return ref_path, scale_mode
+        return None
+
+
+    def update_ref_pc2_files (self, ref_wing: 'Reference_Wing', remove: bool = False):
+        """ Add, update, or remove a reference PC2 file entry. """
+
+        ref_path = ref_wing.parm_path_abs.resolve(strict=False)
+
+        for index, (stored_path, _) in enumerate(self._ref_pc2_files):
+            candidate_path = Path(stored_path)
+            if not candidate_path.is_absolute():
+                candidate_path = self.workingDir_path / candidate_path
+            candidate_path = candidate_path.resolve(strict=False)
+
+            if candidate_path == ref_path:
+                if remove:
+                    del self._ref_pc2_files[index]
+                else:
+                    self._ref_pc2_files[index] = (stored_path, ref_wing.scale_mode)
+                return
+
+        if not remove:
+            self._ref_pc2_files.append((ref_path, ref_wing.scale_mode))
 
 
     def handle_airfoil_change (self):
@@ -558,13 +648,6 @@ class Wing:
 
             # create new VLM_Wing - mesh with current wing sections will be created if needed
             self._vlm_wing = VLM_Wing (self)
-
-            # ensure all wing sections have straked airfoils
-            if not self.planform.wingSections.strak_done:
-                self.planform.wingSections.do_strak (geometry_class=GEO_BASIC)
-
-            # ensure all wingSections have a polar with the current re
-            self.planform.wingSections.refresh_polar_sets (reset=False)
 
         return self._vlm_wing
 
@@ -684,39 +767,45 @@ class Wing:
         return self._exporter_airfoils     
 
     @property
-    def parm_pathFileName (self):
-        """ path and filename of the parameter file like './my_dir/VJX.pc2' relative to working dir"""
-        return self._parm_pathFileName 
+    def parm_path (self) -> Path:
+        """ path of the parameter file like './my_dir/VJX.pc2' relative to working dir"""
+        return Path(self._parm_pathFileName) if self._parm_pathFileName else Path()
 
     @property
-    def parm_fileName (self):
-        """ filename of the parameter file like 'VJX.pc2' """
-        return os.path.basename(self._parm_pathFileName) if self._parm_pathFileName else ''
-
-
-    @property
-    def parm_fileName_stem (self):
-        """ stem of fileName like 'VJX' """
-        return Path(self.parm_fileName).stem if self.parm_fileName else ''
+    def parm_path_abs (self) -> Path:
+        """ absolute path of the parameter file like 'c:/my_dir/VJX.pc2' relative to working dir"""
+        if self.workingDir and not self.parm_path.is_absolute():
+            return self.workingDir_path / self.parm_path
+        return self.parm_path
 
 
     @property
-    def parm_pathFileName_abs (self):
-        """ absolute path and filename of the parameter file like 'c:/my_dir/VJX.pc2' """
-        if self.workingDir:
-            pathFileName_abs =  os.path.join(self.workingDir, self.parm_pathFileName)
-        else: 
-            pathFileName_abs =  self.parm_pathFileName
-        
-        if not os.path.isabs (pathFileName_abs):
-            pathFileName_abs = os.path.abspath(pathFileName_abs)       # will insert cwd 
-        return pathFileName_abs
-
-
-    @property
-    def workingDir(self): 
+    def workingDir(self) -> str:
         """directory of the parameter file"""
-        return self.pathHandler.workingDir
+        return str(self._working_dir)
+
+    @property
+    def workingDir_path (self) -> Path:
+        """Working directory as an absolute pathlib Path."""
+        return self._working_dir
+
+
+    def _set_working_dir(self, working_dir: str | Path | None = None):
+        """Set the working directory, creating it when it does not exist."""
+        if working_dir is None or not str(working_dir):
+            working_dir = Path.cwd()
+
+        working_dir = Path(working_dir).resolve(strict=False)
+        working_dir.mkdir(parents=True, exist_ok=True)
+        self._working_dir = working_dir
+
+
+    def _set_working_dir_from_file(self, file_path: str | Path | None):
+        """Set the working directory to the directory containing a file."""
+        if file_path is None or not str(file_path):
+            self._set_working_dir()
+        else:
+            self._set_working_dir(Path(file_path).parent)
 
 
     @property
@@ -771,13 +860,9 @@ class Wing:
         if not self.background_image.pathFilename:
             return True             # no background image defined - nothing to do 
 
-        target_path = target_dir
-
-        current_dir_path = Path(self.parm_pathFileName_abs).parent
-        current_dir_abs  = current_dir_path.resolve(strict=False)
-        target_dir_abs   = target_path.resolve(strict=False)
-
-        if os.path.normcase(str(current_dir_abs)) == os.path.normcase(str(target_dir_abs)):
+        target_dir = Path(target_dir)
+        current_dir = self.parm_path_abs.parent
+        if current_dir.resolve(strict=False) == target_dir.resolve(strict=False):
             return True             # same dir - nothing to do 
 
         source_image_path = Path(self.background_image.pathFilename_abs)
@@ -791,15 +876,15 @@ class Wing:
             return True             # do not copy absolute path - just keep the path as is
 
         try:
-            new_image_path = target_dir_abs / image_rel_path
+            new_image_path = target_dir / image_rel_path
             new_image_path.parent.mkdir(parents=True, exist_ok=True)
             if not new_image_path.is_file():
                 shutil.copy2(source_image_path, new_image_path)
-            logger.info (f"Copied background image '{self.background_image.pathFilename_abs}' to '{target_dir_abs}'")
+            logger.info (f"Copied background image '{self.background_image.pathFilename_abs}' to '{target_dir}'")
             return True 
 
         except Exception as e:
-            logger.error (f"Copying background image '{self.background_image.pathFilename_abs}' to '{target_path}' failed: {e}")
+            logger.error (f"Copying background image '{self.background_image.pathFilename_abs}' to '{target_dir}' failed: {e}")
             return False
 
 
@@ -906,10 +991,10 @@ class Wing:
 
         # get new absolute path and filename of the parameter file
         if newPathFilename is None:
-            pathFileName_abs = Path(self.parm_pathFileName_abs)
+            pathFileName_abs = self.parm_path_abs
         else:
             new_path = Path(newPathFilename)
-            pathFileName_abs = new_path if new_path.is_absolute() else Path(self.workingDir) / new_path
+            pathFileName_abs = new_path if new_path.is_absolute() else self.workingDir_path / new_path
  
         # set new location of parms file and save parms 
         parms.set_pathFileName (str(pathFileName_abs))
@@ -938,7 +1023,7 @@ class Wing:
                 self._copy_background_image (target_dir)
 
                 # set the current working Dir to the dir of the new saved parameter file            
-                self.pathHandler.set_workingDirFromFile (str(pathFileName_abs))
+                self._set_working_dir_from_file(pathFileName_abs)
                 self._parm_pathFileName = pathFileName_abs.name         # only the file name relative to working dir
 
                 # reinit planform with wing sections having new airfoils 
@@ -957,16 +1042,15 @@ class Wing:
             fileName_stem: new file name like 'my_wing' with extension '.pc2' added automatically
         """
 
-        pathFileName_abs = self.parm_pathFileName_abs
+        parm_path = self.parm_path_abs
 
         # first rename airfoils dir if existing 
-        new_airfoils_dir = os.path.join (os.path.dirname(pathFileName_abs), 
-                                        fileName_stem + AIRFOILS_DIR_SUFFIX)    
-        old_airfoils_dir = self.airfoils_dir
+        new_airfoils_dir = parm_path.parent / (fileName_stem + AIRFOILS_DIR_SUFFIX)
+        old_airfoils_dir = Path(self.airfoils_dir)
 
-        if os.path.isdir(old_airfoils_dir):
+        if old_airfoils_dir.is_dir():
             try:
-                if os.path.isdir(new_airfoils_dir):
+                if new_airfoils_dir.is_dir():
                     shutil.rmtree(new_airfoils_dir, ignore_errors=True)
                 shutil.move(old_airfoils_dir, new_airfoils_dir)
             except Exception as e:
@@ -975,21 +1059,21 @@ class Wing:
 
         # rename param file name
 
-        new_pathFileName_abs = os.path.join (os.path.dirname(pathFileName_abs), fileName_stem + ".pc2")
-        if os.path.isfile (pathFileName_abs):
+        new_parm_path = parm_path.with_name(fileName_stem + ".pc2")
+        if parm_path.is_file():
             try:
-                os.rename (pathFileName_abs, new_pathFileName_abs)
+                parm_path.rename(new_parm_path)
             except Exception as e:
-                logger.error(f"Renaming parameter file '{pathFileName_abs}' to '{new_pathFileName_abs}' failed: {e}")
+                logger.error(f"Renaming parameter file '{parm_path}' to '{new_parm_path}' failed: {e}")
                 # rollback airfoils dir rename
-                if os.path.isdir(new_airfoils_dir):
+                if new_airfoils_dir.is_dir():
                     try:
                         shutil.move(new_airfoils_dir, old_airfoils_dir)
                     except Exception as e2:
                         logger.error(f"Rolling back airfoils dir rename from '{new_airfoils_dir}' to '{old_airfoils_dir}' failed: {e2}")
                 return
 
-            self._parm_pathFileName = fileName_stem + ".pc2"
+            self._parm_pathFileName = new_parm_path.name
 
 
     def has_changed (self):
@@ -1064,14 +1148,21 @@ class Scale_Mode (StrEnum):
         NO_SCALE = \
                     "No scaling"
         MATCH_SPAN_AND_AREA = \
-                    "Match span and area"
+                    "Span & Area"
         MATCH_ROOT_CHORD_AND_AREA = \
-                    "Match root chord and area"
+                    "Root & Area"
         MATCH_ROOT_CHORD_AND_SPAN = \
-                    "Match root chord and span"
+                    "Root & Span"
 
 
 class Reference_Wing (Wing):
+
+    """ 
+    Reference wing class that allows scaling of a reference PC2 file
+    relative to a parent wing 
+    """
+
+    is_reference_wing = True
 
     def __init__ (self, 
                   parm_filePath: str,
@@ -1087,6 +1178,7 @@ class Reference_Wing (Wing):
 
         super().__init__(parm_filePath, **kwargs)
 
+        # original area of the planform (normed)
         self._area_normed = self.planform.calc_area (normed=True)
 
         # now set the desired scale mode
@@ -1095,17 +1187,38 @@ class Reference_Wing (Wing):
         # apply updated polar sets (fitting to new scale)
         self.planform.wingSections.refresh_polar_sets()
 
+    @override
+    def _save (self) -> Parameters:
+        """ returns the parameters of self as new Parameters"""
+        # no save for reference wing
+        p = Parameters ()
+        return p
+
 
     @property
     def parent_wing (self) -> Wing:
         return self._parent_wing
 
     @property
+    def name (self) -> str:
+        return self.parm_path.name
+
+
+    @property
     def scale_mode (self) -> Scale_Mode:
+        """ defines how self is scaled to parent wing"""
         return self._scale_mode
 
-    def set_scale_mode (self, scale_mode: Scale_Mode):
+    def set_scale_mode (self, scale_mode: Scale_Mode | str):
+
+        if isinstance(scale_mode, str):
+            scale_mode = Scale_Mode(scale_mode)
+
         self._scale_mode = Scale_Mode(scale_mode)
+
+    @property
+    def scale_mode_names (self) -> list[str]:
+        return [mode.value for mode in Scale_Mode]
 
 
     @override
@@ -1129,7 +1242,7 @@ class Reference_Wing (Wing):
     @override
     @property
     def chord_root (self) -> float:
-        """ returns root chord of the reference wing based on the scaling mode """
+        """ root chord of the reference wing based on the scaling mode """
 
         if self.scale_mode == Scale_Mode.NO_SCALE:
             return self._chord_root
@@ -1144,26 +1257,103 @@ class Reference_Wing (Wing):
         raise ValueError (f"Unsupported reference-wing scale mode: {self.scale_mode}")
 
 
+    def polar_def_scaled_to_ref (self, polar_def: Polar_Definition) -> Polar_Definition:
+        """ returns a polar definition scaled to the reference wing from parent wing """
+
+        if self._scale_mode == Scale_Mode.MATCH_SPAN_AND_AREA:
+            re_factor = self.chord_root / self._parent_wing.chord_root
+            polar_def_new = Polar_Definition (polar_def._as_dict())
+            polar_def_new.set_re_asK (polar_def.re_asK * re_factor)
+            return polar_def_new
+        else:
+            return polar_def
+
+
     @override
     @property
     def polar_definitions (self) -> list [Polar_Definition]:
-        """ list of actual polar definitions """
+        """ list of actual polar definitions (scaled to self if needed)"""
 
         # take polar definitions from parent wing
         polar_defs_parent = self._parent_wing.polar_definitions
 
         # in case of different chord, adapt Re to have constant speed assumption
         if self._scale_mode == Scale_Mode.MATCH_SPAN_AND_AREA:  
-
             polar_defs   = []
-            re_factor = self.chord_root / self._parent_wing.chord_root
             for polar_def in polar_defs_parent:
-                # create copy of polar definition with adjusted Re
-                polar_def_new = Polar_Definition (polar_def._as_dict())
-                polar_def_new.set_re_asK (polar_def.re_asK * re_factor)
-                polar_defs.append (polar_def_new)
-                print (f"Original Re: {polar_def.re_asK}, Adjusted Re: {polar_def_new.re_asK}")
+                polar_defs.append (self.polar_def_scaled_to_ref(polar_def))
         else:
             polar_defs = polar_defs_parent
 
         return polar_defs
+
+
+    def refresh_wingSections(self):
+        """ Refresh the wing sections from the parent wing. """
+
+        # to override in subclasses if needed
+        pass                                        # self is master of wing sections
+
+
+
+class Reference_Wing_Elliptical (Reference_Wing):
+
+    """ 
+    Reference wing class having an elliptical planform and scaled 
+    to a parent wing 
+    """
+
+    name = "Elliptical"
+
+    def __init__ (self, parent_wing : Wing,
+                  scale_mode = Scale_Mode.MATCH_SPAN_AND_AREA):
+
+        p_parent = parent_wing._parms
+        p        = Parameters()
+
+        p.set ("pc2_version", PARAMETER_FILE_VERSION)
+        p.set ("wing_name", "Elliptical")
+        p.set ("description", "This is a pure elliptical reference wing")
+        p.set ("halfspan", 1000.0)
+        p.set ("chord_root", 200.0)
+
+        p.set ("chord_distribution", {"chord_style": N_Distrib_Elliptical.name})
+        p.set ("wingSections", self._sectionsDict_of(parent_wing))
+        p.set ("panels", {"strategy": Mesh_Strategy_Smooth.name, Mesh_Strategy_Smooth.name: {"cn_tip_min": 0.05}})
+
+        working_dir = parent_wing.workingDir
+
+        super().__init__(None, parent_wing, 
+                         parameters=p, 
+                         scale_mode=scale_mode, 
+                         defaultDir=working_dir)
+
+    @override
+    @property
+    def airfoils_dir_rel(self) -> str:
+        """ Returns the relative directory of airfoils from the parent wing. """
+        return self._parent_wing.airfoils_dir_rel
+
+
+    def _sectionsDict_of (self, parent_wing: Wing) -> list [dict]:
+        """ dict list of the relevant wing sections of parent wing """
+
+        parent_sections = parent_wing.planform.wingSections.without_for_panels
+
+        sections_list = []
+        for section in parent_sections:
+            if section.has_real_airfoil:
+                sections_list.append(section._as_dict())
+        return sections_list
+
+
+    @override
+    def refresh_wingSections(self):
+        """ Refresh the wing sections from the parent wing. """
+
+        # create new WingSections object from the parent wing's sections
+        wingSections = WingSections (self.planform, sectionsDict = self._sectionsDict_of(self._parent_wing))
+        wingSections.check_n_repair()
+        wingSections.refresh_polar_sets()
+
+        self.planform._wingSections = wingSections

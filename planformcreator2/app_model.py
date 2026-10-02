@@ -29,7 +29,7 @@ from airfoileditor.model.polar_set          import Polar_Task, Polar_Definition,
 
 # --- the real model imports
 
-from .model.wing             import Wing, Reference_Wing, Scale_Mode, FILENAME_NEW
+from .model.wing             import Wing, Reference_Wing, Reference_Wing_Elliptical, Scale_Mode, FILENAME_NEW
 from .model.planform         import WingSection
 from .model.VLM_wing         import VLM_OpPoint, VLM_Polar
 
@@ -91,7 +91,6 @@ class App_Model (QObject):
         self._wing : Wing                   = None      # actual wing model
         self._cur_wingSection : WingSection = None      # current selected wing section
 
-        self._ref_wing_path : Path          = None      # path to the reference wing file
         self._ref_wing : Wing               = None      # reference wing of the current planform    
 
         self._cur_vlm_alpha : float         = None      # current VLM opPoint alpha
@@ -292,27 +291,88 @@ class App_Model (QObject):
 
 
     @property
-    def ref_wing_path (self) -> Path | None:
-        """ path to the reference wing file """
+    def ref_wings_name (self) -> list[str]:
+        """ list of available reference wing names """
+        return self.wing.ref_wing_names
 
-        if self._ref_wing_path is None and self.wing.ref_pc2_file:
-            self._ref_wing_path = Path(self.wing.ref_pc2_file)
-        return self._ref_wing_path
-
-
-    @property
-    def ref_wing (self) -> Wing:
-        """ reference wing of the current planform """
-
-        if self._ref_wing is None and self.ref_wing_path:
-            self._ref_wing = Reference_Wing (self.ref_wing_path, self.wing,
-                                             scale_mode=Scale_Mode.MATCH_SPAN_AND_AREA)
-        return self._ref_wing
 
     @property
     def ref_wing_name (self) -> str:
         """ name of the reference wing """
-        return self.ref_wing.name if self._ref_wing else None
+        if self._ref_wing:
+            return self.ref_wing.name
+        else:
+            return None
+
+
+    def add_ref_pc2_file (self, ref_path: str):
+        """ add a reference PC2 file and make this the current reference wing """
+
+        if not Path(ref_path).is_file():
+            return
+        
+        scale_mode = self.ref_wing.scale_mode if self._ref_wing else Scale_Mode.NO_SCALE
+
+        self._ref_wing = Reference_Wing (ref_path, self.wing, scale_mode=scale_mode)
+
+        self.wing.update_ref_pc2_files(self.ref_wing)
+        self.notify_ref_wing_changed()
+
+
+    def remove_ref_pc2_file (self):
+        """ remove the current ref file and make the next ref wing the current one """
+
+        if not self._ref_wing or self._ref_wing.name == Reference_Wing_Elliptical.name:
+            return
+
+        # index of current reference wing 
+        cur_index = self.ref_wings_name.index(self.ref_wing.name) if self.ref_wing else -1
+
+        self.wing.update_ref_pc2_files(self.ref_wing, remove=True)
+
+        # set the next reference wing as the current one
+        next_index = cur_index if cur_index < len(self.ref_wings_name) else len(self.ref_wings_name) - 1
+        if next_index >= 0:
+            self.set_ref_wing_name(self.ref_wings_name[next_index])
+            self.notify_ref_wing_changed()
+
+
+    def set_ref_wing_name (self, name: str):
+
+        if not name in self.ref_wings_name:
+            self._ref_wing = None
+        elif name == Reference_Wing_Elliptical.name:
+            self._ref_wing = Reference_Wing_Elliptical (self.wing)
+        else :
+            ref_pc2_file = self.wing.get_ref_pc2_file(name)
+            if ref_pc2_file is not None and ref_pc2_file[0].is_file():
+                ref_path, scale_mode = ref_pc2_file
+                self._ref_wing = Reference_Wing (ref_path, self.wing, scale_mode=scale_mode)
+            else:
+                self._ref_wing = None
+
+        self.notify_ref_wing_changed()
+
+
+    def set_ref_wing_scale_mode (self, scale_mode: Scale_Mode | str):
+        if self._ref_wing:
+            self.ref_wing.set_scale_mode(scale_mode)
+            if not isinstance(self.ref_wing, Reference_Wing_Elliptical):
+                self.wing.update_ref_pc2_files(self.ref_wing)
+            self.notify_ref_wing_changed()
+
+
+    @property
+    def ref_wing (self) -> Reference_Wing:
+        """ reference wing of the current planform """
+        return self._ref_wing
+
+
+    @property
+    def ref_wing_scale_mode (self) -> Scale_Mode:
+        """ scale mode of the reference wing """
+        return self.ref_wing.scale_mode if self._ref_wing else None
+
 
 
     # --- VLM -----
@@ -403,7 +463,9 @@ class App_Model (QObject):
         """ reference VLM polar based on the selected root polar definition """
 
         if self.ref_wing and self.cur_vlm_polar: 
-            return self.ref_wing.vlm_wing.polar_at (self.cur_polar_def)
+            # scale current polar definition to root of the reference wing
+            ref_polar_def = self.ref_wing.polar_def_scaled_to_ref(self.cur_polar_def)
+            return self.ref_wing.vlm_wing.polar_at (ref_polar_def)
         else:
             return None
 
@@ -435,6 +497,8 @@ class App_Model (QObject):
         self._cur_vlm_alpha   = None
         self._cur_polar_def   = None
         self._ensure_cur_polar_def()
+
+        self._ref_wing        = None
 
         self.sig_new_wing.emit()
 
@@ -483,8 +547,7 @@ class App_Model (QObject):
         """ notify self that planform changed """
 
         # if there is a reference wing, we have to reset its vlm_wing to be recalculated
-        if self.ref_wing:
-            self.ref_wing.vlm_wing_reset()
+        self.notify_ref_wing_changed(silent=True)
 
         self.sig_planform_changed.emit()
 
@@ -504,6 +567,11 @@ class App_Model (QObject):
             self.sig_wingSection_changed.emit()
             # just handle new paneling
             self.notify_paneling_changed ()
+
+        # an elliptical ref wing has wing sections of parent
+        if self._ref_wing: 
+            self.ref_wing.refresh_wingSections()               
+            self.sig_planform_changed.emit()            # refresh diagram
 
 
     def notify_airfoil_changed (self):
@@ -530,6 +598,16 @@ class App_Model (QObject):
     def notify_fileName_changed (self):
         """ notify self that file name has changed """
         self.sig_new_wing.emit()                                # refresh title etc.
+
+
+    def notify_ref_wing_changed (self, silent=False):
+        """ notify self that reference wing changed """
+
+        if self._ref_wing:
+            self._ref_wing.vlm_wing_reset()
+
+        if not silent:
+            self.sig_planform_changed.emit()                        # will refresh diagrams
 
 
     @property

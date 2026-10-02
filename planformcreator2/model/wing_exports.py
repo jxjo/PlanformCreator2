@@ -24,7 +24,7 @@ from math                   import atan, pi, isclose
 import xml.etree.ElementTree as ET                              # Xflr5 xml handling
 
 from airfoileditor.base.spline            import Bezier
-from airfoileditor.base.common_utils      import fromDict, toDict, PathHandler 
+from airfoileditor.base.common_utils      import fromDict, toDict
 from airfoileditor.base.dxf_artist        import Dxf_Artist, Cad_Line, Cad_PolyLine, Cad_FitSpline, Cad_Spline, Cad_Text, TextAlign
 from airfoileditor.model.airfoil          import Airfoil, GEO_SPLINE, Flap_Definition
 from airfoileditor.model.airfoil_exports  import Dxf_Airfoil_Artist
@@ -52,7 +52,7 @@ class Exporter_Abstract:
     def __init__(self, wing : Wing, dataDict: dict = None):
  
         self._wing              = wing
-        self._working_dir       = wing.workingDir
+        self._working_dir       = wing.workingDir_path
         self._export_dir        = fromDict (dataDict, "export_dir", None)
         self._clear_export_dir  = False
 
@@ -76,7 +76,7 @@ class Exporter_Abstract:
     @property
     def export_dir_default(self):
         """the default directory for self export - path is relative to current """
-        return self.wing.parm_fileName_stem  + self.EXPORT_DIR_SUFFIX
+        return self.wing.parm_path.stem + self.EXPORT_DIR_SUFFIX
 
 
     @property
@@ -89,7 +89,20 @@ class Exporter_Abstract:
             return self._export_dir
     
     def set_export_dir(self, newStr): 
-        export_dir = PathHandler (workingDir=self._working_dir).relFilePath (newStr)
+        if newStr is None:
+            export_dir = None
+        else:
+            working_dir = self._working_dir
+            export_path = Path(newStr)
+            if not export_path.is_absolute():
+                export_path = working_dir / export_path
+            export_path = export_path.resolve(strict=False)
+
+            try:
+                export_dir = str(export_path.relative_to(working_dir))
+            except ValueError:
+                export_dir = str(export_path)
+
         if export_dir != self.export_dir_default:
             self._export_dir = export_dir
         else:
@@ -98,7 +111,11 @@ class Exporter_Abstract:
     @property
     def export_dir_abs(self):
         """the directory for dxf export including current dir """
-        return PathHandler (workingDir=self._working_dir).fullFilePath (self.export_dir)
+        export_dir = self.export_dir
+        export_path = Path(export_dir)
+        if not export_path.is_absolute():
+            export_path = self._working_dir / export_path
+        return str(export_path.resolve(strict=False))
 
 
     @property
@@ -412,12 +429,12 @@ class Exporter_Xflr5 (Exporter_Abstract):
     
 
     @property
-    def _wingSections_reduced (self) -> list[WingSection]:
-        return self._planform_mesh.wingSections_reduced()
+    def wingSections_reduced (self) -> list[WingSection]:
+        return self._planform_mesh.wingSections_mesh
 
     @property
     def xflr5_filename(self): 
-        return self._wing.parm_fileName_stem + '_wing.xml'
+        return self._wing.parm_path.stem + '_wing.xml'
 
 
     def do_it (self): 
@@ -506,7 +523,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
         # ! x and y are swapped !
         #
 
-        for iSec, section in enumerate(self._wingSections_reduced):
+        for iSec, section in enumerate(self.wingSections_reduced):
             # copy the template
             newSectionXml = deepcopy(sectionTemplateXml)
 
@@ -664,8 +681,8 @@ class Exporter_FLZ (Exporter_Abstract):
 
 
     @property
-    def _wingSections_reduced (self) -> list[WingSection]:
-        return self._planform_mesh.wingSections_reduced()
+    def wingSections_reduced (self) -> list[WingSection]:
+        return self._planform_mesh.wingSections_mesh
 
     @property
     def use_nick(self) -> bool: return self._use_nick
@@ -673,7 +690,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
     @property
     def flz_filename(self): 
-        return self.wing.parm_fileName_stem + '_wing.flz'
+        return self.wing.parm_path.stem + '_wing.flz'
 
 
     def do_it (self): 
@@ -746,7 +763,6 @@ class Exporter_FLZ (Exporter_Abstract):
         def __init__(self, wing : Wing, planform_mesh : Planform_Mesh, index = None):
     
             self._wing        = wing
-            self._working_dir  = wing.workingDir  
             self._planform_mesh  = planform_mesh
             self._index = index
 
@@ -756,8 +772,8 @@ class Exporter_FLZ (Exporter_Abstract):
             return self._planform_mesh.strategy_trapezoidal
 
         @property
-        def _wingSections (self) -> list[WingSection]:
-            return self._planform_mesh.wingSections_reduced()
+        def wingSections (self) -> list[WingSection]:
+            return self._planform_mesh.wingSections_mesh
 
         @property
         def start_tag(self): 
@@ -835,23 +851,23 @@ class Exporter_FLZ (Exporter_Abstract):
         def __init__(self, *args, index=None):
             super().__init__(*args, index)
 
-            self.profil = Exporter_FLZ.PROFIL (*args, self._wingSections[0])
+            self.profil = Exporter_FLZ.PROFIL (*args, self.wingSections[0])
 
             # segments: first right FLZ half wing 
 
             right_segments =[]
-            for i,sec in enumerate(self._wingSections): 
-                if i < len(self._wingSections) - 1:
-                    new_segment = Exporter_FLZ.SEGMENT (*args, sec, self._wingSections[i+1])
+            for i,sec in enumerate(self.wingSections): 
+                if i < len(self.wingSections) - 1:
+                    new_segment = Exporter_FLZ.SEGMENT (*args, sec, self.wingSections[i+1])
                     right_segments.append(new_segment)  
 
             # segments: then left FLZ half wing 
 
             left_segments =[]
-            for i,sec in reversed (list(enumerate(self._wingSections))): 
-                if i < len(self._wingSections) - 1:
+            for i,sec in reversed (list(enumerate(self.wingSections))): 
+                if i < len(self.wingSections) - 1:
                     # flip section order 
-                    new_segment = Exporter_FLZ.SEGMENT (*args, self._wingSections[i+1], sec)
+                    new_segment = Exporter_FLZ.SEGMENT (*args, self.wingSections[i+1], sec)
                     left_segments.append(new_segment)  
 
             self.segments = left_segments + right_segments
@@ -1074,7 +1090,7 @@ class Exporter_CSV (Exporter_Abstract):
 
     @property
     def csv_filename(self): 
-        return self._wing.parm_fileName_stem + '_wing.csv'
+        return self._wing.parm_path.stem + '_wing.csv'
 
 
     def do_it (self): 
@@ -1406,7 +1422,7 @@ class Exporter_DXF (Exporter_Abstract):
     
     @property
     def dxf_filename(self): 
-        return self._wing.parm_fileName_stem + '_wing.dxf'
+        return self._wing.parm_path.stem + '_wing.dxf'
 
     @property
     def always_as_cubic_fit(self) -> bool:

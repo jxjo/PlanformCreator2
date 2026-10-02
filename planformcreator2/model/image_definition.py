@@ -13,9 +13,9 @@ class Image_Definition:
     Describes the properties of an image which can be used e.g. for background.
     """
 
-    def __init__(self, working_dir: str, myDict: dict = None):
+    def __init__(self, working_dir: str | Path, myDict: dict = None):
 
-        self._working_dir         = working_dir
+        self._working_dir         = Path(working_dir)
         self._pathFilename        = fromDict (myDict, "file", None)
 
         self._mirrored_horizontal = fromDict (myDict, "mirrored_horizontal", False)
@@ -37,7 +37,7 @@ class Image_Definition:
         d = {}
         if self.pathFilename:
 
-            working_dir = Path(self._working_dir).resolve(strict=False)
+            working_dir = self._working_dir
             file_path = Path(self._pathFilename)
 
             if file_path.is_absolute():
@@ -96,7 +96,8 @@ class Image_Definition:
         elif os.path.isabs (self._pathFilename):
             return self._pathFilename
         else:
-            return PathHandler(workingDir= self._working_dir).fullFilePath(self._pathFilename)
+            path = self._working_dir / self._pathFilename
+            return os.path.normpath(str(path))
 
 
     @property

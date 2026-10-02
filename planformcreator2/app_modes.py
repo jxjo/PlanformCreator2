@@ -272,7 +272,7 @@ class Mode_Modify (Mode_Abstract):
         if self.wing.has_changed(): 
             message = "The planform has been modified..\n\n" + \
                       "Do you want to save before leaving?"
-            button = MessageBox.save(self.stacked_panel, f"Leaving {self.wing.parm_fileName}", message)
+            button = MessageBox.save(self.stacked_panel, f"Leaving {self.wing.parm_path.name}", message)
 
             if button == QMessageBox.StandardButton.Save:
                 if self.wing.is_new_wing:
@@ -317,9 +317,9 @@ class Mode_Modify (Mode_Abstract):
 
         ok = self.wing.save ()
         if ok:
-            self._toast_message (f"Planform {self.wing.parm_fileName} saved", toast_style=style.GOOD)
+            self._toast_message (f"Planform {self.wing.parm_path.name} saved", toast_style=style.GOOD)
         else:
-            MessageBox.error   (self.stacked_panel,"Save Planform", f"<b>{self.wing.parm_fileName}</b> couldn't be saved", min_height= 60)
+            MessageBox.error   (self.stacked_panel,"Save Planform", f"<b>{self.wing.parm_path.name}</b> couldn't be saved", min_height= 60)
 
 
     def save_as (self) ->bool: 
@@ -378,7 +378,7 @@ class Mode_Modify (Mode_Abstract):
                                 parentPos=(0.3,-0.6), dialogPos=(0,1))  
         dialog.exec()   
 
-        self.app_model.load_wing (self.wing.parm_pathFileName_abs)      # reload wing to apply new name / filename
+        self.app_model.load_wing (str(self.wing.parm_path_abs))      # reload wing to apply new name / filename
 
 
 
@@ -388,7 +388,7 @@ class Mode_Modify (Mode_Abstract):
     def delete_temp_files (self): 
         """ delete all temp files and directories of current airfoil ..."""
 
-        text = f"Delete temporary files of <b>{self.wing.parm_fileName}</b>.<br><br>" +\
+        text = f"Delete temporary files of <b>{self.wing.parm_path.name}</b>.<br><br>" +\
                f"The planform will be saved and reloaded after this." 
 
         msg = MessageBox (self.stacked_panel, "Delete Temp Files", text, Icon (Icon.INFO), min_width=300)
@@ -399,7 +399,7 @@ class Mode_Modify (Mode_Abstract):
       
             self.wing.save ()                                     # save first to ensure actual data for reload
             self.wing.remove_tmp ()
-            self.app_model.load_wing (self.wing.parm_pathFileName_abs)  # reload wing for new strak etc.
+            self.app_model.load_wing (str(self.wing.parm_path_abs))  # reload wing for new strak etc.
 
             self._toast_message ("Temporary files removed", toast_style=style.GOOD)
 
