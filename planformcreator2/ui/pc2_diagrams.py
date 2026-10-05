@@ -219,9 +219,10 @@ class Item_Abstract (Diagram_Item):
         """ slot when planform changed - refresh only relevant artists """
 
         if self.isVisible_effective():
+            self._viewRange_set = False
             self.refresh()  
-            if self.viewBox.autoRangeEnabled():  
-                self.setup_viewRange()                  # fit to screen
+            # if self.viewBox.autoRangeEnabled():  
+            #     self.setup_viewRange()                  # fit to screen
 
 
     def _setup_artists_slots (self):
@@ -847,6 +848,15 @@ class Item_VLM_OpPoint (Item_Abstract):
         """ current VLM polar """
         return self.app_model.cur_vlm_polar
 
+    @property
+    def ref_vlm_polar (self) -> VLM_Polar:
+        """ current reference VLM polar """
+        return self.app_model.ref_vlm_polar
+
+    @property
+    def ref_vlm_opPoint (self) -> VLM_OpPoint:
+        """ current reference opPoint based on vta and alpha"""
+        return self.app_model.ref_vlm_opPoint
 
     @property
     def vlm_alpha (self) -> float:
@@ -903,7 +913,9 @@ class Item_VLM_OpPoint (Item_Abstract):
         
         self._add_artist (VLM_OpPoint_Artist     (self, lambda:self.planform, show_legend=True,
                                                         polar_fn=lambda: self.vlm_polar,
-                                                        opPoint_fn=lambda: self.vlm_opPoint))
+                                                        opPoint_fn=lambda: self.vlm_opPoint,
+                                                        ref_polar_fn=lambda: self.ref_vlm_polar,
+                                                        ref_opPoint_fn=lambda: self.ref_vlm_opPoint ))
 
     def setVisible (self, aBool):
         """ Qt overloaded to signal parent """

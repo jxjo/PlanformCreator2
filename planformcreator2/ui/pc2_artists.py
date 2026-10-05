@@ -68,7 +68,7 @@ _VLM_VAR_ALPHA_AXIS = {VLM_Var.Y, VLM_Var.WING_ALPHA}
 _VLM_VAR_CL_AXIS    = {VLM_Var.CL, VLM_Var.WING_CL, VLM_Var.WING_LIFT}
 
 
-def pen_vlm_var (xyvars : tuple[VLM_Var, VLM_Var], is_reference=False) -> QPen:
+def pen_vlm_var (xyvars : tuple[VLM_Var, VLM_Var], is_main_polar=True) -> QPen:
     """ return a QPen for a xyvars pair - styled by whichever var is not the axis var """
 
     x_var, y_var = xyvars
@@ -90,12 +90,20 @@ def pen_vlm_var (xyvars : tuple[VLM_Var, VLM_Var], is_reference=False) -> QPen:
         main_var = y_var if priority (y_var) >= priority (x_var) else x_var
 
     if main_var in _VLM_VAR_BASE:
-        width = 1.5 if is_reference else 2.0
-        color, width, alphaF = 'whitesmoke', width, 1.0
+        if is_main_polar:
+            color, width, alphaF = 'whitesmoke', 2.0, 1.0
+        else:
+            color, width, alphaF = 'whitesmoke', 1.0, 0.6
     elif 'IND' in main_var.name:
-        color, width, alphaF = 'red', 1.0, 1.0
+        if is_main_polar:
+            color, width, alphaF = 'red', 1.0, 1.0
+        else:
+            color, width, alphaF = 'red', 1.0, 0.5
     elif 'AIRFOIL' in main_var.name:
-        color, width, alphaF = 'aquamarine', 1.0, 1.0
+        if is_main_polar:
+            color, width, alphaF = 'aquamarine', 1.0, 1.0
+        else:
+            color, width, alphaF = 'aquamarine', 1.0, 0.5
     elif main_var == VLM_Var.ALPHA:
         color, width, alphaF = 'dodgerblue', 1.0, 1.0
     else:
@@ -103,10 +111,8 @@ def pen_vlm_var (xyvars : tuple[VLM_Var, VLM_Var], is_reference=False) -> QPen:
 
     if ('MAX' in main_var.name or 'MIN' in main_var.name):
         style = Qt.PenStyle.DashLine
-    elif is_reference:
-        style = Qt.PenStyle.DotLine
     else:
-        style =  Qt.PenStyle.SolidLine
+        style = Qt.PenStyle.SolidLine
 
     qcolor = QColor (color)
     qcolor.setAlphaF (alphaF)
@@ -1098,11 +1104,16 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
     def __init__ (self, *args, 
                   polar_fn = None,
                   opPoint_fn = None, 
+                  ref_polar_fn = None,
+                  ref_opPoint_fn = None,
                   **kwargs):
         
-        self._polar_fn      = polar_fn                      # bound method to get current polar
-        self._opPoint_fn    = opPoint_fn                    # bound method to get current opPoint
-        self._current_plot  = "Lift distribution"
+        self._polar_fn       = polar_fn                         # bound method to get current polar
+        self._opPoint_fn     = opPoint_fn                       # bound method to get current opPoint
+        self._ref_opPoint_fn = ref_opPoint_fn                   # bound method to get reference opPoint
+        self._ref_polar_fn   = ref_polar_fn                     # bound method to get reference polar
+        self._current_plot   = "Lift distribution"
+
         super().__init__ (*args, **kwargs)
 
 
@@ -1110,11 +1121,21 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
     def opPoint (self) -> VLM_OpPoint:
         """ current opPoint to show (e.g. cp value of panel)"""
         return self._opPoint_fn() if callable(self._opPoint_fn) else None
-   
+
+    @property
+    def ref_opPoint (self) -> VLM_OpPoint:
+        """ current reference opPoint to show (e.g. cp value of panel)"""
+        return self._ref_opPoint_fn() if callable(self._ref_opPoint_fn) else None
+
     @property
     def vlm_polar (self) -> VLM_Polar:
         """ current wing polar """
         return self._polar_fn() if callable(self._polar_fn) else None
+
+    @property
+    def ref_vlm_polar (self) -> VLM_Polar:
+        """ current reference wing polar """
+        return self._ref_polar_fn() if callable(self._ref_polar_fn) else None
 
     @property
     def vlm_wing (self) -> VLM_Wing:
@@ -1142,85 +1163,96 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         if not self.wingSections.strak_done:
             self.wingSections.do_strak (geometry_class=GEO_BASIC)
 
-        # is polar ready to show results - all section polars generated and loaded?
-        if not self.vlm_polar.is_ready:
-            n_running = Polar_Task.get_total_n_polars_running()
-            if n_running > 0:
-                self._plot_text (f"Generating airfoil polars... ({n_running} running)", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
-            elif self.vlm_polar.error_reason:
-                text = '<br>'.join (self.vlm_polar.error_reason)          
-                self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
-            else:
-                self._plot_text (f"Polar not ready for opPoint - this should not happen", color= "red",  itemPos=(0.5, 1))
-            return   
+        # collect main polar and reference polar (if defined)
+        vlm_polars = [(self.vlm_polar, self.opPoint, True)]
+        if self.ref_vlm_polar is not None and self.ref_opPoint is not None:
+            vlm_polars.append ((self.ref_vlm_polar, self.ref_opPoint, False))
 
-        # get vars to plot depending on selected plot
-        vars = self.available_plots[self.current_plot] 
+        # plot both main and reference polar opPoint 
 
-        # get aero results
-        aero_results = self.opPoint.aero_results
-        x = aero_results [VLM_Var.Y] * 1000                 # x-axis is always the span-wise y-coordinate in mm
+        for vlm_polar, opPoint, is_main_polar in vlm_polars:
 
-        # plot all opPoint variables 
+            vlm_wing = vlm_polar.vlm_wing
 
-        x_left, x_right, y_left, y_right = None, None, None, None
-
-        for i, var in enumerate (vars):
-
-            pen = pen_vlm_var ((var, VLM_Var.Y ))
-
-            if var in [VLM_Var.LIFT_SPAN, VLM_Var.DRAG_SPAN]:
-                brush_color = pen.color().darker(200)
-                brush_color.setAlphaF(0.3)
-                brush = pg.mkBrush (brush_color)
-            else:
-                brush = None
-
-            antialias = pen.width() > 1.0
-
-            values = aero_results [var]
-            if var == VLM_Var.ALPHA_IND:
-                values = -values                            # xflr5 convention: show induced angle as negative
-
-            xe, ye = self._extend_to_root_and_tip (x, values)
-
-            self._plot_dataItem  (xe, ye, pen=pen, name=str(var), antialias=antialias, zValue=1,
-                                fillLevel=0.0, fillBrush=brush) 
-
-            # plot span border once for all variables of this plot 
-            if i == 0:
-                self._plot_span_border (xe, ye)
-
-            # plot additional infos 
-            if var == VLM_Var.CL:
-                self._plot_critical_Cl_stripes (aero_results, aero_results [VLM_Var.MAX_MASK], 
-                                                "Critical range", "orangered")
-            elif var == VLM_Var.CL_MAX_AIRFOIL:
-                self._plot_cl_max_values (pen.color())
-            elif var != VLM_Var.CL_MIN_AIRFOIL:
-                self._plot_critical_stripes (aero_results, aero_results [VLM_Var.MAX_MASK],
-                                             "Critical range", "orangered")
-            
-            # error message for error in VLM calculation 
-            if self.opPoint.has_vlm_error and (var == VLM_Var.CL or var == VLM_Var.ALPHA):
-                text = 'VLM error occurred (maybe less x-panels could help)'         
-                self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
-
-                if var == VLM_Var.CL:
-                    self._plot_critical_Cl_stripes (aero_results, aero_results [VLM_Var.ERROR_MASK],
-                                                    "VLM error", "red")
+            # is polar ready to show results - all section polars generated and loaded?
+            if not vlm_polar.is_ready:
+                n_running = Polar_Task.get_total_n_polars_running()
+                if n_running > 0:
+                    self._plot_text (f"Generating airfoil polars... ({n_running} running)", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
+                elif vlm_polar.error_reason:
+                    text = '<br>'.join (vlm_polar.error_reason)          
+                    self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
                 else:
-                    self._plot_critical_stripes (aero_results, aero_results [VLM_Var.ERROR_MASK],
-                                                 "VLM error", "red")
+                    self._plot_text (f"Polar not ready for opPoint - this should not happen", color= "red",  itemPos=(0.5, 1))
+                return   
 
-        # plot total wing values
-        self._plot_wing_values (vars, aero_results)
+            # get vars to plot depending on selected plot
+            vars = self.available_plots[self.current_plot] 
+
+            # get aero results
+            aero_results = opPoint.aero_results
+            x = aero_results [VLM_Var.Y] * 1000                 # x-axis is always the span-wise y-coordinate in mm
+
+            # plot all opPoint variables 
+
+            for i, var in enumerate (vars):
+
+                pen = pen_vlm_var ((var, VLM_Var.Y), is_main_polar)
+
+                if is_main_polar and var in [VLM_Var.LIFT_SPAN, VLM_Var.DRAG_SPAN]:
+                    brush_color = pen.color().darker(200)
+                    brush_color.setAlphaF(0.3)
+                    brush = pg.mkBrush (brush_color)
+                else:
+                    brush = None
+                antialias = pen.width() > 1.0
+                label = str(var) if is_main_polar else f"Ref: {var}"
+
+                values = aero_results [var]
+                if var == VLM_Var.ALPHA_IND:
+                    values = -values                            # xflr5 convention: show induced angle as negative
+
+                xe, ye = self._extend_to_root_and_tip (vlm_wing, x, values)
+
+                self._plot_dataItem  (xe, ye, pen=pen, name=label, antialias=antialias, zValue=1,
+                                    fillLevel=0.0, fillBrush=brush) 
+
+                if is_main_polar:
+
+                    # plot span border once for all variables of this plot 
+                    if i == 0:
+                        self._plot_span_border (xe, ye)
+
+                    # plot additional infos 
+                    if var == VLM_Var.CL:
+                        self._plot_critical_Cl_stripes (vlm_wing, aero_results, "Critical range", "orangered")
+                    elif var == VLM_Var.CL_MAX_AIRFOIL:
+                        self._plot_cl_max_values (vlm_polar, pen.color())
+                    elif var != VLM_Var.CL_MIN_AIRFOIL:
+                        self._plot_critical_stripes (vlm_wing, aero_results, aero_results [VLM_Var.MAX_MASK],
+                                                    "Critical range", "orangered")
+                    
+                    # error message for error in VLM calculation 
+                    if self.opPoint.has_vlm_error and (var == VLM_Var.CL or var == VLM_Var.ALPHA):
+                        text = 'VLM error occurred (maybe less x-panels could help)'         
+                        self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
+
+                        if var == VLM_Var.CL:
+                            self._plot_critical_Cl_stripes (vlm_wing, aero_results, "VLM error", "red")
+                        else:
+                            self._plot_critical_stripes (vlm_wing, aero_results, aero_results [VLM_Var.ERROR_MASK],
+                                                        "VLM error", "red")
+
+            # plot total wing values
+            if is_main_polar:
+                self._plot_wing_values (vlm_polar, vars, aero_results)
 
 
-    def _extend_to_root_and_tip (self, x : np.ndarray, y : np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    @staticmethod
+    def _extend_to_root_and_tip (vlm_wing : VLM_Wing, x : np.ndarray, y : np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """ extend x,y with linearly extrapolated values at root and tip section """
 
-        sections_y = self.vlm_wing.sections_y * 1000
+        sections_y = vlm_wing.sections_y * 1000
         x_root, x_tip = sections_y[0], sections_y[-1]
 
         y_root = interpolate (x[0], x[1], y[0], y[1], x_root)
@@ -1244,8 +1276,10 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         self._plot_dataItem ([x_right, x_right], [0.0, y_right], pen=pen, antialias=False, zValue=1)
 
 
-    def _plot_critical_Cl_stripes (self, results, mask, label, color_red):
+    def _plot_critical_Cl_stripes (self, vlm_wing : VLM_Wing, results, label, color_red):
         """Plot the active positive or negative airfoil lift limit over critical stripes."""
+
+        mask = results [VLM_Var.MAX_MASK]
 
         if not np.any (mask):
             return
@@ -1255,7 +1289,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                      results [VLM_Var.CL_MAX_AIRFOIL],
                      results [VLM_Var.CL_MIN_AIRFOIL])
         y = results [VLM_Var.Y]
-        b = self.vlm_polar.vlm_wing.stripes_width
+        b = vlm_wing.stripes_width
 
         color = QColor (color_red)
         color.setAlphaF (0.7)
@@ -1266,7 +1300,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         starts = np.flatnonzero (transitions == 1)
         ends   = np.flatnonzero (transitions == -1)
 
-        sections_y = self.vlm_wing.sections_y
+        sections_y = vlm_wing.sections_y
 
         for start, end in zip (starts, ends):
             # extend to root / tip section if critical range reaches the outermost stripe
@@ -1292,14 +1326,14 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                                  antialias=False, zValue=2)
 
 
-    def _plot_critical_stripes (self, results, mask, label, color_red):
+    def _plot_critical_stripes (self, vlm_wing : VLM_Wing, results, mask, label, color_red):
         """Plot masked stripe ranges as thick horizontal markers at y=0."""
 
         if not np.any (mask):
             return
 
         y = results [VLM_Var.Y]
-        b = self.vlm_polar.vlm_wing.stripes_width
+        b = vlm_wing.stripes_width
         color = QColor (color_red)
         color.setAlphaF (0.7)
         pen = pg.mkPen (color, width=8)
@@ -1308,7 +1342,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         starts = np.flatnonzero (transitions == 1)
         ends = np.flatnonzero (transitions == -1)
 
-        sections_y = self.vlm_wing.sections_y
+        sections_y = vlm_wing.sections_y
 
         for start, end in zip (starts, ends):
             # extend to root / tip section if critical range reaches the outermost stripe
@@ -1318,7 +1352,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                                  pen=pen, name=label, antialias=False, zValue=2)
 
 
-    def _plot_cl_max_values (self, color):
+    def _plot_cl_max_values (self, vlm_polar : VLM_Polar, color):
         """plot Cl max at wingsection """
 
         text_color = QColor (color).darker(120)
@@ -1326,9 +1360,9 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         anchor = (0.5,1.1)
 
         # get section values from vlm_polar
-        polars = self.vlm_polar.airfoil_polar_sections
+        polars = vlm_polar.airfoil_polar_sections
         cl_max_sections = np.array ([np.max (polar.cl) for polar in polars])
-        x      = self.vlm_wing.sections_y * 1000.0
+        x      = vlm_polar.vlm_wing.sections_y * 1000.0
 
         for i, cl_max in enumerate (cl_max_sections):
 
@@ -1340,24 +1374,11 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         return
 
 
-    def _plot_alpha0_values (self, color):
-        """plot alpha0 of airfoil at wingsection """
 
-        text_color = QColor (color).darker(120)
-        text_fill  = pg.mkBrush ("black")
-
-        x = self.vlm_wing.sections_y * 1000.0
-
-        for i, alpha0 in enumerate(self.vlm_polar.alpha0_sections):
-
-            text  = f"{alpha0:.1f}°"  
-            self._plot_point (x[i], alpha0, color=text_color, textFill=text_fill, size=0, text=text, 
-                            textColor=text_color, anchor=(0.5,-0.1))
-
-
-
-    def _plot_wing_values (self, vars: list, aero_results: dict):
+    def _plot_wing_values (self, vlm_polar: VLM_Polar, vars: list, aero_results: dict):
         """plot wing values of opPoint """
+
+        vlm_wing = vlm_polar.vlm_wing
 
         x = np.max(aero_results [VLM_Var.Y]) * 1000 / 2             # point pos in the middle
 
@@ -1407,13 +1428,13 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
         # moment reference 
         if VLM_Var.CM in vars or VLM_Var.MOMENT_SPAN in vars:
-            cm_ref_x = self.vlm_wing.cm_ref_x * 1000.0
+            cm_ref_x = vlm_wing.cm_ref_x * 1000.0
             self._plot_text (f"Moment reference x={cm_ref_x:.1f}mm ", color="dimgray", fontSize=8,
                              parentPos = (0,0), itemPos=(0,0), offset=(55,45))
 
         # plot text for viscous loop or linear VLM
         driver = "XFOIL" if True else "NeuralFoil" #todo: add neuralfoil driver
-        text = f"Viscous loop based on {driver}" if self.vlm_polar.use_viscous_loop else f"Linear VLM based on {driver}"
+        text = f"Viscous loop based on {driver}" if vlm_polar.use_viscous_loop else f"Linear VLM based on {driver}"
         self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-35),color="dimgray", fontSize=8)
 
         return
@@ -1439,7 +1460,6 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
                   polar_fn = None,
                   ref_polar_fn = None,
                   **kwargs):
-        super().__init__ (*args, **kwargs)
 
         self._polar_fn      = polar_fn                      # bound method to get current polar
         self._ref_polar_fn  = ref_polar_fn                  # bound method to get reference polar
@@ -1448,7 +1468,8 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
         self._xyVars        = xyVars                        # definition of x,y axis
         self._show_level_flight = False                     # show level flight point in polar
         self._show_kpis     = False                         # show key performance indicators (KPIs)
-        self._show_ref      = True                          # show reference polar
+
+        super().__init__ (*args, **kwargs)
 
     @override
     def refresh(self):
@@ -1470,9 +1491,7 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
     @property
     def ref_vlm_polar (self) -> VLM_Polar:
         """ reference VLM polar """
-        if self.show_ref:
-            return self._ref_polar_fn() if callable(self._ref_polar_fn) else None
-        return None
+        return self._ref_polar_fn() if callable(self._ref_polar_fn) else None
 
     @property
     def xyVars(self): return self._xyVars
@@ -1502,14 +1521,6 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
         self._show_kpis = show
         self.refresh()
 
-    @property
-    def show_ref(self) -> bool:
-        return self._show_ref
-    def set_show_ref(self, show: bool):
-        self._show_ref = show
-        self.refresh()
-
-
 
     def _plot (self): 
         """Plot the VLM polar curves in the prepared axes."""
@@ -1519,11 +1530,11 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
             return
 
         # collect main polar and reference polar (if defined)
-        vlm_polars = [(self.vlm_polar, False)]
+        vlm_polars = [(self.vlm_polar, True)]
         if self.ref_vlm_polar is not None:
-            vlm_polars.append ((self.ref_vlm_polar, True))
+            vlm_polars.append ((self.ref_vlm_polar, False))
 
-        for vlm_polar, is_reference in vlm_polars:
+        for vlm_polar, is_main_polar in vlm_polars:
             
             # is polar ready to show results - all section polars generated and loaded?
             if not vlm_polar.is_ready:
@@ -1548,15 +1559,16 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
             for xyVars in xyVars_list:
                 
                 # plot the polar curve
-                pen    = pen_vlm_var (xyVars, is_reference)
-                label  = xyVars[1].value + " vs " + xyVars[0].value
-                if is_reference:
+                pen       = pen_vlm_var (xyVars, is_main_polar)
+                antialias = True if pen.width() > 1.0 else False
+                label     = xyVars[1].value + " vs " + xyVars[0].value
+                if not is_main_polar:
                     label = "Ref: " + label
 
                 x,y = vlm_polar.of_vars (xyVars)
 
                 self._plot_dataItem  (x, y, name=label, pen = pen, 
-                                        symbol=symbol, antialias = True, zValue=1)
+                                        symbol=symbol, antialias = antialias, zValue=1)
 
         if self.show_level_flight:
             self._plot_level_flight_point ()
