@@ -18,6 +18,7 @@ from typing     import TYPE_CHECKING, override
 from airfoileditor.base.math_util           import *
 from airfoileditor.base.spline              import *
 from airfoileditor.base.common_utils        import *
+from airfoileditor.base.cst                 import bernstein_elevate, bernstein_product
 
 from airfoileditor.model.airfoil            import Airfoil, GEO_BASIC
 from airfoileditor.model.polar_set          import Polar_Set
@@ -1719,7 +1720,8 @@ class WingSections (list [WingSection]):
                 n_straked += 1
 
         if n_straked > 0:
-            logger.info (f"{self} straked {n_straked} airfoils")
+            class_name = geometry_class.__name__ if geometry_class else "None"
+            logger.info (f"{self} straked {n_straked} airfoils (geometry:{class_name})")
 
         self._strak_done = True 
 

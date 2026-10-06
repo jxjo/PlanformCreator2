@@ -892,6 +892,11 @@ class VLM_Polar:
 
         return True
 
+    @property
+    def is_neuralfoil (self) -> bool:  
+        """ True if airfoil polars are from NeuralFoil (not Xfoil)""" 
+        return self._root_polar_def.is_neuralfoil if self._root_polar_def else False
+
 
     @property 
     def use_viscous_loop (self) -> bool:
@@ -1162,15 +1167,15 @@ class VLM_Polar:
 
             if is_vlm:
                 airfoil_polarSet.ensure_polars_VLM()
-                airfoil_polarSet.load_or_generate_polars(normal=False, VLM=True)
-            else:
-                airfoil_polarSet.load_or_generate_polars(normal=True, VLM=False)
 
-            # find polar with matching Re of this wing section
+            # Find and load only the polar matching this wing section.
 
             matching_polar = self._get_matching_polar (airfoil_polarSet, section_re, is_vlm)
 
             if matching_polar is not None:
+                airfoil_polarSet.load_or_generate_polars (
+                    normal=not is_vlm, VLM=is_vlm, only_polars=[matching_polar])
+
                 if matching_polar.isLoaded:
                     # there is a polar that fits to Re of wingSection
                     airfoil_polar_sections.append(matching_polar)
@@ -1302,7 +1307,7 @@ class VLM_Polar:
         cm    = self._of_var (VLM_Var.WING_CM)
         moment = self._of_var (VLM_Var.WING_MOMENT)
         for i in range(len(alpha)):
-            print (f"  {alpha[i]:8.1f} {cl[i]:8.3f} {lift[i]:8.1f} {cd[i]:8.3f} {cd_i[i]:8.3f} {drag[i]:8.2f} {glide[i]:8.2f} {cm[i]:8.3f} {moment[i]:8.3f}")
+            print (f"  {alpha[i]:8.1f} {cl[i]:8.3f} {lift[i]:8.1f} {cd[i]:8.4f} {cd_i[i]:8.4f} {drag[i]:8.2f} {glide[i]:8.2f} {cm[i]:8.3f} {moment[i]:8.3f}")
 
         print ("Level flight conditions:")
         cl = self.cl_level_flight
@@ -1572,9 +1577,8 @@ class VLM_OpPoint:
         self._cl_max_reached = bool (cl_limit_mask.any())                # flag this opPoint
         self._has_vlm_error   = bool (VLM_error.any())
 
-        # alpha_eff and alpha_ind based on cl_vlm and alpha0 of airfoil polar
+        # alpha_eff and alpha_ind based on cl_vlm and alpha0 of airfoil polar (iteration dependent)
 
-        alpha0            = self.polar.alpha0_stripes
         alpha_eff_VLM     = np.degrees (cl_vlm_masked / (2 * np.pi)) + alpha0
         alpha_ind_VLM     = self.alpha - alpha_eff_VLM
 
@@ -1599,7 +1603,7 @@ class VLM_OpPoint:
         results[VLM_Var.ERROR_MASK]     = VLM_error                 # mask where VLM error occured             
 
         results[VLM_Var.LIFT_SPAN]      = lift_per_span
-        results[VLM_Var.ALPHA0_AIRFOIL] = alpha0                            # airfoil alpha0 from polar
+        results[VLM_Var.ALPHA0_AIRFOIL] = self.polar.alpha0_stripes         # airfoil alpha0 from polar
         results[VLM_Var.ALPHA_EFF]      = alpha_eff_VLM            
         results[VLM_Var.ALPHA_IND]      = alpha_ind_VLM                      
         results[VLM_Var.ALPHA]          = np.full (ns, self.alpha)     

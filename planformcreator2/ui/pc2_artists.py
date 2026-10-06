@@ -20,7 +20,6 @@ from airfoileditor.base.artist                import *
 from airfoileditor.base.common_utils          import *
 from airfoileditor.model.airfoil              import GEO_BASIC
 from airfoileditor.model.polar_set            import *
-from airfoileditor.ui.ae_artists              import _linestyle_of
 
 from ..model.wing               import Wing, Reference_Wing
 from ..model.planform           import (Planform, N_Distrib_Bezier,
@@ -709,7 +708,7 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
         def _finished_point (self, aPoint):
             """ slot - point move is finished """
             # write back control points into original bezier 
-            self._norm_chord.bezier_from_jpoints (self._jpoints, transform_fn = self._tr_fn)
+            self._norm_chord.bezier_from_jpoints (self.jpoints, transform_fn = self._tr_fn)
             super()._finished_point (aPoint)
 
 
@@ -1433,7 +1432,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                              parentPos = (0,0), itemPos=(0,0), offset=(55,45))
 
         # plot text for viscous loop or linear VLM
-        driver = "XFOIL" if True else "NeuralFoil" #todo: add neuralfoil driver
+        driver = "NeuralFoil"  if vlm_polar.is_neuralfoil else "XFOIL"
         text = f"Viscous loop based on {driver}" if vlm_polar.use_viscous_loop else f"Linear VLM based on {driver}"
         self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-35),color="dimgray", fontSize=8)
 
@@ -1470,17 +1469,6 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
         self._show_kpis     = False                         # show key performance indicators (KPIs)
 
         super().__init__ (*args, **kwargs)
-
-    @override
-    def refresh(self):
-        """
-        refresh current plots - only if PlotItem of self is visible 
-        """
-
-        #todo remove after changed in artist
-        if self.show and self._pi.isVisible_effective():
-
-            self.plot()
 
 
     @property
@@ -2781,7 +2769,7 @@ class Airfoil_Artist (Abstract_Artist_Planform):
         x = c_line.x * chord + le_x
         y = c_line.y * chord
 
-        style = _linestyle_of(c_line._type)
+        style = Qt.PenStyle.DashDotLine
         pen   = pg.mkPen(color, width=1, style=style)
 
         self._plot_dataItem (x, y, pen = pen, name = c_line.name, zValue=1)

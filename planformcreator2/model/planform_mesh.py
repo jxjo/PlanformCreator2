@@ -40,8 +40,8 @@ class Mesh_Strategy:
         "cosine": lambda x: (np.cos ((x + 1) * np.pi) + 1) / 2,
     }
 
-    PANEL_WIDTH_MIN       = 0.005                       # Minimum width of a spanwise panel
-    SECTION_DIST_MIN      = 0.01                        # Minimum distance between sections
+    PANEL_WIDTH_MIN       = 0.002                       # Minimum width of a spanwise panel
+    SECTION_DIST_MIN      = 0.005                       # Minimum distance between sections
 
 
     def __init__ (self, mesh: "Planform_Mesh", dataDict: dict | None = None):

@@ -66,7 +66,19 @@ logger = logging.getLogger(__name__)
 #-------------------------------------------------------------------------------
 
 APP_NAME         = "PlanformCreator2"
-__version__      = "4.3.2"                            # hatch "version dynamic" reads this version for build
+__version__      = "5.0b1"                            # hatch "version dynamic" reads this version for build
+
+
+# DEV: Ensure compatibility with airfoileditor 5.0
+
+from importlib.metadata import version
+from packaging.version  import Version
+
+if Version(version("airfoileditor")).major !=  Version(__version__).major:
+    logger.error(
+        f"At least airfoileditor major version { Version(__version__).major} is required, "
+        f"but airfoileditor version is { Version(version("airfoileditor"))}" )
+    sys.exit(0)
 
 
 class Main (QMainWindow):

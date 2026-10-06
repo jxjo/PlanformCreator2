@@ -2861,6 +2861,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
                                         allow_transition=False,
                                         parentPos=(0.95, 0.5), dialogPos=(0,0.5))
 
+        diag.sig_changed.connect (self._on_polar_def_changed)      
         diag.sig_final_changed.connect (self._on_polar_def_changed)
         diag.show()
 
@@ -3551,7 +3552,8 @@ class Panel_Polar_Defs (Edit_Panel):
                             toolTip="Show/Hide this polar in diagram")  
             w.sig_changed.connect (self._on_polar_def_changed)
 
-            Field      (l,r,c+1, width=(80,None), get=lambda p=polar_def: p.name_with_v(self.chord))
+            Field      (l,r,c+1, width=(80,None), get=lambda p=polar_def: p.name_with_v(self.chord),
+                        toolTip=lambda p=polar_def: p.name_with_v(self.chord))
 
             # either tool buttons 
             if not polar_def.is_mandatory: 
@@ -3588,6 +3590,7 @@ class Panel_Polar_Defs (Edit_Panel):
                                         parentPos=(1.1, 0.5), dialogPos=(0,0.5), fixed_chord=self.chord)
         diag.show()
 
+        diag.sig_changed.connect (self._on_polar_def_changed)           # live update with NeuralFoil polars
         diag.sig_final_changed.connect (self._on_polar_def_changed)
 
 
