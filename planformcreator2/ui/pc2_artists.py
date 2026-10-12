@@ -48,11 +48,9 @@ COLOR_REF_LINE      = QColor ('springgreen')
 COLOR_BANANA        = QColor ('khaki')
 COLOR_SECTION       = QColor ('deeppink')
 COLOR_EXTRA_SECTION = QColor ('gold').darker (120)
-
 COLOR_REF_PC2       = QColor ('magenta').darker(120)
 
-COLOR_WARNING       = QColor ('gold')
-
+COLOR_CRITICAL      = QColor ('orangered')
 
 
 _VLM_VAR_BASE = {VLM_Var.CL, VLM_Var.CD,                                # 'plain/total' family vars
@@ -61,7 +59,7 @@ _VLM_VAR_BASE = {VLM_Var.CL, VLM_Var.CD,                                # 'plain
                  VLM_Var.CM, VLM_Var.MOMENT_SPAN, 
                  VLM_Var.WING_CL, VLM_Var.WING_DRAG,             
                  VLM_Var.WING_CD, VLM_Var.WING_GLIDE, 
-                 VLM_Var.WING_MOMENT, VLM_Var.WING_CM}
+                 VLM_Var.WING_MOMENT, VLM_Var.WING_CM, VLM_Var.WING_LIFT}
 
 _VLM_VAR_ALPHA_AXIS = {VLM_Var.Y, VLM_Var.WING_ALPHA}
 _VLM_VAR_CL_AXIS    = {VLM_Var.CL, VLM_Var.WING_CL, VLM_Var.WING_LIFT}
@@ -72,6 +70,7 @@ def pen_vlm_var (xyvars : tuple[VLM_Var, VLM_Var], is_main_polar=True) -> QPen:
 
     x_var, y_var = xyvars
 
+    # find the main var to plot of xyVars
     if x_var in _VLM_VAR_ALPHA_AXIS:
         main_var = y_var
     elif y_var in _VLM_VAR_ALPHA_AXIS:
@@ -88,30 +87,41 @@ def pen_vlm_var (xyvars : tuple[VLM_Var, VLM_Var], is_main_polar=True) -> QPen:
         priority = lambda var: 0 if var in _VLM_VAR_BASE else 1
         main_var = y_var if priority (y_var) >= priority (x_var) else x_var
 
+    # default pen style
+    if is_main_polar:
+        style = Qt.PenStyle.SolidLine
+    else:
+        style = Qt.PenStyle.DashLine
+
+
     if main_var in _VLM_VAR_BASE:
         if is_main_polar:
             color, width, alphaF = 'whitesmoke', 2.0, 1.0
         else:
-            color, width, alphaF = 'whitesmoke', 1.0, 0.6
+            color, width, alphaF = COLOR_REF_PC2, 1.0, 1.0
+            style = Qt.PenStyle.SolidLine    
+
+    elif ('MAX' in main_var.name or 'MIN' in main_var.name):
+        if is_main_polar:
+            color, width, alphaF = COLOR_CRITICAL, 1.0, 1.0
+        else:
+            color, width, alphaF = COLOR_CRITICAL, 1.0, 0.5
+        style = Qt.PenStyle.DashDotLine
+
     elif 'IND' in main_var.name:
         if is_main_polar:
-            color, width, alphaF = 'red', 1.0, 1.0
+            color, width, alphaF = 'firebrick', 1.0, 1.0
         else:
-            color, width, alphaF = 'red', 1.0, 0.5
+            color, width, alphaF = 'firebrick', 1.0, 0.8
     elif 'AIRFOIL' in main_var.name:
         if is_main_polar:
             color, width, alphaF = 'aquamarine', 1.0, 1.0
         else:
-            color, width, alphaF = 'aquamarine', 1.0, 0.5
+            color, width, alphaF = 'aquamarine', 1.0, 0.8
     elif main_var == VLM_Var.ALPHA:
         color, width, alphaF = 'dodgerblue', 1.0, 1.0
     else:
         color, width, alphaF = 'gray', 1.0, 1.0
-
-    if ('MAX' in main_var.name or 'MIN' in main_var.name):
-        style = Qt.PenStyle.DashLine
-    else:
-        style = Qt.PenStyle.SolidLine
 
     qcolor = QColor (color)
     qcolor.setAlphaF (alphaF)
@@ -221,6 +231,9 @@ class Abstract_Artist_Planform (Artist):
     def show_all_sections (self) -> bool:
         """ show all wingSections including extra sections for paneling"""
         return self._show_all_sections
+    def set_show_all_sections (self, value: bool):
+        """Set whether to show all wing sections including extra sections for paneling."""
+        self._show_all_sections = value
 
     @property
     def wingSections_to_show (self) -> list[WingSection]:
@@ -339,30 +352,33 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
             """ handle add point - will be called when ctrl_click on Bezier """
 
             # limit n of control points 
-            if len(self._jpoints) >= 8: return False   
+            if len(self.jpoints) >= 8: return False   
 
             # find insertion point 
 
-            px     = np.array( self.jpoints_xy ()[0]) 
+            px     = np.array( self.points_xy ()[0]) 
             px_new = x
 
             idx = np.searchsorted(px, px_new)
             idx = clip (idx, 1, len(px)-1)                  # between start and end tangent point
 
-            self._jpoints.insert (idx, JPoint ((x,y)))
+            jpoints = self.jpoints
+            jpoints.insert (idx, JPoint ((x,y)))
 
             logger.debug (f"Bezier point added at x={x} y={y}")
 
-            self._finished_point (None)
+            self._finished_point (None, jpoints=jpoints)
 
             return True
             
 
         @override
-        def _finished_point (self, aPoint):
+        def _finished_point (self, aPoint : Movable_Point|None, jpoints : list[JPoint]|None = None):
             """ slot - point move is finished - write back control points"""
 
-            jpoints = JPoint.transform (self._jpoints, transform_fn = self._tr_fn)
+            if jpoints is None:
+                jpoints = self.jpoints
+            jpoints = JPoint.transform (jpoints, transform_fn = self._tr_fn)
             self._planform.n_ref_line.bezier_from_jpoints (jpoints)
 
             super()._finished_point (aPoint)
@@ -554,8 +570,22 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
         - mode DEFAULT (normed in span)
         - mode NORM
     """
+    def __init__ (self, *args, 
+                  as_contour=False, 
+                  **kwargs):
+        
+        self._as_contour    = as_contour                                # whether to plot just as contour
 
-    
+        super().__init__(*args, **kwargs)
+
+    @property
+    def as_contour (self) -> bool:
+        """ plot just as contour if True """
+        return self._as_contour
+    def set_as_contour (self, as_contour: bool):
+        self._as_contour = as_contour
+
+
     def _plot (self): 
 
         if self._mode == mode.NORM_NORM:
@@ -567,9 +597,15 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
  
         name       = "Chord distribution"
         color      = COLOR_CHORD
-        pen, brush = pg.mkPen(color, width=2), pg.mkBrush (color.darker (600))
 
-        self._plot_dataItem  (x, yn, pen = pen, name=name, antialias = True, 
+        if self.as_contour:
+            pen, brush = pg.mkPen(color, width=1, style=Qt.PenStyle.DashLine), None
+            antialias = False
+        else:
+            pen, brush = pg.mkPen(color, width=2), pg.mkBrush (color.darker (600))
+            antialias = True
+
+        self._plot_dataItem  (x, yn, pen = pen, name=name, antialias = antialias, 
                               fillLevel=0.0, fillBrush=brush,  zValue=1)
 
         # Chord Bezier curve based - move control points  
@@ -578,7 +614,7 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
  
             pt = self.Movable_Chord_Bezier (self._pi, self.planform,
                                             t_fn = t_fn, tr_fn = tr_fn, 
-                                            movable=True, color=color,
+                                            movable=True, color=color.darker(120),
                                             on_changed=self._on_bezier_changed)
             self._add (pt) 
 
@@ -672,21 +708,22 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
             """ handle add point - will be called when ctrl_click on Bezier """
 
             # limit n of control points 
-            if len(self._jpoints) >= 8: return False  
+            if len(self.jpoints) >= 8: return False  
 
             # find insertion point 
 
-            px     = np.array( self.jpoints_xy ()[0]) 
+            px     = np.array( self.points_xy ()[0]) 
             px_new = x
 
             idx = np.searchsorted(px, px_new)
             idx = clip (idx, 2, len(px)-2)                  # between start and end tangent point
 
-            self._jpoints.insert (idx, JPoint ((x,y)))
+            jpoints = self.jpoints
+            jpoints.insert (idx, JPoint ((x,y)))
 
             logger.debug (f"Bezier point added at x={x} y={y}")
 
-            self._finished_point (None)
+            self._finished_point (None, jpoints=jpoints)
 
             return True
 
@@ -696,19 +733,21 @@ class Norm_Chord_Artist (Abstract_Artist_Planform):
             """ slot - point should be deleted """
 
             # a minimum of 2 control points 
-            if len(self._jpoints) <= 4: return   
+            if len(self.jpoints) <= 4: return   
 
             # do not delete first and last 2 control points 
             i = aPoint.id
-            if i > 1 and i < (len(self._jpoints) -2):
+            if i > 1 and i < (len(self.jpoints) -2):
                 super()._delete_point (aPoint)
 
 
         @override
-        def _finished_point (self, aPoint):
+        def _finished_point (self, aPoint, jpoints : list[JPoint]|None = None):
             """ slot - point move is finished """
             # write back control points into original bezier 
-            self._norm_chord.bezier_from_jpoints (self.jpoints, transform_fn = self._tr_fn)
+            if jpoints is None:
+                jpoints = self.jpoints
+            self._norm_chord.bezier_from_jpoints (jpoints, transform_fn = self._tr_fn)
             super()._finished_point (aPoint)
 
 
@@ -792,7 +831,6 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
 
     def __init__ (self, *args, 
                   opPoint_fn = None, 
-                  show_strak=False, 
                   **kwargs):
         
         self._opPointFn     = opPoint_fn                                # bound method to get current opPoint
@@ -1082,6 +1120,71 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
 
 
 
+class VLM_Chord_Artist (Abstract_Artist_Planform):
+    """
+    Plot chord of vlm stations (mesh) of a VLM_Wing
+    """    
+
+    def __init__ (self, *args, 
+                  ref_wing_fn : Callable | None = None, 
+                  **kwargs):
+        
+        self._ref_wing_fn       = ref_wing_fn
+
+        super().__init__ (*args, **kwargs)
+
+    @property 
+    def vlm_wing (self) -> VLM_Wing:
+        return self.wing.vlm_wing
+
+    @property
+    def ref_vlm_wing (self) -> VLM_Wing | None:
+        ref_wing : Wing = self._ref_wing_fn() if callable(self._ref_wing_fn) else None
+        if ref_wing:
+            return ref_wing.vlm_wing
+        return None
+  
+
+    def _plot (self): 
+
+        vlm_wings = [(self.vlm_wing, True)]
+        if self.ref_vlm_wing:
+            vlm_wings.append((self.ref_vlm_wing, False))
+
+        for vlm_wing, is_main in vlm_wings:
+                
+            # calculate chord of mesh stations from x_stations
+
+            x_stations  = vlm_wing.stations_y * 1000.0 
+            cn_stations = vlm_wing.stations_cn
+
+            if is_main:
+
+                # plot vertical lines for each y_station indicating chord distribution
+
+                pen = pg.mkPen(COLOR_BOX.darker(140), width=1)
+
+                x_pairs  = np.repeat (x_stations, 2)
+                cn_pairs = np.column_stack ((np.zeros_like (cn_stations), cn_stations)).ravel ()
+                self._plot_dataItem (x_pairs, cn_pairs, pen=pen, 
+                                    connect="pairs", antialias=False, zValue=2)
+
+                label = "Mesh Chord" 
+                pen = pg.mkPen(COLOR_BOX, width=2)
+                brush = pg.mkBrush(COLOR_BOX.darker(800))
+                antialias=True
+            else: 
+                label = "Ref: Mesh Chord"
+                pen = pg.mkPen(COLOR_REF_PC2.darker(120), width=1)
+                brush = None
+                antialias=False
+
+            # plot relative chord distribution 
+
+            self._plot_dataItem (x_stations, cn_stations , pen=pen, name=label,
+                                fillBrush=brush, fillLevel=0, 
+                                antialias=antialias, zValue=1)
+
 
 
 class VLM_OpPoint_Artist (Abstract_Artist_Planform):
@@ -1156,7 +1259,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         # sanity VLM polar needed
         if self.vlm_polar is None:  
             self._plot_text (f"No VLM T1 polar available", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
-            return
+            return    
 
         # strak airfoils if needed to have polars
         if not self.wingSections.strak_done:
@@ -1179,7 +1282,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                 if n_running > 0:
                     self._plot_text (f"Generating airfoil polars... ({n_running} running)", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
                 elif vlm_polar.error_reason:
-                    text = '<br>'.join (vlm_polar.error_reason)          
+                    text = '<br>'.join (html.escape (reason) for reason in vlm_polar.error_reason)        
                     self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
                 else:
                     self._plot_text (f"Polar not ready for opPoint - this should not happen", color= "red",  itemPos=(0.5, 1))
@@ -1204,8 +1307,13 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                     brush = pg.mkBrush (brush_color)
                 else:
                     brush = None
+
                 antialias = pen.width() > 1.0
-                label = str(var) if is_main_polar else f"Ref: {var}"
+                if not var==VLM_Var.CL_MIN_AIRFOIL:
+                    label     = str(var) if is_main_polar else f"Ref: {var}"
+                else:
+                    label     = ""                              # suppress label for CL_MIN_AIRFOIL
+                zValue    = 2 if is_main_polar else 1
 
                 values = aero_results [var]
                 if var == VLM_Var.ALPHA_IND:
@@ -1213,7 +1321,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
                 xe, ye = self._extend_to_root_and_tip (vlm_wing, x, values)
 
-                self._plot_dataItem  (xe, ye, pen=pen, name=label, antialias=antialias, zValue=1,
+                self._plot_dataItem  (xe, ye, pen=pen, name=label, antialias=antialias, zValue=zValue,
                                     fillLevel=0.0, fillBrush=brush) 
 
                 if is_main_polar:
@@ -1224,12 +1332,12 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
                     # plot additional infos 
                     if var == VLM_Var.CL:
-                        self._plot_critical_Cl_stripes (vlm_wing, aero_results, "Critical range", "orangered")
+                        self._plot_critical_Cl_stripes (vlm_wing, aero_results, "Critical range")
                     elif var == VLM_Var.CL_MAX_AIRFOIL:
                         self._plot_cl_max_values (vlm_polar, pen.color())
                     elif var != VLM_Var.CL_MIN_AIRFOIL:
                         self._plot_critical_stripes (vlm_wing, aero_results, aero_results [VLM_Var.MAX_MASK],
-                                                    "Critical range", "orangered")
+                                                    "Critical range")
                     
                     # error message for error in VLM calculation 
                     if self.opPoint.has_vlm_error and (var == VLM_Var.CL or var == VLM_Var.ALPHA):
@@ -1237,10 +1345,10 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                         self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
 
                         if var == VLM_Var.CL:
-                            self._plot_critical_Cl_stripes (vlm_wing, aero_results, "VLM error", "red")
+                            self._plot_critical_Cl_stripes (vlm_wing, aero_results, "VLM error")
                         else:
                             self._plot_critical_stripes (vlm_wing, aero_results, aero_results [VLM_Var.ERROR_MASK],
-                                                        "VLM error", "red")
+                                                        "VLM error")
 
             # plot total wing values
             if is_main_polar:
@@ -1275,57 +1383,35 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         self._plot_dataItem ([x_right, x_right], [0.0, y_right], pen=pen, antialias=False, zValue=1)
 
 
-    def _plot_critical_Cl_stripes (self, vlm_wing : VLM_Wing, results, label, color_red):
+    def _plot_critical_Cl_stripes (self, vlm_wing : VLM_Wing, results, label):
         """Plot the active positive or negative airfoil lift limit over critical stripes."""
 
-        mask = results [VLM_Var.MAX_MASK]
-
+        mask     = results [VLM_Var.MAX_MASK]
         if not np.any (mask):
             return
 
-        cl_vlm = results [VLM_Var.CL_VLM]
-        cl_limit = np.where (cl_vlm >= 0.0,
-                     results [VLM_Var.CL_MAX_AIRFOIL],
-                     results [VLM_Var.CL_MIN_AIRFOIL])
-        y = results [VLM_Var.Y]
-        b = vlm_wing.stripes_width
+        cl_vlm   = results [VLM_Var.CL_VLM]
+        cl_limit = np.where (cl_vlm >= 0.0, results [VLM_Var.CL_MAX_AIRFOIL], results [VLM_Var.CL_MIN_AIRFOIL])
+        y        = results [VLM_Var.Y]
+        b        = vlm_wing.stripes_width
 
-        color = QColor (color_red)
+        y_ext, cl_ext = self._extend_to_root_and_tip (vlm_wing, y * 1000, cl_limit)
+        edges = np.r_[y - b / 2, y[-1] + b[-1] / 2] * 1000
+        edges[0], edges[-1] = y_ext[0], y_ext[-1]
+
+        y_crit   = np.column_stack ((edges[:-1], y * 1000, edges[1:])).ravel ()
+        cl_crit  = np.interp (y_crit, y_ext, cl_ext)
+        cl_crit  = np.where (np.repeat (mask, 3), cl_crit, np.nan)
+
+        color = QColor(COLOR_CRITICAL)     
         color.setAlphaF (0.7)
         pen = pg.mkPen (color, width=8)
 
-        # Find contiguous ranges of critical stripes. End is exclusive.
-        transitions = np.diff (np.r_[False, mask, False].astype (int))
-        starts = np.flatnonzero (transitions == 1)
-        ends   = np.flatnonzero (transitions == -1)
-
-        sections_y = vlm_wing.sections_y
-
-        for start, end in zip (starts, ends):
-            # extend to root / tip section if critical range reaches the outermost stripe
-            y_start = sections_y[0]  if start == 0     else y[start] - b[start] / 2
-            y_end   = sections_y[-1] if end == len (y) else y[end - 1] + b[end - 1] / 2
-
-            i_left_start  = max (0, start - 1)
-            i_right_start = min (len(y) - 1, start + 1)
-            slope_start = ((cl_limit[i_right_start] - cl_limit[i_left_start]) /
-                           (y[i_right_start] - y[i_left_start]))
-            cl_start = cl_limit[i_left_start] + slope_start * (y_start - y[i_left_start])
-
-            i_left_end  = max (0, end - 2)
-            i_right_end = min (len(y) - 1, end)
-            slope_end = ((cl_limit[i_right_end] - cl_limit[i_left_end]) /
-                         (y[i_right_end] - y[i_left_end]))
-            cl_end = cl_limit[i_left_end] + slope_end * (y_end - y[i_left_end])
-
-            y_crit = np.r_[y_start, y[start:end], y_end]
-            cl_crit = np.r_[cl_start, cl_limit[start:end], cl_end]
-
-            self._plot_dataItem (y_crit * 1000, cl_crit, pen=pen, name=label,
-                                 antialias=False, zValue=2)
+        self._plot_dataItem (y_crit, cl_crit, pen=pen, name=label,
+                             connect="finite", antialias=False, zValue=2)
 
 
-    def _plot_critical_stripes (self, vlm_wing : VLM_Wing, results, mask, label, color_red):
+    def _plot_critical_stripes (self, vlm_wing : VLM_Wing, results, mask, label):
         """Plot masked stripe ranges as thick horizontal markers at y=0."""
 
         if not np.any (mask):
@@ -1333,30 +1419,23 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
         y = results [VLM_Var.Y]
         b = vlm_wing.stripes_width
-        color = QColor (color_red)
+        color = QColor (COLOR_CRITICAL)
         color.setAlphaF (0.7)
         pen = pg.mkPen (color, width=8)
 
-        transitions = np.diff (np.r_[False, mask, False].astype (int))
-        starts = np.flatnonzero (transitions == 1)
-        ends = np.flatnonzero (transitions == -1)
+        x_crit = np.column_stack ((y - b / 2, y + b / 2)).ravel () * 1000
+        x_crit[0], x_crit[-1] = vlm_wing.sections_y[[0, -1]] * 1000
+        y_crit = np.where (np.repeat (mask, 2), 0.0, np.nan)
 
-        sections_y = vlm_wing.sections_y
-
-        for start, end in zip (starts, ends):
-            # extend to root / tip section if critical range reaches the outermost stripe
-            x_start = sections_y[0]  if start == 0     else y[start] - b[start] / 2
-            x_end   = sections_y[-1] if end == len (y) else y[end - 1] + b[end - 1] / 2
-            self._plot_dataItem ([x_start * 1000, x_end * 1000], [0.0, 0.0],
-                                 pen=pen, name=label, antialias=False, zValue=2)
+        self._plot_dataItem (x_crit, y_crit, pen=pen, name=label,
+                             connect="finite", antialias=False, zValue=2)
 
 
     def _plot_cl_max_values (self, vlm_polar : VLM_Polar, color):
         """plot Cl max at wingsection """
 
-        text_color = QColor (color).darker(120)
-        text_fill  = pg.mkBrush ("black")
-        anchor = (0.5,1.1)
+        color_max = QColor (color).darker(120)
+        color_re  = QColor (self.COLOR_NORMAL).darker(120)
 
         # get section values from vlm_polar
         polars = vlm_polar.airfoil_polar_sections
@@ -1366,10 +1445,11 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         for i, cl_max in enumerate (cl_max_sections):
 
             polar = polars[i] 
-            text  = f"{polar.re_asK}k\n{cl_max:.2f}"  
 
-            self._plot_point (x[i], cl_max, color=text_color, textFill=text_fill, size=0, text=text, 
-                            textColor=text_color, anchor=anchor)
+            self._plot_point (x[i], cl_max, color=color_re, textFill="black", size=0, 
+                              text=f"{polar.re_asK}k", textColor=color_re, anchor=(0.5,2.0))
+            self._plot_point (x[i], cl_max, color=color_max, textFill="black", size=0, 
+                              text=f"{cl_max:.2f}", textColor=color_max, anchor=(0.5,1.1))
         return
 
 
@@ -1420,10 +1500,15 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
             text  = f"Wing M={value:.2f}Nm" if ~np.isnan(value) else "Wing M=?"
 
         if text:
-            self._plot_point (x, y, size=0, text=text, textFill="black", anchor=(1,0.5))
-            if  np.isnan(values).any():
-                self._plot_text (f"Stall starting", color= "orangered", fontSize=self.SIZE_HEADER, 
-                                 parentPos = (0.5,0.4), itemPos=(0.9, 1))
+            self._plot_point (x, y, size=0, text=text, textFill="black", anchor=(0.5,0.0))
+
+        # plot stall indication if any panel is at maximum lift condition
+        stall          = np.isnan (aero_results [VLM_Var.WING_CL])
+        stall_or_close = np.any (aero_results [VLM_Var.MAX_MASK])
+        if stall_or_close:
+            stall_text = "Stall starting" if stall_or_close and not stall else "Stall"
+            self._plot_point (x, y, size=0, text=stall_text, textColor= COLOR_CRITICAL, 
+                                anchor=(0.5,1.2))
 
         # moment reference 
         if VLM_Var.CM in vars or VLM_Var.MOMENT_SPAN in vars:
@@ -1431,10 +1516,23 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
             self._plot_text (f"Moment reference x={cm_ref_x:.1f}mm ", color="dimgray", fontSize=8,
                              parentPos = (0,0), itemPos=(0,0), offset=(55,45))
 
-        # plot text for viscous loop or linear VLM
-        driver = "NeuralFoil"  if vlm_polar.is_neuralfoil else "XFOIL"
-        text = f"Viscous loop based on {driver}" if vlm_polar.use_viscous_loop else f"Linear VLM based on {driver}"
-        self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-35),color="dimgray", fontSize=8)
+        # plot efficiency factor (e) if available
+        if not np.isnan(aero_results[VLM_Var.WING_EFFICIENCY]):
+            e = aero_results[VLM_Var.WING_EFFICIENCY]
+            text = f"Efficiency factor: {e:.3f}"
+            self._plot_text (text, color="dimgray", fontSize=8,
+                             parentPos = (0,1), itemPos=(0,1), offset=(55,-60))
+
+        # plot info text for viscous loop or linear VLM / Treffz or near field 
+        if VLM_Var.CD in vars or VLM_Var.DRAG_SPAN in vars:
+            if vlm_polar.use_trefftz:
+                text = "Using Trefftz plane for induced drag calculation"
+            else:
+                text = "Using near field for induced drag calculation"
+        else:
+            driver = "NeuralFoil"  if vlm_polar.is_neuralfoil else "XFOIL"
+            text = f"Viscous loop based on {driver}" if vlm_polar.use_viscous_loop else f"Linear VLM based on {driver}"
+        self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-40),color="dimgray", fontSize=8)
 
         return
 
@@ -1514,7 +1612,7 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
         """Plot the VLM polar curves in the prepared axes."""
 
         if not self.vlm_polar:
-            self._plot_text (f"Wing not ready... ", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
+            self._plot_text (f"Polar not ready... ", color= "dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5, 1))
             return
 
         # collect main polar and reference polar (if defined)
@@ -1550,13 +1648,13 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
                 pen       = pen_vlm_var (xyVars, is_main_polar)
                 antialias = True if pen.width() > 1.0 else False
                 label     = xyVars[1].value + " vs " + xyVars[0].value
-                if not is_main_polar:
-                    label = "Ref: " + label
+                label     = label if is_main_polar else "Ref: " + label
+                zValue    = 2 if is_main_polar else 1
 
                 x,y = vlm_polar.of_vars (xyVars)
 
                 self._plot_dataItem  (x, y, name=label, pen = pen, 
-                                        symbol=symbol, antialias = antialias, zValue=1)
+                                        symbol=symbol, antialias = antialias, zValue=zValue)
 
         if self.show_level_flight:
             self._plot_level_flight_point ()
@@ -1685,9 +1783,110 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
             return round(value, 3)
 
 
-class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
+
+class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
     """
-    Plot chord reference within chord distribution
+    Plot the delta between the current VLM polar and a reference polar.
+    """
+
+    def __init__ (self, *args, 
+                  delta_vars_fn : Callable = None, 
+                  delta_data_fn : Callable = None,
+                  **kwargs):
+
+        self._delta_vars_fn = delta_vars_fn                 # bound method to get base_var and value_var
+        self._delta_data_fn = delta_data_fn
+
+        super().__init__(*args, **kwargs)
+
+
+    @property
+    def delta_vars (self) -> tuple:
+        return self._delta_vars_fn() if callable(self._delta_vars_fn) else None
+
+
+    @property
+    def delta_data (self) -> tuple[np.ndarray, np.ndarray, bool]:
+        return self._delta_data_fn() if callable(self._delta_data_fn) else (np.array([]), np.array([]), False)
+
+
+    def _plot (self):
+
+        if self.delta_vars is None:
+            self._plot_text ("Delta plot requires CL or alpha as an axis", color="dimgray",
+                             fontSize=self.SIZE_NORMAL, itemPos=(0.5, 1))
+            return
+
+        # get base and deviation values
+
+        base_var, value_var = self.delta_vars
+
+        x, delta, is_relative = self.delta_data
+
+        if not x.size or not delta.size:
+            self._plot_text ("No delta data available", color="dimgray",
+                             fontSize=self.SIZE_NORMAL, itemPos=(0.5, 1))
+            return
+
+        valid = np.isfinite (x) & np.isfinite (delta)
+        if not np.any (valid):
+            self._plot_text ("No comparable delta samples", color="dimgray",
+                             fontSize=self.SIZE_NORMAL, itemPos=(0.5, 1))
+            return
+
+        delta = np.where (valid, delta, np.nan)
+
+        # plot zero line
+
+        # self._plot_dataItem ([np.min (x), np.max (x)], [0.0, 0.0],
+        #                      pen=pg.mkPen (Artist.COLOR_NORMAL, width=1.0), zValue=0)
+
+        # plot sections with good/bad deviations
+
+        positive_is_better = value_var not in (
+            VLM_Var.WING_CD, VLM_Var.WING_CD_IND, VLM_Var.WING_CD_AIRFOIL,
+            VLM_Var.WING_DRAG, VLM_Var.WING_DRAG_IND, VLM_Var.WING_DRAG_AIRFOIL)
+        color_good = COLOR_GOOD.darker(150)
+        color_good.setAlphaF (0.8)
+        color_bad  = COLOR_ERROR.darker(150)
+        color_bad.setAlphaF (0.8)
+        color_positive = color_good if positive_is_better else color_bad
+        color_negative = color_bad  if positive_is_better else color_good
+
+        for values, color in ((np.maximum (delta, 0.0), color_positive),
+                              (np.minimum (delta, 0.0), color_negative)):
+            if not np.any (values[valid]): continue
+
+            self._plot_dataItem (x, values, pen=None, fillLevel=0.0,
+                                 fillBrush=pg.mkBrush (color), connect="finite", zValue=1)
+
+        pen = pg.mkPen (QColor(Artist.COLOR_NORMAL).darker(100), width=1.0)
+        self._plot_dataItem (x, delta, connect="finite", antialias=False, zValue=2, pen=pen)
+
+        # plot min/max values above/below the deviation high points
+
+        i_max = np.nanargmax (delta)
+        i_min = np.nanargmin (delta)
+        x_min, x_max = x[i_min], x[i_max]
+        y_min, y_max = delta[i_min], delta[i_max]
+        delta_format = "+.1%" if is_relative else "+.3f"
+
+        if y_max > 0.0:
+            color = COLOR_GOOD if positive_is_better else COLOR_ERROR
+            self._plot_point(x_max, y_max, color=color, symbol='s', size=7, anchor=(0.4, 1.1), zValue=3,
+                     text=f"{y_max:{delta_format}}", textColor=color)
+
+        if y_min < 0.0:
+            color = COLOR_ERROR if positive_is_better else COLOR_GOOD
+            self._plot_point(x_min, y_min, color=color, symbol='s', size=7, anchor=(0.4, -0.1), zValue=3,
+                     text=f"{y_min:{delta_format}}", textColor=color)
+        
+
+
+
+class Norm_Ref_Line_Artist (Abstract_Artist_Planform):
+    """
+    Plot chord reference line within chord distribution
         - mode SPAN_REF
         - mode NORM_REF    
     """
@@ -1797,7 +1996,7 @@ class Norm_Chord_Ref_Artist (Abstract_Artist_Planform):
         def _finished_point (self, aPoint):
             """ slot - point move is finished - write back control points"""
 
-            jpoints = JPoint.transform (self._jpoints, transform_fn = self._tr_fn)
+            jpoints = JPoint.transform (self.jpoints, transform_fn = self._tr_fn)
             self._planform.n_chord_ref.bezier_from_jpoints (jpoints)
 
             super()._finished_point (aPoint)
@@ -2047,7 +2246,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
         if scene:
             try:                            # slot could be not connected up to now
                 scene.sigMouseClicked.disconnect (self._scene_clicked)
-            except:
+            except TypeError:
                 pass
 
 
@@ -2468,11 +2667,9 @@ class Flaps_Artist (Abstract_Artist_Planform):
 
             def __init__ (self, *args, 
                           planform = Planform, 
-                          mode = mode.NORM_TO_PLANFORM,
                           t_fn = None, tr_fn = None,                                # transformation
                           **kwargs):
 
-                self._mode = mode
                 self._planform = planform
                 self._t_fn  = t_fn
                 self._tr_fn = tr_fn
@@ -2495,7 +2692,6 @@ class Flaps_Artist (Abstract_Artist_Planform):
 
         def __init__ (self, pi : pg.PlotItem, 
                     planform = Planform, 
-                    mode = mode.NORM_TO_PLANFORM,
                     t_fn = None, tr_fn = None,                                  # transformation
                     color = None, 
                     movable = False,
@@ -2507,17 +2703,13 @@ class Flaps_Artist (Abstract_Artist_Planform):
             self._planform = planform
             self._flaps : Flaps = planform.flaps
 
-            self._mode = mode 
             self._color = color 
             self._t_fn, self._tr_fn  = t_fn, tr_fn
             self._callback_changed = on_changed
 
             # Control jpoints - transform them to current coordinate system   
 
-            if self._mode == mode.NORM_NORM:
-                self._jpoints = self._flaps.rel_depth_as_jpoints ()
-            else:
-                self._jpoints = self._flaps.hinge_as_jpoints (transform_fn = t_fn)
+            self._jpoints = self._flaps.hinge_as_jpoints (transform_fn = t_fn)
 
             # init polyline of control points as PlotCurveItem and hide it (pen=None) 
 
@@ -2531,7 +2723,7 @@ class Flaps_Artist (Abstract_Artist_Planform):
 
             for i, jpoint in enumerate (self._jpoints):
 
-                p = self.Movable_Hinge_Point (jpoint, planform=planform, mode=mode, id = i, parent=self, 
+                p = self.Movable_Hinge_Point (jpoint, planform=planform, id = i, parent=self, 
                                               movable=movable, t_fn = t_fn, tr_fn = tr_fn,               # transformation
                                               color=color, symbol='s', size=7, label_anchor=label_anchor, **kwargs) 
                 
@@ -2612,10 +2804,7 @@ class Flaps_Artist (Abstract_Artist_Planform):
             """ slot - point move is finished """
             
             self.hide()
-            if self._mode == mode.NORM_NORM:
-                self._flaps.rel_depth_from_jpoints (self._jpoints)
-            else: 
-                self._flaps.hinge_from_jpoints (self._jpoints, transform_fn=self._tr_fn)
+            self._flaps.hinge_from_jpoints (self._jpoints, transform_fn=self._tr_fn)
 
             if callable(self._callback_changed):
                 QTimer().singleShot(10, lambda: self._callback_changed())
