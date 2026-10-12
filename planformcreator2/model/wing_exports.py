@@ -430,7 +430,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
     @property
     def wingSections_reduced (self) -> list[WingSection]:
-        return self._planform_mesh.wingSections_mesh
+        return self.trapezoidal_mesh.wingSections_mesh
 
     @property
     def xflr5_filename(self): 
@@ -447,6 +447,8 @@ class Exporter_Xflr5 (Exporter_Abstract):
         """
 
         self._ensure_export_dir()
+
+        self._planform_mesh.create_mesh (self.trapezoidal_mesh)
 
         # ensure all airfoils are up to date and splined (quality) 
 
@@ -682,7 +684,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
     @property
     def wingSections_reduced (self) -> list[WingSection]:
-        return self._planform_mesh.wingSections_mesh
+        return self.trapezoidal_mesh.wingSections_mesh
 
     @property
     def use_nick(self) -> bool: return self._use_nick
@@ -700,6 +702,8 @@ class Exporter_FLZ (Exporter_Abstract):
         """
 
         self._ensure_export_dir()
+
+        self._planform_mesh.create_mesh (self.trapezoidal_mesh)
 
         # ensure all airfoils are up to date and splined (quality) 
 
@@ -773,7 +777,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
         @property
         def wingSections (self) -> list[WingSection]:
-            return self._planform_mesh.wingSections_mesh
+            return self.trapezoidal_mesh.wingSections_mesh
 
         @property
         def start_tag(self): 

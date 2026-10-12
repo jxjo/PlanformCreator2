@@ -104,7 +104,7 @@ class N_Chord_Reference:
 
 
 
-    def at (self, xn: float, fast=True) -> float:
+    def at (self, xn: float | Array | list, fast=True) -> float | Array:
         """ 
         Chord reference function - returns cr at xn
             e.g. cr = 0.8 means 80% of chord is towards le and 20% towards te
@@ -227,7 +227,7 @@ class N_Reference_Line:
         return d
 
 
-    def at (self, xn: float | np.ndarray, fast=True) -> float:
+    def at (self, xn: float | Array | list, fast=True) -> float | Array:
         """ 
         reference line yn at xn  (normally = 0.0 except if Banana-Bezier)
             Higher Precision is achieved with interpolation of the curve (fast=False) 
@@ -237,12 +237,11 @@ class N_Reference_Line:
                 return 0.0 
             else: 
                 return self._ref_bezier.eval_y_on_x (xn, fast=fast) 
-        else: 
-            yn = np.zeros (len(xn))
-            if self.is_banana:
-                for i in range (len(xn)):
-                    yn[i] = self.at (xn[i], fast=fast)
-            return yn
+        else:
+            xn = np.asarray (xn, dtype=float)
+            if not self.is_banana:
+                return np.zeros_like (xn)
+            return self._ref_bezier.eval_y_on_x (xn, fast=fast)
 
 
 
@@ -411,13 +410,14 @@ class N_Distrib_Abstract:
         return xn, yn
 
 
-    def at (self, xn: float) -> float:
+    def at (self, xn: float | Array | list, fast=True) -> float | Array:
         """ main chord function - to be overridden
 
         Args:
-            xn: normalized x position
+            xn: normalized x position or positions
+            fast: use cached approximation where supported
         Returns:
-            cn: normalized chord
+            cn: normalized chord or chords
         """
         raise NotImplementedError
 
@@ -513,7 +513,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
         return d
 
 
-    def at (self, xn: float, fast=True) -> float:
+    def at (self, xn: float | Array | list, fast=True) -> float | Array:
         """ 
         Main chord function - returns cn at xn
             Normally a linear interpolation is done for fast evaluation (fast=True). 
@@ -524,13 +524,27 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
 
         # xn either on straight line or on Bezier 
                            
-        if xn < xn_bezier_start:         
-            xn_line, cn_line = self.line_from_root ()
-            cn = round (np.interp(xn, xn_line, cn_line),10)
-        else:    
-            cn = round (self._bezier.eval_y_on_x (xn, fast=fast),10) 
+        if np.isscalar (xn):
+            if xn < xn_bezier_start:
+                xn_line, cn_line = self.line_from_root ()
+                cn = round (np.interp(xn, xn_line, cn_line),10)
+            else:
+                cn = round (self._bezier.eval_y_on_x (xn, fast=fast),10)
+            return cn
 
-        return cn 
+        xn_values = np.asarray (xn, dtype=float)
+        root_mask = xn_values < xn_bezier_start
+        cn = np.empty_like (xn_values)
+        if np.any (root_mask):
+            xn_line, cn_line = self.line_from_root ()
+            if len (xn_line):
+                cn[root_mask] = np.interp (xn_values[root_mask], xn_line, cn_line)
+            else:
+                cn[root_mask] = self._bezier.cpoints_y[0]
+        if np.any (~root_mask):
+            cn[~root_mask] = self._bezier.eval_y_on_x (xn_values[~root_mask], fast=fast)
+
+        return np.round (cn, 10)
     
 
     def xn_at (self, cn: float, fast=True) -> float:
@@ -746,7 +760,7 @@ class N_Distrib_Trapezoid (N_Distrib_Abstract):
         return np.round(xn,10), np.round(cn,10) 
 
 
-    def at (self, xn: float, fast=True) -> float:
+    def at (self, xn: float | Array | list, fast=True) -> float | Array:
         """ 
         Main chord function - returns cn at xn
         """
@@ -754,7 +768,7 @@ class N_Distrib_Trapezoid (N_Distrib_Abstract):
         xn_arr, cn_arr = self.polyline()
         cn = np.interp(xn, xn_arr, cn_arr)                      # linear interpolation in polyline
 
-        return round (cn,10) 
+        return round (cn,10) if np.isscalar (cn) else np.round (cn,10)
 
 
     def xn_at (self, cn: float, fast=True) -> float:
@@ -785,13 +799,16 @@ class N_Distrib_Elliptical (N_Distrib_Abstract):
     isElliptical    = True 
 
 
-    def at (self, xn: float, fast=True) -> float:
+    def at (self, xn: float | Array | list, fast=True) -> float | Array:
         """ 
         Main chord function - returns cn at xn
         """
-        xn = clip(xn, 0.0, 1.0)
+        if np.isscalar (xn):
+            xn = clip(xn, 0.0, 1.0)
+        else:
+            xn = np.clip (np.asarray (xn, dtype=float), 0.0, 1.0)
         cn = np.sqrt(1.0 - (xn ** 2))                       # Pythagoras
-        return round (cn,10) 
+        return round (cn,10) if np.isscalar (cn) else np.round (cn,10)
 
 
     def xn_at (self, cn: float, fast=True) -> float:
@@ -912,6 +929,7 @@ class WingSection :
             info = f"cn={self._cn:.2f}" 
         else:
             info = ''
+        info += " (for panels)" if self.is_for_panels else ""
         return f"<{type(self).__name__} {info}>"
 
 
@@ -1174,8 +1192,6 @@ class WingSection :
             if self._xn is None: self._xn = round(self.xn,10)           
             if self._cn is None: self._cn = round(self.cn,10) 
 
-        self.set_is_for_panels (False) 
-
 
     @property
     def c (self) -> float:
@@ -1254,7 +1270,7 @@ class WingSection :
         """ index of self with wingSections"""
         try: 
             index = self._planform.wingSections.index (self)
-        except: 
+        except ValueError:
             index = 1
         return index  
 
@@ -1447,7 +1463,7 @@ class WingSections (list [WingSection]):
 
     """
 
-    MIN_XN_DISTANCE    = 0.01                              # minimum distance between wing sections
+    MIN_XN_DISTANCE    = 0.005                             # minimum distance between wing sections
     MIN_CN_DIFFERENCE  = 0.001                             # minimum chord difference between wing sections
 
 
@@ -1496,7 +1512,8 @@ class WingSections (list [WingSection]):
         section_list  = []
         section : WingSection
         for section in self: 
-            section_list.append (section._as_dict ()) 
+            if not section.is_for_panels:
+                section_list.append (section._as_dict ()) 
 
         return section_list
 
@@ -1508,10 +1525,13 @@ class WingSections (list [WingSection]):
 
 
 
-    def create_after (self, aSection: 'WingSection'=None, index=None, is_for_panels=False) -> 'WingSection' : 
+    def create_after (self, aSection: 'WingSection'=None, index=None, 
+                      is_for_panels=False,
+                      ensure_distance=False) -> 'WingSection' : 
         """
-        creates and inserts a new wing section after aSection 
+        creates and inserts a new wing section after aSection or after the section at the given index
             with a chord in the middle to the next neighbor 
+            'ensure_distance' indicates whether to enforce a minimum distance between sections
             'is_for_panels' indicates an extra section created just for paneling
 
         Return: 
@@ -1534,6 +1554,13 @@ class WingSections (list [WingSection]):
                                        {"cn": new_cn, 
                                         "flap_group"  :new_flap_group,
                                         "is_for_panels" : is_for_panels})
+
+            if ensure_distance:
+                new_xn = new_section.xn
+                min_distance = WingSections.MIN_XN_DISTANCE
+                if (right_sec.xn - new_xn < min_distance) or (new_xn - aSection.xn < min_distance):
+                    return None
+
             self.insert (self.index(aSection) + 1, new_section)
 
             self.reset_strak()
@@ -1541,13 +1568,18 @@ class WingSections (list [WingSection]):
         return new_section
 
 
-    def create_at (self, x : float, normed=False)  -> 'WingSection': 
+    def create_at (self, x : float, 
+                   normed=False,
+                   is_for_panels=False,
+                   ensure_distance=True)  -> 'WingSection': 
         """
         create and insert a new wing section at pos x 
 
         Args:
             x:  either x oder xn depending on 'normed' to look for 
             normed: True x value is normed xn 
+            is_for_panels: indicates an extra section created just for paneling
+            ensure_distance: indicates whether to enforce a minimum distance between sections
         Return: 
             newSection: the new wingSection, None if a new section couldn't be created 
         """
@@ -1558,12 +1590,15 @@ class WingSections (list [WingSection]):
 
         xn = clip (xn, 0.0, 1.0)
 
-        # is there already a section? Return this one 
+        # is there already a section? Return  
 
-        exist_sec = self.at_x (xn, tolerance=0.002, normed=True)
+        tolerance = WingSections.MIN_XN_DISTANCE if ensure_distance else 0.0
+
+        exist_sec = self.at_x (xn, tolerance=tolerance, normed=True)
         if exist_sec: return None 
 
-        new_section = WingSection (self._planform, {"xn": xn})
+        new_section = WingSection (self._planform, {"xn": xn,
+                                                    "is_for_panels" : is_for_panels})
         self.insert (1,new_section)                                     # insert section somewhere
 
         self.check_n_repair ()                                          # re-sort
@@ -1583,22 +1618,23 @@ class WingSections (list [WingSection]):
         if aSection and not (protect_root_tip and aSection.is_root_or_tip):
             try:
                 index = self.index (aSection)
-                self.remove (aSection)
+            except ValueError:
+                return None
 
-                if not aSection.is_for_panels:
-                    self.reset_strak()                      # reset strak if "real" wing section is deleted
+            self.remove (aSection)
 
-                    # find previous section which is not for_panels
-                    for sec in reversed(self[:index]):
-                        if not sec.is_for_panels:
-                            return sec
-                    logger.warning (f"{self} no previous section found after deleting {aSection}")
-                    return None
-                else:
-                    # else return previous section
-                    return self[index-1] 
-            except: 
-                pass
+            if not aSection.is_for_panels:
+                self.reset_strak()                      # reset strak if "real" wing section is deleted
+
+                # find previous section which is not for_panels
+                for sec in reversed(self[:index]):
+                    if not sec.is_for_panels:
+                        return sec
+                logger.warning (f"{self} no previous section found after deleting {aSection}")
+                return None
+            else:
+                # else return previous section
+                return self[index-1]
         return None  
 
 
@@ -1774,9 +1810,11 @@ class WingSections (list [WingSection]):
         for section in self [1:-1]:
             left_sec, right_sec = self.neighbors_of (section)
             if left_sec and section.xn - left_sec.xn < self.MIN_XN_DISTANCE:
-                logger.warning (f"{section} is too close to neighboring section {left_sec}")
-            if right_sec and right_sec.is_tip and right_sec.xn - section.xn < self.MIN_XN_DISTANCE:
-                logger.warning (f"{right_sec} is too close to neighboring section {section}")
+                logger.warning (f"{section} is too close to left neighboring section {left_sec}")
+            if right_sec and right_sec.xn - section.xn < self.MIN_XN_DISTANCE:
+                if not ( right_sec.is_tip and section.is_for_panels):           
+                  # ignore if the right section is the tip and the current section is for panels
+                  logger.warning (f"{right_sec} is too close to right neighboring section {section}")
 
         # there must be root and tip 
         if not self[0].is_root or not self[-1].is_tip:
@@ -1789,7 +1827,7 @@ class WingSections (list [WingSection]):
         """
         try:
             index = self.index (aSection) 
-        except: 
+        except ValueError:
             return None, None
         
         if index == 0 : 
@@ -1798,7 +1836,7 @@ class WingSections (list [WingSection]):
             left_sec = self[index - 1] 
         try:
             right_sec = self[index + 1] 
-        except: 
+        except IndexError:
             right_sec = None
         return left_sec, right_sec
 
@@ -1848,7 +1886,7 @@ class WingSections (list [WingSection]):
 
         try:
             index = self.index (aSection) 
-        except: 
+        except ValueError:
             return None, None
 
         left_sec = None
@@ -2639,7 +2677,7 @@ class Planform:
         return self.flaps.hinge_equal_ref_line
     
 
-    def cn_at (self, x: float, fast=True, normed=False) -> float:
+    def cn_at (self, x: float | Array | list, fast=True, normed=False) -> float | Array:
         """ 
         Normalized chord at x or xn. At root cn is always 1.0 
 
@@ -2651,7 +2689,7 @@ class Planform:
             cn:     normalized chord
         """
         if not normed:
-            xn = x / self.span
+            xn = x / self.span if np.isscalar (x) else np.asarray (x, dtype=float) / self.span
         else: 
             xn = x
         return self.n_distrib.at (xn, fast=fast)
@@ -2719,7 +2757,7 @@ class Planform:
         return le_y, te_y 
 
 
-    def c_at (self, x: float, fast=False) -> float:
+    def c_at (self, x: float | Array | list, fast=False) -> float | Array:
         """ 
         chord at x. At root c is always chord_root 
 
@@ -2729,7 +2767,7 @@ class Planform:
         Returns:
             c:      chord
         """
-        xn = x / self.span
+        xn = x / self.span if np.isscalar (x) else np.asarray (x, dtype=float) / self.span
         cn = self.n_distrib.at (xn, fast=fast)
         c  = cn * self.chord_root
         return c
@@ -2978,12 +3016,17 @@ class Planform:
             xn = round (xcn, 10)
 
         else: 
-            # array loop over each xn as y will be depending on the position 
-            xn, yn = np.array (xcn), np.array (ycn)
+            xn = np.asarray (xcn, dtype=float)
+            ycn = np.asarray (ycn, dtype=float)
 
-            for i in range (len(xcn)):
-                cni = cn[i] if cn is not None else None
-                xn[i], yn[i] = self.t_chord_to_norm (xn[i], yn[i], cn=cni)
+            if cn is None:
+                chord = self.n_distrib.at (xn)
+            else:
+                chord = np.asarray (cn, dtype=float)
+
+            cr = self.n_chord_ref.at (xn)
+            yn = np.round (chord * (1.0 - cr - ycn), 10)
+            xn = np.round (xn, 10)
 
         return xn, yn 
 

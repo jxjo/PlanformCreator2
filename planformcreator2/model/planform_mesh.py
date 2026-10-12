@@ -13,8 +13,8 @@ import numpy as np
 from airfoileditor.base.common_utils import clip, fromDict, toDict
 from airfoileditor.model.airfoil     import GEO_BASIC
 
-if TYPE_CHECKING:
-    from .planform import Planform, WingSection, WingSections
+# if TYPE_CHECKING:
+from .planform                       import Planform, WingSection, WingSections
 
 
 logger = logging.getLogger(__name__)
@@ -41,8 +41,6 @@ class Mesh_Strategy:
     }
 
     PANEL_WIDTH_MIN       = 0.002                       # Minimum width of a spanwise panel
-    SECTION_DIST_MIN      = 0.005                       # Minimum distance between sections
-
 
     def __init__ (self, mesh: "Planform_Mesh", dataDict: dict | None = None):
         """Bind this strategy to its mesh and load its configuration."""
@@ -55,7 +53,7 @@ class Mesh_Strategy:
         self._cn_tip_min        = None
         self._cn_ratio_min      = None
         self._width_min_targ    = None
-
+        self._width_min_cur     = None
 
         self._from_dict (dataDict)
 
@@ -91,16 +89,63 @@ class Mesh_Strategy:
         self.set_width_min_targ (fromDict (data, "width_min", self.PANEL_WIDTH_MIN))
 
 
-    def _clean_sections_cn_tip_min (self):
-        """ delete all helper sections which are beyond the minimum tip chord """
+    def _apply_cn_tip_min (self):
+        """ 
+        delete all helper sections which are beyond the minimum tip chord 
+        and try to add a new section at the requested minimum tip chord.
+        """
 
-        if self.cn_tip_min is None:
+        cn_tip = self.wingSections_planform[-1].cn
+
+        if self.cn_tip_min is None or cn_tip >= self.cn_tip_min:
             return
 
-        # remove sections that are below the minimum tip chord
-        for section in self.wingSections_planform[:]:
+        # remove sections that are below minimum tip chord 
+        for section in self.wingSections_planform[1:-1]:
             if section.is_for_panels and section.cn < self.cn_tip_min:
-                self.mesh.wingSections.remove(section)
+                self.wingSections_planform.remove(section)
+
+        # is the last before tip already less than cn_tip_min?
+        last_before_tip = self.wingSections_planform[-2]
+        if last_before_tip.cn < self.cn_tip_min:
+            return
+
+        # position of an additional section at cn_tip_min
+        yn_tip_min = self.mesh.parent_planform.xn_at_cn (self.cn_tip_min, fast=False)
+
+        if round(yn_tip_min, 4) >= 1.0:                               # sanity
+            return
+        
+        # is there enough width to add an additional section at cn_tip_min?
+        yn_left    = last_before_tip.xn
+        dist_to_left = yn_tip_min - yn_left
+
+        # is there nearby a section that would prevent adding a new one?
+        if dist_to_left < (2 * WingSections.MIN_XN_DISTANCE) and last_before_tip.is_for_panels:
+            # move this one to cn_tip_min
+            last_before_tip.set_cn (self.cn_tip_min)    
+            logger.info (f"Moved section to cn_tip_min {self.cn_tip_min}")
+            return
+
+        # is there enough width to add an additional section at cn_tip_min?
+        if dist_to_left > WingSections.MIN_XN_DISTANCE:
+
+            # add a new section at cn_tip_min
+            new_section = self.wingSections_planform.create_at (yn_tip_min, is_for_panels=True, 
+                                                                normed=True, ensure_distance=False)
+            if new_section is None:
+                logger.warning (f"Failed to create new section at cn_tip_min {self.cn_tip_min}")
+            else:
+                new_section.set_cn (self.cn_tip_min)        # set exactly the minimum tip chord
+                logger.info (f"Created new section at cn_tip_min {self.cn_tip_min}")
+
+
+    def _remove_all_helper_sections (self):
+        """Remove all helper sections that were added for paneling purposes."""
+
+        for section in self.wingSections_planform[:]:
+            if section.is_for_panels:
+                self.wingSections_planform.remove(section)
 
 
     @property
@@ -153,9 +198,9 @@ class Mesh_Strategy:
     def set_width_min_targ (self, value: float | None):
         """Set the target minimum spanwise panel width."""
         if value == 0.0:
-            self._width_min_targ = round (self.width_min_cur + self.PANEL_WIDTH_MIN, 2)
+            self._width_min_targ = round (self.width_min_cur + self.PANEL_WIDTH_MIN, 3)
         elif value is not None:
-            self._width_min_targ = clip (value, 0.001, 0.2)
+            self._width_min_targ = clip (value, self.PANEL_WIDTH_MIN, 0.2)
         else:
             self._width_min_targ = None
 
@@ -163,12 +208,11 @@ class Mesh_Strategy:
     @property
     def width_min_cur (self) -> float:
         """narrowest current panel width as fraction of the span."""
-        widths = np.diff (self.y_stations ())
-        if len(widths) == 0:
-            min_width = 0.0
-        else:
-            min_width = np.min (widths) / self.mesh.span
-        return float (min_width)
+
+        if self._width_min_cur is None:
+            self.y_stations()                       # update current minimum panel width
+        return self._width_min_cur 
+
 
     @property
     def wy_distribution_fns_names (self) -> list[str]:
@@ -191,7 +235,7 @@ class Mesh_Strategy:
         wingSections = self.wingSections_planform
 
         if value == 0.0:
-            self._cn_tip_min = 0.1
+            self._cn_tip_min = 0.09
         elif value is not None:
             cn_min = 0.01
             cn_max = max (wingSections[1].cn, 0.5)
@@ -226,6 +270,13 @@ class Mesh_Strategy:
         return min (ratios) if ratios else 1.0
 
 
+    @property
+    def cn_diff (self) -> float:
+        """Return the greatest normalized chord deficit relative to the parent."""
+        # only relevant for strategy trapezoidal
+        return 0.0
+    
+
     def _apply_cn_ratio_min (self):
         """Insert helper sections until adjacent section chord ratios are high enough."""
 
@@ -240,15 +291,26 @@ class Mesh_Strategy:
             sections = self.wingSections_planform
             section_inserted = False
             for index in range (len (sections) - 1):
-                section_width = sections[index + 1].xn - sections[index].xn
+
                 cn_left  = sections[index].cn
                 cn_right = sections[index + 1].cn
-                if section_width >= 2 * self.SECTION_DIST_MIN and cn_left and cn_right / cn_left < self.cn_ratio_min:
-                    sections.create_after (index=index, is_for_panels=True)
-                    section_inserted = True
-                    break
+
+                # insert new section if the section width is above the minimum and the chord ratio is below the minimum
+                if cn_right / cn_left < self.cn_ratio_min:
+                    new_section = sections.create_after (index=index, is_for_panels=True, ensure_distance=True)
+                    if new_section:
+                        section_inserted = True
+                        break
 
             cycle += 1
+
+
+    def prepare_sections (self):
+        """Rebuild mesh helper sections before generating a mesh."""
+
+        self._remove_all_helper_sections ()
+        self._apply_cn_ratio_min ()
+        self._apply_cn_tip_min ()
 
 
     @property
@@ -273,10 +335,11 @@ class Mesh_Strategy:
         raise NotImplementedError
 
 
-    def cn_at (self, yn: float) -> float:
+    def cn_at (self, yn: float | np.ndarray) -> float | np.ndarray:
         """Interpolate the normalized mesh chord at normalized span position ``yn``."""
         yn_arr, cn_arr = self.cn_polyline ()
-        return round (np.interp (yn, yn_arr, cn_arr), 10)
+        cn = np.interp (yn, yn_arr, cn_arr)
+        return round (cn, 10) if np.isscalar (cn) else np.round (cn, 10)
 
 
     def yn_rel_stations (self, wy_panels: int) -> np.ndarray:
@@ -326,7 +389,7 @@ class Mesh_Strategy:
     @property
     def wingSections_mesh (self) -> list[WingSection]:
         """ all wingSections of the mesh"""
-        all_sections = self.wingSections_planform
+        all_sections = self.wingSections_planform [:]
         for index, section in enumerate (all_sections):
             if self.cn_tip_min and round (section.cn, 2) < self.cn_tip_min:
                 return all_sections[:index]
@@ -345,7 +408,9 @@ class Mesh_Strategy:
         else:
             raise ValueError (f"Index {index} to get wing section is to high")
 
-        return int (np.count_nonzero ((self.y_stations () > left_y) & (self.y_stations () <= right_y)))
+        y_stations = self.y_stations ()
+
+        return int (np.count_nonzero ((y_stations > left_y) & (y_stations <= right_y)))
 
 
     def c_diff_lines (self) -> list:
@@ -391,8 +456,8 @@ class Mesh_Strategy_Trapezoidal (Mesh_Strategy):
         if not data:
             data = {}
         self._wy_panels = fromDict (data, "wy_panels", 8)
-        self._width_min_targ = fromDict (data, "width_min", 0.015)
-        self._cn_diff_max = fromDict (data, "cn_diff_max", 0.02)
+        self._width_min_targ = fromDict (data, "width_min", None)
+        self._cn_diff_max = fromDict (data, "cn_diff_max", None)
 
 
     @property
@@ -437,36 +502,28 @@ class Mesh_Strategy_Trapezoidal (Mesh_Strategy):
         return np.array (yn), np.array (cn)
 
 
-    def cn_at_y (self, y: float) -> float:
+    def cn_at_y (self, y: float | np.ndarray) -> float | np.ndarray:
         """Return the normalized trapezoidal chord at a spanwise position."""
-        return self.cn_at (y / self.mesh.span)
+        yn = y / self.mesh.span if np.isscalar (y) else np.asarray (y, dtype=float) / self.mesh.span
+        return self.cn_at (yn)
 
 
-    def c_at (self, y: float) -> float:
+    def c_at (self, y: float | np.ndarray) -> float | np.ndarray:
         """Return the trapezoidal chord at a spanwise position."""
         return self.cn_at_y (y) * self.mesh.chord_root
 
     @property
     def cn_diff (self) -> float:
         """Return the greatest normalized chord deficit relative to the parent."""
-        cn_diff = 0.0
-        for y in self.y_stations ():
-            c_diff = self.mesh.parent_planform.c_at (y) - self.c_at (y)
-            cn_diff = max (c_diff / self.mesh.chord_root, cn_diff)
-        return cn_diff
+        y = self.y_stations ()
+        if not len (y):
+            return 0.0
+        c_diff = self.mesh.parent_planform.c_at (y) - self.c_at (y)
+        return max (0.0, float (np.max (c_diff / self.mesh.chord_root)))
 
 
     def y_stations (self) -> np.ndarray:
         """Return stations distributed independently within each retained section."""
-
-        self._apply_cn_ratio_min ()
-
-        # optimize deviation - insert helper sections
-        if self.cn_diff_max:
-            self._optimize_cn_diff ()
-
-        # clean up sections that are beyond the minimum tip chord
-        self._clean_sections_cn_tip_min ()
 
         # get the spanwise stations of the wing sections up to cutted tip (reduced)
         yn_sec = self.cn_polyline (reduced=True)[0]
@@ -476,7 +533,23 @@ class Mesh_Strategy_Trapezoidal (Mesh_Strategy):
 
         yn_stations = self._apply_width_min (yn_sec, yn_rel_stations)
 
+        # store the current minimum panel width for reference
+        self._width_min_cur = np.min(np.diff (yn_stations))
+
         return np.round (yn_stations * self.mesh.span, 6)
+
+
+    @override
+    def prepare_sections (self):
+        """Rebuild trapezoidal mesh helper sections before generating a mesh."""
+
+        self._remove_all_helper_sections ()
+        self._apply_cn_ratio_min ()
+
+        if self.cn_diff_max:
+            self._optimize_cn_diff ()
+
+        self._apply_cn_tip_min ()
 
 
     def _apply_width_min (self, yn_sec: np.ndarray, yn_rel_stations: np.ndarray) -> np.ndarray:
@@ -524,17 +597,17 @@ class Mesh_Strategy_Trapezoidal (Mesh_Strategy):
 
             sections = self.wingSections_planform
             section_inserted = False
-            for index in range (len (sections) - 1):
-                section_width = sections[index + 1].xn - sections[index].xn
-                panel_width_min = self.width_min_targ if self.width_min_targ else self.PANEL_WIDTH_MIN
-                if section_width >= 2 * self.SECTION_DIST_MIN and section_width > 1.5 * panel_width_min:
-                    yn_mid    = (sections[index].xn + sections[index + 1].xn) / 2
-                    cn_mesh   = self.cn_at (yn_mid)
-                    cn_parent = self.mesh.parent_planform.n_distrib.at (yn_mid)
-                    if cn_parent - cn_mesh > self.cn_diff_max:
-                        sections.create_after (index=index, is_for_panels=True)
-                        section_inserted = True
-                        break
+            xn = np.array ([section.xn for section in sections])
+            yn_mid = (xn[:-1] + xn[1:]) / 2
+            cn_mesh = self.cn_at (yn_mid)
+            cn_parent = self.mesh.parent_planform.n_distrib.at (yn_mid)
+
+            violating_indices = np.flatnonzero (cn_parent - cn_mesh > self.cn_diff_max)
+            for index in violating_indices:
+                new_section = sections.create_after (index=int(index), is_for_panels=True, ensure_distance=True)
+                if new_section:
+                    section_inserted = True
+                    break
             cycle += 1
 
 
@@ -544,16 +617,16 @@ class Mesh_Strategy_Trapezoidal (Mesh_Strategy):
         lines = []
         c_diff_max = self.cn_diff_max * self.mesh.chord_root if self.cn_diff_max is not None else 0.0
         y_poly, le_x, te_x = self.le_te_polyline ()
+        y_stations = self.y_stations ()
+        c_diff = self.mesh.parent_planform.c_at (y_stations) - self.c_at (y_stations)
 
-        for y in self.y_stations ():
-            c_panel = self.c_at (y)
-            c_parent = self.mesh.parent_planform.c_at (y)
-            if c_parent - c_panel > c_diff_max:
-                le_x_mesh = np.interp (y, y_poly, le_x)
-                te_x_mesh = np.interp (y, y_poly, te_x)
-                le_x_parent, te_x_parent = self.mesh.parent_planform.le_te_at (y)
-                lines.append (([y, y], [le_x_parent, le_x_mesh]))
-                lines.append (([y, y], [te_x_parent, te_x_mesh]))
+        for index in np.flatnonzero (c_diff > c_diff_max):
+            y = y_stations[index]
+            le_x_mesh = np.interp (y, y_poly, le_x)
+            te_x_mesh = np.interp (y, y_poly, te_x)
+            le_x_parent, te_x_parent = self.mesh.parent_planform.le_te_at (y)
+            lines.append (([y, y], [le_x_parent, le_x_mesh]))
+            lines.append (([y, y], [te_x_parent, te_x_mesh]))
         return lines
 
 
@@ -713,11 +786,6 @@ class Mesh_Strategy_Smooth (Mesh_Strategy):
     def y_stations (self) -> np.ndarray:
         """Return globally distributed stations from root to the retained tip."""
 
-        self._apply_cn_ratio_min ()
-
-        # remove sections that are below the minimum tip chord
-        self._clean_sections_cn_tip_min ()
-
         yn_max = self.yn_max() 
 
         # raw distribution up to y_max
@@ -728,6 +796,9 @@ class Mesh_Strategy_Smooth (Mesh_Strategy):
 
         # align stations to wing sections
         yn_stations = self._align_to_sections (yn_stations)
+
+        # store the current minimum panel width for reference
+        self._width_min_cur = np.min(np.diff (yn_stations))
 
         return np.round (yn_stations * self.mesh.span, 6)
 
@@ -744,7 +815,7 @@ class Planform_Mesh:
     """Paneled mesh derived from a planform, using x chordwise and y spanwise."""
 
 
-    def __init__ (self, parent_planform: Planform, dataDict: dict | None = None):
+    def __init__ (self, parent_planform: Planform, dataDict: dict | None):
         """Create a mesh derived from a planform.
 
         Args:
@@ -832,7 +903,7 @@ class Planform_Mesh:
             value = Mesh_Strategy_Trapezoidal.name
         try:
             self._strategy = self._strategies[value]
-        except:
+        except KeyError:
             if self._strategy is None:
                 self._strategy = self._strategies[Mesh_Strategy_Trapezoidal.name]
 
@@ -863,7 +934,7 @@ class Planform_Mesh:
         return self._strategies[Mesh_Strategy_Smooth.name]
 
 
-    def create_mesh (self) -> tuple[np.ndarray, np.ndarray, list]:
+    def create_mesh (self, strategy: Mesh_Strategy | None = None) -> tuple[np.ndarray, np.ndarray, list]:
         """Return the full mesh as a tuple of spanwise and chordwise stations.
 
         Returns:
@@ -872,22 +943,19 @@ class Planform_Mesh:
             - List of sections used for mesh generation.
         """
 
+        strategy = strategy or self.strategy
         t0 = perf_counter ()
 
-        # always remove helper sections before optimizing
-        for section in self.wingSections[:]:
-            if section.is_for_panels:
-                self.wingSections.delete (section)
-
-        y_stations = self.strategy.y_stations ()
+        strategy.prepare_sections ()
+        y_stations = strategy.y_stations ()
 
         t1 = perf_counter ()
 
-        x_stations = self.strategy.x_stations_for (y_stations)
+        x_stations = strategy.x_stations_for (y_stations)
 
         logger.debug (f"{self} create_mesh y: {t1 - t0:.5f}s x: {perf_counter () - t1:.5f}s")
 
-        return y_stations, x_stations, self.wingSections_mesh
+        return y_stations, x_stations, strategy.wingSections_mesh
 
 
     def reset (self):

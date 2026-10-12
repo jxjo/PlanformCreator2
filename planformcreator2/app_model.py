@@ -73,6 +73,7 @@ class App_Model (QObject):
     sig_new_polars              = pyqtSignal()          # new polars generated
     sig_paneling_changed        = pyqtSignal()          # paneling definition changed
 
+    sig_ref_wing_changed        = pyqtSignal()          # reference wing changed
     sig_vlm_changed             = pyqtSignal()          # current VLM polar/op-point changed
 
 
@@ -231,7 +232,7 @@ class App_Model (QObject):
         if self._cur_wingSection: 
             try:
                 self._cur_wingSection.index ()
-            except: 
+            except ValueError:
                 self._cur_wingSection = None
 
         # handle first time or not existing 
@@ -607,7 +608,7 @@ class App_Model (QObject):
             self._ref_wing.vlm_wing_reset()
 
         if not silent:
-            self.sig_planform_changed.emit()                        # will refresh diagrams
+            self.sig_ref_wing_changed.emit()                        # notify reference wing changed
 
 
     @property

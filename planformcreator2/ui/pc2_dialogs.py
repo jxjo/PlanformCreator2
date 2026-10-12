@@ -1468,7 +1468,7 @@ class Dialog_Edit_Paneling (Dialog_Modal):
                     obj=lambda: trapezoidal, prop=Mesh_Strategy_Trapezoidal.cn_diff_max,
                     hide=lambda: self.mesh.strategy.is_smooth or self.is_planform_trapezoidal or trapezoidal.cn_diff_max is None,
                     toolTip=tip)
-            Label (l, r, 4, get=lambda: f"currently {trapezoidal.cn_diff:.1%}",
+            Label (l, r, 4, get=lambda: f"currently {self.mesh.strategy.cn_diff:.1%}",
                     colSpan=2, style=style.COMMENT,
                     hide=lambda: self.mesh.strategy.is_smooth or self.is_planform_trapezoidal or not trapezoidal.cn_diff_max is None)
             r += 1
@@ -1525,7 +1525,6 @@ class Dialog_Edit_Paneling (Dialog_Modal):
 
     @property
     def activated_cn_tip_min (self) -> bool:
-        print (f"activated_cn_tip_min: {self.mesh.strategy.cn_tip_min}")
         return self.mesh.strategy.cn_tip_min is not None
 
     def set_activated_cn_tip_min (self, aBool):
@@ -1575,9 +1574,10 @@ class Dialog_Edit_Paneling (Dialog_Modal):
     def _on_widget_changed (self,*_):
         """ slot for change of widgets"""
         self.panel_header.refresh ()
-        self.panel_strategy.refresh ()
-        # super()._on_widget_changed (*_)               
         self.sig_paneling_changed.emit()                        # refresh diagram
+
+        # now we have new values for the mesh strategy
+        self.panel_strategy.refresh ()
 
 
     @override

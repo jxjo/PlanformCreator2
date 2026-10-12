@@ -157,7 +157,7 @@ class Wing:
 
         # mesh derived from self planform
 
-        self._planform_mesh         = Planform_Mesh (self.planform, dataDict = fromDict (p, "panels", {}))
+        self._planform_mesh         = Planform_Mesh (self.planform, fromDict (p, "panels", {}))
 
         # will hold the handler which manages export including its parameters
 
@@ -1027,8 +1027,9 @@ class Wing:
                 self._parm_pathFileName = pathFileName_abs.name         # only the file name relative to working dir
 
                 # reinit planform with wing sections having new airfoils 
-                self._planform = Planform (self, parms)
-                self._planform_mesh = None                              # reset planform mesh
+                self._planform      = Planform (self, parms)
+                self._planform_mesh = Planform_Mesh (self._planform, fromDict (parms, "panels", {}))
+
                 self._vlm_wing = None                                   # reset VLM wing
                 self._background_image = None                           # reset to reload from new working dir and/or location
 
