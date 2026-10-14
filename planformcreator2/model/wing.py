@@ -24,7 +24,7 @@ import numpy.typing as npt
 import bisect
 import shutil
 import copy
-from typing                 import override
+from typing                 import TYPE_CHECKING, override
 from pathlib                import Path
 from math                   import isclose
 from time                   import perf_counter
@@ -42,6 +42,9 @@ from .planform_mesh                         import Planform_Mesh, Mesh_Strategy_
 from .image_definition                      import Image_Definition
 from .planform                              import (Planform, N_Distrib_Bezier, WingSections,
                                                     N_Distrib_Trapezoid, N_Distrib_Elliptical)
+
+if TYPE_CHECKING:
+    from .wing_reference import Reference_PC2_File
 
 
 import logging
@@ -152,7 +155,20 @@ class Wing:
 
         # reference planforms and background image  
 
-        self._ref_pc2_files         = self._ref_pc2_files_from_dict(p)
+        from .wing_reference import Reference_PC2_File
+
+        pc2_files = fromDict (p, "reference_pc2_files", [])
+        if not pc2_files:
+            single_pc2_file = fromDict (p, "reference_pc2_file", None)
+            if single_pc2_file:
+                pc2_files = [{"path": single_pc2_file}]
+
+        self._ref_pc2_files = []
+        for pc2_file_data in pc2_files:
+            try:
+                self._ref_pc2_files.append (Reference_PC2_File (pc2_file_data, self.workingDir_path))
+            except FileNotFoundError as error:
+                logger.warning (str(error))
         self._background_image      = None
 
         # mesh derived from self planform
@@ -207,7 +223,8 @@ class Wing:
         p.set ("airfoil_nick_base",  self._airfoil_nick_base) 
         p.set ("background_image",   self.background_image._as_dict())
 
-        p.set ("reference_pc2_files", self._ref_pc2_files_as_dict())
+        p.set ("reference_pc2_files", [pc2_file._as_dict (self.workingDir_path)
+                           for pc2_file in self.ref_pc2_files])
 
         # polar definitions - do not save if there is only a default definition 
         def_list = []
@@ -237,30 +254,6 @@ class Wing:
             p.set ("csv", self._exporter_csv._as_dict()) 
 
         return p
-
-
-    def _ref_pc2_files_as_dict (self) -> list[dict]:
-        """ Return reference PC2 files as dictionaries for saving. """
-
-        pc2_files = []
-        working_dir = self.workingDir_path
-
-        for ref_path, scale_mode in self.ref_pc2_files:
-            ref_path = Path(ref_path)
-            if not ref_path.is_absolute():
-                ref_path = working_dir / ref_path
-
-            ref_path_to_save = ref_path.resolve(strict=False)
-            try:
-                ref_path_to_save = ref_path_to_save.relative_to(working_dir)
-            except ValueError:
-                pass
-
-            pc2_files.append({
-                "path": ref_path_to_save.as_posix(),
-                "scale_mode": str(scale_mode)})
-
-        return pc2_files
 
 
     def _convert_to_v2 (self, dataDict :dict) -> dict:
@@ -415,40 +408,6 @@ class Wing:
         return dict_v5
 
 
-    def _ref_pc2_files_from_dict (self, dataDict: dict):
-        """ load reference PC2 files from dataDict """
-
-        pc2_files_list : list = fromDict (dataDict, "reference_pc2_files", [])
-
-        # compatibility for older version wth a single reference PC2 file specified as a string
-        if not pc2_files_list:
-            single_pc2_file = fromDict (dataDict, "reference_pc2_file", [])
-            if single_pc2_file:
-                pc2_files_list.append({"path": single_pc2_file, "scale_mode": Scale_Mode.NO_SCALE.value})
-
-        # read list and convert to tuples (path, scale_mode)
-        ref_pc2_files = []
-        item_dict : dict
-        for item_dict in pc2_files_list:
-            path       = Path(fromDict(item_dict, "path", ""))
-            scale_mode_str = fromDict(item_dict, "scale_mode", Scale_Mode.NO_SCALE.value)
-            if scale_mode_str not in {mode.value for mode in Scale_Mode}:
-                logger.warning (f"Invalid reference-wing scale mode '{scale_mode_str}' for '{path}'")
-                scale_mode = Scale_Mode.NO_SCALE
-            else:
-                scale_mode = Scale_Mode(scale_mode_str)
-            # check if path is relative 
-            if not path.is_absolute():
-                path = self.workingDir_path / path
-            if not path.exists():
-                logger.warning (f"Reference PC2 file not found: {path}")
-                continue
-            
-            ref_pc2_files.append((path, scale_mode))
-
-        return ref_pc2_files
-
-
     # ---Properties --------------------- 
 
     @property
@@ -582,47 +541,44 @@ class Wing:
     
 
     @property
-    def ref_pc2_files (self) -> list[tuple[Path, 'Scale_Mode']]:
-        """ list of PC2 reference planforms as (Path, Scale_Mode) tuples"""
+    def ref_pc2_files (self) -> list['Reference_PC2_File']:
+        """List of PC2 reference planform entries."""
         return self._ref_pc2_files
 
     @property
     def ref_wing_names (self) -> list[str]:
         """ Available reference wings, with the built-in elliptical wing first. """
-        names = [path.name for path , _ in self.ref_pc2_files]
+        from .wing_reference import Reference_Wing_Elliptical
+
+        names = [pc2_file.path.name for pc2_file in self.ref_pc2_files]
         names.append (Reference_Wing_Elliptical.name)
         return names
 
 
-    def get_ref_pc2_file (self, name: str) -> tuple[Path, 'Scale_Mode'] | None:
-        """ Return the configured reference PC2 file matching its filename stem. """
+    def get_ref_pc2_file (self, name: str) -> 'Reference_PC2_File | None':
+        """Return the configured reference PC2 entry matching its filename."""
 
-        for ref_path, scale_mode in self.ref_pc2_files:
-            if ref_path.name == name:
-                return ref_path, scale_mode
+        for pc2_file in self.ref_pc2_files:
+            if pc2_file.path.name == name:
+                return pc2_file
         return None
 
 
-    def update_ref_pc2_files (self, ref_wing: 'Reference_Wing', remove: bool = False):
-        """ Add, update, or remove a reference PC2 file entry. """
+    def update_ref_pc2_files (self, pc2_file: 'Reference_PC2_File', remove: bool = False):
+        """Add, update, or remove a reference PC2 file entry without reordering it."""
 
-        ref_path = ref_wing.parm_path_abs.resolve(strict=False)
+        ref_path = pc2_file.path_abs.resolve(strict=False)
 
-        for index, (stored_path, _) in enumerate(self._ref_pc2_files):
-            candidate_path = Path(stored_path)
-            if not candidate_path.is_absolute():
-                candidate_path = self.workingDir_path / candidate_path
-            candidate_path = candidate_path.resolve(strict=False)
-
-            if candidate_path == ref_path:
+        for index, stored_file in enumerate(self.ref_pc2_files):
+            if stored_file.path_abs.resolve(strict=False) == ref_path:
                 if remove:
                     del self._ref_pc2_files[index]
                 else:
-                    self._ref_pc2_files[index] = (stored_path, ref_wing.scale_mode)
+                    self._ref_pc2_files[index] = pc2_file
                 return
 
         if not remove:
-            self._ref_pc2_files.append((ref_path, ref_wing.scale_mode))
+            self._ref_pc2_files.append(pc2_file)
 
 
     def handle_airfoil_change (self):
@@ -637,7 +593,6 @@ class Wing:
 
         if self._vlm_wing:
             self._vlm_wing.handle_airfoil_change()
-
 
 
     @property
@@ -1137,224 +1092,3 @@ class Wing:
         t_x = -t_x  
 
         return t_x, y 
-
-
-#-------------------------------------------------------------------------------
-# Reference Wing  
-#-------------------------------------------------------------------------------
-
-
-class Scale_Mode (StrEnum):
-        
-        NO_SCALE = \
-                    "No scaling"
-        MATCH_SPAN_AND_AREA = \
-                    "Span & Area"
-        MATCH_ROOT_CHORD_AND_AREA = \
-                    "Root & Area"
-        MATCH_ROOT_CHORD_AND_SPAN = \
-                    "Root & Span"
-
-
-class Reference_Wing (Wing):
-
-    """ 
-    Reference wing class that allows scaling of a reference PC2 file
-    relative to a parent wing 
-    """
-
-    is_reference_wing = True
-
-    def __init__ (self, 
-                  parm_filePath: str,
-                  parent_wing : Wing,
-                  scale_mode = Scale_Mode.MATCH_SPAN_AND_AREA,
-                  **kwargs):
-
-        self._parent_wing = parent_wing
-        self._area_normed = None
-
-         # avoid recursion during initialization
-        self._scale_mode  = Scale_Mode.NO_SCALE            
-
-        super().__init__(parm_filePath, **kwargs)
-
-        # original area of the planform (normed)
-        self._area_normed = self.planform.calc_area (normed=True)
-
-        # now set the desired scale mode
-        self._scale_mode  = Scale_Mode(scale_mode)
-
-        # apply updated polar sets (fitting to new scale)
-        self.planform.wingSections.refresh_polar_sets()
-
-    @override
-    def _save (self) -> Parameters:
-        """ returns the parameters of self as new Parameters"""
-        # no save for reference wing
-        p = Parameters ()
-        return p
-
-
-    @property
-    def parent_wing (self) -> Wing:
-        return self._parent_wing
-
-    @property
-    def name (self) -> str:
-        return self.parm_path.name
-
-
-    @property
-    def scale_mode (self) -> Scale_Mode:
-        """ defines how self is scaled to parent wing"""
-        return self._scale_mode
-
-    def set_scale_mode (self, scale_mode: Scale_Mode | str):
-
-        if isinstance(scale_mode, str):
-            scale_mode = Scale_Mode(scale_mode)
-
-        self._scale_mode = Scale_Mode(scale_mode)
-
-    @property
-    def scale_mode_names (self) -> list[str]:
-        return [mode.value for mode in Scale_Mode]
-
-
-    @override
-    @property
-    def halfspan (self) -> float:
-        """ returns halfspan of the reference wing based on the scaling mode """
-
-        if self.scale_mode == Scale_Mode.NO_SCALE:
-            return self._halfspan
-        elif self.scale_mode == Scale_Mode.MATCH_SPAN_AND_AREA:
-            return self.parent_wing.halfspan
-        elif self.scale_mode == Scale_Mode.MATCH_ROOT_CHORD_AND_AREA:
-            parent_area_normed = self.parent_wing.planform.calc_area(normed=True)
-            span = (parent_area_normed / self._area_normed) * self.parent_wing.halfspan 
-            return max(0.01, span)
-        elif self.scale_mode == Scale_Mode.MATCH_ROOT_CHORD_AND_SPAN:
-            return self.parent_wing.halfspan
-        raise ValueError (f"Unsupported reference-wing scale mode: {self.scale_mode}")
-
-
-    @override
-    @property
-    def chord_root (self) -> float:
-        """ root chord of the reference wing based on the scaling mode """
-
-        if self.scale_mode == Scale_Mode.NO_SCALE:
-            return self._chord_root
-        elif self.scale_mode == Scale_Mode.MATCH_SPAN_AND_AREA:
-            parent_area_normed = self.parent_wing.planform.calc_area(normed=True)
-            chord = (parent_area_normed / self._area_normed) * self.parent_wing.chord_root 
-            return max(0.01, chord)
-        elif self.scale_mode == Scale_Mode.MATCH_ROOT_CHORD_AND_AREA:
-            return self.parent_wing.chord_root
-        elif self.scale_mode == Scale_Mode.MATCH_ROOT_CHORD_AND_SPAN:
-            return self.parent_wing.chord_root
-        raise ValueError (f"Unsupported reference-wing scale mode: {self.scale_mode}")
-
-
-    def polar_def_scaled_to_ref (self, polar_def: Polar_Definition) -> Polar_Definition:
-        """ returns a polar definition scaled to the reference wing from parent wing """
-
-        if self._scale_mode == Scale_Mode.MATCH_SPAN_AND_AREA:
-            re_factor = self.chord_root / self._parent_wing.chord_root
-            polar_def_new = Polar_Definition (polar_def._as_dict())
-            polar_def_new.set_re_asK (polar_def.re_asK * re_factor)
-            return polar_def_new
-        else:
-            return polar_def
-
-
-    @override
-    @property
-    def polar_definitions (self) -> list [Polar_Definition]:
-        """ list of actual polar definitions (scaled to self if needed)"""
-
-        # take polar definitions from parent wing
-        polar_defs_parent = self._parent_wing.polar_definitions
-
-        # in case of different chord, adapt Re to have constant speed assumption
-        if self._scale_mode == Scale_Mode.MATCH_SPAN_AND_AREA:  
-            polar_defs   = []
-            for polar_def in polar_defs_parent:
-                polar_defs.append (self.polar_def_scaled_to_ref(polar_def))
-        else:
-            polar_defs = polar_defs_parent
-
-        return polar_defs
-
-
-    def refresh_wingSections(self):
-        """ Refresh the wing sections from the parent wing. """
-
-        # to override in subclasses if needed
-        pass                                        # self is master of wing sections
-
-
-
-class Reference_Wing_Elliptical (Reference_Wing):
-
-    """ 
-    Reference wing class having an elliptical planform and scaled 
-    to a parent wing 
-    """
-
-    name = "Elliptical"
-
-    def __init__ (self, parent_wing : Wing,
-                  scale_mode = Scale_Mode.MATCH_SPAN_AND_AREA):
-
-        p_parent = parent_wing._parms
-        p        = Parameters()
-
-        p.set ("pc2_version", PARAMETER_FILE_VERSION)
-        p.set ("wing_name", "Elliptical")
-        p.set ("description", "This is a pure elliptical reference wing")
-        p.set ("halfspan", 1000.0)
-        p.set ("chord_root", 200.0)
-
-        p.set ("chord_distribution", {"chord_style": N_Distrib_Elliptical.name})
-        p.set ("wingSections", self._sectionsDict_of(parent_wing))
-        p.set ("panels", {"strategy": Mesh_Strategy_Smooth.name, Mesh_Strategy_Smooth.name: {"cn_tip_min": 0.05}})
-
-        working_dir = parent_wing.workingDir
-
-        super().__init__(None, parent_wing, 
-                         parameters=p, 
-                         scale_mode=scale_mode, 
-                         defaultDir=working_dir)
-
-    @override
-    @property
-    def airfoils_dir_rel(self) -> str:
-        """ Returns the relative directory of airfoils from the parent wing. """
-        return self._parent_wing.airfoils_dir_rel
-
-
-    def _sectionsDict_of (self, parent_wing: Wing) -> list [dict]:
-        """ dict list of the relevant wing sections of parent wing """
-
-        parent_sections = parent_wing.planform.wingSections.without_for_panels
-
-        sections_list = []
-        for section in parent_sections:
-            if section.has_real_airfoil:
-                sections_list.append(section._as_dict())
-        return sections_list
-
-
-    @override
-    def refresh_wingSections(self):
-        """ Refresh the wing sections from the parent wing. """
-
-        # create new WingSections object from the parent wing's sections
-        wingSections = WingSections (self.planform, sectionsDict = self._sectionsDict_of(self._parent_wing))
-        wingSections.check_n_repair()
-        wingSections.refresh_polar_sets()
-
-        self.planform._wingSections = wingSections

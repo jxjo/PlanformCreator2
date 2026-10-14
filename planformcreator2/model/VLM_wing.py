@@ -23,7 +23,7 @@ from __future__                     import annotations  # for forward type refer
 
 import csv
 import numpy as np
-from copy                           import copy
+from copy                           import deepcopy
 from enum                           import StrEnum
 from typing                         import Tuple, NamedTuple, TYPE_CHECKING
 from time                           import perf_counter
@@ -36,7 +36,6 @@ from airfoileditor.model.airfoil    import GEO_BASIC
 if TYPE_CHECKING:
     from .wing                      import Wing                                        # avoid circular import
     from .planform                  import WingSection
-    from .planform_mesh             import Planform_Mesh
 
 
 VLM_Polar_CacheEntry = tuple[Polar_Definition, 'VLM_Polar']
@@ -114,6 +113,7 @@ class VLM_KPI (StrEnum_Extended):
     MAX_LIFT        = "Max Lift"
     MAX_GLIDE       = "Max Glide"
     MIN_DRAG        = "Min Drag"
+    MIN_RADIUS      = "Min Radius"
 
 
 class Point_3D (NamedTuple):
@@ -286,10 +286,6 @@ class VLM_Wing:
         if not wing_sections.strak_done:
             wing_sections.do_strak (geometry_class=GEO_BASIC)
     
-        # ensure all wingSections have a polar with the current re
-
-        wing_sections.refresh_polar_sets (reset=False)
-
 
     def __repr__(self) -> str:
         # overwrite to get a nice print string
@@ -489,17 +485,22 @@ class VLM_Wing:
         if not isinstance (root_polar_def, Polar_Definition):
             return None
 
-        # polar already exisiting in locasl cache ?
-        for cached_polar_def, polar in self._polars:
-            if cached_polar_def.is_equal_to (root_polar_def):
-                return polar
+        # polar already exisiting in local cache ?
+        for polar_def, vlm_polar in self._polars:
+            if polar_def.is_equal_to (root_polar_def):
+                return vlm_polar
 
+        # ensure all wingSections have a polar with the current re
+
+        self._wing.planform.wingSections.refresh_polar_sets (reset=False)
+    
         # create new polar for this root polar definition
-        polar_def_copy = copy (root_polar_def)               # polar_def in cache must be inmutable 
-        polar = VLM_Polar (self, polar_def_copy)             # calculate new Polar and opPoints 
-        self._polars.append ((polar_def_copy, polar)) 
+
+        polar_def_copy = deepcopy (root_polar_def)               # polar_def in cache must be inmutable 
+        vlm_polar = VLM_Polar (self, polar_def_copy)             # calculate new Polar and opPoints 
+        self._polars.append ((polar_def_copy, vlm_polar)) 
             
-        return polar 
+        return vlm_polar 
 
 
     def handle_airfoil_change (self):
@@ -515,6 +516,10 @@ class VLM_Wing:
             vlm_polar = VLM_Polar (self, root_polar_def)            
             self._polars.append ((root_polar_def, vlm_polar)) 
 
+
+    @property
+    def is_reference_wing (self) -> bool:
+        return self._wing.is_reference_wing
 
     # ----- private --------------------------------------------------
       
@@ -895,7 +900,7 @@ class VLM_Polar:
         self._root_polar_def = root_polar_def           # polar definition of root airfoil (wingSection 0) 
 
         self._vtas                      = None          # true air speed (derived from root polar def)
-        self._opPoints                  = {}            # dict of operating points
+        self._opPoints_dict             = {}            # dict of operating points
         self._error_reason              = []            # list of error messages eg polar couldn't be loaded 
         self._is_polar_generated        = False         # polar is completly generated and ready for use
 
@@ -945,8 +950,7 @@ class VLM_Polar:
     @property
     def opPoints (self) -> list ['VLM_OpPoint']:
         """ sorted list of existing opPoints of self"""
-        ops_sorted = dict(sorted(self._opPoints.items()))
-        return ops_sorted.values()
+        return [op_point for _, op_point in sorted(self._opPoints_dict.items())]
 
     @property
     def airfoil_polar_sections (self) -> list [Polar]:
@@ -1042,22 +1046,22 @@ class VLM_Polar:
 
     def set_use_viscous_loop (self, aBool : bool): 
         self._use_viscous_loop = aBool
-        self._opPoints = {}                             # remove current results 
+        self._opPoints_dict = {}                             # remove current results 
 
 
     def opPoint_at (self, alpha: float) -> 'VLM_OpPoint':
         """ returns opPoint at alpha - or None if airfoil polars are not ready"""
 
         if self.is_ready:
-            a = round (alpha, 2)                        # ensure clean key for dict
+            a = round (float(alpha), 2)                 # ensure clean key for dict
             try:
-                opPoint = self._opPoints[a]             # already exisiting
+                opPoint = self._opPoints_dict[a]        # already exisiting
             except KeyError:
 
                 opPoint = VLM_OpPoint (self, a)         # calculate new opPOint 
 
                 if not opPoint.cl_max_reached:          # add to polar only if valid
-                    self._opPoints[a] = opPoint 
+                    self._opPoints_dict[a] = opPoint 
             return opPoint 
         else: 
             return None 
@@ -1095,6 +1099,11 @@ class VLM_Polar:
             return None, None
 
         cl = self._of_var (VLM_Var.WING_CL)
+
+        # cl_level already out off cl range?
+        if cl_level < np.min(cl) or cl_level > np.max(cl):
+            return None, None
+
         x_var, y_var = xyVars
         x_values, y_values = self.of_vars ((x_var, y_var))
         x_level = float (np.interp (cl_level, cl, x_values))
@@ -1150,6 +1159,8 @@ class VLM_Polar:
         if not kpi in VLM_KPI or not self._is_polar_generated:
             return None, None, None, None
 
+        kpi_val, kpi_var = None, None
+
         alpha = self._of_var (VLM_Var.WING_ALPHA)
         if kpi == VLM_KPI.MAX_LIFT:
             kpi_var = VLM_Var.WING_LIFT
@@ -1171,9 +1182,14 @@ class VLM_Polar:
             kpi_var = VLM_Var.WING_CD
             cd      = self._of_var (kpi_var)
             alpha_val, kpi_val = extremum (alpha, cd, mode="min")
-        else:
-            kpi_var = None
-            kpi_val = None
+        elif kpi == VLM_KPI.MIN_RADIUS:
+            cl_level = self.cl_level_flight
+            if cl_level is not None:
+                kpi_var = VLM_Var.WING_CL
+                cl      = self._of_var (kpi_var)
+                alpha_val, cl_max = extremum (alpha, cl, mode="max")
+                radius  = self.vtas ** 2 / (9.81 * np.sqrt ((cl_max/cl_level)**2 - 1))     # v² / g*sqrt((cl_max/cl_level)² - 1)
+                kpi_val = radius
 
         if kpi_val is None:
             logger.warning (f"KPI {kpi} could not be determined for {self}")
@@ -1190,7 +1206,18 @@ class VLM_Polar:
         kpi_base_y = np.interp (alpha_val, alpha[y_valid], y[y_valid]) if np.any (y_valid) else None
 
         return kpi_var, kpi_val, kpi_base_x, kpi_base_y
-   
+
+
+    @property
+    def is_reference_polar (self) -> bool:
+        """ returns true if the polar belongs to a reference wing """
+        return self.vlm_wing.is_reference_wing
+
+    @property
+    def is_main_polar (self) -> bool:
+        """ returns true if the polar belongs to the main wing """
+        return not self.is_reference_polar
+    
     # ---- private ----
 
 
@@ -1198,7 +1225,7 @@ class VLM_Polar:
                              is_vlm: bool, re_scale: float) -> Polar | None:
         """ return the matching normal or forced-transition polar for a section Re """
 
-        polar_def_target = copy (self._root_polar_def)
+        polar_def_target = deepcopy (self._root_polar_def)
         polar_def_target.set_re (section_re)
         re_rel_tolerance = RE_TOLERANCE
         if re_scale != 1.0:
@@ -1317,7 +1344,7 @@ class VLM_Polar:
             alpha_end = alpha
 
         if alpha is None:
-            logger.warning (f"{self} alpha_max not found ({len(self._opPoints)} opPoints")
+            logger.warning (f"{self} alpha_max not found ({len(self.opPoints)} opPoints")
             return None 
         else: 
             logger.debug (f"{self} found alpha_max {self.opPoint_at (alpha)}")
@@ -1387,7 +1414,7 @@ class VLM_Polar:
         # collect values of existing opPoints for the requested polar_var
         vals = []
         opPoint : VLM_OpPoint
-        for opPoint in self._opPoints.values():
+        for opPoint in self.opPoints:
             vals.append(opPoint.aero_results.get(polar_var, np.nan))
 
         return np.array(vals)
@@ -1412,19 +1439,18 @@ class VLM_Polar:
  
             opPoint = self.opPoint_at (alpha)
 
-            if opPoint.cl_max_reached:
-                self._opPoints.pop (opPoint.alpha, None)
+            if opPoint is None:
+                continue
+            elif opPoint.cl_max_reached:
+                self._opPoints_dict.pop (opPoint.alpha, None)
                 break
             elif opPoint.cl_max_almost_reached:     
                 break 
 
-        # re-sort as there could have been already opPoints
-        self._opPoints = dict(sorted(self._opPoints.items()))
-
         self._is_polar_generated = True
 
         dt = perf_counter() - t0
-        logger.debug (f"{self} polar generation: {len(self._opPoints)} opPoints, alpha={alpha_start:.1f}..{alpha_max:.1f}, step={step} ({dt:.4f}s)")
+        logger.debug (f"{self} polar generation: {len(self.opPoints)} opPoints, alpha={alpha_start:.1f}..{alpha_max:.1f}, step={step} ({dt:.4f}s)")
 
         # self._test_print()
 
@@ -1433,7 +1459,7 @@ class VLM_Polar:
         """ print polar data alpha, Cl, Lift """
 
         print (f"{self} polar data")
-        print (f"  {len(self._opPoints)} opPoints")
+        print (f"  {len(self.opPoints)} opPoints")
         print (f"  {'Alpha':>8s} {'CL':>8s} {'Lift':>8s} {'CD':>8s} {'CD_i':>8s} {'Drag':>8s} {'Glide':>8s} {'CM':>8s} {'Moment':>8s}")
 
         alpha = self._of_var (VLM_Var.WING_ALPHA)
@@ -1593,8 +1619,6 @@ class VLM_OpPoint:
             dt = perf_counter() - t0
             cl = self.aero_results[VLM_Var.WING_CL]
             logger.debug (f"{self} aero results: CL{cl:6.3f}, cl_max_reached {self._cl_max_reached}  ({dt:.4f} s)")
-
-            print (f"e: {self.aero_results[VLM_Var.WING_EFFICIENCY]:.3f}  CD_ind {self.aero_results[VLM_Var.WING_CD_IND]:.5f} CD_ind_elliptical {self.Cd_ind_elliptical:.5f}")
 
         return self._aero_results  
 

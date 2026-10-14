@@ -26,7 +26,8 @@ from airfoileditor.ui.util_dialogs      import Polar_Definition_Dialog, Calc_Rey
 
 # ---- pc2 modules  
 
-from ..model.wing       import Wing, Scale_Mode, Reference_Wing_Elliptical
+from ..model.wing       import Wing
+from ..model.wing_reference import Scale_Mode, Reference_Wing_Elliptical
 from ..model.planform   import Planform
 from ..model.VLM_wing   import VLM_OpPoint, VLM_Var, VLM_Wing
 
@@ -1224,6 +1225,7 @@ class Item_VLM_Polar (Item_Abstract):
     @override
     def _set_settings (self, d : dict):
         """ set settings of self from dict """
+        super()._set_settings(d)
         xyVars = fromDict(d, 'xyVars', None)
         if xyVars is not None:
             self.set_xyVars (xyVars)
@@ -1420,6 +1422,35 @@ class Item_VLM_Polar (Item_Abstract):
 
             self.viewBox.setRange(rect=rect, padding=0.0)       # restore view Range
 
+        self._set_legend_position ()                            # find nice legend position 
+
+
+    def _set_legend_position (self):
+        """ try to have a good position for legend depending on xyVars"""
+
+        if self.legend is None:
+            # normally Artist adds legend  - here to set legend during init 
+            self.addLegend(offset=(-10,10),  verSpacing=0 )  
+            self.legend.setLabelTextColor (Artist.COLOR_LEGEND)
+
+        if (self.yVar == VLM_Var.WING_CL or self.yVar == VLM_Var.WING_ALPHA) and self.xVar == VLM_Var.WING_CD:
+            self.legend.anchor (itemPos=(1,0.5), parentPos=(1,0.5), offset=(-10,0))     # right, middle 
+
+        elif (self.yVar == VLM_Var.WING_GLIDE) and (self.xVar == VLM_Var.WING_ALPHA or self.xVar == VLM_Var.WING_CL):
+            self.legend.anchor (itemPos=(0.2,1), parentPos=(0.5,1), offset=(0,-20))     # middle, bottom
+
+        elif (self.yVar == VLM_Var.WING_CL) and (self.xVar == VLM_Var.WING_ALPHA):
+            self.legend.anchor (itemPos=(0,0), parentPos=(0,0), offset=(40,10))         # left, top
+
+        else:  
+            self.legend.anchor (itemPos=(1,0), parentPos=(1,0), offset=(-10,10))        # right, top 
+
+        # reduce vertical spacing 
+        l : QGraphicsGridLayout = self.legend.layout
+        l.setVerticalSpacing(-5)
+
+
+
 
 
 class Item_VLM_Polar_Delta (Item_Abstract):
@@ -1435,6 +1466,7 @@ class Item_VLM_Polar_Delta (Item_Abstract):
     def __init__(self, *args, parent_xyVars_fn : Callable = None, **kwargs):
 
         self._parent_xyVars_fn = parent_xyVars_fn
+        self._x_axis_label_item = None
 
         super().__init__(*args,  **kwargs)
 
@@ -1443,6 +1475,19 @@ class Item_VLM_Polar_Delta (Item_Abstract):
         # connect to app model signals to refresh - new wing is handled in Diagram_Abstract
         self.app_model.sig_vlm_changed.connect          (self.refresh)
         self.app_model.sig_new_polars.connect           (self.refresh)
+
+    @override
+    def _settings (self) -> dict:
+        """ return dictionary of self settings"""
+        # no settings for this item
+        return {}
+
+
+    @override
+    def _set_settings (self, d : dict):
+        """ set settings of self from dict """
+        # do not set show
+        pass
 
 
     @override
@@ -1472,12 +1517,9 @@ class Item_VLM_Polar_Delta (Item_Abstract):
     def plot_title(self, **kwargs):
 
         if self.delta_vars:
-            base_var, value_var = self.delta_vars
-            title = f"Δ{value_var.value} vs. {self.app_model.ref_wing_name}"
-        else:
-            title = ""
-
-        return super().plot_title (title=title, title_size=Artist.SIZE_NORMAL,**kwargs)
+            _, value_var = self.delta_vars
+            title = f"Δ{value_var.value} vs. Reference"
+            return super().plot_title (title=title, title_size=Artist.SIZE_NORMAL,**kwargs)
 
 
     @property
@@ -1515,7 +1557,7 @@ class Item_VLM_Polar_Delta (Item_Abstract):
     def setup_artists (self):
         """ create and setup the artists of self"""
 
-        a = VLM_Polar_Delta_Artist  (self, lambda: self.planform,
+        a = VLM_Polar_Delta_Artist  (self, lambda: self.app_model.cur_vlm_polar,
                                      delta_vars_fn=lambda: self.delta_vars, 
                                      delta_data_fn=self.get_delta_data,
                                      show=True)
@@ -1558,7 +1600,16 @@ class Item_VLM_Polar_Delta (Item_Abstract):
         y_axis.setLabel(y_label, units=y_units)
         y_axis.setScale(y_scale)
         x_axis : pg.AxisItem = self.getAxis("bottom")
-        x_axis.setLabel(x_label)
+        x_axis.setLabel("")
+
+        if self._x_axis_label_item is None:
+            self._x_axis_label_item = pg.LabelItem(
+                x_label, color=Artist.COLOR_LEGEND, size=f"{Artist.SIZE_NORMAL}pt")
+            self._x_axis_label_item.setParentItem(self)
+            self._x_axis_label_item.anchor(
+                itemPos=(1, 1), parentPos=(0.98, 1), offset=(0, -30))
+
+        self._x_axis_label_item.setText(x_label)
 
         self.showGrid(x=True, y=True)
 
@@ -2898,12 +2949,13 @@ class Diagram_Airfoils (Diagram_Abstract):
                             obj=self, prop=Diagram_Airfoils.min_re_asK,
                             hide=lambda: not self.apply_min_re)
             r += 1
-            CheckBox    (l,r,c, text="Forced transistion versions (VLM)", colSpan=5,
+            CheckBox    (l,r,c, text="Forced transition versions (VLM)", colSpan=5,
                             obj=self, prop=Diagram_Airfoils.show_VLM_polars,
                             toolTip="Show VLM polars with a forced transition close to leading edge,\n" + \
                                 "instead of the defined polars without forced transition.\n" + \
                                 "These VLM polars are used to determine alpha0 and cl_max\n"+ \
                                 "for the VLM analysis.\n"+ \
+                                "VLM polars are only generated for XFoil-based polars.\n"+ \
                                 "Activate 'Show blended airfoils' to see all airfoils used in VLM.")
 
             # polar diagrams variables setting 
@@ -3027,7 +3079,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             item_delta = Item_VLM_Polar_Delta (self, self.app_model, parent_xyVars_fn=lambda item=item: item.xyVars, 
                                                show=False)
             item_delta.name = f"{Item_VLM_Polar_Delta.name}_{i+1}"
-            self._add_item (item_delta, 4, i, rowStretch=1)
+            self._add_item (item_delta, 4, i, rowStretch=2)
             # item_delta.set_desired_xLink_name (item.name)
             # item_delta.set_xLinked (True)
             item.sig_xyVars_changed.connect (item_delta.refresh)
@@ -3225,6 +3277,8 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         artist : VLM_Polar_Artist
         for artist in self._get_artist (VLM_Polar_Artist):
             artist.set_show_level_flight (aBool)
+        for artist in self._get_artist (VLM_Polar_Delta_Artist):
+            artist.set_show_level_flight (aBool)
         self.panel_polar.refresh()        # ensure mass field is shown/hidden
 
     @property
@@ -3274,8 +3328,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             r += 1
             SpaceR (l,r, height=10)
             r += 1
-            p = Panel_Reference_Wing (self, self.app_model)
-            # p.sig_show_ref_wing.connect(self.set_show_ref_wing)
+            p = Panel_Reference_Wing (self, self.app_model, show_no_flap=True)
             l.addWidget(p, r, c, 1, 3)
 
             l.setColumnStretch(0, 1)
@@ -3304,11 +3357,11 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
                       get=lambda: self.show_level_flight, set=self.set_show_level_flight)
             r += 1
             mass = FieldF   (l,r,c+1, lab="Mass", width=85, step=0.1, lim=(0.1, 100), dec=1, unit="kg",
-                        obj=self.wing, prop=Wing.mass, hide=lambda: not self.show_level_flight)
+                        obj=lambda: self.wing, prop=Wing.mass, hide=lambda: not self.show_level_flight)
             mass.sig_changed.connect (self.refresh)        # refresh diagram
             r += 1
             load = FieldF   (l,r,c+1, lab="Wing Load", width=85, step=1, lim=(1, 500), dec=0, unit="g/dm²",
-                        obj=self.wing, prop=Wing.wing_loading, hide=lambda: not self.show_level_flight)
+                        obj=lambda: self.wing, prop=Wing.wing_loading, hide=lambda: not self.show_level_flight)
             load.sig_changed.connect (self.refresh)        # refresh diagram
 
             r += 1
@@ -3891,8 +3944,9 @@ class Panel_Reference_Wing (Edit_Panel):
 
     sig_show_ref_wing = pyqtSignal(bool)                    # signal to show artists
 
-    def __init__(self, *args):
+    def __init__(self, *args, show_no_flap=False):
 
+        self._show_no_flap = show_no_flap                   # show the no flap checkbox
         super().__init__(*args, 
                          has_head=False,
                          auto_height=True,
@@ -3962,7 +4016,14 @@ class Panel_Reference_Wing (Edit_Panel):
         ComboBox   (l,r,c+2, options=list(Scale_Mode), 
                     get=lambda: str(self.app_model.ref_wing_scale_mode), 
                     set=self.app_model.set_ref_wing_scale_mode,
+                    disable=lambda: self.app_model.ref_wing_name==Reference_Wing_Elliptical.name,
                     hide = lambda: not self.show_ref)
+
+        if self._show_no_flap:
+            r += 1
+            CheckBox   (l,r,c+1, text="Do not set flap in polar", colSpan=4,
+                        get=lambda: self.app_model.ref_wing_no_flap, set=self.app_model.set_ref_wing_no_flap,
+                        hide = lambda: not self.show_ref or (not self.app_model.cur_polar_def.is_flap_set))
         r += 1
 
         return l

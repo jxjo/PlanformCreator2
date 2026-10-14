@@ -21,7 +21,8 @@ from airfoileditor.base.common_utils          import *
 from airfoileditor.model.airfoil              import GEO_BASIC
 from airfoileditor.model.polar_set            import *
 
-from ..model.wing               import Wing, Reference_Wing
+from ..model.wing               import Wing
+from ..model.wing_reference     import Reference_Wing
 from ..model.planform           import (Planform, N_Distrib_Bezier,
                                         WingSection, WingSections, Flaps, Flap)
 from ..model.image_definition   import Image_Definition
@@ -1266,13 +1267,13 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
             self.wingSections.do_strak (geometry_class=GEO_BASIC)
 
         # collect main polar and reference polar (if defined)
-        vlm_polars = [(self.vlm_polar, self.opPoint, True)]
+        vlm_polars = [(self.vlm_polar, self.opPoint)]
         if self.ref_vlm_polar is not None and self.ref_opPoint is not None:
-            vlm_polars.append ((self.ref_vlm_polar, self.ref_opPoint, False))
+            vlm_polars.append ((self.ref_vlm_polar, self.ref_opPoint))
 
         # plot both main and reference polar opPoint 
 
-        for vlm_polar, opPoint, is_main_polar in vlm_polars:
+        for vlm_polar, opPoint in vlm_polars:
 
             vlm_wing = vlm_polar.vlm_wing
 
@@ -1299,9 +1300,9 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
             for i, var in enumerate (vars):
 
-                pen = pen_vlm_var ((var, VLM_Var.Y), is_main_polar)
+                pen = pen_vlm_var ((var, VLM_Var.Y), vlm_polar.is_main_polar)
 
-                if is_main_polar and var in [VLM_Var.LIFT_SPAN, VLM_Var.DRAG_SPAN]:
+                if vlm_polar.is_main_polar and var in [VLM_Var.LIFT_SPAN, VLM_Var.DRAG_SPAN]:
                     brush_color = pen.color().darker(200)
                     brush_color.setAlphaF(0.3)
                     brush = pg.mkBrush (brush_color)
@@ -1310,10 +1311,10 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
                 antialias = pen.width() > 1.0
                 if not var==VLM_Var.CL_MIN_AIRFOIL:
-                    label     = str(var) if is_main_polar else f"Ref: {var}"
+                    label     = str(var) if vlm_polar.is_main_polar else f"Ref: {var}"
                 else:
                     label     = ""                              # suppress label for CL_MIN_AIRFOIL
-                zValue    = 2 if is_main_polar else 1
+                zValue    = 2 if vlm_polar.is_main_polar else 1
 
                 values = aero_results [var]
                 if var == VLM_Var.ALPHA_IND:
@@ -1324,7 +1325,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                 self._plot_dataItem  (xe, ye, pen=pen, name=label, antialias=antialias, zValue=zValue,
                                     fillLevel=0.0, fillBrush=brush) 
 
-                if is_main_polar:
+                if vlm_polar.is_main_polar:
 
                     # plot span border once for all variables of this plot 
                     if i == 0:
@@ -1351,7 +1352,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                                                         "VLM error")
 
             # plot total wing values
-            if is_main_polar:
+            if vlm_polar.is_main_polar:
                 self._plot_wing_values (vlm_polar, vars, aero_results)
 
 
@@ -1616,11 +1617,11 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
             return
 
         # collect main polar and reference polar (if defined)
-        vlm_polars = [(self.vlm_polar, True)]
+        vlm_polars = [self.vlm_polar]
         if self.ref_vlm_polar is not None:
-            vlm_polars.append ((self.ref_vlm_polar, False))
+            vlm_polars.append (self.ref_vlm_polar)
 
-        for vlm_polar, is_main_polar in vlm_polars:
+        for vlm_polar in vlm_polars:
             
             # is polar ready to show results - all section polars generated and loaded?
             if not vlm_polar.is_ready:
@@ -1645,11 +1646,11 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
             for xyVars in xyVars_list:
                 
                 # plot the polar curve
-                pen       = pen_vlm_var (xyVars, is_main_polar)
+                pen       = pen_vlm_var (xyVars, vlm_polar.is_main_polar)
                 antialias = True if pen.width() > 1.0 else False
                 label     = xyVars[1].value + " vs " + xyVars[0].value
-                label     = label if is_main_polar else "Ref: " + label
-                zValue    = 2 if is_main_polar else 1
+                label     = label if vlm_polar.is_main_polar else "Ref: " + label
+                zValue    = 2 if vlm_polar.is_main_polar else 1
 
                 x,y = vlm_polar.of_vars (xyVars)
 
@@ -1673,13 +1674,13 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
         cl = self.vlm_polar.cl_level_flight
         text = f"Level flight CL: {cl:.3f}"
 
-        color       = QColor('turquoise')
+        color       = QColor('gold')
         brush_color = QColor('black')
-        # brush_color.setAlphaF (0.8); 
+        brush_color.setAlphaF (0.6); 
 
-        self._plot_point (x_level, y_level, symbol='s', size=9, color=color,  brush=brush_color,
-                          text=text, textFill=pg.mkBrush ('black'), 
-                          textOffset=(5, 0),anchor=(0, 0.5))
+        self._plot_point (x_level, y_level, symbol='s', size=10, color=color,  brush=brush_color,
+                          text=text, textFill=pg.mkBrush (brush_color), zValue=4,
+                          textOffset=(7, 0),anchor=(0, 0.5))
 
 
     def _get_additional_plots (self) -> list[Tuple[VLM_Var, VLM_Var]]:
@@ -1708,7 +1709,7 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
 
         # which kpis should be plotted based on the current xyVars?
         if is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_CD):
-            kpis = [VLM_KPI.MIN_CD, VLM_KPI.MAX_GLIDE, VLM_KPI.MAX_CL]
+            kpis = [VLM_KPI.MIN_CD, VLM_KPI.MAX_GLIDE, VLM_KPI.MAX_CL, VLM_KPI.MIN_RADIUS]
         elif is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_GLIDE):
             kpis = [VLM_KPI.MAX_GLIDE]
         elif is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_CL):
@@ -1727,9 +1728,7 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
             kpi_var, kpi_val, x_val, y_val = self.vlm_polar.kpi_in (kpi, self.xyVars)
 
             if kpi_val is not None:
-                # xvar, yvar = self.xyVars
-                # x_val_rnd   = self._round_var(xvar, x_val)
-                # y_val_rnd   = self._round_var(yvar, y_val)
+
                 kpi_val_rnd = self._round_var(kpi_var, kpi_val)
 
                 # if kpi_var == xvar:
@@ -1741,18 +1740,20 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
                 # text = f"{kpi.value}: {kpi_val_rnd} {at_text}" 
                 text = f"{kpi.value}: {kpi_val_rnd}" 
 
-                if kpi_var in [VLM_Var.WING_CL, VLM_Var.WING_LIFT]:
-                    anchor = (1.0, 0.5)
+                if kpi == VLM_KPI.MIN_RADIUS:
+                    anchor = (1.3, -0.5)
+                elif kpi_var in [VLM_Var.WING_CL, VLM_Var.WING_LIFT]:
+                    anchor = (1.3, 0.5)
                 else:
                     anchor =  (0, 0.5)
 
                 color       = QColor('lightgray')
                 brush_color = QColor('black')
-                # brush_color.setAlphaF (0.8); 
+                brush_color.setAlphaF (0.6); 
                 brush = pg.mkBrush (brush_color)
-                self._plot_point (x_val, y_val, symbol='s', size=9, color=color, brush=brush,
-                                  text=text, textFill=pg.mkBrush ('black'), 
-                                  textOffset=(5, 0), anchor=anchor)
+                self._plot_point (x_val, y_val, symbol='o', size=9, color=color, brush=brush,
+                                  text=text, textFill=pg.mkBrush (brush_color), 
+                                  textOffset=(7, 0), anchor=anchor)
 
                 # if there is a ref polar, plot the delta between the current and reference KPI values
 
@@ -1767,7 +1768,7 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
 
                         self._plot_point (x_val, y_val, size=0, color=delta_color,
                                         text=delta_text, textColor=delta_color,
-                                        textOffset=(5, -14), anchor=anchor)
+                                        textOffset=(7, -14), anchor=anchor)
 
 
     def _round_var (self, var: VLM_Var, value) -> float:
@@ -1796,9 +1797,13 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
 
         self._delta_vars_fn = delta_vars_fn                 # bound method to get base_var and value_var
         self._delta_data_fn = delta_data_fn
+        self._show_level_flight = False                     # show level flight point in polar
 
         super().__init__(*args, **kwargs)
 
+    @property
+    def vlm_polar(self) -> VLM_Polar:
+        return self.data_object
 
     @property
     def delta_vars (self) -> tuple:
@@ -1808,6 +1813,13 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
     @property
     def delta_data (self) -> tuple[np.ndarray, np.ndarray, bool]:
         return self._delta_data_fn() if callable(self._delta_data_fn) else (np.array([]), np.array([]), False)
+
+    @property
+    def show_level_flight(self) -> bool:
+        return self._show_level_flight
+    def set_show_level_flight(self, show: bool):
+        self._show_level_flight = show
+        self.refresh()
 
 
     def _plot (self):
@@ -1834,31 +1846,35 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
                              fontSize=self.SIZE_NORMAL, itemPos=(0.5, 1))
             return
 
+        # if base_var is CL mask values to cl > 0 
+        if base_var == VLM_Var.WING_CL and x[0] < 0.0:
+            valid &= x > 0.0
+            text = f"Only positive CL values shown"
+            self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-35),color="dimgray", fontSize=8)
+
+        x     = np.where (valid, x, np.nan)
         delta = np.where (valid, delta, np.nan)
-
-        # plot zero line
-
-        # self._plot_dataItem ([np.min (x), np.max (x)], [0.0, 0.0],
-        #                      pen=pg.mkPen (Artist.COLOR_NORMAL, width=1.0), zValue=0)
 
         # plot sections with good/bad deviations
 
         positive_is_better = value_var not in (
             VLM_Var.WING_CD, VLM_Var.WING_CD_IND, VLM_Var.WING_CD_AIRFOIL,
             VLM_Var.WING_DRAG, VLM_Var.WING_DRAG_IND, VLM_Var.WING_DRAG_AIRFOIL)
-        color_good = COLOR_GOOD.darker(150)
-        color_good.setAlphaF (0.8)
-        color_bad  = COLOR_ERROR.darker(150)
-        color_bad.setAlphaF (0.8)
-        color_positive = color_good if positive_is_better else color_bad
-        color_negative = color_bad  if positive_is_better else color_good
 
-        for values, color in ((np.maximum (delta, 0.0), color_positive),
-                              (np.minimum (delta, 0.0), color_negative)):
+        color_positive = COLOR_GOOD if positive_is_better else COLOR_ERROR
+        color_negative = COLOR_ERROR if positive_is_better else COLOR_GOOD
+
+        brush_positive = color_positive.darker(150)
+        brush_positive.setAlphaF (0.8)
+        brush_negative = color_negative.darker(150)
+        brush_negative.setAlphaF (0.8)
+
+        for values, color in ((np.maximum (delta, 0.0), brush_positive),
+                              (np.minimum (delta, 0.0), brush_negative)):
             if not np.any (values[valid]): continue
 
             self._plot_dataItem (x, values, pen=None, fillLevel=0.0,
-                                 fillBrush=pg.mkBrush (color), connect="finite", zValue=1)
+                        fillBrush=pg.mkBrush (color), connect="finite", zValue=1)
 
         pen = pg.mkPen (QColor(Artist.COLOR_NORMAL).darker(100), width=1.0)
         self._plot_dataItem (x, delta, connect="finite", antialias=False, zValue=2, pen=pen)
@@ -1872,15 +1888,34 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
         delta_format = "+.1%" if is_relative else "+.3f"
 
         if y_max > 0.0:
-            color = COLOR_GOOD if positive_is_better else COLOR_ERROR
-            self._plot_point(x_max, y_max, color=color, symbol='s', size=7, anchor=(0.4, 1.1), zValue=3,
-                     text=f"{y_max:{delta_format}}", textColor=color)
+            self._plot_point (x_max, y_max, color=color_positive, symbol='s', size=7, anchor=(0.4, 1.1), zValue=3,
+                    text=f"{y_max:{delta_format}}", textColor=color_positive)
 
         if y_min < 0.0:
-            color = COLOR_ERROR if positive_is_better else COLOR_GOOD
-            self._plot_point(x_min, y_min, color=color, symbol='s', size=7, anchor=(0.4, -0.1), zValue=3,
-                     text=f"{y_min:{delta_format}}", textColor=color)
+            self._plot_point (x_min, y_min, color=color_negative, symbol='s', size=7, anchor=(0.4, -0.1), zValue=3,
+                     text=f"{y_min:{delta_format}}", textColor=color_negative)
         
+        # Plot the level-flight point for the currently selected polar axes.
+
+        if self.show_level_flight:
+
+            x_level, _ = self.vlm_polar.cl_level_flight_vars (self.delta_vars)
+            if x_level is None : return
+
+            y_level = np.interp (x_level, x, delta)
+
+            brush_color = QColor('black')
+            brush_color.setAlphaF (0.6); 
+
+            self._plot_point (x_level, y_level, symbol='s', size=10, color='gold',  brush=brush_color,
+                        text="Level flight", textFill=pg.mkBrush (brush_color), zValue=5,
+                        textOffset=(0, 27),anchor=(0.4, 1.0))
+
+            textColor = color_positive if y_level >= 0 else color_negative
+            self._plot_point (x_level, y_level, size=0, zValue=4,
+                        text=f"{y_level:{delta_format}}", textColor=textColor,
+                        textFill=pg.mkBrush (brush_color),
+                        textOffset=(0, 10),anchor=(0.4, 1.0))
 
 
 

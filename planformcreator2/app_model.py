@@ -29,7 +29,9 @@ from airfoileditor.model.polar_set          import Polar_Task, Polar_Definition,
 
 # --- the real model imports
 
-from .model.wing             import Wing, Reference_Wing, Reference_Wing_Elliptical, Scale_Mode, FILENAME_NEW
+from .model.wing             import Wing, FILENAME_NEW
+from .model.wing_reference   import (Reference_PC2_File, Reference_Wing,
+                                     Reference_Wing_Elliptical, Scale_Mode)
 from .model.planform         import WingSection
 from .model.VLM_wing         import VLM_OpPoint, VLM_Polar
 
@@ -313,10 +315,12 @@ class App_Model (QObject):
             return
         
         scale_mode = self.ref_wing.scale_mode if self._ref_wing else Scale_Mode.NO_SCALE
+        pc2_file = Reference_PC2_File (
+            {"path": ref_path, "scale_mode": scale_mode.value}, self.wing.workingDir_path)
 
-        self._ref_wing = Reference_Wing (ref_path, self.wing, scale_mode=scale_mode)
+        self._ref_wing = Reference_Wing (pc2_file, self.wing)
 
-        self.wing.update_ref_pc2_files(self.ref_wing)
+        self.wing.update_ref_pc2_files(pc2_file)
         self.notify_ref_wing_changed()
 
 
@@ -329,7 +333,7 @@ class App_Model (QObject):
         # index of current reference wing 
         cur_index = self.ref_wings_name.index(self.ref_wing.name) if self.ref_wing else -1
 
-        self.wing.update_ref_pc2_files(self.ref_wing, remove=True)
+        self.wing.update_ref_pc2_files(self.ref_wing.reference_pc2_file, remove=True)
 
         # set the next reference wing as the current one
         next_index = cur_index if cur_index < len(self.ref_wings_name) else len(self.ref_wings_name) - 1
@@ -339,16 +343,15 @@ class App_Model (QObject):
 
 
     def set_ref_wing_name (self, name: str):
-
-        if not name in self.ref_wings_name:
+        """ set new reference wing by (file)name"""
+        if name not in self.ref_wings_name:
             self._ref_wing = None
         elif name == Reference_Wing_Elliptical.name:
             self._ref_wing = Reference_Wing_Elliptical (self.wing)
         else :
-            ref_pc2_file = self.wing.get_ref_pc2_file(name)
-            if ref_pc2_file is not None and ref_pc2_file[0].is_file():
-                ref_path, scale_mode = ref_pc2_file
-                self._ref_wing = Reference_Wing (ref_path, self.wing, scale_mode=scale_mode)
+            pc2_file = self.wing.get_ref_pc2_file(name)
+            if pc2_file and pc2_file.path_abs.is_file():
+                self._ref_wing = Reference_Wing (pc2_file, self.wing)
             else:
                 self._ref_wing = None
 
@@ -358,8 +361,6 @@ class App_Model (QObject):
     def set_ref_wing_scale_mode (self, scale_mode: Scale_Mode | str):
         if self._ref_wing:
             self.ref_wing.set_scale_mode(scale_mode)
-            if not isinstance(self.ref_wing, Reference_Wing_Elliptical):
-                self.wing.update_ref_pc2_files(self.ref_wing)
             self.notify_ref_wing_changed()
 
 
@@ -374,6 +375,16 @@ class App_Model (QObject):
         """ scale mode of the reference wing """
         return self.ref_wing.scale_mode if self._ref_wing else None
 
+    @property
+    def ref_wing_no_flap (self) -> bool:
+        """ indicates whether the reference wing has no flap set for its polars """
+        return self.ref_wing.no_flap if self._ref_wing else False
+
+    def set_ref_wing_no_flap (self, no_flap: bool):
+        if self._ref_wing:
+            self.ref_wing.set_no_flap(no_flap)
+
+            self.sig_new_polars.emit()
 
 
     # --- VLM -----
@@ -464,9 +475,7 @@ class App_Model (QObject):
         """ reference VLM polar based on the selected root polar definition """
 
         if self.ref_wing and self.cur_vlm_polar: 
-            # scale current polar definition to root of the reference wing
-            ref_polar_def = self.ref_wing.polar_def_scaled_to_ref(self.cur_polar_def)
-            return self.ref_wing.vlm_wing.polar_at (ref_polar_def)
+            return self.ref_wing.vlm_polar_at (self.cur_polar_def)
         else:
             return None
 
@@ -534,8 +543,6 @@ class App_Model (QObject):
 
         # as polar definitions could have changed, ensure a new initialized polarSet of airfoils
         self.wing.planform.wingSections.refresh_polar_sets (reset=True)
-        if self.ref_wing:
-            self.ref_wing.planform.wingSections.refresh_polar_sets (reset=True)
 
         self._ensure_cur_polar_def()
 

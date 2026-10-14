@@ -295,12 +295,12 @@ class Panel_Wing_Small (Panel_Wing):
         l = QGridLayout()
         r,c = 0, 0 
         FieldF (l,r,c, lab="Half Wing Span", width=85, unit="mm", step=10, lim=(10, 10000), dec=0, 
-                obj=self.planform, prop=Planform.span)
+            obj=lambda: self.planform, prop=Planform.span)
         r += 1
         FieldF (l,r,c, lab="Root Chord", width=85, unit="mm", step=10, lim=(10, 1000), dec=0, 
-                obj=self.planform, prop=Planform.chord_root)
+            obj=lambda: self.planform, prop=Planform.chord_root)
         FieldF (l,r,c+3, lab="Sweep Angle", width=75, unit="°", step=0.1, lim=(-45, 45), dec=1,
-                obj=self.planform, prop=Planform.sweep_angle)
+            obj=lambda: self.planform, prop=Planform.sweep_angle)
         r += 1
         l.setRowStretch (r,1)
 
