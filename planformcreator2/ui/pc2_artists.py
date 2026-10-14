@@ -1741,11 +1741,11 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
                 text = f"{kpi.value}: {kpi_val_rnd}" 
 
                 if kpi == VLM_KPI.MIN_RADIUS:
-                    anchor = (1.3, -0.5)
+                    anchor = (1.2, -0.7)
                 elif kpi_var in [VLM_Var.WING_CL, VLM_Var.WING_LIFT]:
-                    anchor = (1.3, 0.5)
+                    anchor = (1.2, 0.7)
                 else:
-                    anchor =  (0, 0.5)
+                    anchor =  (-0.2, 0.5)
 
                 color       = QColor('lightgray')
                 brush_color = QColor('black')
@@ -1753,7 +1753,7 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
                 brush = pg.mkBrush (brush_color)
                 self._plot_point (x_val, y_val, symbol='o', size=9, color=color, brush=brush,
                                   text=text, textFill=pg.mkBrush (brush_color), 
-                                  textOffset=(7, 0), anchor=anchor)
+                                  textOffset=(0, 0), anchor=anchor)
 
                 # if there is a ref polar, plot the delta between the current and reference KPI values
 
@@ -1768,7 +1768,7 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
 
                         self._plot_point (x_val, y_val, size=0, color=delta_color,
                                         text=delta_text, textColor=delta_color,
-                                        textOffset=(7, -14), anchor=anchor)
+                                        textOffset=(0, -14), anchor=anchor)
 
 
     def _round_var (self, var: VLM_Var, value) -> float:
