@@ -830,9 +830,8 @@ class N_Distrib_Elliptical (N_Distrib_Abstract):
             xn: normalized x coordinates
             cn: normalized chord
         """
-        alphas = np.linspace (0, 1, 50)
-        alphas = alphas * alphas * np.pi /2                     # achieve smaller angles at tip by **2 
-        
+        alphas = np.linspace (1.0, 0.0, 50)
+        alphas = (1.0 - alphas ** 2) * np.pi / 2
         xn = np.sin (alphas)
         cn = np.cos (alphas)
 

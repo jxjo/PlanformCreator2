@@ -30,7 +30,7 @@ from time                           import perf_counter
 
 from .VLM                           import calc_Qjj
 from airfoileditor.base.math_util   import extremum
-from airfoileditor.model.polar_set  import Polar_Set, polarType, Polar, Polar_Definition, RE_SCALE_ROUND_TO
+from airfoileditor.model.polar_set  import Polar_Set, polarType, Polar, Polar_Definition, RE_SCALE_ROUND_TO, var
 from airfoileditor.model.airfoil    import GEO_BASIC
 
 if TYPE_CHECKING:
@@ -108,12 +108,13 @@ class VLM_Var (StrEnum_Extended):
 
 class VLM_KPI (StrEnum_Extended):
     """ Key Performance Indicators for VLM wing polar analysis """
-    MAX_CL          = "Max CL"
-    MIN_CD          = "Min CD"
-    MAX_LIFT        = "Max Lift"
-    MAX_GLIDE       = "Max Glide"
-    MIN_DRAG        = "Min Drag"
-    MIN_RADIUS      = "Min Radius"
+    CL_MAX          = "Max CL"
+    CD_MIN          = "Min CD"
+    CD_0            = "CD @ CL=0"
+    LIFT_MAX        = "Max Lift"
+    GLIDE_MAX       = "Max Glide"
+    DRAG_MIN        = "Min Drag"
+    RADIUS_MIN      = "Min Radius"
 
 
 class Point_3D (NamedTuple):
@@ -126,6 +127,8 @@ class Point_3D (NamedTuple):
 
 
 RE_TOLERANCE  = 0.02                                    # Re tolerance for polars to be considered matching
+
+INVISCID_LIFT_SLOPE = 0.1097                            # The inviscid slope is 2*pi per radian, or 0.1097 per degree.
 
 
 #-------------------------------------------------------------------------------
@@ -668,40 +671,53 @@ class Airfoil_Polar_Interpolated:
         self._xtrb  = None
         self._branch = None                         # cached indices of increasing-lift branch
 
-        # sanity - polars must be loaded and have same alpha range
+        # sanity - polars must be loaded
         if not polar_left.isLoaded or not polar_right.isLoaded:
             raise ValueError ("polars must be loaded")
 
         # interpolate main aerodynamic coefficients
-        self._alpha, self._cl, self._cd = self._interpolate_curve ()
+        self._alpha, self._alpha_left, self._alpha_right = self._build_alpha_mapping ()
+        self._cl = self._interpolate_values (var.CL)
+        self._cd = self._interpolate_values (var.CD)
+
+    def __repr__(self) -> str:
+        # overwrite to get a nice print string 
+        return f"<{type(self).__name__} at {self._chord_fraction:.2f} >"
 
 
-    def _interpolate_curve (self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        alpha_left  = self._polar_left.alpha
-        alpha_right = self._polar_right.alpha
+    def _build_alpha_mapping (self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Align pre-stall alpha ranges from cl_min (0) to cl_max (1)."""
 
-        alpha_min = max (alpha_left[0], alpha_right[0])
-        alpha_max = min (alpha_left[-1], alpha_right[-1])
-        alpha = np.union1d (alpha_left, alpha_right)
-        alpha = alpha[(alpha >= alpha_min) & (alpha <= alpha_max)]
+        branches = []
+        for polar in (self._polar_left, self._polar_right):
+            alpha, cl = np.asarray (polar.alpha), np.asarray (polar.cl)
+            if not alpha.size:
+                raise ValueError ("Cannot interpolate an empty polar")
 
-        fraction = self._chord_fraction_log
-        cl_left = np.interp (alpha, alpha_left, self._polar_left.cl)
-        cl_right = np.interp (alpha, alpha_right, self._polar_right.cl)
-        cd_left = np.interp (alpha, alpha_left, self._polar_left.cd)
-        cd_right = np.interp (alpha, alpha_right, self._polar_right.cd)
+            index_min, index_max = int (np.argmin (cl)), int (np.argmax (cl))
+            if index_min >= index_max:
+                raise ValueError ("Polar must have a pre-stall branch from cl_min to cl_max")
 
-        cl = cl_left + fraction * (cl_right - cl_left)
-        cd = cd_left + fraction * (cd_right - cd_left)
-        return alpha, cl, cd
+            branches.append (alpha[index_min:index_max + 1])
+
+        branch_left, branch_right = branches
+        normalized = np.union1d (
+            (branch_left  - branch_left[0])  / (branch_left[-1]  - branch_left[0]),
+            (branch_right - branch_right[0]) / (branch_right[-1] - branch_right[0]))
+        alpha_left  = np.interp (normalized, [0.0, 1.0], branch_left[[0, -1]])
+        alpha_right = np.interp (normalized, [0.0, 1.0], branch_right[[0, -1]])
+
+        alpha = alpha_left + self._chord_fraction_log * (alpha_right - alpha_left)
+
+        return alpha, alpha_left, alpha_right
 
 
-    def _interpolate_values (self, name: str) -> np.ndarray:
-        fraction = self._chord_fraction_log
-        values_left = np.interp (self.alpha, self._polar_left.alpha,
-                                 getattr (self._polar_left, name))
-        values_right = np.interp (self.alpha, self._polar_right.alpha,
-                                  getattr (self._polar_right, name))
+    def _interpolate_values (self, polar_var: var) -> np.ndarray:
+        fraction = self._chord_fraction# _log
+        values_left  = np.interp (self._alpha_left, self._polar_left.alpha,
+                                 self._polar_left._ofVar (polar_var))
+        values_right = np.interp (self._alpha_right, self._polar_right.alpha,
+                                  self._polar_right._ofVar (polar_var))
         return values_left + fraction * (values_right - values_left)
 
 
@@ -720,36 +736,51 @@ class Airfoil_Polar_Interpolated:
     @property
     def cdp (self) -> np.ndarray:
         if self._cdp is None:
-            self._cdp = self._interpolate_values ('cdp')
+            self._cdp = self._interpolate_values (var.CDP)
         return self._cdp
 
     @property
     def cm (self) -> np.ndarray:
         if self._cm is None:
-            self._cm = self._interpolate_values ('cm')
+            self._cm = self._interpolate_values (var.CM)
         return self._cm
 
     @property
     def cp_min (self) -> np.ndarray:
         if self._cp_min is None:
-            self._cp_min = self._interpolate_values ('cp_min')
+            self._cp_min = self._interpolate_values (var.CP_MIN)
         return self._cp_min
 
     @property
     def xtrt (self) -> np.ndarray:
         if self._xtrt is None:
-            self._xtrt = self._interpolate_values ('xtrt')
+            self._xtrt = self._interpolate_values (var.XTRT)
         return self._xtrt
 
     @property
     def xtrb (self) -> np.ndarray:
         if self._xtrb is None:
-            self._xtrb = self._interpolate_values ('xtrb')
+            self._xtrb = self._interpolate_values (var.XTRB)
         return self._xtrb
 
     @property
     def alpha0 (self) -> float | None:
-        return self._interpolate_at_cl (0.0, self.alpha)
+        finite_samples = np.isfinite (self.alpha) & np.isfinite (self.cl)
+        if not finite_samples.any():
+            raise ValueError (f"{self}: Cannot estimate alpha0 without finite pre-stall samples")
+
+        alpha0 = self._interpolate_at_cl (0.0, self.alpha)
+        if alpha0 is not None:
+            return alpha0
+
+        branch = self._branch_idx
+        branch = branch[finite_samples[branch]]
+        if not branch.size:
+            raise ValueError (f"{self}: Cannot estimate alpha0 without finite pre-stall samples")
+
+        index = branch[np.argmin (np.abs (self.cl[branch]))]
+        logger.warning (f"{self}: CL=0 is outside polar; estimating alpha0")
+        return float (self.alpha[index] - self.cl[index] / INVISCID_LIFT_SLOPE)
 
     @property
     def cl_max (self) -> float | None:
@@ -1099,13 +1130,20 @@ class VLM_Polar:
             return None, None
 
         cl = self._of_var (VLM_Var.WING_CL)
-
-        # cl_level already out off cl range?
-        if cl_level < np.min(cl) or cl_level > np.max(cl):
-            return None, None
-
         x_var, y_var = xyVars
         x_values, y_values = self.of_vars ((x_var, y_var))
+        valid = np.isfinite (cl) & np.isfinite (x_values) & np.isfinite (y_values)
+        if not np.any (valid):
+            return None, None
+
+        cl = cl[valid]
+        x_values = x_values[valid]
+        y_values = y_values[valid]
+
+        # cl_level already out off cl range?
+        if cl_level < np.min (cl) or cl_level > np.max (cl):
+            return None, None
+
         x_level = float (np.interp (cl_level, cl, x_values))
         y_level = float (np.interp (cl_level, cl, y_values))
 
@@ -1162,34 +1200,49 @@ class VLM_Polar:
         kpi_val, kpi_var = None, None
 
         alpha = self._of_var (VLM_Var.WING_ALPHA)
-        if kpi == VLM_KPI.MAX_LIFT:
+        if kpi == VLM_KPI.LIFT_MAX:
             kpi_var = VLM_Var.WING_LIFT
             lift    = self._of_var (kpi_var)
             alpha_val, kpi_val = extremum (alpha, lift, mode="max")
-        elif kpi == VLM_KPI.MAX_GLIDE:
+
+        elif kpi == VLM_KPI.GLIDE_MAX:
             kpi_var = VLM_Var.WING_GLIDE
             glide   = self._of_var (kpi_var)
             alpha_val, kpi_val = extremum (alpha, glide, mode="max")
-        elif kpi == VLM_KPI.MIN_DRAG:
+
+        elif kpi == VLM_KPI.DRAG_MIN:
             kpi_var = VLM_Var.WING_DRAG
             drag    = self._of_var (kpi_var)
             alpha_val, kpi_val = extremum (alpha, drag, mode="min")
-        elif kpi == VLM_KPI.MAX_CL:
+
+        elif kpi == VLM_KPI.CL_MAX:
             kpi_var = VLM_Var.WING_CL
             cl      = self._of_var (kpi_var)
             alpha_val, kpi_val = extremum (alpha, cl, mode="max")
-        elif kpi == VLM_KPI.MIN_CD:
+
+        elif kpi == VLM_KPI.CD_MIN:
             kpi_var = VLM_Var.WING_CD
             cd      = self._of_var (kpi_var)
             alpha_val, kpi_val = extremum (alpha, cd, mode="min")
-        elif kpi == VLM_KPI.MIN_RADIUS:
+
+        elif kpi == VLM_KPI.CD_0:
+            kpi_var = VLM_Var.WING_CD
+            cd      = self._of_var (kpi_var)
+            cl      = self._of_var (VLM_Var.WING_CL)
+            cd0     = np.interp (0.0, cl, cd, left=np.nan, right=np.nan)
+            kpi_val = float (cd0) if np.isfinite (cd0) else None 
+            alpha0  = np.interp (0.0, cl, alpha, left=np.nan, right=np.nan)
+            alpha_val = float (alpha0) if np.isfinite (alpha0) else None
+
+        elif kpi == VLM_KPI.RADIUS_MIN:
             cl_level = self.cl_level_flight
             if cl_level is not None:
                 kpi_var = VLM_Var.WING_CL
                 cl      = self._of_var (kpi_var)
                 alpha_val, cl_max = extremum (alpha, cl, mode="max")
-                radius  = self.vtas ** 2 / (9.81 * np.sqrt ((cl_max/cl_level)**2 - 1))     # v² / g*sqrt((cl_max/cl_level)² - 1)
-                kpi_val = radius
+                if not cl_max is None:
+                    radius  = self.vtas ** 2 / (9.81 * np.sqrt ((cl_max/cl_level)**2 - 1))     # v² / g*sqrt((cl_max/cl_level)² - 1)
+                    kpi_val = radius
 
         if kpi_val is None:
             logger.warning (f"KPI {kpi} could not be determined for {self}")
@@ -1227,9 +1280,11 @@ class VLM_Polar:
 
         polar_def_target = deepcopy (self._root_polar_def)
         polar_def_target.set_re (section_re)
-        re_rel_tolerance = RE_TOLERANCE
+        re_tolerance = RE_TOLERANCE * section_re
         if re_scale != 1.0:
-            re_rel_tolerance = max (re_rel_tolerance, (RE_SCALE_ROUND_TO / 2) / section_re)
+            re_tolerance = max (re_tolerance, RE_SCALE_ROUND_TO / 2)
+        re_tolerance = np.ceil (re_tolerance / 1000.0) * 1000.0
+        re_rel_tolerance = float (np.nextafter (re_tolerance / section_re, np.inf))
 
         matching_polar = None
         best_re_delta  = float("inf")
@@ -1323,32 +1378,55 @@ class VLM_Polar:
         return None
 
 
-    def _find_alpha_max (self) -> 'VLM_OpPoint':
-        """ find opPoint which is close before cl_max reached at a span position"""
+    def _find_alpha_max (self, low_point: VLM_OpPoint | None = None, high_point: VLM_OpPoint | None = None,
+                         precision: float = 0.05) -> VLM_OpPoint | None:
+        """Return the valid side of a lift-limit bracket refined to precision degrees.
 
-        alpha = None
-        alpha_start = 0.0
-        alpha_end   = 30.0
+        Without points, first search 0..30 degrees in 5-degree steps.
+        Supplied points must bracket a valid-to-reached transition.
+        """
 
-        for step in (5.0, 1.0, 0.2):
-            alpha = None
-            for candidate in np.arange (alpha_start, alpha_end + step / 2, step):
-                if self.opPoint_at (candidate).cl_max_almost_reached:
-                    alpha = candidate
-                    break
+        if not np.isfinite (precision) or precision < 0.01:
+            raise ValueError ("Alpha precision must be at least 0.01 degrees")
+        if (low_point is None) != (high_point is None):
+            raise ValueError ("Both operating points must be supplied together")
 
-            if alpha is None:
+        if low_point is None:
+            for candidate in np.arange (0.0, 30.1, 5.0):
+                point = self.opPoint_at (candidate)
+                if point is None or point.has_vlm_error:
+                    return None
+                if point.cl_max_reached:
+                    if low_point is not None:
+                        high_point = point
+                        break
+                else:
+                    low_point = point
+        if low_point is None or high_point is None:
+            logger.warning (f"{self} alpha_max bracket not found")
+            return None
+        if (not np.isfinite (low_point.alpha) or not np.isfinite (high_point.alpha) or
+                low_point.alpha >= high_point.alpha):
+            raise ValueError ("Operating-point alphas must be finite and increasing")
+        if low_point.has_vlm_error or high_point.has_vlm_error:
+            return None
+        if low_point.cl_max_reached or not high_point.cl_max_reached:
+            raise ValueError ("Alpha bounds must bracket a valid-to-reached lift limit")
+
+        while high_point.alpha - low_point.alpha > precision + 1e-9:
+            candidate = round ((low_point.alpha + high_point.alpha) / 2.0, 2)
+            if not low_point.alpha < candidate < high_point.alpha:
                 break
+            point = self.opPoint_at (candidate)
+            if point is None or point.has_vlm_error:
+                return None
+            if point.cl_max_reached:
+                high_point = point
+            else:
+                low_point = point
 
-            alpha_start = alpha - step
-            alpha_end = alpha
-
-        if alpha is None:
-            logger.warning (f"{self} alpha_max not found ({len(self.opPoints)} opPoints")
-            return None 
-        else: 
-            logger.debug (f"{self} found alpha_max {self.opPoint_at (alpha)}")
-            return self.opPoint_at (alpha)
+        logger.debug (f"{self} alpha_max bracket: {low_point.alpha:.2f}..{high_point.alpha:.2f}")
+        return low_point
 
 
     def of_vars (self, xyVars: Tuple[VLM_Var, VLM_Var]) -> Tuple[np.ndarray, np.ndarray]:
@@ -1421,10 +1499,7 @@ class VLM_Polar:
 
 
     def generate_polar (self, alpha_start = -3.0, alpha_max :float = 25.0, step = 0.25):
-        """ 
-        Generate polar data alpha, Cl, Lift 
-            - if alpha_end is omitted, the polar ends when CL_Max is almost reached       
-        """
+        """Generate up to alpha_max (exclusive), refining the first upper lift limit to 0.10 degrees."""
 
         # already done
         if self._is_polar_generated:
@@ -1435,17 +1510,24 @@ class VLM_Polar:
             return
 
         t0 = perf_counter()
+        previous_point = None
         for alpha in np.arange (alpha_start, alpha_max, step):
  
             opPoint = self.opPoint_at (alpha)
 
             if opPoint is None:
-                continue
+                return
+            elif opPoint.has_vlm_error:
+                self._opPoints_dict.pop (opPoint.alpha, None)
+                return
             elif opPoint.cl_max_reached:
                 self._opPoints_dict.pop (opPoint.alpha, None)
+                if previous_point is None:
+                    continue
+                if self._find_alpha_max (previous_point, opPoint) is None:
+                    return
                 break
-            elif opPoint.cl_max_almost_reached:     
-                break 
+            previous_point = opPoint
 
         self._is_polar_generated = True
 
@@ -2116,8 +2198,6 @@ class VLM_OpPoint:
             # offset for this iteration, not the physical zero-lift angle.
             # With cl capped, alpha0 absorbs further changes in alpha_eff.
             
-            # The inviscid slope is 2*pi per radian, or 0.1097 per degree.
-            INVISCID_LIFT_SLOPE = 0.1097
             alpha0 = alpha_eff - cl / INVISCID_LIFT_SLOPE 
 
             sections_alpha0.append(alpha0)

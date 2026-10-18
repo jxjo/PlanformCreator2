@@ -51,6 +51,7 @@ COLOR_SECTION       = QColor ('deeppink')
 COLOR_EXTRA_SECTION = QColor ('gold').darker (120)
 COLOR_REF_PC2       = QColor ('magenta').darker(120)
 
+COLOR_WARNING       = QColor ('orange')
 COLOR_CRITICAL      = QColor ('orangered')
 
 
@@ -1402,14 +1403,20 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
         y_crit   = np.column_stack ((edges[:-1], y * 1000, edges[1:])).ravel ()
         cl_crit  = np.interp (y_crit, y_ext, cl_ext)
-        cl_crit  = np.where (np.repeat (mask, 3), cl_crit, np.nan)
+        tip_mask = y >= 0.95 * vlm_wing.sections_y[-1]
 
-        color = QColor(COLOR_CRITICAL)     
-        color.setAlphaF (0.7)
-        pen = pg.mkPen (color, width=8)
+        for stripe_mask, stripe_color in ((mask & ~tip_mask, COLOR_CRITICAL),
+                                          (mask & tip_mask, COLOR_WARNING)):
+            if not np.any (stripe_mask):
+                continue
+            values = np.where (np.repeat (stripe_mask, 3), cl_crit, np.nan)
+            color = QColor (stripe_color)
+            color.setAlphaF (0.7)
+            pen = pg.mkPen (color, width=8)
 
-        self._plot_dataItem (y_crit, cl_crit, pen=pen, name=label,
-                             connect="finite", antialias=False, zValue=2)
+            self._plot_dataItem (y_crit, values, pen=pen, name=label,
+                                 connect="finite", antialias=False, zValue=2)
+            label = None
 
 
     def _plot_critical_stripes (self, vlm_wing : VLM_Wing, results, mask, label):
@@ -1669,10 +1676,11 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
 
         x_level, y_level = self.vlm_polar.cl_level_flight_vars (self.xyVars)
         if x_level is None or y_level is None:
+            self._plot_text (f"Level flight condition outside existing polar range", color= "red",  itemPos=(0.5, 1))
             return
 
-        cl = self.vlm_polar.cl_level_flight
-        text = f"Level flight CL: {cl:.3f}"
+        y_str = self._round_var(self.xyVars[1], y_level)
+        text = f"Level flight {self.xyVars[1]}: {y_str}"
 
         color       = QColor('gold')
         brush_color = QColor('black')
@@ -1681,6 +1689,18 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
         self._plot_point (x_level, y_level, symbol='s', size=10, color=color,  brush=brush_color,
                           text=text, textFill=pg.mkBrush (brush_color), zValue=4,
                           textOffset=(7, 0),anchor=(0, 0.5))
+
+        # show ref polar point if available
+        if self.ref_vlm_polar is not None:
+            x_ref, y_ref = self.ref_vlm_polar.cl_level_flight_vars (self.xyVars)
+            if x_ref is not None and y_ref is not None:
+
+                color       = COLOR_REF_PC2
+                brush_color = QColor('black')
+                brush_color.setAlphaF (0.6); 
+
+                self._plot_point (x_ref, y_ref, symbol='s', size=10, color=color,  brush=brush_color)
+
 
 
     def _get_additional_plots (self) -> list[Tuple[VLM_Var, VLM_Var]]:
@@ -1709,17 +1729,19 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
 
         # which kpis should be plotted based on the current xyVars?
         if is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_CD):
-            kpis = [VLM_KPI.MIN_CD, VLM_KPI.MAX_GLIDE, VLM_KPI.MAX_CL, VLM_KPI.MIN_RADIUS]
+            kpis = [VLM_KPI.CD_MIN, VLM_KPI.GLIDE_MAX, VLM_KPI.CL_MAX, VLM_KPI.CD_0]
+            if self.show_level_flight:                      # level flight needed to make sense
+                kpis.append(VLM_KPI.RADIUS_MIN)
         elif is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_GLIDE):
-            kpis = [VLM_KPI.MAX_GLIDE]
+            kpis = [VLM_KPI.GLIDE_MAX, VLM_KPI.CL_MAX]
         elif is_plot_like ([VLM_Var.WING_CL, VLM_Var.WING_ALPHA], VLM_Var.WING_CL):
-            kpis = [VLM_KPI.MAX_CL]
+            kpis = [VLM_KPI.CL_MAX]
         elif is_plot_like ([VLM_Var.WING_DRAG, VLM_Var.WING_ALPHA], VLM_Var.WING_LIFT):
-            kpis = [VLM_KPI.MIN_DRAG, VLM_KPI.MAX_GLIDE]
+            kpis = [VLM_KPI.DRAG_MIN, VLM_KPI.GLIDE_MAX]
         elif is_plot_like ([VLM_Var.WING_LIFT, VLM_Var.WING_ALPHA], VLM_Var.WING_GLIDE):
-            kpis = [VLM_KPI.MAX_GLIDE]
+            kpis = [VLM_KPI.GLIDE_MAX]
         elif is_plot_like ([VLM_Var.WING_LIFT, VLM_Var.WING_ALPHA], VLM_Var.WING_LIFT):
-            kpis = [VLM_KPI.MAX_LIFT]
+            kpis = [VLM_KPI.LIFT_MAX]
 
         for kpi in kpis:
 
@@ -1739,36 +1761,35 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
                 #     at_text = f"@ {xvar.value}: {x_val_rnd}, {yvar.value}: {y_val_rnd}"
                 # text = f"{kpi.value}: {kpi_val_rnd} {at_text}" 
                 text = f"{kpi.value}: {kpi_val_rnd}" 
+                label_html = f"<span style='color:{Artist.COLOR_NORMAL}'>{html.escape(text)}</span>"
 
-                if kpi == VLM_KPI.MIN_RADIUS:
-                    anchor = (1.2, -0.7)
+                if self.ref_vlm_polar is not None:
+                    _, ref_kpi_val, _, _ = self.ref_vlm_polar.kpi_in (kpi, self.xyVars)
+
+                    if ref_kpi_val is not None:
+                        improve = (kpi_val - ref_kpi_val) / kpi_val
+                        better = improve >= 0.0 if "max" in kpi.value.lower() else improve <= 0.0
+                        delta_text  = f"  Δ{improve:+.1%}"
+                        delta_color = COLOR_GOOD if better else COLOR_ERROR
+                        label_html += f" <span style='color:{delta_color.name()}'>{html.escape(delta_text)}</span>"
+
+                if kpi == VLM_KPI.RADIUS_MIN:
+                    anchor     = (1.0, -0.7)
+                    textOffset = (-10, 0)
                 elif kpi_var in [VLM_Var.WING_CL, VLM_Var.WING_LIFT]:
-                    anchor = (1.2, 0.7)
+                    anchor     = (1.0, 0.7)
+                    textOffset = (-10, 0)
                 else:
-                    anchor =  (-0.2, 0.5)
+                    anchor     = (0, 0.5)
+                    textOffset = (10, 0)
 
                 color       = QColor('lightgray')
                 brush_color = QColor('black')
                 brush_color.setAlphaF (0.6); 
                 brush = pg.mkBrush (brush_color)
                 self._plot_point (x_val, y_val, symbol='o', size=9, color=color, brush=brush,
-                                  text=text, textFill=pg.mkBrush (brush_color), 
-                                  textOffset=(0, 0), anchor=anchor)
-
-                # if there is a ref polar, plot the delta between the current and reference KPI values
-
-                if self.ref_vlm_polar is not None:
-                    _, ref_kpi_val, _, _ = self.ref_vlm_polar.kpi_in (kpi, self.xyVars)
-
-                    if  ref_kpi_val is not None:
-                        improve = (kpi_val - ref_kpi_val) / kpi_val
-                        better = improve >= 0.0 if "max" in kpi.value.lower() else improve <= 0.0
-                        delta_text  = f"Δ: {improve:+.1%}"
-                        delta_color = "limegreen" if better else "red"
-
-                        self._plot_point (x_val, y_val, size=0, color=delta_color,
-                                        text=delta_text, textColor=delta_color,
-                                        textOffset=(0, -14), anchor=anchor)
+                                  textFill=pg.mkBrush (brush_color), html=label_html,
+                                  textOffset=textOffset, anchor=anchor)
 
 
     def _round_var (self, var: VLM_Var, value) -> float:
@@ -1776,10 +1797,12 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
 
         if var in [VLM_Var.WING_CL, VLM_Var.WING_ALPHA]:
             return round(value, 2)
-        elif var in [VLM_Var.WING_DRAG, VLM_Var.WING_LIFT, VLM_Var.WING_GLIDE]:
+        elif var in [VLM_Var.WING_DRAG, VLM_Var.WING_LIFT]:
             return round(value, 2)
         elif var in [VLM_Var.WING_CD]:
-            return round(value, 4)
+            return round(value, 5)
+        elif var in [VLM_Var.WING_GLIDE]:
+            return round(value, 1)
         else:
             return round(value, 3)
 
@@ -2543,7 +2566,7 @@ class Ref_WingSections_Artist (Abstract_Artist_Planform):
             else: 
                 x,y = section.line ()
 
-            pen   = pg.mkPen(COLOR_REF_PC2, width=1.0,style=Qt.PenStyle.DotLine)
+            pen   = pg.mkPen(COLOR_REF_PC2, width=1.0,style=Qt.PenStyle.DashLine)
 
             self._plot_dataItem  (x, y,  pen = pen, antialias = False, zValue=3)
 

@@ -282,8 +282,8 @@ class Main (QMainWindow):
         diagrams.append (Diagram_Making_Of     (self, self._app_model))
         diagrams.append (Diagram_Wing          (self, self._app_model))
         diagrams.append (Diagram_Planform      (self, self._app_model))
-        diagrams.append (Diagram_Paneling      (self, self._app_model))
         diagrams.append (Diagram_Airfoils      (self, self._app_model))
+        diagrams.append (Diagram_Paneling      (self, self._app_model))
         diagrams.append (Diagram_Aero_Analysis (self, self._app_model))
         tab_panel = Tab_Panel (parent=self)
         for diagram in diagrams:

@@ -215,6 +215,18 @@ class Reference_Wing (Wing):
         raise ValueError(f"Unsupported reference-wing scale mode: {self.scale_mode}")
 
 
+    @override
+    @property
+    def mass(self) -> float:
+        """Mass of the reference wing as mass of parent wing"""
+        return self.parent_wing.mass
+
+    def set_mass(self, aVal: float):
+        """Set mass of the reference wing - not allowed."""
+        logger.warning("Setting mass of the reference wing is not allowed.")
+        pass
+
+
     def _adapt_parent_polar_def(self, polar_def: Polar_Definition) -> Polar_Definition:
         """Scale / adapt (no_flap) a polar definition of parent wing."""
 
@@ -280,7 +292,7 @@ class Reference_Wing_Elliptical (Reference_Wing):
         parameters.set("wingSections", self._sectionsDict_of(parent_wing))
         parameters.set("panels", {
             "strategy": Mesh_Strategy_Smooth.name,
-            Mesh_Strategy_Smooth.name: {"cn_tip_min": 0.05},
+            Mesh_Strategy_Smooth.name: {"cn_tip_min": 0.1},
         })
 
         self._parent_wing = parent_wing

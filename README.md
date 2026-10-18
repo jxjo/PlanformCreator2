@@ -4,7 +4,7 @@
 
 # v5.0 dev
 
-... work in progress ...
+... work in progress - needs AirfoilEditor 5.0b2 ...
 
 **PlanformCreator2** (PC2) is an app for designing wing planforms, with a focus on model planes.
 

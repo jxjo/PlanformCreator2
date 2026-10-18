@@ -2,20 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-## 5.0 - wip 
+## 5.0b1  
 
 ### Added
 
-- generalized reference wings
+- Generalized reference wings
 
 - Paneling
   - Smooth paneling for Bezier-based planforms
-  - Automatically add helper wing sections when the chord difference between two neighboring wing sections is too large
+  - Add helper wing sections when the chord difference between two neighboring wing sections is too large
 
 - VLM
-  - Added CD (nearfield and Treffz) and CM
-  - Added a polar view of the wing
-  - Added polar delta view to reference wing
+  - Polar: NeuralFoil support for airfoil polars (beside XFoil)
+  - Polar: CD (nearfield and Treffz) and CM
+  - Polar diagram
+  - KPIs of polar 
+  - Level flight point of a polar
+  - Polar delta view to a reference wing
 
 
 ## 4.3.2

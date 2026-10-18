@@ -251,9 +251,9 @@ class Item_Planform (Item_Abstract):
         self._add_artist (Flaps_Artist          (self, lambda: self.planform, show=False ,show_legend=True))
         self._add_artist (Airfoil_Name_Artist   (self, lambda: self.planform, show=False, show_legend=False))
 
-        self._add_artist (Ref_Planform_Artist   (self, lambda: self.ref_planform, show=False, show_legend=True))
+        self._add_artist (Ref_Planform_Artist   (self, lambda: self.ref_planform, show=True, show_legend=True))
         self._add_artist (Ref_WingSections_Artist (
-                                                 self, lambda: self.ref_planform, show=False, show_legend=True))
+                                                 self, lambda: self.ref_planform, show=False, show_legend=False))
         self._add_artist (Image_Artist          (self, lambda: self.planform, show=False, 
                                                        image_def=lambda: self.wing.background_image,
                                                        as_background=True))
@@ -596,8 +596,9 @@ class Item_VLM_Panels (Item_Abstract):
         self._add_artist (WingSections_Artist   (self, lambda: self.planform, 
                                                  wingSection_fn=lambda: self.cur_wingSection,
                                                  show=True, show_legend=True, show_all_sections=True))  
-        self._add_artist (Airfoil_Name_Artist   (self, lambda: self.planform, 
-                                                 show=False, show_legend=False))
+        self._add_artist (Ref_WingSections_Artist (self, lambda: self.ref_planform, show=True,
+                                                 show_all_sections=True))
+        self._add_artist (Airfoil_Name_Artist   (self, lambda: self.planform, show=False))
 
         # connect signals from artists to app model notify
         self._setup_artists_slots()
@@ -626,6 +627,7 @@ class Item_VLM_Panels (Item_Abstract):
     
     def set_show_wingSections (self, aBool : bool): 
         self._show_artist (WingSections_Artist, show=aBool)
+        self._show_artist (Ref_WingSections_Artist, show=aBool)
  
 
     @property
@@ -773,6 +775,10 @@ class Item_VLM_Chord (Item_Abstract):
 
         if not self.xLinked:
             self.viewBox.autoRange()
+            # leave some space to the right for the legend
+            x_min, x_max = self.viewBox.viewRange()[0]
+            x_span = x_max - x_min
+            self.viewBox.setXRange(x_min, x_min + x_span / 0.9, padding=0.0)
 
         self.viewBox.setYRange( 0, 1.1, padding=0.08)  
 
@@ -1027,8 +1033,15 @@ class Item_VLM_OpPoint (Item_Abstract):
     def setup_viewRange (self):
         """ define view range of this plotItem"""
 
+        self.viewBox.setDefaultPadding(0.05)
+
         if not self.xLinked:
             self.viewBox.autoRange()
+
+            # leave some space to the right for the legend
+            x_min, x_max = self.viewBox.viewRange()[0]
+            x_span = x_max - x_min
+            self.viewBox.setXRange(x_min, x_min + x_span / 0.9, padding=0.0)
 
         self._set_yRange ()
 
@@ -2458,18 +2471,7 @@ class Diagram_Planform (Diagram_Abstract):
     
     def set_show_wingSections (self, aBool : bool): 
         self._show_artist (WingSections_Artist, show=aBool)
-        self._show_artist (Ref_WingSections_Artist, show=aBool and self.show_ref_wing)
-
-
-    @property
-    def show_ref_wing (self) -> bool: 
-        """ return show_ref_wing state of first artist"""
-        artist : Ref_Planform_Artist = self._get_artist (Ref_Planform_Artist) [0]
-        return artist.show
-
-    def set_show_ref_wing (self, aBool : bool):
-        self._show_artist (Ref_Planform_Artist, aBool)
-        self._show_artist (Ref_WingSections_Artist, show=aBool and self.show_wingSections)
+        self._show_artist (Ref_WingSections_Artist, show=aBool)
 
 
     @property
@@ -2544,7 +2546,6 @@ class Diagram_Planform (Diagram_Abstract):
 
             r += 1
             p = Panel_Reference_Wing (self, self.app_model)
-            p.sig_show_ref_wing.connect(self.set_show_ref_wing)
             l.addWidget(p, r, c, 1, 2)
 
             r += 1
@@ -3038,8 +3039,15 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         super().__init__(*args, **kwargs)
 
         # Diagram refresh is handled in Diagram_Items - but view panel is owned by this class
-        self.app_model.sig_vlm_changed.connect      (self._viewPanel.refresh)
-        self.app_model.sig_ref_wing_changed.connect (self._viewPanel.refresh)
+        self.app_model.sig_vlm_changed.connect      (self._on_vlm_changed)
+        self.app_model.sig_ref_wing_changed.connect (self._on_vlm_changed)
+
+
+    def _on_vlm_changed (self):
+        """Handle changes in the VLM model."""
+
+        if self.isVisible():
+            self._viewPanel.refresh()
 
 
     @override
@@ -3309,9 +3317,10 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             r += 1
             ComboBox (l,r,c, width=None, 
                         get=lambda: self.polar_def_name, set=self.set_polar_def_name,
-                        options=lambda: self.polar_def_list)
+                        options=lambda: self.polar_def_list,
+                        toolTip=lambda: self.polar_def_name)                        # cut have been cutted
             ToolButton (l,r,c+1, icon=Icon.EDIT,   set=self._edit_polar_def, 
-                        disable=lambda: not self.wing.vlm_data_available,      # wait until VLM ended
+                        disable=lambda: not self.app_model.cur_polar_def,           
                         toolTip="Change the settings of this polar definition")                              
             # ToolButton (l,r,c+2, icon=Icon.DELETE, set=self._delete_polar_def,
             #             disable=lambda: not self.wing.vlm_data_available or  
@@ -3356,11 +3365,11 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             CheckBox (l,r,c, colSpan=4, text="Show level flight point for ...",
                       get=lambda: self.show_level_flight, set=self.set_show_level_flight)
             r += 1
-            mass = FieldF   (l,r,c+1, lab="Mass", width=85, step=0.1, lim=(0.1, 100), dec=1, unit="kg",
+            mass = FieldF   (l,r,c+1, lab="Mass", width=90, step=0.1, lim=(0.1, 100), dec=2, unit="kg",
                         obj=lambda: self.wing, prop=Wing.mass, hide=lambda: not self.show_level_flight)
             mass.sig_changed.connect (self.refresh)        # refresh diagram
             r += 1
-            load = FieldF   (l,r,c+1, lab="Wing Load", width=85, step=1, lim=(1, 500), dec=0, unit="g/dm²",
+            load = FieldF   (l,r,c+1, lab="Wing Load", width=90, step=1, lim=(1, 500), dec=1, unit="g/dm²",
                         obj=lambda: self.wing, prop=Wing.wing_loading, hide=lambda: not self.show_level_flight)
             load.sig_changed.connect (self.refresh)        # refresh diagram
 
@@ -3942,8 +3951,6 @@ class Panel_Polar_Defs (Edit_Panel):
 class Panel_Reference_Wing (Edit_Panel):
     """ helper panel to activate and select a reference wing"""
 
-    sig_show_ref_wing = pyqtSignal(bool)                    # signal to show artists
-
     def __init__(self, *args, show_no_flap=False):
 
         self._show_no_flap = show_no_flap                   # show the no flap checkbox
@@ -3968,8 +3975,6 @@ class Panel_Reference_Wing (Edit_Panel):
             self.app_model.set_ref_wing_name(self.app_model.ref_wings_name[0] )
         elif not aBool:
             self.app_model.set_ref_wing_name(None)
-
-        self.sig_show_ref_wing.emit (aBool)
 
         self.refresh()
 

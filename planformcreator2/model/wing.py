@@ -519,14 +519,14 @@ class Wing:
 
     @property
     def wing_loading (self) -> float:
-        """Wing loading in g/dm┬▓."""
+        """Wing loading in g/dm²."""
         wing_area_mm2, _, _, _, _ = self.wing_data()
         if wing_area_mm2 <= 0:
             return 0.0
         return self.mass * 1000.0 * 10_000.0 / wing_area_mm2
 
     def set_wing_loading (self, aVal: float):
-        """ set wing loading in g/dm┬▓ - will set mass accordingly"""
+        """ set wing loading in g/dm² - will set mass accordingly"""
         if aVal is not None:
             aVal = clip (aVal, 1.0, 1000.0)
             wing_area_mm2, _, _, _, _ = self.wing_data()
