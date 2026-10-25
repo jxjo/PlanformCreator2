@@ -30,7 +30,7 @@ from time                           import perf_counter
 
 from .VLM                           import calc_Qjj
 from airfoileditor.base.math_util   import extremum
-from airfoileditor.model.polar_set  import Polar_Set, polarType, Polar, Polar_Definition, RE_SCALE_ROUND_TO, var
+from airfoileditor.model.polar_set  import Polar_Set, polarType, Polar, Polar_Definition, re_scale_round_to, var
 from airfoileditor.model.airfoil    import GEO_BASIC
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ VLM_Polar_CacheEntry = tuple[Polar_Definition, 'VLM_Polar']
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 #-------------------------------------------------------------------------------
@@ -126,7 +126,7 @@ class Point_3D (NamedTuple):
 
 
 
-RE_TOLERANCE  = 0.02                                    # Re tolerance for polars to be considered matching
+RE_TOLERANCE  = 0.02                                    # reuse band during interactive chord changes
 
 INVISCID_LIFT_SLOPE = 0.1097                            # The inviscid slope is 2*pi per radian, or 0.1097 per degree.
 
@@ -280,6 +280,7 @@ class VLM_Wing:
         self._panels_by_stripe = panels_by_stripe   # panels indexed by span stripe, then chordwise
         self._has_distorted = distorted             # indicate distorted (bad) panels
         self._sections_y    = None                  # y position of wing sections in m
+        self._sections_chord = None                 # chord of wing sections in m
 
         # ensure all wing sections have straked airfoils
 
@@ -344,6 +345,15 @@ class VLM_Wing:
             y = [section.x / 1000 for section in self.sections]
             self._sections_y = np.array(y)
         return self._sections_y
+
+    @property
+    def sections_chord (self) -> np.ndarray:
+        """ chord length of wing sections in m"""
+
+        if self._sections_chord is None:
+            c = [section.c / 1000 for section in self.sections]
+            self._sections_chord = np.array(c)
+        return self._sections_chord
 
 
     @property
@@ -638,7 +648,7 @@ class VLM_Wing:
 
 
 
-class Airfoil_Polar_Interpolated:
+class VLM_Airfoil_Polar:
     """Airfoil polar interpolated between two spanwise sections."""
 
     def __init__ (self, polar_left: Polar, polar_right: Polar,
@@ -669,7 +679,7 @@ class Airfoil_Polar_Interpolated:
         self._cp_min = None
         self._xtrt  = None
         self._xtrb  = None
-        self._branch = None                         # cached indices of increasing-lift branch
+        self._branch_mask_cache = None
 
         # sanity - polars must be loaded
         if not polar_left.isLoaded or not polar_right.isLoaded:
@@ -677,8 +687,9 @@ class Airfoil_Polar_Interpolated:
 
         # interpolate main aerodynamic coefficients
         self._alpha, self._alpha_left, self._alpha_right = self._build_alpha_mapping ()
-        self._cl = self._interpolate_values (var.CL)
-        self._cd = self._interpolate_values (var.CD)
+        self._cl = self._interpolate_values (var.CL, log=True)
+        self._cd = self._interpolate_values (var.CD, log=True)
+
 
     def __repr__(self) -> str:
         # overwrite to get a nice print string 
@@ -712,8 +723,12 @@ class Airfoil_Polar_Interpolated:
         return alpha, alpha_left, alpha_right
 
 
-    def _interpolate_values (self, polar_var: var) -> np.ndarray:
-        fraction = self._chord_fraction# _log
+    def _interpolate_values (self, polar_var: var, log: bool = False) -> np.ndarray:
+        """
+        Interpolate the given polar variable between the left and right polars.
+        - either logarithmic interpolation or linear based on chord fraction
+        """
+        fraction = self._chord_fraction_log if log else self._chord_fraction
         values_left  = np.interp (self._alpha_left, self._polar_left.alpha,
                                  self._polar_left._ofVar (polar_var))
         values_right = np.interp (self._alpha_right, self._polar_right.alpha,
@@ -773,12 +788,11 @@ class Airfoil_Polar_Interpolated:
         if alpha0 is not None:
             return alpha0
 
-        branch = self._branch_idx
-        branch = branch[finite_samples[branch]]
-        if not branch.size:
+        branch_mask = self._branch_mask & finite_samples
+        if not branch_mask.any():
             raise ValueError (f"{self}: Cannot estimate alpha0 without finite pre-stall samples")
 
-        index = branch[np.argmin (np.abs (self.cl[branch]))]
+        index = np.flatnonzero (branch_mask)[np.argmin (np.abs (self.cl[branch_mask]))]
         logger.warning (f"{self}: CL=0 is outside polar; estimating alpha0")
         return float (self.alpha[index] - self.cl[index] / INVISCID_LIFT_SLOPE)
 
@@ -804,16 +818,18 @@ class Airfoil_Polar_Interpolated:
 
 
     @property
-    def _branch_idx (self) -> np.ndarray:
-        """indices of the increasing-lift branch, strictly increasing in cl"""
+    def _branch_mask (self) -> np.ndarray:
+        """Mask of samples on the increasing-lift branch, strictly increasing in cl."""
 
-        if self._branch is None:
+        if self._branch_mask_cache is None:
             i_min, i_max = int (np.argmin (self.cl)), int (np.argmax (self.cl))
-            idx      = np.arange (i_min, i_max + 1)
-            cl       = self.cl[idx]
+            cl       = self.cl[i_min:i_max + 1]
             prev_max = np.maximum.accumulate (np.r_[-np.inf, cl[:-1]])
-            self._branch = idx[cl > prev_max]               # drop wiggles below a previous max
-        return self._branch
+            increasing_cl_mask = cl > prev_max
+            branch_mask = np.zeros (self.cl.shape, dtype=bool)
+            branch_mask[i_min:i_max + 1] = increasing_cl_mask
+            self._branch_mask_cache = branch_mask
+        return self._branch_mask_cache
 
 
     def _interpolate_at_cl (self, cl: float, values: np.ndarray) -> float | None:
@@ -822,8 +838,8 @@ class Airfoil_Polar_Interpolated:
         if not len (self.cl) or not np.isfinite (cl):
             return None
 
-        idx = self._branch_idx
-        val = np.interp (cl, self.cl[idx], values[idx], left=np.nan, right=np.nan)
+        branch_mask = self._branch_mask
+        val = np.interp (cl, self.cl[branch_mask], values[branch_mask], left=np.nan, right=np.nan)
         return float (val) if np.isfinite (val) else None
 
 
@@ -998,14 +1014,14 @@ class VLM_Polar:
         return self._airfoil_polar_sections_normal
 
     @property
-    def airfoil_polar_stripes (self) -> list [Airfoil_Polar_Interpolated]:
+    def airfoil_polar_stripes (self) -> list [VLM_Airfoil_Polar]:
         """VLM airfoil polars interpolated to the panel stripes."""
         if not self._airfoil_polar_stripes:
             self._airfoil_polar_stripes = self._build_airfoil_polar_stripes (is_vlm=True)
         return self._airfoil_polar_stripes
 
     @property
-    def airfoil_polar_stripes_normal (self) -> list [Airfoil_Polar_Interpolated]:
+    def airfoil_polar_stripes_normal (self) -> list [VLM_Airfoil_Polar]:
         """Normal airfoil polars interpolated to the panel stripes."""
         if not self._airfoil_polar_stripes_normal:
             self._airfoil_polar_stripes_normal = self._build_airfoil_polar_stripes (is_vlm=False)
@@ -1049,7 +1065,7 @@ class VLM_Polar:
         return self._use_treffz
 
 
-    def _build_airfoil_polar_stripes (self, is_vlm: bool) -> list[Airfoil_Polar_Interpolated]:
+    def _build_airfoil_polar_stripes (self, is_vlm: bool) -> list[VLM_Airfoil_Polar]:
         """Build one interpolated airfoil polar for each panel stripe."""
         section_polars = self.airfoil_polar_sections if is_vlm else self.airfoil_polar_sections_normal
         if not section_polars or len (section_polars) != len (self.vlm_wing.sections):
@@ -1068,7 +1084,7 @@ class VLM_Polar:
                 i_left += 1
                 i_right += 1
 
-            interpolated.append (Airfoil_Polar_Interpolated (
+            interpolated.append (VLM_Airfoil_Polar (
                 section_polars[i_left], section_polars[i_right],
                 section_chords[i_left], section_chords[i_right], chord))
 
@@ -1280,10 +1296,12 @@ class VLM_Polar:
 
         polar_def_target = deepcopy (self._root_polar_def)
         polar_def_target.set_re (section_re)
+
+        # Reuse nearby polars so small Bezier/chord changes need no regeneration.
+        # For scaled polars, also cover rounding by half the generation grid step.
         re_tolerance = RE_TOLERANCE * section_re
         if re_scale != 1.0:
-            re_tolerance = max (re_tolerance, RE_SCALE_ROUND_TO / 2)
-        re_tolerance = np.ceil (re_tolerance / 1000.0) * 1000.0
+            re_tolerance = max (re_tolerance, re_scale_round_to (section_re) / 2)
         re_rel_tolerance = float (np.nextafter (re_tolerance / section_re, np.inf))
 
         matching_polar = None
@@ -1294,7 +1312,7 @@ class VLM_Polar:
             if polar.is_equal_to (polar_def_target, ignore_active=True, ignore_xtrip=True,
                                   re_rel_tolerance=re_rel_tolerance):
                 re_delta = abs (polar.re - section_re)
-                if re_delta < best_re_delta:
+                if re_delta <= np.nextafter (re_tolerance, np.inf) and re_delta < best_re_delta:
                     matching_polar = polar
                     best_re_delta = re_delta
 
@@ -2202,9 +2220,33 @@ class VLM_OpPoint:
 
             sections_alpha0.append(alpha0)
 
-        # alpha0 of stripe by interpolation of section alpha0 
+        # now interpolate alpha0 from sections to stripes either
+        # - by chord if the chord decreases from left to right
+        # - by spanwise position otherwise
 
-        alpha0_stripes = np.interp (y_stripes, sections_y, sections_alpha0)
+        sections_chord = self.wing.sections_chord
+        stripes_chord  = self.wing.stripes_chord
+        alpha0_sections = np.asarray (sections_alpha0)
+        alpha0_stripes = np.empty_like (y_stripes)
+
+        for section_index in range (n_sections - 1):
+            y_left = sections_y[section_index]
+            y_right = sections_y[section_index + 1]
+            in_interval = (y_stripes >= y_left) & (y_stripes < y_right)
+
+            if not np.any (in_interval):
+                continue
+
+            chord_left = sections_chord[section_index]
+            chord_right = sections_chord[section_index + 1]
+            if chord_left > chord_right:
+                fraction = (stripes_chord[in_interval] - chord_left) / (chord_right - chord_left)
+            else:
+                fraction = (y_stripes[in_interval] - y_left) / (y_right - y_left)
+
+            alpha0_left = alpha0_sections[section_index]
+            alpha0_right = alpha0_sections[section_index + 1]
+            alpha0_stripes[in_interval] = alpha0_left + fraction * (alpha0_right - alpha0_left)
 
         return alpha0_stripes
 
@@ -2297,5 +2339,3 @@ class VLM_OpPoint:
                     value = values[stripe_index]
                     row.append ("" if value is None else format (float (value), precision))
                 writer.writerow (row)
-
-

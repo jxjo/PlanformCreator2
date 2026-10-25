@@ -18,7 +18,7 @@ from .planform                       import Planform, WingSection, WingSections
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 class Mesh_Strategy:
@@ -693,7 +693,7 @@ class Mesh_Strategy_Smooth (Mesh_Strategy):
 
 
     def _apply_width_min (self, yn_stations: np.ndarray) -> np.ndarray:
-        """Stretch narrow panels while preserving the mesh root and tip."""
+        """Reserve minimum panel widths and distribute the remaining span by the original spacing."""
 
         if self.width_min_targ is None:
             return yn_stations
@@ -710,32 +710,10 @@ class Mesh_Strategy_Smooth (Mesh_Strategy):
 
         width_min = self.width_min_targ
 
-        # Panels narrower than the target are stretched to the target width.
-        # The other panels are shortened proportionally, like a rubber band,
-        # so that root and tip remain fixed.
-        is_stretched = panel_widths < width_min
-        while True:
-            width_stretched = np.sum (is_stretched) * width_min
-            width_remaining = yn_range - width_stretched
-            widths_remaining = panel_widths[~is_stretched]
-
-            if len (widths_remaining) == 0:
-                panel_widths[:] = width_min
-                break
-
-            panel_widths[is_stretched] = width_min
-            panel_widths[~is_stretched] = widths_remaining * width_remaining / np.sum (widths_remaining)
-
-            # A shortened panel may now fall below the target. Lock it and
-            # redistribute once more. If no new panel needs locking, stop.
-            is_newly_stretched = (panel_widths < width_min) & ~is_stretched
-            if not np.any (is_newly_stretched):
-                break
-            is_stretched |= is_newly_stretched
-
-        yn_adjusted = np.empty_like (yn_stations)
-        yn_adjusted[0] = yn_stations[0]
-        yn_adjusted[1:] = yn_adjusted[0] + np.cumsum (panel_widths)
+        width_remaining = yn_range - len (panel_widths) * width_min
+        fractions = (yn_stations - yn_stations[0]) / yn_range
+        yn_adjusted = yn_stations[0] + np.arange (len (yn_stations)) * width_min + width_remaining * fractions
+        yn_adjusted[0], yn_adjusted[-1] = yn_stations[0], yn_stations[-1]
         return yn_adjusted
     
 
@@ -800,7 +778,8 @@ class Mesh_Strategy_Smooth (Mesh_Strategy):
         # store the current minimum panel width for reference
         self._width_min_cur = np.min(np.diff (yn_stations))
 
-        return np.round (yn_stations * self.mesh.span, 6)
+        stations = np.round (yn_stations * self.mesh.span, 6)
+        return stations
 
 
     def le_te_polyline (self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
