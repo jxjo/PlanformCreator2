@@ -1202,7 +1202,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         # "CD contribution along span" :  [VLM_Var.CD_SPAN, VLM_Var.CD_IND_SPAN],
         "Cd along span" :               [VLM_Var.CD, VLM_Var.CD_IND, VLM_Var.CD_AIRFOIL],
         "Cm along span" :               [VLM_Var.CM, VLM_Var.CM_VLM, VLM_Var.CM_AIRFOIL],
-        "Alpha_eff along span" :        [VLM_Var.ALPHA_EFF, VLM_Var.ALPHA, VLM_Var.ALPHA_IND]
+        "Alpha along span" :            [VLM_Var.ALPHA_EFF, VLM_Var.ALPHA, VLM_Var.ALPHA_IND, VLM_Var.ALPHA0_AIRFOIL]
         }
 
     def __init__ (self, *args, 
@@ -1330,7 +1330,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
                     # plot span border once for all variables of this plot 
                     if i == 0:
-                        self._plot_span_border (xe, ye)
+                        self._plot_span_border (xe)
 
                     # plot additional infos 
                     if var == VLM_Var.CL:
@@ -1373,16 +1373,15 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         return x_ext, y_ext
 
 
-    def _plot_span_border (self, x : np.ndarray, y : np.ndarray):
-        """ plot vertical lines at x_left/x_right from y=0 to the respective y value (VLM_Panels color) """
-
-        x_left, x_right = x[0], x[-1]
-        y_left, y_right = y[0], y[-1]
+    def _plot_span_border (self, x : np.ndarray):
+        """ plot infinite vertical lines at the root and tip (VLM_Panels color) """
 
         pen = pg.mkPen (COLOR_BOX, width=1, style=Qt.PenStyle.DotLine)
 
-        self._plot_dataItem ([x_left, x_left], [0.0, y_left], pen=pen, antialias=False, zValue=1)
-        self._plot_dataItem ([x_right, x_right], [0.0, y_right], pen=pen, antialias=False, zValue=1)
+        for x_border in (x[0], x[-1]):
+            line = pg.InfiniteLine (pos=x_border, angle=90, movable=False, pen=pen)
+            line.setZValue (1)
+            self._add (line)
 
 
     def _plot_critical_Cl_stripes (self, vlm_wing : VLM_Wing, results, label):
@@ -1403,20 +1402,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
         y_crit   = np.column_stack ((edges[:-1], y * 1000, edges[1:])).ravel ()
         cl_crit  = np.interp (y_crit, y_ext, cl_ext)
-        tip_mask = y >= 0.95 * vlm_wing.sections_y[-1]
-
-        for stripe_mask, stripe_color in ((mask & ~tip_mask, COLOR_CRITICAL),
-                                          (mask & tip_mask, COLOR_WARNING)):
-            if not np.any (stripe_mask):
-                continue
-            values = np.where (np.repeat (stripe_mask, 3), cl_crit, np.nan)
-            color = QColor (stripe_color)
-            color.setAlphaF (0.7)
-            pen = pg.mkPen (color, width=8)
-
-            self._plot_dataItem (y_crit, values, pen=pen, name=label,
-                                 connect="finite", antialias=False, zValue=2)
-            label = None
+        self._plot_critical_ranges (vlm_wing, results, mask, y_crit, cl_crit, 3, label)
 
 
     def _plot_critical_stripes (self, vlm_wing : VLM_Wing, results, mask, label):
@@ -1427,16 +1413,30 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
         y = results [VLM_Var.Y]
         b = vlm_wing.stripes_width
-        color = QColor (COLOR_CRITICAL)
-        color.setAlphaF (0.7)
-        pen = pg.mkPen (color, width=8)
 
         x_crit = np.column_stack ((y - b / 2, y + b / 2)).ravel () * 1000
         x_crit[0], x_crit[-1] = vlm_wing.sections_y[[0, -1]] * 1000
-        y_crit = np.where (np.repeat (mask, 2), 0.0, np.nan)
+        self._plot_critical_ranges (vlm_wing, results, mask, x_crit, np.zeros_like (x_crit), 2, label)
 
-        self._plot_dataItem (x_crit, y_crit, pen=pen, name=label,
-                             connect="finite", antialias=False, zValue=2)
+
+    def _plot_critical_ranges (self, vlm_wing : VLM_Wing, results, mask,
+                               x_coords, values, points_per_stripe, label):
+        """Plot prepared stripe ranges with shared tip coloring and one legend entry."""
+
+        tip_mask = results [VLM_Var.Y] >= 0.95 * vlm_wing.sections_y[-1]
+
+        for stripe_mask, stripe_color in ((mask & ~tip_mask, COLOR_CRITICAL),
+                                          (mask & tip_mask, COLOR_WARNING)):
+            if not np.any (stripe_mask):
+                continue
+            masked_values = np.where (np.repeat (stripe_mask, points_per_stripe), values, np.nan)
+            color = QColor (stripe_color)
+            color.setAlphaF (0.7)
+            pen = pg.mkPen (color, width=8)
+
+            self._plot_dataItem (x_coords, masked_values, pen=pen, name=label,
+                                 connect="finite", antialias=False, zValue=2)
+            label = None
 
 
     def _plot_cl_max_values (self, vlm_polar : VLM_Polar, color):
@@ -1473,39 +1473,41 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
         if VLM_Var.CL in vars:
             values = aero_results [VLM_Var.CL]
-            y     = np.nanmax (values) / 2 if not np.all (np.isnan (values)) else 0.0
-            value = aero_results[VLM_Var.WING_CL]
-            text  = f"Wing CL={value:.3f}" if ~np.isnan(value) else "Wing CL=?"
+            value  = aero_results[VLM_Var.WING_CL]
+            text   = f"Wing CL={value:.3f}" if ~np.isnan(value) else "Wing CL=?"
 
         elif VLM_Var.LIFT_SPAN in vars:
             values = aero_results [VLM_Var.LIFT_SPAN]
-            y     = np.nanmax (values) / 2 if not np.all (np.isnan (values)) else 0.0
-            value = aero_results[VLM_Var.WING_LIFT]
-            text  = f"Wing Lift={value:.2f}N" if ~np.isnan(value) else "Wing Lift=?"
+            value  = aero_results[VLM_Var.WING_LIFT]
+            text   = f"Wing Lift={value:.2f}N" if ~np.isnan(value) else "Wing Lift=?"
 
         elif VLM_Var.DRAG_SPAN in vars:
             values = aero_results [VLM_Var.DRAG_SPAN]
-            y     = np.nanmax (values) / 2 if not np.all (np.isnan (values)) else 0.0
-            value = aero_results[VLM_Var.WING_DRAG]
-            text  = f"Wing Drag={value:.2f}N" if ~np.isnan(value) else "Wing Drag=?"
+            value  = aero_results[VLM_Var.WING_DRAG]
+            text   = f"Wing Drag={value:.2f}N" if ~np.isnan(value) else "Wing Drag=?"
 
         elif VLM_Var.CD_SPAN in vars or VLM_Var.CD in vars:
             values = aero_results [VLM_Var.CD]
-            y     = np.nanmax (values) / 2 if not np.all (np.isnan (values)) else 0.0
-            value = aero_results[VLM_Var.WING_CD]
-            text  = f"Wing CD={value:.4f}" if ~np.isnan(value) else "Wing CD=?"
+            value  = aero_results[VLM_Var.WING_CD]
+            text   = f"Wing CD={value:.4f}" if ~np.isnan(value) else "Wing CD=?"
 
         elif VLM_Var.CM in vars:
             values = aero_results [VLM_Var.CM]
-            y     = np.nanmin (values) / 2 if not np.all (np.isnan (values)) else 0.0
-            value = aero_results[VLM_Var.WING_CM]
-            text  = f"Wing CM={value:.3f}" if ~np.isnan(value) else "Wing CM=?"
+            value  = aero_results[VLM_Var.WING_CM]
+            text   = f"Wing CM={value:.3f}" if ~np.isnan(value) else "Wing CM=?"
 
         elif VLM_Var.MOMENT_SPAN in vars:
             values = aero_results [VLM_Var.MOMENT_SPAN]
-            y     = np.nanmin (values) / 2 if not np.all (np.isnan (values)) else 0.0
-            value = aero_results[VLM_Var.WING_MOMENT]
-            text  = f"Wing M={value:.2f}Nm" if ~np.isnan(value) else "Wing M=?"
+            value  = aero_results[VLM_Var.WING_MOMENT]
+            text   = f"Wing M={value:.2f}Nm" if ~np.isnan(value) else "Wing M=?"
+
+        elif VLM_Var.ALPHA in vars:
+            values = aero_results [VLM_Var.ALPHA]
+            text   = ""
+        else:
+            return 
+
+        y = np.nanmax (values) / 2 if not np.all (np.isnan (values)) else 0.0
 
         if text:
             self._plot_point (x, y, size=0, text=text, textFill="black", anchor=(0.5,0.0))

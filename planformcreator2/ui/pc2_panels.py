@@ -806,7 +806,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
         # 2 normalized and not in airfoils_dir -> ask copy
         elif not already_there:    
 
-            text = f"'{airfoil.fileName}' will be copied into directory <b>./{self.wing.airfoils_dir_rel}</b><br>" +\
+            text = f"<b>{airfoil.fileName}</b> will be copied into directory <b>{self.wing.airfoils_dir_rel}</b><br>" +\
                 f"which is the recommended location for airfoils of this planform.<br><br>" + \
                 f"Copy airfoil?"
             msg = MessageBox (self, "Copy Airfoil", text, Icon (Icon.INFO), min_width=350)

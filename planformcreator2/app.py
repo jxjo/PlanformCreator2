@@ -98,6 +98,8 @@ class Main (QMainWindow):
         # --- init Settings, check for newer app version ---------------
 
         Settings.set_file (APP_NAME, file_extension= '.settings')
+        logger.info (f"Settings: {Settings().pathFileName}")       
+
 
         is_first_run = Run_Checker.is_first_run (__version__)                 # to show Welcome message
         
@@ -108,7 +110,7 @@ class Main (QMainWindow):
 
         self._app_model = App_Model (workingDir_default=Settings.user_data_dir (APP_NAME))
         self._app_model.set_app_info (__version__, "No CHANGE_TEXT", is_first_run)
-
+        
         # either airfoil file or Xoptfoil2 input file
 
         pc2_file = check_or_get_initial_file (initial_file)
@@ -148,9 +150,9 @@ class Main (QMainWindow):
         l.addWidget (modes_panel, 1,0)        
         l.setRowStretch (0,1)
         l.setRowMinimumHeight (0,400)
-        modes_manager.set_height (160, minimized=65)
+        modes_manager.set_height (150, minimized=65)
         
-        l.setSpacing (5)
+        l.setSpacing (3)
         l.setContentsMargins (QMargins(5, 5, 5, 5))
 
         main = QWidget()

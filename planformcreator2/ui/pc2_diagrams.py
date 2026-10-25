@@ -1106,6 +1106,8 @@ class Item_VLM_OpPoint (Item_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
+            Label      (l,r,c, colSpan=4, get=f"Choose a plot in diagram", style=style.COMMENT)
+            r += 1
             FieldF     (l,r,c,  lim=(-20,20), step=0.5, width=60, unit="°", dec=1, 
                         lab="Alpha",
                         obj=self, prop=Item_VLM_OpPoint.vlm_alpha,
@@ -1114,8 +1116,6 @@ class Item_VLM_OpPoint (Item_Abstract):
                         obj=self, prop=Item_VLM_OpPoint.alpha_fixed_to_max,
                         disable=lambda: not self.wing.vlm_data_available,
                         toolTip="The operating point alpha is set to the current polar’s alpha max.")
-            r += 1
-            Label      (l,r,c, colSpan=4, get=f"Choose a plot in diagram", style=style.COMMENT)
 
             l.setColumnStretch (3,2)
             l.setColumnMinimumWidth (0,50)
@@ -1581,16 +1581,35 @@ class Item_VLM_Polar_Delta (Item_Abstract):
     def setup_viewRange (self):
         """ define view range of this plotItem"""
 
+        def range_limit (value, default, step):
+            """Return a default bound or round outward; the step sign selects upper/lower."""
+
+            within_default = value < default if step > 0 else value > default
+            if within_default or value == default == 0:
+                return default
+
+            whole_steps = int (value / step)
+            return (whole_steps + 1) * step
+
         self.viewBox.setDefaultPadding(0.05)
+
+        # relative or absolute delta
+        _, _, is_relative = self.get_delta_data()
 
         # set y range 
         rect = self.viewBox.childrenBoundingRect()
-        y_min, y_max = sorted((rect.top(), rect.bottom()))
-        y_range_max = max(abs(y_min), abs(y_max)) * 1.5
-        self.viewBox.setYRange (-y_range_max, y_range_max)
+        min_val, max_val = sorted((rect.top(), rect.bottom()))
+
+        if is_relative:
+            range_max = range_limit (max_val, default= 0.05, step= 0.05)
+            range_min = range_limit (min_val, default=-0.05, step=-0.05)
+        else: 
+            range_max = max(abs(min_val), abs(max_val)) * 1.5
+            range_min = -range_max
+
+        self.viewBox.setYRange (range_min, range_max)
 
         # axis label 
-        _, _, is_relative = self.get_delta_data()
         y_units = ""
         y_scale = 1
         if self.delta_vars:
@@ -1612,6 +1631,10 @@ class Item_VLM_Polar_Delta (Item_Abstract):
         y_axis : pg.AxisItem = self.getAxis("left")
         y_axis.setLabel(y_label, units=y_units)
         y_axis.setScale(y_scale)
+        # After polar regeneration, setScale can leave a stale SI prefix (m%).
+        # Suppress prefixes for percentages and explicitly refresh the cached prefix.
+        y_axis.setSIPrefixEnableRanges (() if is_relative else None)
+        y_axis.updateAutoSIPrefix ()
         x_axis : pg.AxisItem = self.getAxis("bottom")
         x_axis.setLabel("")
 
@@ -2926,7 +2949,15 @@ class Diagram_Airfoils (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
 
-            Label (l,r,c, colSpan=6, get="Polar definitions for Root", style=style.COMMENT) 
+            Label (l,r,c, colSpan=6, get="Polar definitions for Root") 
+            drivers = []
+            if Worker.ready:
+                drivers.append("Xfoil")
+            if Neuralfoil_Evaluator.ready:
+                drivers.append(Neuralfoil_Evaluator.NAME)
+            text = ", ".join(drivers) + "  "
+            Label  (l, r, c, colSpan=6, get=text, style=style.COMMENT, fontSize=size.SMALL,
+                    align=Qt.AlignmentFlag.AlignRight)
             r += 1
 
             # helper panel for polar definitions 
@@ -2985,14 +3016,8 @@ class Diagram_Airfoils (Diagram_Abstract):
             self._panel_polar = Edit_Panel (title="View Polars", layout=l, auto_height=True,
                                             switchable  = True, 
                                             switched_on = lambda: self.show_polars, 
+                                            main_margins  = (10, 5,10, 5),
                                             on_switched = lambda aBool: self.set_show_polars(aBool))
-
-            # patch Worker version into head of panel 
-
-            if Worker.ready:
-                l_head = self._panel_polar._head.layout()
-                Label  (l_head, get=f"{Worker.NAME} {Worker.version}", style=style.COMMENT, fontSize=size.SMALL,
-                        align=Qt.AlignmentFlag.AlignBottom)
 
         return self._panel_polar 
 
@@ -3108,7 +3133,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
 
         item = self._get_items (Item_VLM_Chord)[0]
         layout.addWidget (item.section_panel, stretch=0)            # chord distribution
-        layout.addSpacing (20)
+        # layout.addSpacing (20)
 
         layout.addWidget (self.panel_aero, stretch=0)               # master aero 
 
@@ -3120,8 +3145,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         layout.addStretch (2)
         layout.addWidget (self.panel_export, stretch=0)
 
-        self._viewPanel = Container_Panel()
-        self._viewPanel.setLayout (layout)
+        self._viewPanel = Container_Panel(layout=layout)
 
 
     @property
@@ -3343,6 +3367,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             l.setColumnStretch(0, 1)
 
             self._panel_aero = Edit_Panel (title="Aero Analysis", layout=l, auto_height=True,
+                                           main_margins  = (10, 5, 5, 5),
                                            switchable=False)
         return self._panel_aero 
 
@@ -3357,12 +3382,10 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             r,c = 0, 0
             Label (l,r,c, style=style.COMMENT, colSpan=4, get="Choose polar variables in diagram")
             r += 1
-            SpaceR (l,r, height=5)
-            r += 1
-            CheckBox (l,r,c, colSpan=4, text="Show key performance indicators",
+            CheckBox (l,r,c, colSpan=4, text="Key performance indicators",
                       get=lambda: self.show_kpis, set=self.set_show_kpis)
             r += 1
-            CheckBox (l,r,c, colSpan=4, text="Show level flight point for ...",
+            CheckBox (l,r,c, colSpan=4, text="Level flight point for ...",
                       get=lambda: self.show_level_flight, set=self.set_show_level_flight)
             r += 1
             mass = FieldF   (l,r,c+1, lab="Mass", width=90, step=0.1, lim=(0.1, 100), dec=2, unit="kg",
@@ -3374,7 +3397,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             load.sig_changed.connect (self.refresh)        # refresh diagram
 
             r += 1
-            CheckBox (l,r,c, colSpan=4, text="Show delta to reference",
+            CheckBox (l,r,c, colSpan=4, text="Delta to reference wing",
                       get=lambda: self.show_polars_delta, set=self.set_show_polars_delta,
                       disable=lambda: self.app_model.ref_wing is None)
 

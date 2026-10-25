@@ -333,3 +333,10 @@ class Reference_Wing_Elliptical (Reference_Wing):
         """Set the scale mode for the reference wing."""
         # elliptical reference wing always uses MATCH_ROOT_CHORD_AND_SPAN
         pass
+
+
+    @override
+    @property
+    def sweep_angle (self) -> float:
+        """ always use sweep angle of the parent wing """
+        return self._parent_wing.sweep_angle

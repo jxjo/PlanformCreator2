@@ -1321,6 +1321,9 @@ class Dialog_Edit_Paneling (Dialog_Modal):
 
         super().__init__ ( *args, **kwargs)
 
+        l = self._panel.layout()
+        l.setContentsMargins(QMargins(0, 0, 0, 0))
+
         # connect dialog buttons
         self._close_btn.clicked.connect  (self.close)
         self._reset_btn.clicked.connect  (self._on_reset)
@@ -1347,14 +1350,14 @@ class Dialog_Edit_Paneling (Dialog_Modal):
 
     # -------------------------------------------------------------------
 
+    @override
     def _init_layout(self) -> QLayout:
 
         l = QVBoxLayout()
 
         l.addWidget (self.panel_header)
-        l.addWidget (self.panel_strategy)
-
-        l.addStretch (1)
+        l.addWidget (self.panel_strategy, stretch=1)
+        l.setSpacing(3)
         return l
 
 
@@ -1367,7 +1370,7 @@ class Dialog_Edit_Paneling (Dialog_Modal):
             l = QGridLayout()
             r, c = 0, 0
 
-            Label       (l,r,c, height=40, colSpan=3,
+            Label       (l,r,c,colSpan=3,
                         get="Select mesh type ",
                         style=style.COMMENT)
             r += 1
@@ -1386,9 +1389,7 @@ class Dialog_Edit_Paneling (Dialog_Modal):
             l.setColumnStretch (2, 2)
 
             self._panel_header = Edit_Panel (
-                    layout=l, auto_height=True, has_head=False,
-                    main_margins=(0, 0, 0, 0),
-                    panel_margins=(0, 0, 0, 0),)
+                    layout=l, has_head=False)
 
         return self._panel_header
 
@@ -1477,7 +1478,7 @@ class Dialog_Edit_Paneling (Dialog_Modal):
             CheckBox (l, r, 0, text="Set a minimum panel width", colSpan=4,
                     obj=self, prop=Dialog_Edit_Paneling.activated_width_min_targ,
                     toolTip=tip)
-            FieldF (l, r, 4, width=70, step=0.5, lim=(0.5, 10), dec=1, unit="%",
+            FieldF (l, r, 4, width=70, step=0.1, lim=(Mesh_Strategy.PANEL_WIDTH_MIN*100, 10), dec=1, unit="%",
                     obj=strategy, prop=Mesh_Strategy.width_min_targ,
                     hide=lambda: self.mesh.strategy.width_min_targ is None,
                     toolTip=tip)
@@ -1506,12 +1507,10 @@ class Dialog_Edit_Paneling (Dialog_Modal):
             l.setColumnStretch (6, 1)
 
             self._panel_strategy = Edit_Panel (
-                    has_head=False,
-                    layout=l, auto_height=True,
-                    main_margins=(0, 0, 0, 0),
-                    panel_margins=(0, 0, 0, 0),)
+                    has_head=False,layout=l)
             
         return self._panel_strategy
+
 
     @property
     def activated_cn_diff_max (self) -> bool:

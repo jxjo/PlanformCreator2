@@ -503,12 +503,15 @@ class App_Model (QObject):
             new_pathFilename_abs = os.path.join(self.workingDir_default, FILENAME_NEW)
             self.wing.save (new_pathFilename_abs)
         
+        self._ref_wing        = None
         self._cur_wingSection = None
         self._cur_vlm_alpha   = None
         self._cur_polar_def   = None
-        self._ensure_cur_polar_def()
 
-        self._ref_wing        = None
+        # read and apply saved settings
+        self._load_settings()
+
+        self._ensure_cur_polar_def()
 
         self.sig_new_wing.emit()
 
@@ -630,12 +633,39 @@ class App_Model (QObject):
             return self.wing.workingDir
         else:
             return self.workingDir_default
-        
+
+   
+    def _load_settings (self):
+        """ 
+        Load and apply settings for app model ...
+        """
+
+        s = Settings()
+
+        cur_polar_name = s.get('current_polar', None)
+        if cur_polar_name:
+            for polar_def in self.wing.polar_definitions:
+                if polar_def.name == cur_polar_name:
+                    self._cur_polar_def = polar_def
+                    break
+
+
+    def _save_settings (self):
+        """ 
+        Save current settings for app model ...
+        """
+
+        s = Settings()
+        if self._cur_polar_def:
+            s.set('current_polar', self._cur_polar_def.name)
+        s.save()
+
 
     def close (self):
         """ finish app model """
 
         self._finish_watchdog()
+        self._save_settings()
 
         self.cleanup_wing ()
 
