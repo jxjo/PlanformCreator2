@@ -22,6 +22,7 @@ from airfoileditor.base.cst                 import bernstein_elevate, bernstein_
 
 from airfoileditor.model.airfoil            import Airfoil, GEO_BASIC
 from airfoileditor.model.polar_set          import Polar_Set
+from airfoileditor.model.xo2_driver         import Worker
 from airfoileditor.model.airfoil_examples   import Root_Example, Tip_Example
 
 if TYPE_CHECKING:
@@ -1064,20 +1065,27 @@ class WingSection :
             return 
 
         # sanity - file must exist
-        if not os.path.isfile (pathFileName_abs):
+        source_file = Path (pathFileName_abs)
+        if not source_file.is_file():
             raise FileNotFoundError (f"{self} airfoil file {pathFileName_abs} not found")
 
-        fileName = os.path.basename (pathFileName_abs)
+        fileName = source_file.name
         airfoil_pathFileName_abs = pathFileName_abs
         
-        # is airfoil already in airfoils dir of wing ?
         if into_airfoils_dir:
-            pathFileName_in_airfoil_dir = os.path.join(self._planform.wing.airfoils_dir, fileName)
-            airfoil_pathFileName_abs = pathFileName_in_airfoil_dir
-            if not os.path.isfile (pathFileName_in_airfoil_dir):
-                # copy airfoil file to airfoils dir of wing          
-                shutil.copy2 (pathFileName_abs, pathFileName_in_airfoil_dir)
-                logger.info (f"{self} copied airfoil {fileName} to {self._planform.wing.airfoils_dir}")
+            airfoils_dir = Path (self._planform.wing.airfoils_dir)
+            target_file  = airfoils_dir / fileName
+            airfoil_pathFileName_abs = str(target_file)
+
+            # always copy (an existing file could be an outdated version) - except self is already the file in airfoils dir
+            if not (target_file.exists() and target_file.samefile (source_file)):
+                airfoils_dir.mkdir (parents=True, exist_ok=True)
+
+                # remove old polars of a former version of the airfoil
+                Worker.remove_polarDir (str(target_file))
+
+                shutil.copy2 (source_file, target_file)
+                logger.info (f"{self} copied airfoil {fileName} to {airfoils_dir}")
 
         airfoil = Airfoil.onFileType (pathFileName=airfoil_pathFileName_abs, geometry=GEO_BASIC)
         airfoil.load()
@@ -1994,44 +2002,14 @@ class Flap:
         return f"{self.flap_group}"
     
 
-    def polygon  (self) -> tuple [Array, Array]:
+    def line_left  (self, flap_gap : float|None = None) -> tuple [Array, Array]:
         """
-        polyline x,y of self    
+        polyline x, y of self left side. flap_gap defines the gap between two adjacent flaps
         """
-        x,y = [], []
+        x_from = self.x_from
+        if x_from > 0.0 and flap_gap is not None:
+            x_from += flap_gap / 2.0
 
-        # we start a TE at xn_from and going clockwise around the flap upto xn_to
-        x.append(self.x_from)
-        y.append(self.planform.le_te_at (self.x_from)[1])
-
-        # go to hinge point
-        x.append(self.x_from)
-        y.append(self._flaps.hinge_y_at(self.x_from))
-
-        # go along the hinge 
-        x.append(self.x_to)
-        y.append(self._flaps.hinge_y_at(self.x_to))
-
-        # back to TE 
-        x.append(self.x_to)
-        y.append(self.planform.le_te_at (self.x_to)[1])
-
-        # ... finally along TE to starting point back to TE
-        x_arr, _, te_y = self.planform.le_te_polyline()
-        i1 = min(bisect.bisect(te_y, self.x_from)-1, len(te_y) -2)    # get te coordinates between xn_from and yTo
-        i2 = min(bisect.bisect(te_y, self.x_to)  -1, len(te_y) -2)
-        y = np.append (y, np.flip(te_y[i1:i2+1]))  
-        x = np.append (x, np.flip(x_arr[i1:i2+1]))
-
-        return x, y
-
-
-
-    def line_left  (self, x_offset=0) -> tuple [Array, Array]:
-        """
-        polyline x, y of self left side   
-        """
-        x_from = self.x_from + x_offset * self.planform.span
         x,y = [], []
 
         # we start a TE at xn_from and going clockwise around the flap upto xn_to
@@ -2045,11 +2023,16 @@ class Flap:
         return np.array(x), np.array(y)
 
 
-    def line_right  (self, x_offset=0) -> tuple [Array, Array]:
+    def line_right  (self, flap_gap : float|None = None) -> tuple [Array, Array]:
         """
-        polyline x, y of self right side   
+        polyline x, y of self right side. flap_gap defines the gap between two adjacent flaps   
         """
-        x_to   = self.x_to - x_offset * self.planform.span
+        x_to   = self.x_to
+        if x_to < self.planform.span and flap_gap is not None:
+            x_to -= flap_gap / 2.0
+        else:
+            x_to = self.planform.span
+
         y,x = [], []
 
         # we start a TE at xn_from and going clockwise around the flap upto xn_to
@@ -2063,20 +2046,24 @@ class Flap:
         return np.array(x), np.array(y)
 
 
-    def line_hinge  (self, x_offset=0) -> tuple [Array, Array]:
+    def line_hinge  (self, flap_gap : float|None = None) -> tuple [Array, Array]:
         """
         hinge line x, y line of self    
         """
         x,y = [], []
 
         # go to hinge point
-        x_from  = self.x_from + x_offset * self.planform.span
+        x_from  = self.x_from
+        if x_from > 0.0 and flap_gap is not None:
+            x_from += flap_gap / 2.0
         hinge_y = self._flaps.hinge_y_at (x_from)  
         x.append(x_from)
         y.append(hinge_y)
 
         # go along the hinge 
-        x_to    = self.x_to   - x_offset * self.planform.span
+        x_to    = self.x_to
+        if x_to < self.planform.span and flap_gap is not None:
+            x_to -= flap_gap / 2.0
         hinge_y = self._flaps.hinge_y_at (x_to)  
         x.append(x_to)
         y.append(hinge_y)
@@ -2084,12 +2071,16 @@ class Flap:
         return np.array(x), np.array(y)
 
 
-    def line_te  (self, x_offset=0) -> tuple [Array, Array]:
+    def line_te  (self, flap_gap : float|None = None) -> tuple [Array, Array]:
         """
         trailing edge polyline y,x of self    
         """
-        x_from = self.x_from + x_offset * self.planform.span
-        x_to   = self.x_to   - x_offset * self.planform.span
+        x_from = self.x_from
+        if x_from > 0.0 and flap_gap is not None:
+            x_from += flap_gap / 2.0
+        x_to   = self.x_to
+        if x_to < self.planform.span and flap_gap is not None:
+            x_to -= flap_gap / 2.0
         y,x = [], []
 
         # we start a TE at xn_from  
