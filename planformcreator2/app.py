@@ -153,7 +153,7 @@ class Main (QMainWindow):
         modes_manager.set_height (150, minimized=65)
         
         l.setSpacing (3)
-        l.setContentsMargins (QMargins(5, 5, 5, 5))
+        l.setContentsMargins (QMargins(3, 0, 3, 3))
 
         main = QWidget()
         main.setLayout (l) 

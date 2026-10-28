@@ -18,7 +18,7 @@ from PyQt6.QtWidgets        import QFileDialog, QGraphicsLayoutItem
 
 from airfoileditor.base.widgets         import * 
 from airfoileditor.base.diagram         import * 
-from airfoileditor.base.panels          import Container_Panel, MessageBox
+from airfoileditor.base.panels          import Container_Panel, MessageBox, add_section_caption
 
 from airfoileditor.model.polar_set      import *
 from airfoileditor.model.xo2_driver     import Worker
@@ -228,10 +228,7 @@ class Item_Planform (Item_Abstract):
     Diagram (Plot) Item for Planform
     """
 
-    name        = "View Planform"                           # used for link and section header 
-    title       = "Planform"                 
-    subtitle    = "dynamic"                                 # will be set dynamically 
-
+    name        = "Planform"                           # used for link and section header 
 
     @override
     def plot_title(self, **kwargs):
@@ -339,45 +336,45 @@ class Item_Planform (Item_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             CheckBox (l,r,c, text="Chord Reference Line",  colSpan=3,
-                        get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
+                    get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
             r += 1
             CheckBox (l,r,c, text="Neutral Point (geometric)", colSpan=3, 
-                      get=lambda: self.show_np, set=self.set_show_np) 
+                    get=lambda: self.show_np, set=self.set_show_np) 
             r += 1
             CheckBox (l,r,c, text="Airfoils", colSpan=3,
-                      get=lambda: self.show_airfoils, set=self.set_show_airfoils)
+                    get=lambda: self.show_airfoils, set=self.set_show_airfoils)
             r += 1
             CheckBox (l,r,c+1, text="Use nick name", colSpan=2,
-                        obj=self, prop=Item_Airfoils.airfoil_use_nick,
-                        hide=lambda: not self.show_airfoils,
-                        toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
+                    get=lambda: self.airfoil_use_nick, set=self.set_airfoil_use_nick,
+                    hide=lambda: not self.show_airfoils,
+                    toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
             r += 1
             CheckBox (l,r,c+1, text="Also blended", colSpan=2,
-                        get=lambda: self.show_strak, set=self.set_show_strak,
-                        hide=lambda: not self.show_airfoils)    
+                    get=lambda: self.show_strak, set=self.set_show_strak,
+                    hide=lambda: not self.show_airfoils)    
 
             # toggle fields for background image
             r += 1
             CheckBox   (l,r,c, text="Background Image", colSpan=3,
-                        get=lambda: self.show_background_image, 
-                        set=self.set_show_background_image, 
-                        disable=lambda: not bool(self.wing.background_image.filename)) 
-            Button     (l,r,c+2, text="Select", width=50, colSpan=4,
-                        set=self._open_background_image, toolTip="Open background image as reference",
-                        hide = lambda: self.wing.background_image.filename)
+                    get=lambda: self.show_background_image, 
+                    set=self.set_show_background_image, 
+                    disable=lambda: not bool(self.wing.background_image.filename)) 
+            Button (l,r,c+2, text="Select", width=50, colSpan=4,
+                    set=self._open_background_image, toolTip="Open background image as reference",
+                    hide = lambda: self.wing.background_image.filename)
             r += 1
-            Field      (l,r,c+1, 
-                        get=lambda: self.wing.background_image.filename, 
-                        hide = lambda: not self.show_background_image) 
+            Field (l,r,c+1, 
+                    get=lambda: self.wing.background_image.filename, 
+                    hide = lambda: not self.show_background_image) 
             ToolButton (l,r,c+2, icon=Icon.EDIT, 
-                        set=self._edit_background_image, toolTip="Edit background image settings",
-                        hide = lambda: not self.show_background_image) 
+                    set=self._edit_background_image, toolTip="Edit background image settings",
+                    hide = lambda: not self.show_background_image) 
             ToolButton (l,r,c+3, icon=Icon.OPEN, 
-                        set=self._open_background_image, toolTip="Open new background image",
-                        hide = lambda: not self.show_background_image) 
+                    set=self._open_background_image, toolTip="Open new background image",
+                    hide = lambda: not self.show_background_image) 
             ToolButton (l,r,c+4, icon=Icon.DELETE, 
-                        set=self._remove_background_image, toolTip="Remove background image",
-                        hide = lambda: not self.show_background_image)
+                    set=self._remove_background_image, toolTip="Remove background image",
+                    hide = lambda: not self.show_background_image)
 
             l.setColumnMinimumWidth (0,15)
             l.setColumnStretch (1,5)
@@ -430,10 +427,7 @@ class Item_Chord (Item_Abstract):
     Diagram (Plot) Item for normed Chord along span
     """
 
-    name        = "View Chord Distribution"                 # used for link and section header 
-    title       = "Chord Distribution"                 
-    subtitle    = ""                                 
-
+    name        = "Chord Distribution"                 # used for link and section header 
 
     @override
     def setup_artists (self):
@@ -491,10 +485,7 @@ class Item_Chord_Reference (Item_Abstract):
     Diagram (Plot) Item for Chord Reference 
     """
 
-    name        = "View Chord Reference"                    # used for link and section header 
-    title       = "Chord Reference"                 
-    subtitle    = ""                                 
-
+    name        = "Chord Reference"                    # used for link and section header 
 
     @override
     def setup_artists (self):
@@ -545,10 +536,7 @@ class Item_VLM_Panels (Item_Abstract):
     Diagram (Plot) Item to show the VLM panels of the planform  
     """
 
-    name        = "View Paneling"                           # used for link and section header 
-    title       = "Paneling"                 
-    subtitle    = ""                                 
-
+    name        = "Paneling"                           # used for link and section header 
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -560,7 +548,6 @@ class Item_VLM_Panels (Item_Abstract):
         self.app_model.sig_paneling_changed.connect     (self.refresh)
         self.app_model.sig_vlm_changed.connect          (self.refresh)
         self.app_model.sig_new_polars.connect           (self.refresh)
-
 
 
     def _on_planform_changed (self):
@@ -735,9 +722,8 @@ class Item_VLM_Chord (Item_Abstract):
     Diagram (Plot) Item for normed Chord along panels span
     """
 
-    name        = "View Mesh Chord"                 # used for link and section header 
+    name        = "Chord Distribution"                
     title       = "Mesh Chord Distribution"                 
-    subtitle    = ""                                 
 
     def __init__ (self, *args, **kwargs):
         super().__init__ (*args, **kwargs)
@@ -849,9 +835,7 @@ class Item_VLM_OpPoint (Item_Abstract):
     Item to show result of aero calculation for an OpPoint along span
     """
 
-    name        = "View Along Span"                         # used for link and section header 
-    title       = ""                                        # will be dynamically set                 
-    subtitle    = ""                                 
+    name        = "Aero along Span"                             
 
     def __init__(self, *args, **kwargs):
 
@@ -909,9 +893,19 @@ class Item_VLM_OpPoint (Item_Abstract):
         p.setToolTip (f"Select plot along span")           
         self._title_item = p
 
+        # hint for the user - placed below the y-axis button, shown once and until the button is used 
+        #   (plot_title is also called while self is hidden e.g. when settings are applied)
+        #   history of help messages is class wide - so only the first of the two polar items shows it
+        if self.isVisible_effective() and not self.help_message_was_shown (self):
+            self._on_help_message (self, "Click to change",
+                                   anchor={'parentPos': (0,0), 'itemPos': (0,0), 'offset': (52,38)})
+
 
     def _btn_var_clicked (self, pos : QPoint):
         """ slot - polar var button in diagram clicked - show menu list of variables"""
+
+        self._on_help_message (self, None)                          # user knows now - remove hint 
+
         menu = QMenu()
        
         # Build popup menu 
@@ -971,7 +965,6 @@ class Item_VLM_OpPoint (Item_Abstract):
 
     def set_vlm_alpha (self, aVal : float):
         self.app_model.set_cur_vlm_alpha (aVal)
-
         self._set_yRange ()
 
 
@@ -989,6 +982,7 @@ class Item_VLM_OpPoint (Item_Abstract):
 
     def set_alpha_fixed_to_max (self, aBool : bool):
         self.app_model.set_vlm_alpha_fixed_to_max (aBool)
+        self._set_yRange ()
 
 
     @property
@@ -1106,8 +1100,6 @@ class Item_VLM_OpPoint (Item_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            Label      (l,r,c, colSpan=4, get=f"Choose a plot in diagram", style=style.COMMENT)
-            r += 1
             FieldF     (l,r,c,  lim=(-20,20), step=0.5, width=60, unit="°", dec=1, 
                         lab="Alpha",
                         obj=self, prop=Item_VLM_OpPoint.vlm_alpha,
@@ -1188,12 +1180,9 @@ class Item_VLM_Polar (Item_Abstract):
     Diagram Item for VLM polars 
     """
 
-    name        = "View Polar"                          # used for link and section header 
-    title       = None 
-    subtitle    = None                                  # optional subtitle 
+    name        = " Polar"                          # used for link and section header 
 
     sig_xyVars_changed = pyqtSignal ()                  # signal emitted when xyVars are changed (refresh delta plots)
-
 
     def __init__(self, *args, **kwargs):
 
@@ -1276,9 +1265,19 @@ class Item_VLM_Polar (Item_Abstract):
         p.clicked.connect (lambda pos: self._btn_var_clicked("x",pos))            
         self._title_item2 = p
 
+        # hint for the user - placed below the y-axis button, shown once and until the button is used 
+        #   (plot_title is also called while self is hidden e.g. when settings are applied)
+        #   history of help messages is class wide - so only the first of the two polar items shows it
+        if self.isVisible_effective() and not self.help_message_was_shown (self):
+            self._on_help_message (self, "Click to change",
+                                   anchor={'parentPos': (0,0), 'itemPos': (0,0), 'offset': (52,38)})
+
 
     def _btn_var_clicked (self, axis, pos : QPoint):
         """ slot - polar var button in diagram clicked - show menu list of variables"""
+
+        self._on_help_message (self, None)                          # user knows now - remove hint 
+
         menu = QMenu()
 
         possible_vars = VLM_Polar_Artist.possible_vars
@@ -1472,9 +1471,7 @@ class Item_VLM_Polar_Delta (Item_Abstract):
     This item is a slave of a parent Item_VLM_Polar and show same xyVars.
     """
 
-    name        = "View Polar Delta"                    # used for link and section header 
-    title       = None 
-    subtitle    = None                                  # optional subtitle 
+    name        = "Polar Delta"                    # used for link and section header 
 
     def __init__(self, *args, parent_xyVars_fn : Callable = None, **kwargs):
 
@@ -1656,7 +1653,7 @@ class Item_Wing (Item_Abstract):
     Diagram (Plot) Item for a complete Wing
     """
 
-    name = "View Wing"                                          # used for link and section header 
+    name = "Wing"                                          # used for link and section header 
 
     def __init__(self, *args, **kwargs):
 
@@ -1814,8 +1811,9 @@ class Item_Wing (Item_Abstract):
             l.setColumnMinimumWidth (1,80)
             l.setColumnStretch (3,5)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True, 
-                                              switchable  = True,
+            self._section_panel = Edit_Panel (layout=l, auto_height=True, 
+                                              has_head    = False,
+                                              switchable  = False,
                                               switched_on = lambda: self.show,  
                                               on_switched = lambda aBool: self.set_show(aBool))
 
@@ -1830,10 +1828,7 @@ class Item_Wing_Airfoils (Item_Abstract):
     Diagram (Plot) Item for airfoils of a wing
     """
 
-    name        = "View Airfoils"
-    title       = "Airfoils"                       # title of diagram item
-    subtitle    = ""
-
+    name        = "Airfoils"
 
     @override
     def _on_airfoil_changed (self):
@@ -1893,21 +1888,21 @@ class Item_Wing_Airfoils (Item_Abstract):
             r,c = 0, 0 
             r += 1
             CheckBox (l,r,c, text="In real size", 
-                        get=lambda: self.airfoil_artist.real_size,
-                        set=self.airfoil_artist.set_real_size) 
+                    get=lambda: self.airfoil_artist.real_size,
+                    set=self.airfoil_artist.set_real_size) 
             r += 1
             CheckBox (l,r,c, text="Also blended", 
-                        get=lambda: self.airfoil_artist.show_strak,
-                        set=self.airfoil_artist.set_show_strak) 
+                    get=lambda: self.airfoil_artist.show_strak,
+                    set=self.airfoil_artist.set_show_strak) 
             r += 1
             CheckBox (l,r,c, text="Use airfoils nick name", 
-                        obj=self, prop=Item_Airfoils.airfoil_use_nick,
-                        toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
+                    get=lambda: self.airfoil_use_nick, set=self.set_airfoil_use_nick,
+                    toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
             r += 1
             l.setColumnStretch (3,2)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True, 
-                                              switchable  = True,
+                                              switchable  = False,
                                               switched_on = lambda: self.show,  
                                               on_switched = lambda aBool: self.set_show(aBool))
 
@@ -1922,10 +1917,7 @@ class Item_Wing_Data (Item_Abstract):
     Diagram (Plot) Item to show wing data 
     """
 
-    name        = "View Wing data"
-    title       = "Wing Data"                                   # title of diagram item
-    subtitle    = ""
-
+    name        = "Wing data"
 
     @override
     def setup_viewRange (self):
@@ -1964,9 +1956,7 @@ class Item_Airfoils (Item_Abstract):
     Diagram (Plot) Item for airfoils of a planform
     """
 
-    name        = "View Airfoils"                                   
-    title       = "Airfoils"                       # title of diagram item
-    subtitle    = ""
+    name        = "Airfoils"                                   
 
     @override
     def _on_airfoil_changed (self):
@@ -2000,26 +1990,6 @@ class Item_Airfoils (Item_Abstract):
     def airfoil_artist (self) -> Airfoil_Artist:
         return self._get_artist (Airfoil_Artist) [0]
 
-    @property
-    def airfoil_use_nick (self) -> bool:
-        return self.wing.airfoil_use_nick
-    def set_airfoil_use_nick (self, aBool : bool):
-        self.wing.set_airfoil_use_nick (aBool)
-        self.refresh_diagram()
-
-    @property 
-    def airfoil_nick_prefix (self) -> str:
-        return self.wing.airfoil_nick_prefix
-    def set_airfoil_nick_prefix (self, aVal : str):
-        self.wing.set_airfoil_nick_prefix (aVal)
-        self.refresh_diagram()
-    
-    @property 
-    def airfoil_nick_base (self) -> str:
-        return self.wing.airfoil_nick_base
-    def set_airfoil_nick_base (self, aVal : str):
-        self.wing.set_airfoil_nick_base (aVal)
-        self.refresh_diagram()
     
     def set_real_size (self, aBool : bool):
         self.airfoil_artist.set_real_size (aBool)
@@ -2034,37 +2004,17 @@ class Item_Airfoils (Item_Abstract):
             l = QGridLayout()
             r,c = 0, 0 
             r += 1
-            CheckBox (l,r,c, text="In real size", colSpan=4,
+            CheckBox (l,r,c, text="In real size",
                         get=lambda: self.airfoil_artist.real_size,
                         set=self.set_real_size) 
             r += 1
-            CheckBox (l,r,c, text="Show maximum thickness", colSpan=4,
+            CheckBox (l,r,c, text="Show maximum thickness", 
                         get=lambda: self.airfoil_artist.show_thick,
                         set=self.airfoil_artist.set_show_thick) 
             r += 1
-            CheckBox (l,r,c, text="Show camber line", colSpan=4,
+            CheckBox (l,r,c, text="Show camber line", 
                         get=lambda: self.airfoil_artist.show_camber,
                         set=self.airfoil_artist.set_show_camber) 
-            r += 1
-            CheckBox (l,r,c, text="Use airfoils nick name", colSpan=4,
-                        obj=self, prop=Item_Airfoils.airfoil_use_nick) 
-            r += 1
-            Field    (l,r,c+1, lab="Prefix", width=60,
-                        obj=self, prop=Item_Airfoils.airfoil_nick_prefix,
-                        toolTip="Common name prefix for all airfoils")
-            r += 1
-            FieldI   (l,r,c+1, lab="Base", width=60, step=10, lim=(10, 9990), 
-                        obj=self, prop=Item_Airfoils.airfoil_nick_base,
-                        toolTip="<div>Will be multiplied with the relative chord of the airfoils wing section and "+ \
-                                "added to the prefix</div>")
-
-            r += 1
-            l.setColumnMinimumWidth (0,20)
-            l.setColumnMinimumWidth (1,50)
-            l.setColumnMinimumWidth (2,70)
-            l.setColumnStretch (2,2)
-            l.setColumnStretch (3,5)
-            l.setRowStretch    (r,2)
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True,
                                               switchable  = True,
@@ -2113,9 +2063,7 @@ class Item_Polars (Item_Abstract):
     Diagram (Plot) Item for polars 
     """
 
-    name        = "View Polar"                          # used for link and section header 
-    title       = None 
-    subtitle    = None                                  # optional subtitle 
+    name        = "Polar"                          # used for link and section header 
 
     def __init__(self, *args, **kwargs):
 
@@ -2197,9 +2145,20 @@ class Item_Polars (Item_Abstract):
         p.clicked.connect (lambda pos: self._btn_var_clicked("x",pos))            
         self._title_item2 = p
 
+        # hint for the user - placed below the y-axis button, shown once and until the button is used 
+        #   (plot_title is also called while self is hidden e.g. when settings are applied)
+        #   history of help messages is class wide - so only the first of the two polar items shows it
+        if self.isVisible_effective() and not self.help_message_was_shown (self):
+            self._on_help_message (self, "Click to change",
+                                   anchor={'parentPos': (0,0), 'itemPos': (0,0), 'offset': (52,38)})
+
 
     def _btn_var_clicked (self, axis, pos : QPoint):
         """ slot - polar var button in diagram clicked - show menu list of variables"""
+
+        # remove help message if it was shown
+        self._on_help_message (self, None)
+
         menu = QMenu()
        
         # Build popup menu 
@@ -2544,13 +2503,24 @@ class Diagram_Planform (Diagram_Abstract):
         has a section_panel
         """
 
-        super().create_view_panel ()
+        l = QVBoxLayout()
+        l.setContentsMargins (QMargins(0, 0, 0, 0)) 
 
-        layout : QVBoxLayout = self._viewPanel.layout()
+        # commmon panel 
+        add_section_caption (l, "Common")
+        l.addWidget (self.panel_general,stretch=0)
 
-        layout.insertWidget (0, self.panel_general, stretch=0)          # general at top
-        layout.addStretch   (3)
-        layout.addWidget    (self.panel_export, stretch=0)              # export at bottom
+        # diagrams 
+        add_section_caption (l, "Diagrams")
+
+        for item in self.diagram_items:
+            if item.section_panel is not None: 
+                l.addWidget (item.section_panel,stretch=0)
+
+        l.addStretch   (3)
+        l.addWidget    (self.panel_export, stretch=0)              # export at bottom
+
+        self._viewPanel = Container_Panel (layout=l,width=250)
 
 
     @property 
@@ -2569,7 +2539,7 @@ class Diagram_Planform (Diagram_Abstract):
 
             r += 1
             p = Panel_Reference_Wing (self, self.app_model)
-            l.addWidget(p, r, c, 1, 2)
+            l.addWidget(p, r, c, 1, 3)
 
             r += 1
             CheckBox (l,r,c, text="Flaps", 
@@ -2582,8 +2552,9 @@ class Diagram_Planform (Diagram_Abstract):
             l.setColumnStretch (2,5)
             l.setRowStretch (r+1,3)
 
-            self._panel_general = Edit_Panel (title="Common Options", layout=l, auto_height=True,
-                                              switchable=False, switched_on=True)
+            self._panel_general = Edit_Panel (title="Common Options", has_head=False, layout=l, auto_height=True,
+                                        main_margins  = (10, 5, 5, 5),
+                                        switchable=False, switched_on=True)
         return self._panel_general 
 
 
@@ -2692,6 +2663,25 @@ class Diagram_Making_Of (Diagram_Abstract):
         self.graph_layout.setColumnStretchFactor (1,3)
         self.graph_layout.setColumnStretchFactor (2,3)
 
+
+
+    @override
+    def create_view_panel (self):
+        """ 
+        creates a view panel to the left of at least one diagram item 
+        has a section_panel
+        """
+        l = QVBoxLayout()
+        l.setContentsMargins (QMargins(0, 0, 0, 0)) 
+
+        add_section_caption (l, "Diagram Options")
+
+        l.addWidget (self.section_panel,stretch=0)
+        l.addStretch (1)
+
+        self._viewPanel = Container_Panel (layout=l,width=250)
+
+
     # --- view section panels ---------------------------------------------------
 
     @property
@@ -2722,7 +2712,8 @@ class Diagram_Making_Of (Diagram_Abstract):
             SpaceR   (l,r,2)
             l.setColumnStretch (0,2)
 
-            self._section_panel = Edit_Panel (title="Diagram Options", layout=l, auto_height=True,
+            self._section_panel = Edit_Panel (layout=l, auto_height=True,
+                                              has_head=False,
                                               switchable=False)
         return self._section_panel 
 
@@ -2833,19 +2824,48 @@ class Diagram_Airfoils (Diagram_Abstract):
         creates a view panel to the left of at least one diagram item 
         has a section_panel
         """
-        # override to add additional general settings panel on top 
+        l = QVBoxLayout()
+        l.setContentsMargins (QMargins(0, 0, 0, 0)) 
 
-        super().create_view_panel ()
+        # commmon panel 
+        add_section_caption (l, "Common")
+        l.addWidget (self.panel_common,stretch=0)
 
-        layout : QVBoxLayout = self._viewPanel.layout()
+        # diagrams 
+        add_section_caption (l, "Diagrams")
 
-        layout.insertWidget (0, self.panel_common, stretch=0)
-        layout.insertWidget (2, self.panel_polar, stretch=0)
+        for item in self.diagram_items:
+            if item.section_panel is not None: 
+                l.addWidget (item.section_panel,stretch=0)
 
-        # export panel at bottom 
+        l.addWidget (self.panel_polar,stretch=0)
 
-        layout.addStretch   (3)
-        layout.addWidget    (self.panel_export, stretch=0)
+        l.addStretch   (3)
+        l.addWidget    (self.panel_export, stretch=0)              # export at bottom
+
+        self._viewPanel = Container_Panel (layout=l,width=250)
+
+
+    @property
+    def airfoil_use_nick (self) -> bool:
+        return self.wing.airfoil_use_nick
+    def set_airfoil_use_nick (self, aBool : bool):
+        self.wing.set_airfoil_use_nick (aBool)
+        self.refresh()
+
+    @property 
+    def airfoil_nick_prefix (self) -> str:
+        return self.wing.airfoil_nick_prefix
+    def set_airfoil_nick_prefix (self, aVal : str):
+        self.wing.set_airfoil_nick_prefix (aVal)
+        self.refresh()
+    
+    @property 
+    def airfoil_nick_base (self) -> str:
+        return self.wing.airfoil_nick_base
+    def set_airfoil_nick_base (self, aVal : str):
+        self.wing.set_airfoil_nick_base (aVal)
+        self.refresh()
 
 
     @property
@@ -2930,13 +2950,31 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            CheckBox (l,r,c, text="Show blended airfoils", 
-                      get=lambda: self.show_strak, set=self.set_show_strak) 
+            CheckBox (l,r,c, text="Show blended airfoils", colSpan=4,
+                    get=lambda: self.show_strak, set=self.set_show_strak) 
             r += 1
-            l.setColumnStretch (3,2)
+            CheckBox (l,r,c, text="Use airfoils nick name", colSpan=4,
+                    get=lambda: self.airfoil_use_nick, set=self.set_airfoil_use_nick) 
+            r += 1
+            Field    (l,r,c+1, lab="Prefix", width=60,
+                    get=lambda: self.airfoil_nick_prefix, set=self.set_airfoil_nick_prefix,
+                    toolTip="Common name prefix for all airfoils")
+            r += 1
+            FieldI   (l,r,c+1, lab="Base", width=60, step=10, lim=(10, 9990), 
+                    get=lambda: self.airfoil_nick_base, set=self.set_airfoil_nick_base,
+                    toolTip="<div>Will be multiplied with the relative chord of the airfoils wing section and "+ \
+                            "added to the prefix</div>")
 
-            self._panel_common = Edit_Panel (title="Common Options", layout=l, auto_height=True,
-                                              switchable=False, switched_on=True)
+            r += 1
+            l.setColumnMinimumWidth (0,20)
+            l.setColumnMinimumWidth (1,50)
+            l.setColumnMinimumWidth (2,70)
+            l.setColumnStretch (2,2)
+            l.setColumnStretch (3,5)
+
+            self._panel_common = Edit_Panel (title="Common Options", has_head=False, 
+                                             layout=l, auto_height=True,
+                                             switchable=False, switched_on=True)
         return self._panel_common 
 
 
@@ -2949,7 +2987,7 @@ class Diagram_Airfoils (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
 
-            Label (l,r,c, colSpan=6, get="Polar definitions for Root") 
+            Label (l,r,c, colSpan=6, get="Definitions for root") 
             drivers = []
             if Worker.ready:
                 drivers.append("Xfoil")
@@ -2993,27 +3031,24 @@ class Diagram_Airfoils (Diagram_Abstract):
             # polar diagrams variables setting 
 
             r += 1
-            if Worker.ready:
-                Label (l,r,c, colSpan=5, style=style.COMMENT, height=40,
-                       get="To change polar variables, <br>click the axis labels in the diagram.")
-                r += 1
-                l.setRowStretch (r,3)
-
-            else: 
+            if not (Worker.ready or Neuralfoil_Evaluator.ready):
                 SpaceR (l,r, height=10) 
                 r += 1
                 Label (l,r,c, colSpan=4, get="No polars available", style=style.ERROR, fontSize=size.HEADER_SMALL) 
                 r += 1
-                Label (l,r,c, colSpan=4, get="Worker not ready", style=style.ERROR) 
+                SpaceR (l,r, height=10, stretch=0) 
                 r += 1
-                SpaceR (l,r, height=5, stretch=0) 
+                Label (l,r,c, colSpan=4, get=f"{Worker.NAME} not ready", style=style.ERROR) 
                 r += 1
-                lab = Label (l,r,c, colSpan=6, get=Worker.ready_msg, style=style.COMMENT, height=(None,100)) 
-                lab.setWordWrap(True)
+                Label (l,r,c, colSpan=4, get=f"{Worker.ready_msg}", style=style.COMMENT, height=(None,50), 
+                       wordWrap=True) 
                 r += 1
-                l.setRowStretch (r,3)
+                Label (l,r,c, colSpan=4, get=f"{Neuralfoil_Evaluator.NAME} not ready", style=style.ERROR) 
+                r += 1
+                Label (l,r,c, colSpan=4, get=f"{Neuralfoil_Evaluator.ready_msg}", style=style.COMMENT, 
+                       height=(None,50), wordWrap=True) 
 
-            self._panel_polar = Edit_Panel (title="View Polars", layout=l, auto_height=True,
+            self._panel_polar = Edit_Panel (title=" Polars", layout=l, auto_height=True,
                                             switchable  = True, 
                                             switched_on = lambda: self.show_polars, 
                                             main_margins  = (10, 5,10, 5),
@@ -3131,11 +3166,16 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         layout = QVBoxLayout()
         layout.setContentsMargins (QMargins(0, 0, 0, 0)) 
 
+        # diagrams 
+        add_section_caption (layout, "Common")
+        layout.addWidget (self.panel_aero, stretch=0)               # master aero 
+
+        # diagrams 
+        add_section_caption (layout, "Diagrams")
+    
         item = self._get_items (Item_VLM_Chord)[0]
         layout.addWidget (item.section_panel, stretch=0)            # chord distribution
         # layout.addSpacing (20)
-
-        layout.addWidget (self.panel_aero, stretch=0)               # master aero 
 
         item = self._get_items (Item_VLM_OpPoint)[0]
         layout.addWidget (item.section_panel, stretch=0)           # vlm op point panel
@@ -3337,7 +3377,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
 
             # Polar definition for root airfoil
             
-            Label    (l,r,c, colSpan=4, get=f"T1 polar for root airfoil")
+            Label    (l,r,c, colSpan=4, get=f"T1 polar of root section")
             r += 1
             ComboBox (l,r,c, width=None, 
                         get=lambda: self.polar_def_name, set=self.set_polar_def_name,
@@ -3362,11 +3402,11 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             SpaceR (l,r, height=10)
             r += 1
             p = Panel_Reference_Wing (self, self.app_model, show_no_flap=True)
-            l.addWidget(p, r, c, 1, 3)
+            l.addWidget(p, r, c, 1, 4)
 
             l.setColumnStretch(0, 1)
 
-            self._panel_aero = Edit_Panel (title="Aero Analysis", layout=l, auto_height=True,
+            self._panel_aero = Edit_Panel (title="Analysis Setup", layout=l, auto_height=True,
                                            main_margins  = (10, 5, 5, 5),
                                            switchable=False)
         return self._panel_aero 
@@ -3380,8 +3420,6 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         
             l = QGridLayout()
             r,c = 0, 0
-            Label (l,r,c, style=style.COMMENT, colSpan=4, get="Choose polar variables in diagram")
-            r += 1
             CheckBox (l,r,c, colSpan=4, text="Key performance indicators",
                       get=lambda: self.show_kpis, set=self.set_show_kpis)
             r += 1
@@ -3397,14 +3435,14 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             load.sig_changed.connect (self.refresh)        # refresh diagram
 
             r += 1
-            CheckBox (l,r,c, colSpan=4, text="Delta to reference wing",
+            CheckBox (l,r,c, colSpan=4, text="Delta to reference planform",
                       get=lambda: self.show_polars_delta, set=self.set_show_polars_delta,
-                      disable=lambda: self.app_model.ref_wing is None)
+                      hide=lambda: self.app_model.ref_wing is None)
 
             l.setColumnMinimumWidth (0,10)
             l.setColumnMinimumWidth (1,70)
             l.setColumnStretch (3,2)
-            self._panel_polar = Edit_Panel (title="View Polars", layout=l, auto_height=True,
+            self._panel_polar = Edit_Panel (title="Wing Polars", layout=l, auto_height=True,
                                             switchable  = True, 
                                             switched_on = lambda: self.show_polars, 
                                             on_switched = lambda aBool: self.set_show_polars(aBool))
@@ -3576,7 +3614,7 @@ class Item_Making_Of_Abstract (Item_Abstract):
    Abstract Making Of Diagram (Plot) Item 
     """
 
-    name = "View Making Of"
+    name = "Making Of"
 
     min_width   = 200                                   # min size needed - see below 
     min_height  = 100 
@@ -3663,8 +3701,7 @@ class Item_Making_Of_Paneled (Item_Making_Of_Abstract):
 class Item_Making_Of_Welcome (Item_Making_Of_Abstract):
     """ Making Of Diagram (Plot) Item with Welcome message  """
 
-    title       = ""                                    # has it's own title 
-    subtitle    = None
+    title       = None                                 # title is part of message text 
 
     show_buttons = False
     show_coords  = False
@@ -4015,15 +4052,7 @@ class Panel_Reference_Wing (Edit_Panel):
         l.setColumnStretch (2, 3)
 
         r += 1
-
-        #todo  extend the api, that options can be a list of tuples, 
-        # with this switch to an extended mode and the setter returns again a tuple ...
-        # Make the tuple carry the visible label and the value passed to the setter, 
-        # e.g. (label, value), with an optional third tooltip field: (label, value, tooltip). 
-        # In extended mode, the selection callback receives the selected tuple, 
-        # while the getter returns the current tuple so the combo can restore the right item.
-
-        w = ComboBox   (l,r,c+1, colSpan=2, width=155,
+        w = ComboBox   (l,r,c+1, colSpan=2, 
                     options=lambda: self.app_model.ref_wings_name, 
                     get=lambda: self.app_model.ref_wing_name, 
                     set=self.app_model.set_ref_wing_name,

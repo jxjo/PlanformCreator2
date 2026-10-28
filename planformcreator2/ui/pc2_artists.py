@@ -11,7 +11,7 @@ from math                       import isclose
 import html 
 
 from PyQt6.QtGui                import QColor, QImage, QBrush, QPen, QTransform
-from PyQt6.QtCore               import pyqtSignal
+from PyQt6.QtCore               import Qt, pyqtSignal
 
 import pyqtgraph as pg
 
@@ -441,7 +441,7 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
             self._tmp_planform_item = None 
 
             super().__init__(self._point_xy(), movable=movable, label_anchor = (0,0),
-                             symbol='s', size=8, show_label_static = movable,**kwargs)
+                             symbol='s', size=Artist.SIZE_SMALL, show_label_static = movable,**kwargs)
 
 
         def _point_xy (self) -> tuple: 
@@ -1431,11 +1431,13 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                 continue
             masked_values = np.where (np.repeat (stripe_mask, points_per_stripe), values, np.nan)
             color = QColor (stripe_color)
-            color.setAlphaF (0.7)
-            pen = pg.mkPen (color, width=8)
+            color.setAlphaF (0.2)
 
+            pen = pg.mkPen (color, width=40)
+            pen.setCapStyle (Qt.PenCapStyle.FlatCap)            # round caps would extend the range by width/2 at both ends
+            
             self._plot_dataItem (x_coords, masked_values, pen=pen, name=label,
-                                 connect="finite", antialias=False, zValue=2)
+                                 connect="finite", antialias=False, zValue=3)
             label = None
 
 
@@ -1523,14 +1525,14 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         # moment reference 
         if VLM_Var.CM in vars or VLM_Var.MOMENT_SPAN in vars:
             cm_ref_x = vlm_wing.cm_ref_x * 1000.0
-            self._plot_text (f"Moment reference x={cm_ref_x:.1f}mm ", color="dimgray", fontSize=8,
+            self._plot_text (f"Moment reference x={cm_ref_x:.1f}mm ", color="dimgray", fontSize=self.SIZE_SMALL,
                              parentPos = (0,0), itemPos=(0,0), offset=(55,45))
 
         # plot efficiency factor (e) if available
         if not np.isnan(aero_results[VLM_Var.WING_EFFICIENCY]):
             e = aero_results[VLM_Var.WING_EFFICIENCY]
             text = f"Efficiency factor: {e:.3f}"
-            self._plot_text (text, color="dimgray", fontSize=8,
+            self._plot_text (text, color="dimgray", fontSize=self.SIZE_SMALL,
                              parentPos = (0,1), itemPos=(0,1), offset=(55,-60))
 
         # plot info text for viscous loop or linear VLM / Treffz or near field 
@@ -1542,7 +1544,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
         else:
             driver = "NeuralFoil"  if vlm_polar.is_neuralfoil else "XFOIL"
             text = f"Viscous loop based on {driver}" if vlm_polar.use_viscous_loop else f"Linear VLM based on {driver}"
-        self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-40),color="dimgray", fontSize=8)
+        self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-40),color="dimgray", fontSize=self.SIZE_SMALL)
 
         return
 
@@ -1875,7 +1877,7 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
         if base_var == VLM_Var.WING_CL and x[0] < 0.0:
             valid &= x > 0.0
             text = f"Only positive CL values shown"
-            self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-35),color="dimgray", fontSize=8)
+            self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-35),color="dimgray", fontSize=self.SIZE_SMALL)
 
         x     = np.where (valid, x, np.nan)
         delta = np.where (valid, delta, np.nan)
@@ -2380,7 +2382,7 @@ class WingSections_Artist (Abstract_Artist_Planform):
             self._in_move = False                                           # move recursion detection          
 
             super().__init__(self._point_xy(), movable=movable, color=COLOR_SECTION,
-                             symbol='s', size=8, show_label_static = movable,**kwargs)
+                             symbol='s', size=Artist.SIZE_SMALL, show_label_static = movable,**kwargs)
             
             # set static brush depending if point to indicate current section dependency ...
 
@@ -2661,7 +2663,7 @@ class Flaps_Artist (Abstract_Artist_Planform):
     def _plot_flaps (self, flap_list : list[Flap], colors : list[QColor]):
         """ plot the single flaps"""
 
-        gap = 0.002
+        flap_gap = 1.0                          # gap betwenn flaps in mm
 
         for i, flap in enumerate (flap_list):
 
@@ -2670,16 +2672,16 @@ class Flaps_Artist (Abstract_Artist_Planform):
             pen_2   = pg.mkPen(color.darker(150), width=0.5)
 
             # flap contour left and right side 
-            x,y = flap.line_left (x_offset=gap)  
+            x,y = flap.line_left (flap_gap=flap_gap)  
             self._plot_dataItem  (x, y,  pen = pen_1, antialias = False, zValue=1)
-            x,y = flap.line_right(x_offset=gap)  
+            x,y = flap.line_right(flap_gap=flap_gap)  
             self._plot_dataItem  (x, y,  pen = pen_1, antialias = False, zValue=1)
 
             # hinge and te 
-            x,y = flap.line_hinge (x_offset=gap)  
+            x,y = flap.line_hinge (flap_gap=flap_gap)  
             p1 = self._plot_dataItem  (x, y,  pen = pen_2, antialias = False, zValue=1)
 
-            x,y = flap.line_te (x_offset=gap)  
+            x,y = flap.line_te (flap_gap=flap_gap)  
             p2 = self._plot_dataItem  (x, y,  pen = pen_2, antialias = False, zValue=1)
 
             # fill area between hinge and te 
