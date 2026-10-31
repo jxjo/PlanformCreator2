@@ -1044,10 +1044,25 @@ class Wing:
         cur_json = json.dumps(cur_dict, sort_keys=True)
         
         if new_json != cur_json:
-            # Find differences
+            missing = object()
+
+            def log_differences(old_value, new_value, path):
+                if old_value is missing or new_value is missing:
+                    old_display = "<missing>" if old_value is missing else repr(old_value)
+                    new_display = "<missing>" if new_value is missing else repr(new_value)
+                    logger.debug(f"Changed key '{path}': {old_display} -> {new_display}")
+                elif isinstance(old_value, dict) and isinstance(new_value, dict):
+                    for nested_key in old_value.keys() | new_value.keys():
+                        log_differences(
+                            old_value.get(nested_key, missing),
+                            new_value.get(nested_key, missing),
+                            f"{path}.{nested_key}",
+                        )
+                elif old_value != new_value:
+                    logger.debug(f"Changed key '{path}': {old_value!r} -> {new_value!r}")
+
             for key in set(list(new_dict.keys()) + list(cur_dict.keys())):
-                if new_dict.get(key) != cur_dict.get(key):
-                    logger.debug(f"Changed key '{key}': {cur_dict.get(key)} -> {new_dict.get(key)}")
+                log_differences(cur_dict.get(key, missing), new_dict.get(key, missing), str(key))
         
         return new_json != cur_json
   

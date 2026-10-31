@@ -63,8 +63,8 @@ class Image_Definition:
             toDict (d, "remove_red",            self.remove_red)
             toDict (d, "black_level",           self.black_level)
             # toDict (d, "white_level",           self.white_level)
-            toDict (d, "point_le",              self.point_le)
-            toDict (d, "point_te",              self.point_te)
+            toDict (d, "point_le",              list(self.point_le))
+            toDict (d, "point_te",              list(self.point_te))
         return d
 
 

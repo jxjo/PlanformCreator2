@@ -71,7 +71,7 @@ class VLM_Var (StrEnum_Extended):
 
     ALPHA           = "alpha"                               # angle of attack of panel
     ALPHA_EFF       = "alpha effective (VLM)"               # effective angle of attack (based on VLM))
-    ALPHA_IND       = "alpha induced"                      # induced angle from the selected method
+    ALPHA_IND       = "alpha induced"                       # induced angle from the selected method
     ALPHA0_AIRFOIL  = "alpha0 airfoil"                      # alpha0 from airfoil polar  
 
     CD              = "cd"                                  # local drag coefficient 

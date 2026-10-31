@@ -655,7 +655,7 @@ class N_Distrib_Bezier (N_Distrib_Abstract):
                 jpoint.set_name ('Start Tangent') 
             elif i == n-2:                                  # tip tangent
                 jpoint.set_x_limits ((1,1))
-                jpoint.set_y_limits ((0.2,1))
+                jpoint.set_y_limits ((0.05,1))
                 jpoint.set_name ('End Tangent') 
             elif i == n-1:                                  # tip
                 jpoint.set_x_limits ((1,1))

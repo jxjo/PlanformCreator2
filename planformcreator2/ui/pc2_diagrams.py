@@ -3101,6 +3101,12 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         # Diagram refresh is handled in Diagram_Items - but view panel is owned by this class
         self.app_model.sig_vlm_changed.connect      (self._on_vlm_changed)
         self.app_model.sig_ref_wing_changed.connect (self._on_vlm_changed)
+        self.app_model.sig_new_wing.connect         (self._on_new_wing)
+
+
+    def _on_new_wing (self):
+        """Hide polar delta items when a new wing is loaded."""
+        self.set_show_polars_delta (False)
 
 
     def _on_vlm_changed (self):
@@ -4103,4 +4109,3 @@ class Panel_Reference_Wing (Edit_Panel):
         if newPathFilename: 
             self.app_model.add_ref_pc2_file (newPathFilename)
             self.refresh ()  
-

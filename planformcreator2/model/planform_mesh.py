@@ -84,7 +84,7 @@ class Mesh_Strategy:
         self._wx_dist       = fromDict (data, "wx_distribution", "uniform")
         self._wy_dist       = fromDict (data, "wy_distribution", "uniform")
 
-        self.set_cn_tip_min     (fromDict (data, "cn_tip_min", 0.0))    
+        self.set_cn_tip_min     (fromDict (data, "cn_tip_min", None))    
         self.set_cn_ratio_min   (fromDict (data, "cn_ratio_min", None))
         self.set_width_min_targ (fromDict (data, "width_min", self.PANEL_WIDTH_MIN))
 

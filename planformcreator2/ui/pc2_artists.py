@@ -1299,6 +1299,8 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
             # plot all opPoint variables 
 
+            critical_plotted = False
+
             for i, var in enumerate (vars):
 
                 pen = pen_vlm_var ((var, VLM_Var.Y), vlm_polar.is_main_polar)
@@ -1337,7 +1339,8 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                         self._plot_critical_Cl_stripes (vlm_wing, aero_results, "Critical range")
                     elif var == VLM_Var.CL_MAX_AIRFOIL:
                         self._plot_cl_max_values (vlm_polar, pen.color())
-                    elif var != VLM_Var.CL_MIN_AIRFOIL:
+                    elif var != VLM_Var.CL_MIN_AIRFOIL and not critical_plotted:
+                        critical_plotted = True                 # same stripes for all vars - plot once to avoid stacked alpha
                         self._plot_critical_stripes (vlm_wing, aero_results, aero_results [VLM_Var.MAX_MASK],
                                                     "Critical range")
                     
@@ -1402,7 +1405,7 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
         y_crit   = np.column_stack ((edges[:-1], y * 1000, edges[1:])).ravel ()
         cl_crit  = np.interp (y_crit, y_ext, cl_ext)
-        self._plot_critical_ranges (vlm_wing, results, mask, y_crit, cl_crit, 3, label)
+        self._plot_critical_ranges (vlm_wing, results, mask, y_crit, cl_crit, 3, label, width=10)
 
 
     def _plot_critical_stripes (self, vlm_wing : VLM_Wing, results, mask, label):
@@ -1420,7 +1423,8 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
 
     def _plot_critical_ranges (self, vlm_wing : VLM_Wing, results, mask,
-                               x_coords, values, points_per_stripe, label):
+                               x_coords, values, points_per_stripe, label,
+                               width=30):
         """Plot prepared stripe ranges with shared tip coloring and one legend entry."""
 
         tip_mask = results [VLM_Var.Y] >= 0.95 * vlm_wing.sections_y[-1]
@@ -1431,9 +1435,9 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                 continue
             masked_values = np.where (np.repeat (stripe_mask, points_per_stripe), values, np.nan)
             color = QColor (stripe_color)
-            color.setAlphaF (0.2)
+            color.setAlphaF (0.6)
 
-            pen = pg.mkPen (color, width=40)
+            pen = pg.mkPen (color, width=width)
             pen.setCapStyle (Qt.PenCapStyle.FlatCap)            # round caps would extend the range by width/2 at both ends
             
             self._plot_dataItem (x_coords, masked_values, pen=pen, name=label,
@@ -3542,13 +3546,16 @@ class Polar_Artist (Abstract_Artist_Planform):
         # finally plot 
         if section_is_for_panels:
             pen = pg.mkPen(color, width=1.0, style=Qt.PenStyle.DotLine)
+            antialias = False
         elif isBlendAirfoil:
             pen = pg.mkPen(color, width=1.0, style=Qt.PenStyle.DashLine)
+            antialias = False
         else:
-            pen = pg.mkPen(color, width=1.0)
+            pen = pg.mkPen(color, width=1.5)
+            antialias = True
 
         x,y = polar.ofVars (self.xyVars)
 
         self._plot_dataItem  (x, y, name=label, pen = pen, 
-                                symbol=None, antialias = True, zValue=1)
+                                symbol=None, antialias = antialias, zValue=1)
 

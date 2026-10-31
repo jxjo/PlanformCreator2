@@ -486,16 +486,21 @@ class Panel_WingSection (Panel_Planform_Abstract):
         Label  (l,r,c, get=self._section_info, colSpan=5, 
                 style=lambda: style.HINT if self.wingSection.is_for_panels else style.COMMENT,
                 hide = lambda: self.planform.chord_defined_by_sections) 
-        CheckBox (l,r,c, text="Section defines chord", colSpan=5,               # toggle trapezoid or not 
+        CheckBox (l,r,c, text="Section fixes its chord here", colSpan=6,               # toggle trapezoid or not 
                 obj=lambda: self.wingSection, prop=WingSection.defines_cn,
                 disable=lambda: self.wingSection.is_root_or_tip,
-                hide=lambda:  not self.planform.chord_defined_by_sections)     
+                hide=lambda:  not self.planform.chord_defined_by_sections,
+                toolTip="If checked, the chord of this section is fixed by you (shown in blue)\n"
+                        "and will stay unchanged if span or chord distribution is modified")     
                
         r += 1
         FieldF (l,r,c,   lab="Position", width=85, unit="mm", step=1, lim=lambda: (0, self.planform.span), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.x, 
                 disable=lambda: not self.wingSection.is_set_xn_allowed,
-                style=self._style_for_xn_fixed)
+                style=self._style_for_xn_fixed,
+                toolTip=lambda: "Fixed span position - was set by you and stays unchanged\n"
+                                "if span or chord distribution is modified"
+                                if self.wingSection.is_xn_fix and not self.wingSection.is_root_or_tip else None)
         FieldF (l,r,c+3, lab="of span", width=65, unit="%", step=1, lim=(0, 100), dec=1,
                 obj=lambda:self.wingSection, prop=WingSection.xn, 
                 disable=lambda: not self.wingSection.is_set_xn_allowed)
@@ -503,7 +508,10 @@ class Panel_WingSection (Panel_Planform_Abstract):
         FieldF (l,r,c,   lab="Chord", width=85, unit="mm", step=1, lim=lambda:(1, self.planform.chord_root), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.c, 
                 disable=lambda: not self.wingSection.is_set_cn_allowed,
-                style=self._style_for_cn_fixed)
+                style=self._style_for_cn_fixed,
+                toolTip=lambda: "Fixed chord - was set by you and stays unchanged\n"
+                                "if span or chord distribution is modified"
+                                if self.wingSection.is_cn_fix and not self.wingSection.is_root else None)
         FieldF (l,r,c+3, lab="of root", width=65, unit="%", step=1, lim=(1, 100), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.cn, 
                 disable=lambda: not self.wingSection.is_set_cn_allowed)
@@ -625,7 +633,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
     def _style_for_cn_fixed (self) -> style:
         """ returns the style for the entry field dependant if cn fixed"""
-        if self.wingSection.is_cn_fix and not self.wingSection.is_root_or_tip: 
+        if self.wingSection.is_cn_fix and not self.wingSection.is_root: 
             return style.HINT
         else: 
             return style.NORMAL
@@ -866,7 +874,10 @@ class Panel_WingSection_Small (Panel_WingSection):
         FieldF (l,r,c,   lab="Position", width=85, unit="mm", step=1, lim=lambda: (0, self.planform.span), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.x, 
                 disable=lambda: not self.wingSection.is_set_xn_allowed,
-                style=lambda: self._style_for_fixed(self.wingSection.is_xn_fix) )
+                style=lambda: self._style_for_fixed(self.wingSection.is_xn_fix),
+                toolTip=lambda: "Fixed span position - was set by you and stays unchanged\n"
+                                "if span or chord distribution is modified"
+                                if self.wingSection.is_xn_fix and not self.wingSection.is_root_or_tip else None)
         FieldF (l,r,c+3, lab="of span", width=65, unit="%", step=1, lim=(0, 100), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.xn, 
                 disable=lambda: not self.wingSection.is_set_xn_allowed)
@@ -874,7 +885,10 @@ class Panel_WingSection_Small (Panel_WingSection):
         FieldF (l,r,c,   lab="Chord", width=85, unit="mm", step=1, lim=lambda:(1, self.planform.chord_root), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.c, 
                 disable=lambda: not self.wingSection.is_set_cn_allowed,
-                style=lambda: self._style_for_fixed(self.wingSection.is_cn_fix))
+                style=lambda: self._style_for_fixed(self.wingSection.is_cn_fix),
+                toolTip=lambda: "Fixed chord - was set by you and stays unchanged\n"
+                                "if span or chord distribution is modified"
+                                if self.wingSection.is_cn_fix and not self.wingSection.is_root else None)
         FieldF (l,r,c+3, lab="of root", width=65, unit="%", step=1, lim=(1, 100), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.cn, 
                 disable=lambda: not self.wingSection.is_set_cn_allowed)
