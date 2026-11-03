@@ -6,5 +6,8 @@
     "cSpell.words": [
         "idef",
         "planformcreator"
-    ]
+    ],
+    "chat.tools.terminal.autoApprove": {
+        "&": true
+    }
 }

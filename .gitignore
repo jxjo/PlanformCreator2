@@ -8,7 +8,7 @@ releases
 T*.txt
 tmp*.inp
 test/*
-test_VLM/*
+tests/*
 *.xlsx
 *_tmp
 *_temp

@@ -9,10 +9,10 @@ build-backend = "hatchling.build"
 name = "planformcreator2"
 dynamic = ["version"]               
 authors = [{ name="Jochen Guenzel", email="jochen@jxjo.de" }]
-description = "Design a wing planform"
+description = "Parametric wing planform design and aerodynamic analysis"
 readme = "doc/README_PyPi.md"
 requires-python = ">=3.12"
-dependencies = ["airfoileditor~=4.3.2"]
+dependencies = ["airfoileditor>=5.0.2,<5.1"]
 classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.12",

@@ -10,6 +10,7 @@ UI panels
 import subprocess
 import sys
 import os
+import fnmatch        
 
 import logging
 
@@ -21,9 +22,9 @@ from airfoileditor.base.widgets         import *
 from airfoileditor.base.panels          import Edit_Panel, MessageBox, Disabled_Overlay
 from airfoileditor.model.airfoil        import Airfoil, GEO_BASIC, Airfoil_Bezier, Airfoil_BSpline
 
-from ..resources           import _is_frozen
-from ..model.wing           import Wing, STRAK_AIRFOIL_NAME
-from ..model.wing           import (Planform, N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line,
+from ..resources            import _is_frozen
+from ..model.wing           import Wing
+from ..model.planform       import (Planform, N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line,
                                     Flaps, WingSections, WingSection)
 
 from ..app_model            import App_Model
@@ -294,12 +295,12 @@ class Panel_Wing_Small (Panel_Wing):
         l = QGridLayout()
         r,c = 0, 0 
         FieldF (l,r,c, lab="Half Wing Span", width=85, unit="mm", step=10, lim=(10, 10000), dec=0, 
-                obj=self.planform, prop=Planform.span)
+            obj=lambda: self.planform, prop=Planform.span)
         r += 1
         FieldF (l,r,c, lab="Root Chord", width=85, unit="mm", step=10, lim=(10, 1000), dec=0, 
-                obj=self.planform, prop=Planform.chord_root)
+            obj=lambda: self.planform, prop=Planform.chord_root)
         FieldF (l,r,c+3, lab="Sweep Angle", width=75, unit="°", step=0.1, lim=(-45, 45), dec=1,
-                obj=self.planform, prop=Planform.sweep_angle)
+            obj=lambda: self.planform, prop=Planform.sweep_angle)
         r += 1
         l.setRowStretch (r,1)
 
@@ -452,12 +453,12 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
 
     @property
-    def airfoil_name (self) -> str:
+    def airfoil_fileName (self) -> str:
         """ get airfoil file name or 'strak' at section"""
         if self.airfoil is not None:
             return self.airfoil.fileName
         else:
-            return STRAK_AIRFOIL_NAME
+            return Wing.STRAK_AIRFOIL_NAME
 
     @property
     def airfoil_issues (self) -> list[str]:
@@ -485,16 +486,21 @@ class Panel_WingSection (Panel_Planform_Abstract):
         Label  (l,r,c, get=self._section_info, colSpan=5, 
                 style=lambda: style.HINT if self.wingSection.is_for_panels else style.COMMENT,
                 hide = lambda: self.planform.chord_defined_by_sections) 
-        CheckBox (l,r,c, text="Section defines chord", colSpan=5,               # toggle trapezoid or not 
+        CheckBox (l,r,c, text="Section fixes its chord here", colSpan=6,               # toggle trapezoid or not 
                 obj=lambda: self.wingSection, prop=WingSection.defines_cn,
                 disable=lambda: self.wingSection.is_root_or_tip,
-                hide=lambda:  not self.planform.chord_defined_by_sections)     
+                hide=lambda:  not self.planform.chord_defined_by_sections,
+                toolTip="If checked, the chord of this section is fixed by you (shown in blue)\n"
+                        "and will stay unchanged if span or chord distribution is modified")     
                
         r += 1
         FieldF (l,r,c,   lab="Position", width=85, unit="mm", step=1, lim=lambda: (0, self.planform.span), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.x, 
                 disable=lambda: not self.wingSection.is_set_xn_allowed,
-                style=self._style_for_xn_fixed)
+                style=self._style_for_xn_fixed,
+                toolTip=lambda: "Fixed span position - was set by you and stays unchanged\n"
+                                "if span or chord distribution is modified"
+                                if self.wingSection.is_xn_fix and not self.wingSection.is_root_or_tip else None)
         FieldF (l,r,c+3, lab="of span", width=65, unit="%", step=1, lim=(0, 100), dec=1,
                 obj=lambda:self.wingSection, prop=WingSection.xn, 
                 disable=lambda: not self.wingSection.is_set_xn_allowed)
@@ -502,7 +508,10 @@ class Panel_WingSection (Panel_Planform_Abstract):
         FieldF (l,r,c,   lab="Chord", width=85, unit="mm", step=1, lim=lambda:(1, self.planform.chord_root), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.c, 
                 disable=lambda: not self.wingSection.is_set_cn_allowed,
-                style=self._style_for_cn_fixed)
+                style=self._style_for_cn_fixed,
+                toolTip=lambda: "Fixed chord - was set by you and stays unchanged\n"
+                                "if span or chord distribution is modified"
+                                if self.wingSection.is_cn_fix and not self.wingSection.is_root else None)
         FieldF (l,r,c+3, lab="of root", width=65, unit="%", step=1, lim=(1, 100), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.cn, 
                 disable=lambda: not self.wingSection.is_set_cn_allowed)
@@ -513,9 +522,17 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         p_foil = QWidget()
         l_foil = QGridLayout (p_foil)
-        Field  (l_foil,0,0,   lab="Airfoil",
-                get=lambda: self.airfoil_name,                 # name as strak fileName can be long
-                toolTip=lambda: self.wingSection.airfoil.info_as_html)
+        Field      (l_foil,0,0,   lab="Airfoil",                       # no other files in dir 
+                    get=lambda: self.airfoil_fileName,                 
+                    hide=lambda: len(self._airfoil_fileNames_sameDir()) >= 2 and self.airfoil,
+                    toolTip=lambda: self.wingSection.airfoil.info_as_html)
+        ComboBox   (l_foil,0,0,   lab="Airfoil",                       # selection of airfoil from same dir as current airfoil
+                    get=lambda: self.airfoil_fileName,                  
+                    set=self._set_airfoil_by_file,
+                    options=self._airfoil_fileNames_sameDir,
+                    signal=False,                                      # do not signal (would be double refresh)
+                    hide=lambda: len(self._airfoil_fileNames_sameDir()) < 2 or self.airfoil is None,
+                    toolTip=lambda: self.wingSection.airfoil.info_as_html)
 
         ToolButton (l_foil,0,2, icon=Icon.OPEN, set=self._open_airfoil, 
                         toolTip="Select an airfoil for this wing section")
@@ -616,7 +633,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
     def _style_for_cn_fixed (self) -> style:
         """ returns the style for the entry field dependant if cn fixed"""
-        if self.wingSection.is_cn_fix and not self.wingSection.is_root_or_tip: 
+        if self.wingSection.is_cn_fix and not self.wingSection.is_root: 
             return style.HINT
         else: 
             return style.NORMAL
@@ -636,6 +653,31 @@ class Panel_WingSection (Panel_Planform_Abstract):
             text = ""
         return text 
 
+
+    def _airfoil_fileNames_sameDir (self) -> list[str]: 
+        """ 
+        Returns list of airfoil file names in the same directory as airfoil
+            airfoil can be either an Airfoil or a subdirectory
+        Returns all .dat, .bez, .bsp, .cst and .hicks files 
+        """
+
+        if self.airfoil is None: return []
+
+        if self.airfoil.pathFileName_abs is not None: 
+            airfoil_dir = os.path.dirname(self.airfoil.pathFileName_abs) 
+        else:
+            return [] 
+
+        if os.path.isdir (airfoil_dir):
+            dat_files = fnmatch.filter(os.listdir(airfoil_dir), '*.dat')
+            bez_files = fnmatch.filter(os.listdir(airfoil_dir), '*.bez')
+            bsp_files = fnmatch.filter(os.listdir(airfoil_dir), '*.bsp')
+            cst_files = fnmatch.filter(os.listdir(airfoil_dir), '*.cst')
+            hh_files  = fnmatch.filter(os.listdir(airfoil_dir), '*.hicks')
+            airfoil_files = dat_files + bez_files + bsp_files + cst_files + hh_files
+            return sorted (airfoil_files, key=str.casefold)
+        else:
+            return []
 
     def _open_airfoil (self):
         """ open a new airfoil and load it"""
@@ -727,6 +769,11 @@ class Panel_WingSection (Panel_Planform_Abstract):
         Set new airfoil for current section by file name 
             - handles copying to airfoils dir and normalization """
 
+        # if pathFileName is just fileName take dir from current airfoil location
+        if pathFileName and not os.path.isabs(pathFileName):
+            if self.airfoil is None: return
+            pathFileName = os.path.join(self.airfoil.pathName_abs, pathFileName)
+
         new_pathFileName = self.wingSection.get_airfoil_file (pathFileName)
 
         if new_pathFileName is None:
@@ -767,7 +814,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
         # 2 normalized and not in airfoils_dir -> ask copy
         elif not already_there:    
 
-            text = f"'{airfoil.fileName}' will be copied into directory <b>./{self.wing.airfoils_dir_rel}</b><br>" +\
+            text = f"<b>{airfoil.fileName}</b> will be copied into directory <b>{self.wing.airfoils_dir_rel}</b><br>" +\
                 f"which is the recommended location for airfoils of this planform.<br><br>" + \
                 f"Copy airfoil?"
             msg = MessageBox (self, "Copy Airfoil", text, Icon (Icon.INFO), min_width=350)
@@ -782,7 +829,8 @@ class Panel_WingSection (Panel_Planform_Abstract):
 
         # do it - will assign polarSet and reset strak 
         self.wingSections.create_airfoil_for (self.wingSection, new_pathFileName, into_airfoils_dir=do_copy)
-        self.app_model.notify_wingSection_changed ()
+
+        self.app_model.notify_airfoil_changed ()
 
 
 
@@ -826,7 +874,10 @@ class Panel_WingSection_Small (Panel_WingSection):
         FieldF (l,r,c,   lab="Position", width=85, unit="mm", step=1, lim=lambda: (0, self.planform.span), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.x, 
                 disable=lambda: not self.wingSection.is_set_xn_allowed,
-                style=lambda: self._style_for_fixed(self.wingSection.is_xn_fix) )
+                style=lambda: self._style_for_fixed(self.wingSection.is_xn_fix),
+                toolTip=lambda: "Fixed span position - was set by you and stays unchanged\n"
+                                "if span or chord distribution is modified"
+                                if self.wingSection.is_xn_fix and not self.wingSection.is_root_or_tip else None)
         FieldF (l,r,c+3, lab="of span", width=65, unit="%", step=1, lim=(0, 100), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.xn, 
                 disable=lambda: not self.wingSection.is_set_xn_allowed)
@@ -834,7 +885,10 @@ class Panel_WingSection_Small (Panel_WingSection):
         FieldF (l,r,c,   lab="Chord", width=85, unit="mm", step=1, lim=lambda:(1, self.planform.chord_root), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.c, 
                 disable=lambda: not self.wingSection.is_set_cn_allowed,
-                style=lambda: self._style_for_fixed(self.wingSection.is_cn_fix))
+                style=lambda: self._style_for_fixed(self.wingSection.is_cn_fix),
+                toolTip=lambda: "Fixed chord - was set by you and stays unchanged\n"
+                                "if span or chord distribution is modified"
+                                if self.wingSection.is_cn_fix and not self.wingSection.is_root else None)
         FieldF (l,r,c+3, lab="of root", width=65, unit="%", step=1, lim=(1, 100), dec=1,
                 obj=lambda: self.wingSection, prop=WingSection.cn, 
                 disable=lambda: not self.wingSection.is_set_cn_allowed)

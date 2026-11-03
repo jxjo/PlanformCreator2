@@ -54,7 +54,7 @@ from .app_model              import App_Model, Mode_Id
 from .app_modes              import Modes_Manager, Mode_Modify
 
 from .ui.pc2_diagrams        import (Diagram_Wing, Diagram_Planform, Diagram_Airfoils, Diagram_Making_Of,
-                                    Diagram_Wing_Analysis)
+                                    Diagram_Paneling, Diagram_Aero_Analysis, Diagram_Abstract)
 
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,19 @@ logger = logging.getLogger(__name__)
 #-------------------------------------------------------------------------------
 
 APP_NAME         = "PlanformCreator2"
-__version__      = "4.3.2"                            # hatch "version dynamic" reads this version for build
+__version__      = "5.0.0"                            # hatch "version dynamic" reads this version for build
+
+
+# DEV: Ensure compatibility with airfoileditor 5.0
+
+from importlib.metadata import version
+from packaging.version  import Version
+
+if Version(version("airfoileditor")).major !=  Version(__version__).major:
+    logger.error(
+        f"At least airfoileditor major version { Version(__version__).major} is required, "
+        f"but airfoileditor version is { Version(version("airfoileditor"))}" )
+    sys.exit(0)
 
 
 class Main (QMainWindow):
@@ -86,6 +98,8 @@ class Main (QMainWindow):
         # --- init Settings, check for newer app version ---------------
 
         Settings.set_file (APP_NAME, file_extension= '.settings')
+        logger.info (f"Settings: {Settings().pathFileName}")       
+
 
         is_first_run = Run_Checker.is_first_run (__version__)                 # to show Welcome message
         
@@ -96,7 +110,7 @@ class Main (QMainWindow):
 
         self._app_model = App_Model (workingDir_default=Settings.user_data_dir (APP_NAME))
         self._app_model.set_app_info (__version__, "No CHANGE_TEXT", is_first_run)
-
+        
         # either airfoil file or Xoptfoil2 input file
 
         pc2_file = check_or_get_initial_file (initial_file)
@@ -136,16 +150,20 @@ class Main (QMainWindow):
         l.addWidget (modes_panel, 1,0)        
         l.setRowStretch (0,1)
         l.setRowMinimumHeight (0,400)
-        modes_manager.set_height (160, minimized=65)
+        modes_manager.set_height (150, minimized=65)
         
-        l.setSpacing (5)
-        l.setContentsMargins (QMargins(5, 5, 5, 5))
+        l.setSpacing (3)
+        l.setContentsMargins (QMargins(3, 0, 3, 3))
 
         main = QWidget()
         main.setLayout (l) 
         self.setCentralWidget (main)
 
         self._diagrams_panel = diagram
+
+        # apply diagram settings 
+
+        self._load_diagram_settings()
 
         # --- Enter event loop ---------------
 
@@ -159,7 +177,7 @@ class Main (QMainWindow):
     def _set_win_title (self):
         """ set window title with airfoil or case name """
 
-        pc2_file = self._app_model.wing.parm_fileName if self._app_model.wing is not None else "No Wing Loaded"
+        pc2_file = self._app_model.wing.parm_path.name if self._app_model.wing is not None else "No Wing Loaded"
         self.setWindowTitle (APP_NAME + "  v" + str(__version__) + "  [" + pc2_file + "]")
 
 
@@ -178,11 +196,26 @@ class Main (QMainWindow):
             self.setWindowIcon (QIcon (str(app_icon_path)))  
 
         # set dark or light mode
-        scheme_name = Settings().get('color_scheme', Qt.ColorScheme.Unknown.name)   # either unknown (from System), Dark, Light
-        QGuiApplication.styleHints().setColorScheme(Qt.ColorScheme[scheme_name])    # set scheme of QT
 
-        # set mode for Widgets
-        Widget.light_mode = not (scheme_name == Qt.ColorScheme.Dark.name)    
+        scheme_name = Settings().get('color_scheme', Qt.ColorScheme.Unknown.name)   # either unknown (from System), Dark, Light
+        if scheme_name.lower() == 'unknown':
+            scheme_name = Qt.ColorScheme.Unknown.name
+        elif scheme_name.lower() == 'dark':
+            scheme_name = Qt.ColorScheme.Dark.name
+        elif scheme_name.lower() == 'light':
+            scheme_name = Qt.ColorScheme.Light.name
+        else:
+            scheme_name = Qt.ColorScheme.Unknown.name
+            
+        scheme = Qt.ColorScheme[scheme_name]
+        hints = QGuiApplication.styleHints()
+        hints.setColorScheme(scheme)
+        # Settle Qt's palette before panels copy it and the native frame is shown.
+        QApplication.processEvents()
+
+        # Unknown means follow the system, not necessarily light mode.
+        effective_scheme = hints.colorScheme() if scheme == Qt.ColorScheme.Unknown else scheme
+        Widget.light_mode = effective_scheme != Qt.ColorScheme.Dark
 
 
 
@@ -207,13 +240,38 @@ class Main (QMainWindow):
 
         wing = self._app_model.wing
         if wing and not wing.is_new_wing: 
-            s.set ('last_opened', wing.parm_pathFileName_abs)
+            s.set ('last_opened', str(wing.parm_path_abs.resolve(strict=False)))
         else:
             s.set ('last_opened', None)
 
         s.set ('current_diagram', self._diagrams_panel.current_tab_name)
 
+        # save settings of all Diagrams of Tab_Panel 
+
+        tab_panel = self._diagrams_panel
+        diagrams  = [tab_panel.widget(index) for index in range(tab_panel.count())]
+
+        diagram : Diagram_Abstract
+        for diagram in diagrams:
+            settings = diagram.settings()
+            if settings: toDict (s, f"{diagram.name}", settings)
+
         s.save()
+
+
+    def _load_diagram_settings (self):
+        """ load settings of all diagrams from app settings """
+
+        s = Settings()
+
+        tab_panel = self._diagrams_panel
+        diagrams  = [tab_panel.widget(index) for index in range(tab_panel.count())]
+
+        diagram : Diagram_Abstract
+        for diagram in diagrams:
+            settings = s.get(f"{diagram.name}", None)
+            if settings:
+                diagram.set_settings(settings)
 
 
     @override
@@ -242,7 +300,8 @@ class Main (QMainWindow):
         diagrams.append (Diagram_Wing          (self, self._app_model))
         diagrams.append (Diagram_Planform      (self, self._app_model))
         diagrams.append (Diagram_Airfoils      (self, self._app_model))
-        diagrams.append (Diagram_Wing_Analysis (self, self._app_model))
+        diagrams.append (Diagram_Paneling      (self, self._app_model))
+        diagrams.append (Diagram_Aero_Analysis (self, self._app_model))
         tab_panel = Tab_Panel (parent=self)
         for diagram in diagrams:
             tab_panel.add_tab(diagram)
