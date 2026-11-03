@@ -306,7 +306,7 @@ Different variable combinations reveal different aspects of performance: `CL` ve
 
 Optional **key performance indicators** mark characteristic values such as maximum `CL`, minimum `CD` and maximum `CL/CD`, depending on the selected diagram. A level-flight point can also be shown for a specified mass or wing loading, identifying the operating point where wing lift balances weight at the selected speed.
 
-<img src="images/vlm_wing_polar.png" width="700" />
+<img src="images/vlm_wing_polar.png" width="600" />
 
 
 #### Comparison with a Reference Wing
@@ -319,7 +319,7 @@ The reference results are overlaid on the spanwise diagrams and wing polars. Add
 
 Drag and glide-ratio deltas are expressed as percentages relative to the reference: negative drag differences and positive glide-ratio differences indicate an improvement.
 
-<img src="images/vlm_wing_polar_delta_reference.png" width="700" />
+<img src="images/vlm_wing_polar_delta_reference.png" width="600" />
 
 
 
