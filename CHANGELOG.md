@@ -2,23 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
-## 5.0b1  
+## 5.0
+
+Version 5 extends wing analysis from lift distribution and stall assessment to drag, glide performance and comparison with reference wings. Based on AirfoilEditor 5.0.
 
 ### Added
 
-- Generalized reference wings
+- Airfoils and Polars:
+  - NeuralFoil as a fast alternative to Xfoil for airfoil polars and built-in wing analysis
+- Paneling:
+  - Smooth meshes for a closer representation of Bezier-based planforms in built-in analysis
+  - Improved automatic mesh creation with smarter mesh control
+- Aero Analysis:
+  - Wing drag calculation combining airfoil and induced drag, with far-field Trefftz-plane and near-field methods for induced drag
+  - Pitching-moment calculation and spanwise drag and moment distributions
+  - T1 wing polars with selectable diagram variables, including lift, drag and glide ratio
+  - Key performance indicators, including maximum lift coefficient, minimum drag coefficient and best glide ratio
+  - Level-flight operating point for a specified mass or wing loading
+  - CSV export of the current operating point, including overall wing results and spanwise data
+- Reference Wings:
+  - Elliptical reference planform and reference wings loaded from PC2 files
+  - Optional matching of span and area, root chord and area, or root chord and span
+  - Reference results overlaid on spanwise diagrams and wing polars
+  - Delta diagrams showing performance differences relative to a reference wing
+- App: Diagram settings are preserved between sessions
 
-- Paneling
-  - Smooth paneling for Bezier-based planforms
-  - Add helper wing sections when the chord difference between two neighboring wing sections is too large
+### Improved
 
-- VLM
-  - Polar: NeuralFoil support for airfoil polars (beside XFoil)
-  - Polar: CD (nearfield and Treffz) and CM
-  - Polar diagram
-  - KPIs of polar 
-  - Level flight point of a polar
-  - Polar delta view to a reference wing
+- VLM interpolation of section airfoil polars across the span
+- UI tweaks
+
+### Fixed
+
+- Various minor usability issues and bugs
 
 
 ## 4.3.2
