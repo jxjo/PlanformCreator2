@@ -663,7 +663,7 @@ class Wing:
         """ list of actual polar definitions """
 
         if not self._polar_definitions: 
-            self._polar_definitions = [Polar_Definition()]
+            self._polar_definitions = [Polar_Definition({"nf_model_size": "xxlarge"})] # default NeuralFoil
         return self._polar_definitions
 
 

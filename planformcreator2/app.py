@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 #-------------------------------------------------------------------------------
 
 APP_NAME         = "PlanformCreator2"
-__version__      = "5.0b1"                            # hatch "version dynamic" reads this version for build
+__version__      = "5.0.0"                            # hatch "version dynamic" reads this version for build
 
 
 # DEV: Ensure compatibility with airfoileditor 5.0
@@ -196,11 +196,26 @@ class Main (QMainWindow):
             self.setWindowIcon (QIcon (str(app_icon_path)))  
 
         # set dark or light mode
-        scheme_name = Settings().get('color_scheme', Qt.ColorScheme.Unknown.name)   # either unknown (from System), Dark, Light
-        QGuiApplication.styleHints().setColorScheme(Qt.ColorScheme[scheme_name])    # set scheme of QT
 
-        # set mode for Widgets
-        Widget.light_mode = not (scheme_name == Qt.ColorScheme.Dark.name)    
+        scheme_name = Settings().get('color_scheme', Qt.ColorScheme.Unknown.name)   # either unknown (from System), Dark, Light
+        if scheme_name.lower() == 'unknown':
+            scheme_name = Qt.ColorScheme.Unknown.name
+        elif scheme_name.lower() == 'dark':
+            scheme_name = Qt.ColorScheme.Dark.name
+        elif scheme_name.lower() == 'light':
+            scheme_name = Qt.ColorScheme.Light.name
+        else:
+            scheme_name = Qt.ColorScheme.Unknown.name
+            
+        scheme = Qt.ColorScheme[scheme_name]
+        hints = QGuiApplication.styleHints()
+        hints.setColorScheme(scheme)
+        # Settle Qt's palette before panels copy it and the native frame is shown.
+        QApplication.processEvents()
+
+        # Unknown means follow the system, not necessarily light mode.
+        effective_scheme = hints.colorScheme() if scheme == Qt.ColorScheme.Unknown else scheme
+        Widget.light_mode = effective_scheme != Qt.ColorScheme.Dark
 
 
 

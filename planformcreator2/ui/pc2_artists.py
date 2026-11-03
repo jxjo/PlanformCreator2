@@ -1335,29 +1335,29 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
                         self._plot_span_border (xe)
 
                     # plot additional infos 
+                    mask = aero_results [VLM_Var.MAX_MASK]
                     if var == VLM_Var.CL:
-                        self._plot_critical_Cl_stripes (vlm_wing, aero_results, "Critical range")
+                        self._plot_critical_Cl_stripes (vlm_wing, aero_results, mask, "Critical range")
                     elif var == VLM_Var.CL_MAX_AIRFOIL:
                         self._plot_cl_max_values (vlm_polar, pen.color())
                     elif var != VLM_Var.CL_MIN_AIRFOIL and not critical_plotted:
                         critical_plotted = True                 # same stripes for all vars - plot once to avoid stacked alpha
-                        self._plot_critical_stripes (vlm_wing, aero_results, aero_results [VLM_Var.MAX_MASK],
-                                                    "Critical range")
-                    
-                    # error message for error in VLM calculation 
-                    if self.opPoint.has_vlm_error and (var == VLM_Var.CL or var == VLM_Var.ALPHA):
-                        text = 'VLM error occurred (maybe less x-panels could help)'         
-                        self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
+                        self._plot_critical_stripes (vlm_wing, aero_results, mask, "Critical range")
 
-                        if var == VLM_Var.CL:
-                            self._plot_critical_Cl_stripes (vlm_wing, aero_results, "VLM error")
-                        else:
-                            self._plot_critical_stripes (vlm_wing, aero_results, aero_results [VLM_Var.ERROR_MASK],
-                                                        "VLM error")
+            # - only once for main polar
 
-            # plot total wing values
             if vlm_polar.is_main_polar:
+
+                # plot total wing values
                 self._plot_wing_values (vlm_polar, vars, aero_results)
+
+                # error message for error in VLM calculation 
+                if self.opPoint.has_vlm_error:
+                    text = 'VLM error occurred (often because of distorted panels)'         
+                    self._plot_text (text, color=COLOR_ERROR, itemPos=(0.5,0.5))
+
+                    mask = aero_results [VLM_Var.ERROR_MASK]
+                    self._plot_critical_stripes (vlm_wing, aero_results, mask, "VLM error")
 
 
     @staticmethod
@@ -1387,10 +1387,9 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
             self._add (line)
 
 
-    def _plot_critical_Cl_stripes (self, vlm_wing : VLM_Wing, results, label):
+    def _plot_critical_Cl_stripes (self, vlm_wing : VLM_Wing, results, mask, label):
         """Plot the active positive or negative airfoil lift limit over critical stripes."""
 
-        mask     = results [VLM_Var.MAX_MASK]
         if not np.any (mask):
             return
 
@@ -1423,11 +1422,16 @@ class VLM_OpPoint_Artist (Abstract_Artist_Planform):
 
 
     def _plot_critical_ranges (self, vlm_wing : VLM_Wing, results, mask,
-                               x_coords, values, points_per_stripe, label,
+                               x_coords, values, points_per_stripe, label : str,
                                width=30):
         """Plot prepared stripe ranges with shared tip coloring and one legend entry."""
 
-        tip_mask = results [VLM_Var.Y] >= 0.95 * vlm_wing.sections_y[-1]
+        if "error" in label.lower():
+            # for errors no special tip handling
+            tip_mask  = np.zeros_like(results [VLM_Var.Y], dtype=bool)
+        else:
+            # tip area will have extra color 
+            tip_mask = results [VLM_Var.Y] >= 0.95 * vlm_wing.sections_y[-1]
 
         for stripe_mask, stripe_color in ((mask & ~tip_mask, COLOR_CRITICAL),
                                           (mask & tip_mask, COLOR_WARNING)):

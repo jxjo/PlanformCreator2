@@ -1919,6 +1919,9 @@ class Item_Wing_Data (Item_Abstract):
 
     name        = "Wing data"
 
+    show_buttons = False
+    show_coords  = False
+
     @override
     def setup_viewRange (self):
         """ define view range of this plotItem"""
@@ -3441,7 +3444,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             load.sig_changed.connect (self.refresh)        # refresh diagram
 
             r += 1
-            CheckBox (l,r,c, colSpan=4, text="Delta to reference planform",
+            CheckBox (l,r,c, colSpan=4, text="Delta to reference planform", fontSize=size.HEADER_SMALL,
                       get=lambda: self.show_polars_delta, set=self.set_show_polars_delta,
                       hide=lambda: self.app_model.ref_wing is None)
 
