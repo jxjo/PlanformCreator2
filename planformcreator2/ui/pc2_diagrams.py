@@ -2785,8 +2785,9 @@ class Diagram_Airfoils (Diagram_Abstract):
 
         self._apply_min_re_to_artists ()
 
-        # connect to polar set changed signal
-        self.app_model.sig_polar_set_changed.connect  (self._viewPanel.refresh)
+        # connect to app model signals for refreshing the view panel
+        self.app_model.sig_polar_set_changed.connect  (self._viewPanel.refresh)     # update polar defs
+        self.app_model.sig_planform_changed.connect   (self._viewPanel.refresh)     # update vtas in polar defs
 
     # -------------
 
