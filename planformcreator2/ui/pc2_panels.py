@@ -7,33 +7,139 @@ UI panels
 
 """
 
-import sys
 import os
+import sys
 import fnmatch        
 
 import logging
 
 from PyQt6.QtWidgets        import QMenu, QFileDialog, QMessageBox
 from PyQt6.QtGui            import QDesktopServices, QCursor
-from PyQt6.QtCore           import QUrl, QProcess
+from PyQt6.QtCore           import QUrl, QObject, QProcess, QMetaObject
 
 from airfoileditor.base.widgets         import * 
 from airfoileditor.base.panels          import Edit_Panel, MessageBox, Disabled_Overlay
 from airfoileditor.model.airfoil        import Airfoil, GEO_BASIC, Airfoil_Bezier, Airfoil_BSpline
 
-from ..resources            import _is_frozen
 from ..model.wing           import Wing
 from ..model.planform       import (Planform, N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line,
                                     Flaps, WingSections, WingSection)
 
 from ..app_model            import App_Model
 from .pc2_dialogs           import Dialog_Description
+from ..resources            import _is_frozen
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.WARNING)
 
 
 # ---------------------------------------------------------------------------
+
+
+class AirfoilEditor_Launcher(QObject):
+    """Manage an editor process, its modal overlay and owner shutdown."""
+
+    edited = pyqtSignal(str)
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self._owner = parent
+        self._process: QProcess | None = None
+        self._shutdown_connection: QMetaObject.Connection | None = None
+        self._overlay: Disabled_Overlay | None = None
+        self._window: QWidget | None = None
+        self._path = ""
+
+
+    def start(self, path: str):
+        if self._process is not None:
+            MessageBox.error(self._owner, 'Edit Airfoil',
+                             "AirfoilEditor is already running.", min_height=60)
+            return
+
+        if _is_frozen():
+            program = os.path.join(os.path.dirname(sys.executable), 'AirfoilEditor.exe')
+            if not os.path.isfile(program):
+                MessageBox.error(
+                    self._owner, 'Edit Airfoil',
+                    f"Could not find AirfoilEditor.exe in {os.path.dirname(sys.executable)}.<br><br>"
+                    "Reinstall the application<br>", min_height=110)
+                return
+            arguments = [path]
+        else:
+            program = sys.executable
+            arguments = ['-m', 'airfoileditor', path]
+
+        self._path = path
+        self._window = self._owner.window()
+        process = QProcess(self)
+        self._process = process
+        process.finished.connect(self._on_finished)
+        process.errorOccurred.connect(self._on_error)
+
+        # Destruction runs before child QProcesses are deleted. Do not call UI
+        # callbacks while the owner's widget tree is being torn down.
+        def stop_editor():
+            process.finished.disconnect()
+            process.errorOccurred.disconnect()
+            if process.state() != QProcess.ProcessState.NotRunning:
+                process.kill()
+                if not process.waitForFinished(3000):
+                    logger.error("Stopping AirfoilEditor failed: %s", process.errorString())
+
+        self._shutdown_connection = self.destroyed.connect(stop_editor)
+        try:
+            self._overlay = Disabled_Overlay(
+                self._window,
+                text_to_show="Disabled while AirfoilEditor is running.\n\nClose AirfoilEditor to continue.")
+            self._window.setEnabled(False)
+            process.start(program, arguments)
+        except (OSError, RuntimeError, TypeError) as error:
+            self._cleanup()
+            MessageBox.error(self._owner, 'Edit Airfoil',
+                             f"Error launching AirfoilEditor.\n\n{error}", min_height=60)
+
+
+    def _on_finished(self, exit_code: int, exit_status: QProcess.ExitStatus):
+        process = self._process
+        if process is None:
+            return
+        path = self._path
+        details = (bytes(process.readAllStandardError()).decode(errors='replace') or
+                   bytes(process.readAllStandardOutput()).decode(errors='replace')).strip()[:1200]
+        self._cleanup()
+
+        if exit_status == QProcess.ExitStatus.NormalExit and exit_code == 0:
+            self.edited.emit(path)
+        else:
+            text = f"AirfoilEditor exited with error code {exit_code}."
+            if details:
+                text += f"\n\n{details}"
+            MessageBox.error(self._owner, 'Edit Airfoil', text, min_height=90)
+
+
+    def _on_error(self, error: QProcess.ProcessError):
+        if self._process is None or error != QProcess.ProcessError.FailedToStart:
+            return
+        text = self._process.errorString()
+        self._cleanup()
+        MessageBox.error(self._owner, 'Edit Airfoil',
+                         f"Could not open AirfoilEditor.\n\n{text}", min_height=60)
+
+    def _cleanup(self):
+        if self._shutdown_connection is not None:
+            QObject.disconnect(self._shutdown_connection)
+            self._shutdown_connection = None
+        if self._window is not None:
+            self._window.setEnabled(True)
+        if self._overlay is not None:
+            self._overlay.hide()
+            self._overlay.close()
+            self._overlay.deleteLater()
+            self._overlay = None
+        if self._process is not None:
+            self._process.deleteLater()
+            self._process = None
 
 
 class Panel_Planform_Abstract (Edit_Panel):
@@ -376,9 +482,11 @@ class Panel_WingSection (Panel_Planform_Abstract):
     def __init__(self, *args, **kwargs):
 
         self._airfoil_issues = None
-        self._airfoil_editor_process: QProcess | None = None
 
         super().__init__(*args, **kwargs)
+
+        # proxy for launching AirfoilEditor
+        self._airfoil_editor_launcher: AirfoilEditor_Launcher | None = None
 
         # ensure header is not disabled (for section is_for_paneling)
         for w in self.header_widgets:
@@ -679,6 +787,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
         else:
             return []
 
+
     def _open_airfoil (self):
         """ open a new airfoil and load it"""
 
@@ -708,91 +817,11 @@ class Panel_WingSection (Panel_Planform_Abstract):
             MessageBox.error(self, 'Edit Airfoil', "Cannot edit a blended (strak) airfoil.\nPlease assign a real airfoil first.", min_height=60)
             return
         
-        parent_window = self.window()
-        if _is_frozen():
-            candidate = os.path.join(os.path.dirname(sys.executable), 'AirfoilEditor.exe')
-            if not os.path.isfile(candidate):
-                text = (
-                    f"Could not find AirfoilEditor.exe in {os.path.dirname(sys.executable)}.<br><br>"
-                    "Reinstall the application<br>")
-                MessageBox.error(self, 'Edit Airfoil', text, min_height=110)
-                return
-            program = candidate
-            arguments = [airfoil.pathFileName_abs]
-        else:
-            program = sys.executable
-            arguments = ['-m', 'airfoileditor', airfoil.pathFileName_abs]
+        if self._airfoil_editor_launcher is None:
+            self._airfoil_editor_launcher = AirfoilEditor_Launcher(self)
+            self._airfoil_editor_launcher.edited.connect(self._set_airfoil_by_file)
 
-
-        overlay = None
-        process = QProcess(self)
-        try:
-            text_to_show="Disabled while AirfoilEditor is running.\n\nClose AirfoilEditor to continue."
-            overlay = Disabled_Overlay(parent_window, text_to_show=text_to_show)
-            parent_window.setEnabled(False)                 # Disable main window to simulate modal behavior
-            QApplication.processEvents()                    # ensure overlay is shown
-
-            process.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
-            process.finished.connect(
-                lambda exit_code, exit_status: self._on_airfoil_editor_finished(
-                    process, airfoil.pathFileName_abs, parent_window, overlay,
-                    exit_code, exit_status))
-            process.errorOccurred.connect(
-                lambda error: self._on_airfoil_editor_error(
-                    process, parent_window, overlay, error))
-            self._airfoil_editor_process = process
-            process.start(program, arguments)
-
-        except Exception as e:
-            self._airfoil_editor_process = None
-            self._cleanup_airfoil_editor(process, parent_window, overlay)
-            MessageBox.error(self, 'Edit Airfoil', f"Error launching AirfoilEditor.\n\n{e}", min_height=60)
-
-
-    def _on_airfoil_editor_finished(self, process: QProcess, pathFileName: str,
-                                    parent_window, overlay, exit_code: int,
-                                    exit_status: QProcess.ExitStatus):
-        if self._airfoil_editor_process is not process:
-            return
-
-        self._airfoil_editor_process = None
-        self._cleanup_airfoil_editor(process, parent_window, overlay)
-
-        if exit_status == QProcess.ExitStatus.NormalExit and exit_code == 0:
-            self._set_airfoil_by_file(pathFileName)
-            return
-
-        details = (bytes(process.readAllStandardError()).decode(errors='replace') or
-                   bytes(process.readAllStandardOutput()).decode(errors='replace')).strip()
-        if details:
-            details = details[:1200]
-            text = f"AirfoilEditor exited with error code {exit_code}.\n\n{details}"
-        else:
-            text = f"AirfoilEditor exited with error code {exit_code}."
-        MessageBox.error(self, 'Edit Airfoil', text, min_height=90)
-
-
-    def _on_airfoil_editor_error(self, process: QProcess, parent_window,
-                                 overlay, error: QProcess.ProcessError):
-        if (self._airfoil_editor_process is not process or
-                error != QProcess.ProcessError.FailedToStart):
-            return
-
-        self._airfoil_editor_process = None
-        error_text = process.errorString()
-        self._cleanup_airfoil_editor(process, parent_window, overlay)
-        MessageBox.error(
-            self, 'Edit Airfoil', f"Could not open AirfoilEditor.\n\n{error_text}", min_height=60)
-
-
-    def _cleanup_airfoil_editor(self, process: QProcess, parent_window: QWidget, overlay: QWidget):
-
-        parent_window.setEnabled(True)
-        if overlay is not None:
-            overlay.hide()
-            overlay.close()
-            overlay.deleteLater()
-        process.deleteLater()
+        self._airfoil_editor_launcher.start(airfoil.pathFileName_abs)
 
 
     def _set_airfoil_by_file (self, pathFileName : str | None):
