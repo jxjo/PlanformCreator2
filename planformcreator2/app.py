@@ -78,7 +78,7 @@ if Version(version("airfoileditor")).major !=  Version(__version__).major:
     logger.error(
         f"At least airfoileditor major version { Version(__version__).major} is required, "
         f"but airfoileditor version is { Version(version("airfoileditor"))}" )
-    sys.exit(0)
+    sys.exit(1)
 
 
 class Main (QMainWindow):
