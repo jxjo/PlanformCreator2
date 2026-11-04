@@ -2215,6 +2215,11 @@ class Flaps:
     def set_hinge_equal_ref_line (self, aBool : bool):
         self._hinge_equal_ref_line = aBool == True 
 
+        # ensure no hinge definitions if hinge equals reference line
+        if aBool:
+            for sec in self.wingSections:
+                sec.set_defines_hinge (False)
+
 
     def get (self) -> list[Flap]: 
         """
@@ -2274,6 +2279,12 @@ class Flaps:
 
         root_sec : WingSection = sections[0]
         tip_sec  : WingSection = sections[-1]
+
+        # if hinge equal ref_line, all sections may not have hinge definition
+
+        if self.hinge_equal_ref_line:
+            for sec in sections:
+                sec.set_defines_hinge (False)
 
         # if hinge is not equal ref_line - there must be at least 2 hinge definition sections 
 
