@@ -666,15 +666,15 @@ class Panel_WingSection (Panel_Planform_Abstract):
         l_foil.setContentsMargins (QMargins(0, 0, 0, 0)) 
         l_foil.setSpacing (2)
         l_foil.setColumnMinimumWidth (0,70)
-        l_foil.setColumnMinimumWidth (1,215)
+        l_foil.setColumnMinimumWidth (1,205)
         l_foil.setColumnMinimumWidth (5,15)
         l_foil.setColumnStretch (7,1)
         l_foil.setColumnStretch (9,2)
         l.addWidget (p_foil, r, c, 1, 12)
 
         l.setColumnMinimumWidth (0,70)
-        l.setColumnMinimumWidth (2,10)
-        l.setColumnMinimumWidth (3,50)
+        l.setColumnMinimumWidth (2,5)
+        l.setColumnMinimumWidth (3,45)
         l.setColumnMinimumWidth (5,40)
 
         r += 1

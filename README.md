@@ -8,6 +8,8 @@
 
 Version 5.0 integrates [NeuralFoil](https://github.com/peterdsharpe/NeuralFoil) as a fast alternative to Xfoil for airfoil polar generation. Wing analysis now includes drag calculation and glide performance estimates, as well as comparison with a reference wing.
 
+For an introduction to the new features, their background and interactive demos, see [About Version 5.0](doc/About_5.0_en.md).
+
 **PlanformCreator2** (PC2) is an app for parametric wing planform design and wing performance analysis, with a focus on model aircraft. Its interactive workflow combines geometry design with aerodynamic feedback to help compare and refine wing designs.
 
 ### Planform Design
@@ -243,7 +245,7 @@ Both mesh types offer additional controls:
 * **Minimum panel width** - Avoid excessively narrow spanwise panels.
 * **Minimum chord for tip** - Trim very small tip chords in the analysis mesh to avoid regions with very low Reynolds numbers, where airfoil polar data can become unreliable.
 
-These settings affect the analysis mesh, not the designed planform. The mesh is regenerated on demand after geometry changes. Check important results with a finer mesh to assess their sensitivity to panel resolution.
+These settings affect the analysis mesh, not the designed planform. The mesh is regenerated on demand after geometry changes. 
 
 ### Export to Xflr5
 
