@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -57,12 +58,45 @@ def _ensure_airfoileditor_version(package_version: str) -> None:
     print(f"Version check OK: airfoileditor {ae_version} >= planformcreator2 {package_version}")
 
 
+def _ensure_published_airfoileditor() -> None:
+    """Require an index-installed package rather than a direct source installation."""
+
+    distribution = importlib.metadata.distribution("airfoileditor")
+    install_help = (
+        "Release builds require the published AirfoilEditor package. "
+        f'Run "{sys.executable}" -m pip uninstall airfoileditor, then '
+        f'"{sys.executable}" -m pip install "airfoileditor>=5.0.2,<5.1".'
+    )
+    if distribution.read_text("direct_url.json") is not None:
+        raise RuntimeError(
+            "AirfoilEditor was installed from a local path, archive or direct URL "
+            "(including editable and Git installations). " + install_help
+        )
+
+    spec = importlib.util.find_spec("airfoileditor")
+    expected = Path(distribution.locate_file("airfoileditor")) / "__init__.py"
+    if spec is None or spec.origin is None or Path(spec.origin).resolve() != expected.resolve():
+        raise RuntimeError(
+            "Python does not resolve AirfoilEditor from its installed package. "
+            "Remove source-checkout overrides from the import path. " + install_help
+        )
+
+    print(f"Package origin check OK: airfoileditor {distribution.version} at {expected.parent}")
+
+
 def _dual_spec_text(repo_root: Path, pc2_icon_path: Path, ae_icon_path: Path) -> str:
     """Return the generated PyInstaller spec for a shared dual-exe onedir build."""
+
+    from airfoileditor.resources import get_icons_path
+
+    ae_icons_dir = get_icons_path()
+    if not ae_icons_dir.is_dir():
+        raise FileNotFoundError(f"AirfoilEditor icons directory not found: {ae_icons_dir}")
 
     repo_root_text = repo_root.as_posix()
     pc2_icon_text = pc2_icon_path.as_posix()
     ae_icon_text = ae_icon_path.as_posix()
+    ae_icons_text = ae_icons_dir.as_posix()
 
     return f"""# -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
@@ -75,6 +109,7 @@ REPO_ROOT = Path({repo_root_text!r})
 datas = [
     (str(REPO_ROOT / 'icons'), 'planformcreator2/icons'),
     (str(REPO_ROOT / 'templates'), 'planformcreator2/templates'),
+    ({ae_icons_text!r}, 'airfoileditor/icons'),
 ]
 datas += collect_data_files('airfoileditor')
 hiddenimports = collect_submodules('airfoileditor')
@@ -401,6 +436,7 @@ def main() -> int:
     try:
         _, package_version = _project_metadata(repo_root)
         _ensure_airfoileditor_version(package_version)
+        _ensure_published_airfoileditor()
 
         if args.target == "check":
             return 0
