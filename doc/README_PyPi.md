@@ -1,4 +1,4 @@
-![PC2](https://github.com/jxjo/PlanformCreator2/blob/main/images/PC2_logo.png?raw=true)
+![PC2](https://raw.githubusercontent.com/jxjo/PlanformCreator2/main/images/PC2_logo_s.png)
 
 [![PyPI version](https://img.shields.io/pypi/v/planformcreator2)](https://pypi.org/project/planformcreator2/)
 [![Latest release](https://img.shields.io/github/v/release/jxjo/PlanformCreator2)](https://github.com/jxjo/PlanformCreator2/releases/latest)
