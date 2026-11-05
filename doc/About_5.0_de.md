@@ -147,3 +147,7 @@ In der Delta-Polare kommt schließlich alles zusammen: vom Grundriss über den P
 Damit sind wir wieder bei der Frage vom Anfang: Was bringt eine kleine Änderung an der Tragfläche? Version 5 macht es leichter, dieser Frage nachzugehen und die Zusammenhänge besser zu verstehen.
 
 Probiert es an einem eigenen Entwurf aus: den bisherigen Stand als Referenz laden, eine Idee umsetzen und schauen, was sich verändert.
+
+Viel Erfolg mit PlanformCreator2 5.0 :rocket:
+
+Jochen

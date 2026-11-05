@@ -142,3 +142,7 @@ The delta polar is where everything comes together: from planform and spanwise a
 This brings us back to the question at the beginning: what does a small change to the wing actually achieve? Version 5 makes it easier to explore that question and understand the relationships.
 
 Try it with one of your own designs: load the current version as a reference, put an idea into practice and see what changes.
+
+Happy designing with PlanformCreator2 5.0! :rocket:
+
+Jochen
