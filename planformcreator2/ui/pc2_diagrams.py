@@ -367,7 +367,7 @@ class Item_Planform (Item_Abstract):
                     toolTip="Show the selected image behind the planform.")
             Button (l,r,c+2, text="Select", width=50, colSpan=4,
                     set=self._open_background_image, toolTip="Open background image as reference",
-                    hide = lambda: self.wing.background_image.filename)
+                    hide = lambda: bool(self.wing.background_image.filename))
             r += 1
             Field (l,r,c+1, 
                     get=lambda: self.wing.background_image.filename, 
@@ -4252,7 +4252,8 @@ class Panel_Reference_Wing (Edit_Panel):
             r += 1
             CheckBox   (l,r,c+1, text="Do not set flap in polar", colSpan=4,
                         get=lambda: self.app_model.ref_wing_no_flap, set=self.app_model.set_ref_wing_no_flap,
-                        hide = lambda: not self.show_ref or (not self.app_model.cur_polar_def.is_flap_set),
+                        hide = lambda: not self.show_ref or self.app_model.cur_polar_def is None
+                                       or not self.app_model.cur_polar_def.is_flap_set,
                         toolTip="Use a polar without flap deflection for the reference wing.")
         r += 1
 

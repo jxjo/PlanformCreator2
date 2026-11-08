@@ -632,7 +632,7 @@ class Panel_WingSection (Panel_Planform_Abstract):
         l_foil = QGridLayout (p_foil)
         Field      (l_foil,0,0,   lab="Airfoil",                       # no other files in dir 
                     get=lambda: self.airfoil_fileName,                 
-                    hide=lambda: len(self._airfoil_fileNames_sameDir()) >= 2 and self.airfoil,
+                    hide=lambda: len(self._airfoil_fileNames_sameDir()) >= 2 and self.airfoil is not None,
                     toolTip=lambda: self.wingSection.airfoil.info_as_html)
         ComboBox   (l_foil,0,0,   lab="Airfoil",                       # selection of airfoil from same dir as current airfoil
                     get=lambda: self.airfoil_fileName,                  
