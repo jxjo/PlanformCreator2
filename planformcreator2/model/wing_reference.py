@@ -145,7 +145,7 @@ class Reference_Wing (Wing):
         return self._parent_wing
 
     @property
-    def name(self) -> str:
+    def filename(self) -> str:
         return self.parm_path.name
 
     @property
@@ -227,14 +227,14 @@ class Reference_Wing (Wing):
         pass
 
 
-    def _adapt_parent_polar_def(self, polar_def: Polar_Definition) -> Polar_Definition:
-        """Scale / adapt (no_flap) a polar definition of parent wing."""
+    def _adapt_polar_def (self, polar_def: Polar_Definition) -> Polar_Definition:
+        """Scale / adapt (no_flap) a polar definition of parent wing for self."""
 
         polar_def_new = Polar_Definition(polar_def._as_dict())
 
-        # apply scale mode to parent wing
-        if self._scale_mode == Scale_Mode.MATCH_SPAN_AND_AREA:
-            re_factor = self.chord_root / self._parent_wing.chord_root
+        # Preserve the parent's flight speed when the reference root chord differs.
+        re_factor = self.chord_root / self._parent_wing.chord_root
+        if abs(re_factor - 1.0) > 0.001:
             polar_def_new.set_re_asK(polar_def.re_asK * re_factor)
 
         # apply "no flap" for polar definitions if needed
@@ -251,13 +251,13 @@ class Reference_Wing (Wing):
 
         polar_defs_parent = self._parent_wing.polar_definitions
 
-        return [self._adapt_parent_polar_def(polar_def) for polar_def in polar_defs_parent]
+        return [self._adapt_polar_def(polar_def) for polar_def in polar_defs_parent]
 
 
     def vlm_polar_at (self, parent_polar_def: Polar_Definition) -> VLM_Polar:
         """ proxy to get the VLM polar - adapts the parent polar definition to the reference wing."""
 
-        polar_def = self._adapt_parent_polar_def(parent_polar_def)
+        polar_def = self._adapt_polar_def(parent_polar_def)
 
         # sanity - does the adapted polar definition exist self polar definitions
         for p in self.polar_definitions:
@@ -308,6 +308,12 @@ class Reference_Wing_Elliptical (Reference_Wing):
 
     @override
     @property
+    def filename(self) -> str:
+        """Filename of the reference wing."""
+        return self.name
+
+    @override
+    @property
     def airfoils_dir_rel(self) -> str:
         """Relative airfoil directory of the parent wing."""
         return self._parent_wing.airfoils_dir_rel
@@ -340,3 +346,9 @@ class Reference_Wing_Elliptical (Reference_Wing):
     def sweep_angle (self) -> float:
         """ always use sweep angle of the parent wing """
         return self._parent_wing.sweep_angle
+
+    @override
+    @property
+    def fuselage_width (self) -> float:
+        """ width of fuselage"""
+        return self._parent_wing.fuselage_width

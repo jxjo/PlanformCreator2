@@ -546,7 +546,7 @@ class Wing:
         return self._ref_pc2_files
 
     @property
-    def ref_wing_names (self) -> list[str]:
+    def ref_wing_filenames (self) -> list[str]:
         """ Available reference wings, with the built-in elliptical wing first. """
         from .wing_reference import Reference_Wing_Elliptical
 

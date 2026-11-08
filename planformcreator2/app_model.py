@@ -294,16 +294,16 @@ class App_Model (QObject):
 
 
     @property
-    def ref_wings_name (self) -> list[str]:
+    def ref_wings_filename (self) -> list[str]:
         """ list of available reference wing names """
-        return self.wing.ref_wing_names
+        return self.wing.ref_wing_filenames
 
 
     @property
-    def ref_wing_name (self) -> str:
+    def ref_wing_filename (self) -> str:
         """ name of the reference wing """
         if self._ref_wing:
-            return self.ref_wing.name
+            return self.ref_wing.filename
         else:
             return None
 
@@ -331,20 +331,20 @@ class App_Model (QObject):
             return
 
         # index of current reference wing 
-        cur_index = self.ref_wings_name.index(self.ref_wing.name) if self.ref_wing else -1
+        cur_index = self.ref_wings_filename.index(self.ref_wing.name) if self.ref_wing else -1
 
         self.wing.update_ref_pc2_files(self.ref_wing.reference_pc2_file, remove=True)
 
         # set the next reference wing as the current one
-        next_index = cur_index if cur_index < len(self.ref_wings_name) else len(self.ref_wings_name) - 1
+        next_index = cur_index if cur_index < len(self.ref_wings_filename) else len(self.ref_wings_filename) - 1
         if next_index >= 0:
-            self.set_ref_wing_name(self.ref_wings_name[next_index])
+            self.set_ref_wing_filename(self.ref_wings_filename[next_index])
             self.notify_ref_wing_changed()
 
 
-    def set_ref_wing_name (self, name: str):
+    def set_ref_wing_filename (self, name: str):
         """ set new reference wing by (file)name"""
-        if name not in self.ref_wings_name:
+        if name not in self.ref_wings_filename:
             self._ref_wing = None
         elif name == Reference_Wing_Elliptical.name:
             self._ref_wing = Reference_Wing_Elliptical (self.wing)
