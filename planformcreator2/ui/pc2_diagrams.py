@@ -336,36 +336,43 @@ class Item_Planform (Item_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             CheckBox (l,r,c, text="Chord Reference Line",  colSpan=3,
-                    get=lambda: self.show_ref_line, set=self.set_show_ref_line) 
+                    get=lambda: self.show_ref_line, set=self.set_show_ref_line,
+                    toolTip="Show the chord reference line on the planform.")
             r += 1
             CheckBox (l,r,c, text="Neutral Point (geometric)", colSpan=3, 
-                    get=lambda: self.show_np, set=self.set_show_np) 
+                    get=lambda: self.show_np, set=self.set_show_np,
+                    toolTip="Show the geometric neutral point of the wing.")
             r += 1
             CheckBox (l,r,c, text="Airfoils", colSpan=3,
-                    get=lambda: self.show_airfoils, set=self.set_show_airfoils)
+                    get=lambda: self.show_airfoils, set=self.set_show_airfoils,
+                    toolTip="Show airfoil names at their wing sections.")
             r += 1
             CheckBox (l,r,c+1, text="Use nick name", colSpan=2,
                     get=lambda: self.airfoil_use_nick, set=self.set_airfoil_use_nick,
                     hide=lambda: not self.show_airfoils,
-                    toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
+                    toolTip=f"Show airfoil nicknames instead of names. "
+                            f"Nicknames are defined in diagram '{Diagram_Airfoils.name}'.")
             r += 1
             CheckBox (l,r,c+1, text="Also blended", colSpan=2,
                     get=lambda: self.show_strak, set=self.set_show_strak,
-                    hide=lambda: not self.show_airfoils)    
+                    hide=lambda: not self.show_airfoils,
+                    toolTip="Include blended airfoil names at intermediate wing sections.")
 
             # toggle fields for background image
             r += 1
             CheckBox   (l,r,c, text="Background Image", colSpan=3,
                     get=lambda: self.show_background_image, 
                     set=self.set_show_background_image, 
-                    disable=lambda: not bool(self.wing.background_image.filename)) 
+                    disable=lambda: not bool(self.wing.background_image.filename),
+                    toolTip="Show the selected image behind the planform.")
             Button (l,r,c+2, text="Select", width=50, colSpan=4,
                     set=self._open_background_image, toolTip="Open background image as reference",
                     hide = lambda: self.wing.background_image.filename)
             r += 1
             Field (l,r,c+1, 
                     get=lambda: self.wing.background_image.filename, 
-                    hide = lambda: not self.show_background_image) 
+                    hide = lambda: not self.show_background_image,
+                    toolTip="The selected background image filename.")
             ToolButton (l,r,c+2, icon=Icon.EDIT, 
                     set=self._edit_background_image, toolTip="Edit background image settings",
                     hide = lambda: not self.show_background_image) 
@@ -673,13 +680,16 @@ class Item_VLM_Panels (Item_Abstract):
             l = QGridLayout()   
             r,c = 0, 0 
             CheckBox (l,r,c, text="Show mouse helper", 
-                      get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
+                      get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper,
+                      toolTip="Show interactive mouse helpers for editing the diagram.")
             r += 1
             CheckBox (l,r,c, text="Wing Sections", 
-                      get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
+                      get=lambda: self.show_wingSections, set=self.set_show_wingSections,
+                      toolTip="Show wing section positions on the paneling diagram.")
             r += 1
             CheckBox (l,r,c, text="Airfoils", 
-                      get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
+                      get=lambda: self.show_airfoils, set=self.set_show_airfoils,
+                      toolTip="Show airfoil names at their wing sections.")
             r +=1
             SpaceR   (l,r, height=10)
             r +=1
@@ -814,10 +824,12 @@ class Item_VLM_Chord (Item_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             CheckBox (l,r,c, text="Show mouse helper", 
-                      get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
+                      get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper,
+                      toolTip="Show interactive mouse helpers for editing the chord distribution.")
             r += 1
             CheckBox (l,r,c, text="Airfoils", 
-                      get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
+                      get=lambda: self.show_airfoils, set=self.set_show_airfoils,
+                      toolTip="Show airfoil names at their wing sections.")
             
             l.setColumnStretch (0,1)
 
@@ -1103,7 +1115,8 @@ class Item_VLM_OpPoint (Item_Abstract):
             FieldF     (l,r,c,  lim=(-20,20), step=0.5, width=60, unit="°", dec=1, 
                         lab="Alpha",
                         obj=self, prop=Item_VLM_OpPoint.vlm_alpha,
-                        disable=lambda: self.alpha_fixed_to_max or not self.wing.vlm_data_available) 
+                        disable=lambda: self.alpha_fixed_to_max or not self.wing.vlm_data_available,
+                        toolTip="Set the angle of attack for the current VLM operating point.")
             CheckBox   (l,r,c+3, text="Set to max", colSpan=4,
                         obj=self, prop=Item_VLM_OpPoint.alpha_fixed_to_max,
                         disable=lambda: not self.wing.vlm_data_available,
@@ -1150,28 +1163,6 @@ class Item_VLM_OpPoint (Item_Abstract):
                                               switched_on = lambda: self.show,  
                                               on_switched = lambda aBool: self.set_show(aBool))
         return self._section_panel 
-
-
-
-    def _export_polar_opPoint (self):
-        """ export a wing polar and current opPoint to csv"""
-
-        fileName = f"{self.vlm_polar.name}.csv"
-
-        # filters  = "Polar csv files (*.csv)"
-        # newPathFilename, _ = QFileDialog.getSaveFileName(self.section_panel, caption="Export Wing Polar to csv", 
-        #                                                  directory=fileName, filter=filters)
-        # if newPathFilename: 
-        #     self.vlm_polar.export_to_csv (newPathFilename)
-
-        # fileName = f"{self.vlm_polar.name} alpha={self.vlm_opPoint.alpha:.1f}.csv"
-
-        # filters  = "Polar csv files (*.csv)"
-        # newPathFilename, _ = QFileDialog.getSaveFileName(self.section_panel, caption="Export opPoint to csv", 
-        #                                                  directory=fileName, filter=filters)
-        # if newPathFilename: 
-        #     self.vlm_opPoint.export_to_csv (newPathFilename)
-
 
 
 
@@ -1680,18 +1671,18 @@ class Item_Wing (Item_Abstract):
         # plot right and left wing 
 
         self._add_artist (Planform_Artist       (self, lambda: self.planform, mode=mode.WING_RIGHT, as_contour=True))
-        self._add_artist (Ref_Line_Artist       (self, lambda: self.planform, mode=mode.WING_RIGHT))
-        self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.WING_RIGHT))
+        self._add_artist (Ref_Planform_Artist   (self, lambda: self.ref_planform, mode=mode.WING_RIGHT))
+        self._add_artist (Ref_Line_Artist       (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
+        self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.WING_RIGHT, show=True))
         self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
         self._add_artist (Airfoil_Name_Artist   (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
         self._add_artist (Neutral_Point_Artist  (self, lambda: self.planform, mode=mode.WING_RIGHT, show=False))
 
         if self.show_full_wing:
             self._add_artist (Planform_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT, as_contour=True))
-            self._add_artist (Ref_Line_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT))
-            self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.WING_LEFT))
-            self._add_artist (WingSections_Artist   (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
-            self._add_artist (Neutral_Point_Artist  (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
+            self._add_artist (Ref_Planform_Artist   (self, lambda: self.ref_planform, mode=mode.WING_LEFT))
+            self._add_artist (Ref_Line_Artist       (self, lambda: self.planform, mode=mode.WING_LEFT, show=False))
+            self._add_artist (Flaps_Artist          (self, lambda: self.planform, mode=mode.WING_LEFT, show=True))
 
         # switch off mouse helper 
 
@@ -1704,7 +1695,7 @@ class Item_Wing (Item_Abstract):
 
         self.viewBox.autoRange (padding=0.08)
 
-        self.viewBox.setDefaultPadding(0.02)
+        self.viewBox.setDefaultPadding(0.05)
         self.viewBox.setAspectLocked()
         self.viewBox.invertY(True)
         self.viewBox.enableAutoRange()
@@ -1789,36 +1780,42 @@ class Item_Wing (Item_Abstract):
             l = QGridLayout()
             r,c = 0, 0 
             CheckBox (l,r,c, text="Full Wing", colSpan=2, 
-                        get=lambda: self.show_full_wing, set=self.set_show_full_wing) 
+                        get=lambda: self.show_full_wing, set=self.set_show_full_wing,
+                        toolTip="Show both wing halves instead of only the right half.")
             r += 1
             CheckBox (l,r,c, text="Reference Line", colSpan=2, 
                         get=lambda: self.show_ref_line,
-                        set=self.set_show_ref_line) 
+                        set=self.set_show_ref_line,
+                        toolTip="Show the chord reference line on the wing.")
             r += 1
             CheckBox (l,r,c, text="Wing Sections", colSpan=2, 
-                        get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
+                        get=lambda: self.show_wingSections, set=self.set_show_wingSections,
+                        toolTip="Show the wing section positions.")
             r += 1
             CheckBox (l,r,c, text="Flaps", colSpan=2, 
-                        get=lambda: self.show_flaps, set=self.set_show_flaps) 
+                        get=lambda: self.show_flaps, set=self.set_show_flaps,
+                        toolTip="Show the flaps and their hinge line.")
             r += 1
             CheckBox (l,r,c, text="Neutral Point (geometric)", colSpan=3, 
-                      get=lambda: self.show_np, set=self.set_show_np) 
+                      get=lambda: self.show_np, set=self.set_show_np,
+                      toolTip="Show the geometric neutral point of the wing.")
             r += 1
             CheckBox (l,r,c, text="Airfoils", 
-                      get=lambda: self.show_airfoils, set=self.set_show_airfoils) 
-            r += 1
+                      get=lambda: self.show_airfoils, set=self.set_show_airfoils,
+                      toolTip="Show airfoil names at their wing sections.")
+
             l.setColumnMinimumWidth (0,70)
             l.setColumnMinimumWidth (1,80)
             l.setColumnStretch (3,5)
 
             self._section_panel = Edit_Panel (layout=l, auto_height=True, 
-                                              has_head    = False,
+                                              has_head    = True,
+                                              title       = self.name,
                                               switchable  = False,
                                               switched_on = lambda: self.show,  
                                               on_switched = lambda aBool: self.set_show(aBool))
 
         return self._section_panel 
-
 
 
 
@@ -1843,7 +1840,8 @@ class Item_Wing_Airfoils (Item_Abstract):
         """ override to set legend cols"""
         super().refresh()
         if self.legend:
-            self.legend.setColumnCount (3)
+            self.legend.setColumnCount (4)
+            self.legend.setOffset ((-10, 1))
 
 
     @override
@@ -1873,43 +1871,48 @@ class Item_Wing_Airfoils (Item_Abstract):
         return self._get_artist (Airfoil_Artist) [0]
 
     @property
+    def real_size (self) -> bool:
+        return self.airfoil_artist.real_size
+    def set_real_size (self, aBool : bool):
+        self.airfoil_artist.set_real_size (aBool)
+        self.refresh_diagram(also_viewRange=True)
+
+    @property
     def airfoil_use_nick (self) -> bool:
         return self.wing.airfoil_use_nick
+
     def set_airfoil_use_nick (self, aBool : bool):
         self.wing.set_airfoil_use_nick (aBool)
         self.refresh_diagram()
 
     @property
     def section_panel (self) -> Edit_Panel:
-        """ return section panel within view panel"""
-
-        if self._section_panel is None:    
+        if self._section_panel is None:
             l = QGridLayout()
-            r,c = 0, 0 
+            r,c = 0, 0
+            CheckBox (l,r,c, text="Also blended",
+                      get=lambda: self.airfoil_artist.show_strak,
+                      set=self.airfoil_artist.set_show_strak,
+                      toolTip="Include blended airfoils at intermediate wing sections.")
             r += 1
-            CheckBox (l,r,c, text="In real size", 
-                    get=lambda: self.airfoil_artist.real_size,
-                    set=self.airfoil_artist.set_real_size) 
+            CheckBox (l,r,c, text="Use airfoils nick name",
+                      get=lambda: self.airfoil_use_nick, set=self.set_airfoil_use_nick,
+                      toolTip=f"Show airfoil nicknames instead of names. "
+                              f"Nicknames are defined in diagram '{Diagram_Airfoils.name}'.")
             r += 1
-            CheckBox (l,r,c, text="Also blended", 
-                    get=lambda: self.airfoil_artist.show_strak,
-                    set=self.airfoil_artist.set_show_strak) 
+            CheckBox (l,r,c, text="In real size",
+                      get=lambda: self.real_size, set=self.set_real_size,
+                      toolTip="Show airfoils scaled and positioned by their wing section chords.")
             r += 1
-            CheckBox (l,r,c, text="Use airfoils nick name", 
-                    get=lambda: self.airfoil_use_nick, set=self.set_airfoil_use_nick,
-                    toolTip=f"Airfoils nick name is defined in diagram '{Diagram_Airfoils.name}'")
-            r += 1
+            CheckBox (l,r,c, text="Show data",
+                      get=lambda: self.airfoil_artist.show_data,
+                      set=self.airfoil_artist.set_show_data,
+                      toolTip="Show airfoil measurements in a table instead of the legend.")
             l.setColumnStretch (3,2)
 
-            self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True, 
-                                              switchable  = False,
-                                              switched_on = lambda: self.show,  
-                                              on_switched = lambda aBool: self.set_show(aBool))
-
-        return self._section_panel 
-
-
-
+            self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True,
+                                              switchable=False)
+        return self._section_panel
 
 
 class Item_Wing_Data (Item_Abstract):
@@ -1917,7 +1920,7 @@ class Item_Wing_Data (Item_Abstract):
     Diagram (Plot) Item to show wing data 
     """
 
-    name        = "Wing data"
+    name        = "Wing Data"
 
     show_buttons = False
     show_coords  = False
@@ -1925,10 +1928,6 @@ class Item_Wing_Data (Item_Abstract):
     @override
     def setup_viewRange (self):
         """ define view range of this plotItem"""
-
-        self.viewBox.setDefaultPadding(0.02)
-        self.viewBox.setAspectLocked()
-        self.viewBox.enableAutoRange()
 
         self.showGrid(x=False, y=False)
         self.showAxis('left', show=False)
@@ -1939,18 +1938,117 @@ class Item_Wing_Data (Item_Abstract):
     @override
     def setup_artists(self):
 
-        self._add_artist (Wing_Data_Artist (self, lambda: self.planform, show_legend=True))
+        self._add_artist (Wing_Data_Artist (self, lambda: self.planform,
+                                          ref_wing_fn=lambda: self.ref_wing, show_legend=True))
+
+    @override
+    @property
+    def section_panel (self) -> Edit_Panel:
+        """ return section panel within view panel"""
+
+        if self._section_panel is None:    
+            l = QGridLayout()
+            self._section_panel = Edit_Panel (layout=l, auto_height=True, 
+                                              has_head    = True, title       = self.name,
+                                              switchable  = False)
+        return self._section_panel 
 
 
-    def _add_text(self):
+
+
+class Item_Wing_Performance (Item_Abstract):
+    """ 
+    Diagram (Plot) Item to show wing vlm performancedata 
+    """
+
+    name        = "Wing Performance"
+
+    show_buttons = False
+    show_coords  = False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.app_model.sig_vlm_changed.connect          (self.refresh)
+        self.app_model.sig_new_polars.connect           (self.refresh)
+
+    @override
+    def plot_title(self, **kwargs):
+
+        polar_def = self.app_model.cur_polar_def
+        speed = polar_def.calc_v_for_chord (self.wing.planform.chord_root) if polar_def is not None else None
+        subtitle = f"Flight speed: {speed:.1f} m/s" if speed is not None else "Flight speed not available"
+        return super().plot_title (subtitle=subtitle, **kwargs)
+
+    @override
+    def setup_viewRange (self):
+        """ define view range of this plotItem"""
+
+        self.showGrid(x=False, y=False)
+        self.showAxis('left', show=False)
+        self.showAxis('bottom', show=False)
+
+        self.setContentsMargins ( 10,10,20,20)
+
+    @override
+    def setup_artists(self):
+
+        self._add_artist (Wing_Performance_Artist (self, lambda: self.planform,
+                                                   polar_fn=lambda: self.app_model.cur_vlm_polar,
+                                                   ref_polar_fn=lambda: self.app_model.ref_vlm_polar,
+                                                   ref_wing_fn=lambda: self.ref_wing,
+                                                   show_legend=True))
+
+
+    def _format_polar_def (self, polar_def : Polar_Definition) -> str:
+        """ format a polar definition for combobox like '400k N7 | 14,6m/s'"""
+        return polar_def.name_with_v (self.wing.planform.chord_root)
+
+
+    @property
+    def polar_def_list (self) -> list[str]:
+        """ polar definitions as list of formatted strings for combobox"""
+        polar_defs = self.app_model.polar_definitions_T1
+        return [self._format_polar_def (polar_def) for polar_def in polar_defs]
+
+
+    @property
+    def polar_def_name (self) -> str:
+        """ display name of the current polar definition """
+        polar_def = self.app_model.cur_polar_def
+        return self._format_polar_def (polar_def) if polar_def is not None else None
+    
         
-        graphicsLayout = pg.GraphicsLayout (self)
-        layout : QGraphicsGridLayout = graphicsLayout.layout
+    def set_polar_def_name (self, new_polar_def_name): 
+        """ set polar definition of wingSection at root by name"""
+        polar_defs = self.app_model.polar_definitions_T1
+        for polar_def in polar_defs:
+            polar_def_name = self._format_polar_def (polar_def)
+            if polar_def_name == new_polar_def_name: 
+                self.app_model.set_cur_polar_def (polar_def)
 
-        text = Label (layout,0,0, get="Hallo", width=100)
-        layoutItem = self.scene ().addWidget (text)
-        layout.addItem (layoutItem,0,0,1,1)
-        self.addItem (layout)
+    @override
+    @property
+    def section_panel (self) -> Edit_Panel:
+        """ return section panel within view panel"""
+
+        if self._section_panel is None:    
+            l = QGridLayout()
+            r,c = 0, 0
+
+            # Polar definition for root airfoil
+            
+            Label    (l,r,c, colSpan=4, get=f"T1 polar of root section")
+            r += 1
+            ComboBox (l,r,c, width=None, 
+                        get=lambda: self.polar_def_name, set=self.set_polar_def_name,
+                        options=lambda: self.polar_def_list,
+                        toolTip=lambda: f"Select the root-section T1 polar for wing performance.\n"
+                                        f"Current: {self.polar_def_name or 'none'}")
+            self._section_panel = Edit_Panel (layout=l, auto_height=True, 
+                                              has_head    = True, title       = self.name,
+                                              switchable  = False)
+        return self._section_panel 
 
 
 
@@ -1985,8 +2083,9 @@ class Item_Airfoils (Item_Abstract):
         self.showGrid(x=True, y=True)
 
         # reduce vertical spacing of legend as there can be many airfoils
-        l : QGraphicsGridLayout = self.legend.layout
-        l.setVerticalSpacing(-5)
+        if self.legend:
+            l : QGraphicsGridLayout = self.legend.layout
+            l.setVerticalSpacing(-5)
 
 
     @property
@@ -2009,15 +2108,13 @@ class Item_Airfoils (Item_Abstract):
             r += 1
             CheckBox (l,r,c, text="In real size",
                         get=lambda: self.airfoil_artist.real_size,
-                        set=self.set_real_size) 
+                        set=self.set_real_size,
+                        toolTip="Show airfoils scaled and positioned by their wing section chords.")
             r += 1
-            CheckBox (l,r,c, text="Show maximum thickness", 
-                        get=lambda: self.airfoil_artist.show_thick,
-                        set=self.airfoil_artist.set_show_thick) 
-            r += 1
-            CheckBox (l,r,c, text="Show camber line", 
-                        get=lambda: self.airfoil_artist.show_camber,
-                        set=self.airfoil_artist.set_show_camber) 
+            CheckBox (l,r,c, text="Show data",
+                        get=lambda: self.airfoil_artist.show_data,
+                        set=self.airfoil_artist.set_show_data,
+                        toolTip="Show airfoil measurements in a table instead of the legend.")
 
             self._section_panel = Edit_Panel (title=self.name, layout=l, auto_height=True,
                                               switchable  = True,
@@ -2535,10 +2632,12 @@ class Diagram_Planform (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             CheckBox (l,r,c, text="Show mouse helper", colSpan=2,
-                        get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
+                        get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper,
+                        toolTip="Show interactive mouse helpers for editing the diagrams.")
             r += 1
             CheckBox (l,r,c, text="Wing Sections",  colSpan=2,
-                        get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
+                        get=lambda: self.show_wingSections, set=self.set_show_wingSections,
+                        toolTip="Show wing section positions in the diagrams.")
 
             r += 1
             p = Panel_Reference_Wing (self, self.app_model)
@@ -2546,10 +2645,12 @@ class Diagram_Planform (Diagram_Abstract):
 
             r += 1
             CheckBox (l,r,c, text="Flaps", 
-                        get=lambda: self.show_flaps, set=self.set_show_flaps) 
+                        get=lambda: self.show_flaps, set=self.set_show_flaps,
+                        toolTip="Show flaps and their hinge line in the diagrams.")
             CheckBox (l,r,c+1, text="Flap depth", 
                         get=lambda: self.show_flap_depth, set=self.set_show_flap_depth,
-                        hide=lambda: not self.show_flaps)
+                        hide=lambda: not self.show_flaps,
+                        toolTip="Show flap depths in millimetres and as percentages of chord.")
 
             l.setColumnMinimumWidth (0,70)
             l.setColumnStretch (2,5)
@@ -2569,10 +2670,12 @@ class Diagram_Planform (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            Button  (l,r,c, text="Export DXF", width=100, set=self.export_dxf)
+            Button  (l,r,c, text="Export DXF", width=100, set=self.export_dxf,
+                     toolTip="Open the dialog to export the planform as DXF.")
             l.setColumnStretch (2,2)
             r += 1
-            Button      (l,r,c, text="Export CSV", width=100, set=self.export_csv)
+            Button      (l,r,c, text="Export CSV", width=100, set=self.export_csv,
+                         toolTip="Open the dialog to export wing data as CSV.")
 
             self._panel_export = Edit_Panel (title="Export", layout=l,  
                                              auto_height=True, main_margins = (10, 5,10, 10),
@@ -2695,19 +2798,22 @@ class Diagram_Making_Of (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             CheckBox (l,r,c, text="Show mouse helper", 
-                      get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper) 
+                      get=lambda: self.show_mouse_helper, set=self.set_show_mouse_helper,
+                      toolTip="Show interactive points for editing the geometry.")
             r += 1
             Label    (l,r,c, get="Drag the little helper points\nto modify the geometry. ",
                       height=60, style=style.COMMENT).setAlignment(Qt.AlignmentFlag.AlignTop)
             r += 1
             CheckBox (l,r,c, text="Wing Sections", 
-                      get=lambda: self.show_wingSections, set=self.set_show_wingSections) 
+                      get=lambda: self.show_wingSections, set=self.set_show_wingSections,
+                      toolTip="Show wing sections defining airfoils and flaps.")
             r += 1
             Label    (l,r,c, get="Show the wing sections\ndefining e.g. airfoils and flaps",
                       height=60, style=style.COMMENT).setAlignment(Qt.AlignmentFlag.AlignTop)
             r += 1
             CheckBox (l,r,c, text="Flaps", 
-                      get=lambda: self.show_flaps, set=self.set_show_flaps) 
+                      get=lambda: self.show_flaps, set=self.set_show_flaps,
+                      toolTip="Show flaps defined by the hinge line and flap groups.")
             r += 1
             Label    (l,r,c, get="Show flaps defined by \nthe hinge line and flap groups.",
                       height=60, style=style.COMMENT).setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -2745,21 +2851,59 @@ class Diagram_Wing (Diagram_Abstract):
         """ create all plot Items and add them to the layout """
 
         item = Item_Wing (self, self.app_model)
-        self._add_item (item, 0, 0, colspan=2)
+        self._add_item (item, 0, 0, colspan=3, rowStretch=4)
 
         item = Item_Wing_Data (self, self.app_model)
-        self._add_item (item, 1, 0)
+        self._add_item (item, 1, 0, rowspan=2, columnStretch=1, rowStretch=2)
+        item = Item_Wing_Performance (self, self.app_model)
+        self._add_item (item, 1, 1, rowspan=2, columnStretch=2, rowStretch=2)
 
         item = Item_Wing_Airfoils (self, self.app_model)
-        self._add_item (item, 1, 1)
-
-        self.graph_layout.setColumnStretchFactor (0,2)
-        self.graph_layout.setColumnStretchFactor (1,4)
-
-        self.graph_layout.setRowStretchFactor (0,4)
-        self.graph_layout.setRowStretchFactor (1,3)
+        self._add_item (item, 1, 2, rowspan=2, columnStretch=4, rowStretch=2)
 
 
+    @override
+    def create_view_panel (self):
+        """ 
+        creates a view panel to the left of at least one diagram item 
+        has a section_panel
+        """
+
+        l = QVBoxLayout()
+        l.setContentsMargins (QMargins(0, 0, 0, 0)) 
+
+        # commmon panel 
+        add_section_caption (l, "Common")
+        l.addWidget (self.section_panel,stretch=0)
+
+        # diagrams 
+        add_section_caption (l, "Diagrams")
+
+        for item in self.diagram_items:
+            if item.section_panel is not None: 
+                l.addWidget (item.section_panel,stretch=0)
+
+        l.addStretch(1)
+
+        self._viewPanel = Container_Panel (layout=l,width=250)
+
+
+    @property
+    def section_panel (self) -> Edit_Panel:
+        """ return section panel within view panel"""
+
+        if self._section_panel is None:    
+
+            l = QGridLayout()
+            r,c = 0, 0 
+            p = Panel_Reference_Wing (self, self.app_model)
+            l.addWidget (p, r, c, 1, 1)
+
+            self._section_panel = Edit_Panel (layout=l, auto_height=True, 
+                                              has_head    = False,
+                                              switchable  = False)
+
+        return self._section_panel 
 
 
 class Diagram_Airfoils (Diagram_Abstract):
@@ -2955,19 +3099,21 @@ class Diagram_Airfoils (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             CheckBox (l,r,c, text="Show blended airfoils", colSpan=4,
-                    get=lambda: self.show_strak, set=self.set_show_strak) 
+                    get=lambda: self.show_strak, set=self.set_show_strak,
+                    toolTip="Include blended airfoils and their polars at intermediate wing sections.")
             r += 1
             CheckBox (l,r,c, text="Use airfoils nick name", colSpan=4,
-                    get=lambda: self.airfoil_use_nick, set=self.set_airfoil_use_nick) 
+                    get=lambda: self.airfoil_use_nick, set=self.set_airfoil_use_nick,
+                    toolTip="Show generated airfoil nicknames instead of airfoil names.")
             r += 1
             Field    (l,r,c+1, lab="Prefix", width=60,
                     get=lambda: self.airfoil_nick_prefix, set=self.set_airfoil_nick_prefix,
-                    toolTip="Common name prefix for all airfoils")
+                    toolTip="Prefix used when generating airfoil nicknames.")
             r += 1
             FieldI   (l,r,c+1, lab="Base", width=60, step=10, lim=(10, 9990), 
                     get=lambda: self.airfoil_nick_base, set=self.set_airfoil_nick_base,
-                    toolTip="<div>Will be multiplied with the relative chord of the airfoils wing section and "+ \
-                            "added to the prefix</div>")
+                    toolTip="The base is multiplied by the section's relative chord, rounded, "
+                            "and appended to the nickname prefix.")
 
             r += 1
             l.setColumnMinimumWidth (0,20)
@@ -3021,7 +3167,8 @@ class Diagram_Airfoils (Diagram_Abstract):
                             toolTip="Apply a minimum Re number for polars in the diagrams")
             FieldF      (l,r,c+4, width=60, step=10, lim=(1, 1000), unit="k", dec=0,
                             obj=self, prop=Diagram_Airfoils.min_re_asK,
-                            hide=lambda: not self.apply_min_re)
+                            hide=lambda: not self.apply_min_re,
+                            toolTip="Minimum Reynolds number to display, in thousands.")
             r += 1
             CheckBox    (l,r,c, text="Forced transition versions (VLM)", colSpan=5,
                             obj=self, prop=Diagram_Airfoils.show_VLM_polars,
@@ -3069,7 +3216,8 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            Button      (l,r,c, text="Export Airfoils", width=100, set=self.export_airfoils)
+            Button      (l,r,c, text="Export Airfoils", width=100, set=self.export_airfoils,
+                         toolTip="Open the dialog to export the wing's airfoils.")
             l.setColumnStretch (2,2)
 
             self._panel_export = Edit_Panel (title="Export", layout=l, 
@@ -3206,7 +3354,8 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             l = QGridLayout()
             Button (l, 0, 0, text="Export OpPoint", width=100,
                     set=self.export_opPoint,
-                    disable=lambda: not  self.app_model.cur_vlm_opPoint)
+                    disable=lambda: not  self.app_model.cur_vlm_opPoint,
+                    toolTip="Export the current VLM operating point as a CSV file.")
             l.setColumnStretch (2, 2)
             self._panel_export = Edit_Panel (title="Export", layout=l, auto_height=True,
                                              main_margins=(10, 5, 10, 10),
@@ -3392,7 +3541,8 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             ComboBox (l,r,c, width=None, 
                         get=lambda: self.polar_def_name, set=self.set_polar_def_name,
                         options=lambda: self.polar_def_list,
-                        toolTip=lambda: self.polar_def_name)                        # cut have been cutted
+                        toolTip=lambda: f"Select the root-section T1 polar for VLM analysis.\n"
+                                        f"Current: {self.polar_def_name or 'none'}")
             ToolButton (l,r,c+1, icon=Icon.EDIT,   set=self._edit_polar_def, 
                         disable=lambda: not self.app_model.cur_polar_def,           
                         toolTip="Change the settings of this polar definition")                              
@@ -3431,23 +3581,28 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             l = QGridLayout()
             r,c = 0, 0
             CheckBox (l,r,c, colSpan=4, text="Key performance indicators",
-                      get=lambda: self.show_kpis, set=self.set_show_kpis)
+                      get=lambda: self.show_kpis, set=self.set_show_kpis,
+                      toolTip="Show key performance indicators on the wing polar diagrams.")
             r += 1
             CheckBox (l,r,c, colSpan=4, text="Level flight point for ...",
-                      get=lambda: self.show_level_flight, set=self.set_show_level_flight)
+                      get=lambda: self.show_level_flight, set=self.set_show_level_flight,
+                      toolTip="Show the level-flight point for the specified mass or wing loading.")
             r += 1
             mass = FieldF   (l,r,c+1, lab="Mass", width=90, step=0.1, lim=(0.1, 100), dec=2, unit="kg",
-                        obj=lambda: self.wing, prop=Wing.mass, hide=lambda: not self.show_level_flight)
+                        obj=lambda: self.wing, prop=Wing.mass, hide=lambda: not self.show_level_flight,
+                        toolTip="Set the aircraft mass used for the level-flight point.")
             mass.sig_changed.connect (self.refresh)        # refresh diagram
             r += 1
             load = FieldF   (l,r,c+1, lab="Wing Load", width=90, step=1, lim=(1, 500), dec=1, unit="g/dm²",
-                        obj=lambda: self.wing, prop=Wing.wing_loading, hide=lambda: not self.show_level_flight)
+                        obj=lambda: self.wing, prop=Wing.wing_loading, hide=lambda: not self.show_level_flight,
+                        toolTip="Set the wing loading used for the level-flight point.")
             load.sig_changed.connect (self.refresh)        # refresh diagram
 
             r += 1
             CheckBox (l,r,c, colSpan=4, text="Delta to reference planform", fontSize=size.HEADER_SMALL,
                       get=lambda: self.show_polars_delta, set=self.set_show_polars_delta,
-                      hide=lambda: self.app_model.ref_wing is None)
+                      hide=lambda: self.app_model.ref_wing is None,
+                      toolTip="Show differences between the wing and reference planform polars.")
 
             l.setColumnMinimumWidth (0,10)
             l.setColumnMinimumWidth (1,70)
@@ -3540,12 +3695,15 @@ class Diagram_Paneling (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            Button      (l,r,c, text="Export Xflr5", width=100, set=self.export_xflr5)
+            Button      (l,r,c, text="Export Xflr5", width=100, set=self.export_xflr5,
+                         toolTip="Open the dialog to export the paneled wing for XFLR5.")
             r += 1
-            Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz)         
+            Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz,
+                         toolTip="Open the dialog to export the paneled wing for FLZ_Vortex.")
             SpaceC (l,c, width=20, stretch=0)
             c += 2
-            Button      (l,r,c, text="Launch FLZ", width=80, set=self.launch_flz,hide= not os.name == 'nt')                                 # only Windows, Linux requires some extra investigations
+            Button      (l,r,c, text="Launch FLZ", width=80, set=self.launch_flz,hide= not os.name == 'nt',
+                         toolTip="Export the wing and open the resulting file in FLZ_Vortex.")  # only Windows
             
             l.setColumnMinimumWidth (1,12)
             l.setColumnStretch (3,2)
@@ -3932,7 +4090,8 @@ class Panel_Polar_Defs (Edit_Panel):
 
             Field      (l,r,c+1, width=(80,None), get=lambda p=polar_def: p.name_with_v(self.chord),
                         click_disabled=lambda p=polar_def: self.edit_polar_def(polar_def=p),
-                        toolTip=lambda p=polar_def: p.name_with_v(self.chord))
+                        toolTip=lambda p=polar_def: f"{p.name_with_v(self.chord)}\n"
+                                                    "Click to edit this polar definition.")
 
             # either tool buttons 
             if not polar_def.is_mandatory: 
@@ -4036,15 +4195,15 @@ class Panel_Reference_Wing (Edit_Panel):
 
     @property
     def show_ref(self) -> bool:
-        return bool(self.app_model.ref_wing_name)
+        return bool(self.app_model.ref_wing_filename)
 
     def set_show_ref (self, aBool: bool):
 
         # set inital reference wing if needed
-        if aBool and not self.app_model.ref_wing_name:
-            self.app_model.set_ref_wing_name(self.app_model.ref_wings_name[0] )
+        if aBool and not self.app_model.ref_wing_filename:
+            self.app_model.set_ref_wing_filename(self.app_model.ref_wings_filename[0] )
         elif not aBool:
-            self.app_model.set_ref_wing_name(None)
+            self.app_model.set_ref_wing_filename(None)
 
         self.refresh()
 
@@ -4055,7 +4214,8 @@ class Panel_Reference_Wing (Edit_Panel):
         l = QGridLayout()
         r,c = 0, 0
         CheckBox   (l,r,c, text="Reference Planform", colSpan=4,
-                    get=lambda: self.show_ref, set=self.set_show_ref)
+                    get=lambda: self.show_ref, set=self.set_show_ref,
+                    toolTip="Enable a reference planform for comparison.")
 
         l.setColumnMinimumWidth (0,15)
         l.setColumnMinimumWidth (1,50)
@@ -4063,19 +4223,20 @@ class Panel_Reference_Wing (Edit_Panel):
 
         r += 1
         w = ComboBox   (l,r,c+1, colSpan=2, 
-                    options=lambda: self.app_model.ref_wings_name, 
-                    get=lambda: self.app_model.ref_wing_name, 
-                    set=self.app_model.set_ref_wing_name,
-                    hide = lambda: not self.show_ref) 
+                    options=lambda: self.app_model.ref_wings_filename, 
+                    get=lambda: self.app_model.ref_wing_filename, 
+                    set=self.app_model.set_ref_wing_filename,
+                    hide = lambda: not self.show_ref,
+                    toolTip="Select the reference planform.")
         w.sig_changed.connect(lambda: self.refresh())
 
         ToolButton (l,r,c+3, icon=Icon.ADD, 
-                    set=self._add_ref_pc2, toolTip="Open and addnew PC2 Planform",
-                    disable=lambda: len(self.app_model.ref_wings_name) >= 10, 
+                    set=self._add_ref_pc2, toolTip="Add a reference planform from a PC2 file.",
+                    disable=lambda: len(self.app_model.ref_wings_filename) >= 10, 
                     hide = lambda: not self.show_ref)
         ToolButton (l,r,c+4, icon=Icon.DELETE, 
-                    set=self._remove_planform_ref_pc2, toolTip="Remove PC2 Planform",
-                    disable=lambda: self.app_model.ref_wing_name==Reference_Wing_Elliptical.name, 
+                    set=self._remove_planform_ref_pc2, toolTip="Remove the selected PC2 reference planform.",
+                    disable=lambda: self.app_model.ref_wing_filename==Reference_Wing_Elliptical.name, 
                     hide = lambda: not self.show_ref)
         r += 1
         Label      (l,r,c+1, get="Match", # width=50,
@@ -4083,14 +4244,16 @@ class Panel_Reference_Wing (Edit_Panel):
         ComboBox   (l,r,c+2, options=list(Scale_Mode), 
                     get=lambda: str(self.app_model.ref_wing_scale_mode), 
                     set=self.app_model.set_ref_wing_scale_mode,
-                    disable=lambda: self.app_model.ref_wing_name==Reference_Wing_Elliptical.name,
-                    hide = lambda: not self.show_ref)
+                    disable=lambda: self.app_model.ref_wing_filename==Reference_Wing_Elliptical.name,
+                    hide = lambda: not self.show_ref,
+                    toolTip="Choose how to scale the reference planform to match the current wing.")
 
         if self._show_no_flap:
             r += 1
             CheckBox   (l,r,c+1, text="Do not set flap in polar", colSpan=4,
                         get=lambda: self.app_model.ref_wing_no_flap, set=self.app_model.set_ref_wing_no_flap,
-                        hide = lambda: not self.show_ref or (not self.app_model.cur_polar_def.is_flap_set))
+                        hide = lambda: not self.show_ref or (not self.app_model.cur_polar_def.is_flap_set),
+                        toolTip="Use a polar without flap deflection for the reference wing.")
         r += 1
 
         return l

@@ -10,8 +10,9 @@ from enum                       import Enum
 from math                       import isclose
 import html 
 
-from PyQt6.QtGui                import QColor, QImage, QBrush, QPen, QTransform
+from PyQt6.QtGui                import QColor, QImage, QBrush, QPen, QTransform, QPainterPath, QPainter
 from PyQt6.QtCore               import Qt, pyqtSignal
+from PyQt6.QtWidgets            import QGraphicsRectItem
 
 import pyqtgraph as pg
 
@@ -191,6 +192,9 @@ class Abstract_Artist_Planform (Artist):
         """the artist will (re)plot - existing plots will be deleted """
 
         # override to add coordinate transformations prior to _plot 
+
+        if self.planform is None:
+            return super().plot()
 
         if self._mode == mode.NORM_TO_PLANFORM:  
             self.set_t_fn  (self.planform.t_norm_to_plan)                   # bound method for coordinate transformation
@@ -814,14 +818,37 @@ class Neutral_Point_Artist (Abstract_Artist_Planform):
     Plot Neutral Point 
     """
 
+    class _Antialiased_Target (pg.TargetItem):
+        def paint (self, painter, *args):
+            painter.save()
+            painter.setRenderHint (QPainter.RenderHint.Antialiasing, True)
+            super().paint (painter, *args)
+            painter.restore()
+
     def _plot (self): 
 
         _, _, _, _, np = self.wing.wing_data ()
 
-        color = QColor ('mediumorchid')
+        symbol = QPainterPath()
+        for angle in (0, 180):
+            symbol.moveTo (0, 0)
+            symbol.arcTo (-0.5, -0.5, 1, 1, angle, 90)
+            symbol.closeSubpath()
 
-        self._plot_point (np[0], np[1], size=10, color=color, brush=color.darker(150), 
-                          textOffset = (0,-5), text="NP", textFill="black")
+        color = QColor ('#d0d0d0')
+        position = self.t_fn (np[0], np[1])
+        label_opts = {'anchor': (0,1), 'color': QColor(self.COLOR_NORMAL),
+                      'fill': pg.mkBrush(0, 0, 0, 200), 'offset': (0,-5),
+                      'angle': 0, 'ensureInBounds': False}
+        circle = self._Antialiased_Target (pos=position, size=15, pen=pg.mkPen(color, width=1.2),
+                                           brush=QColor('black'), symbol='o', movable=False,
+                                           label="NP", labelOpts=label_opts)
+        circle.setZValue (3)
+        self._add (circle)
+        sectors = self._Antialiased_Target (pos=position, size=15, pen=pg.mkPen(color, width=1.2),
+                                            brush=color, symbol=symbol, movable=False)
+        sectors.setZValue (4)
+        self._add (sectors)
 
 
 
@@ -1141,7 +1168,7 @@ class VLM_Chord_Artist (Abstract_Artist_Planform):
 
     @property
     def ref_vlm_wing (self) -> VLM_Wing | None:
-        ref_wing : Wing = self._ref_wing_fn() if callable(self._ref_wing_fn) else None
+        ref_wing : Wing | None = self._ref_wing_fn() if callable(self._ref_wing_fn) else None
         if ref_wing:
             return ref_wing.vlm_wing
         return None
@@ -2888,13 +2915,13 @@ class Airfoil_Artist (Abstract_Artist_Planform):
     def __init__ (self, *args, 
                   show_strak=False, 
                   real_size=False, 
+                  show_data=False,
                   mini_mode=False,
                   **kwargs):
 
         self._show_strak    = show_strak                    # show also straked airfoils 
         self._real_size     = real_size                     # plot airfoils in real size
-        self._show_thick    = False                         # show max thickness
-        self._show_camber   = False                         # show camber line
+        self._show_data     = show_data
         self._mini_mode     = mini_mode                     # mini mode for overview 
 
         super().__init__ (*args, **kwargs)
@@ -2915,25 +2942,19 @@ class Airfoil_Artist (Abstract_Artist_Planform):
     def set_real_size (self, aBool : bool):
         self._real_size = aBool == True
         self.refresh()
+
+    @property
+    def show_data (self) -> bool:
+        """ true - show airfoil data table """
+        return self._show_data
+    def set_show_data (self, aBool : bool):
+        self._show_data = aBool == True
+        self.refresh()
+
+    @property
+    def show_legend (self) -> bool:
+        return super().show_legend and not self.show_data
     
-
-    @property
-    def show_thick (self) -> bool:
-        """ true - plot max thickness """
-        return self._show_thick
-    def set_show_thick (self, aBool : bool):
-        self._show_thick = aBool == True
-        self.refresh()
-
-
-    @property
-    def show_camber (self) -> bool:
-        """ true - plot camber line """
-        return self._show_camber
-    def set_show_camber (self, aBool : bool):
-        self._show_camber = aBool == True
-        self.refresh()
-
 
     def _plot (self): 
 
@@ -2984,74 +3005,68 @@ class Airfoil_Artist (Abstract_Artist_Planform):
                     pen = pg.mkPen(color, width=1.5)
 
                 self._plot_dataItem  (x, y, name=label, pen = pen, antialias = True, zValue=2)
-                
-                # plot thickness / camber highpoint  
 
-                if self.show_thick:
-                    self._plot_thickness (airfoil, chord, le_x, color)
-                if self.show_camber:
-                    self._plot_camber (airfoil, chord, le_x, color)
+        if self.show_data:
+            self._plot_data_table(colors)
 
 
-    def _plot_thickness (self, airfoil : Airfoil, chord: float, le_x: float, color : QColor):
-        """ plot thickness highpoint with max thickness line """
+    def _plot_data_table (self, colors: list[QColor]):
+        cell_style = "padding-right: 15px; padding-top: 3px; padding-bottom: 3px"
 
-        x,t = airfoil.geo.thickness.highpoint.xy
-        t_x = x
-        y_u = airfoil.geo.upper.yFn (x)                               # thickness highpoint on upper line 
-        y_l = airfoil.geo.lower.yFn (x)                               # thickness highpoint on lower line 
+        def cell (text: str, column: int, color: str | None = None) -> str:
+            align = "left" if column < 2 else "right"
+            style = cell_style
+            if not self.real_size and column == 4:
+                style += "; padding-left: 15px"
+            if color is not None:
+                style += f"; color: {color}"
+            return f"<td align='{align}' style='{style}'>{html.escape(text)}</td>"
+
+        rows = []
+        for i, section in enumerate(self.wingSections_to_show):
+            airfoil = section.airfoil
+            if not airfoil.isLoaded or (not self.show_strak and airfoil.isBlendAirfoil):
+                continue
+
+            if self.real_size:
+                _, line_y = section.line()
+                chord = line_y[1] - line_y[0]
+                values = (f"{chord:.1f}mm", f"{airfoil.geo.max_thick * chord:.1f}mm")
+            else:
+                geo = airfoil.geo
+                values = (f"{geo.max_thick:.2%}", f"{geo.max_thick_x:.1%}",
+                          f"{geo.max_camb:.2%}", f"{geo.max_camb_x:.1%}")
+
+            airfoil_name = (section.airfoil_nick_name if self.wing.airfoil_use_nick
+                            else airfoil.fileName_stem)
+            color = colors[i].darker(130) if self._mini_mode else colors[i]
+            cells = (cell(airfoil_name, 0, color.name())
+                     + cell(section.name_short, 1)
+                     + "".join(cell(value, column)
+                               for column, value in enumerate(values, start=2)))
+            rows.append(f"<tr>{cells}</tr>")
+
+        if not rows:
+            return
+
         if self.real_size:
-            x   = x *   chord + le_x 
-            y_u = y_u * chord 
-            y_l = y_l * chord 
-            t   = t *   chord
-            t_x = t_x * chord 
-            label = f"{t:.1f}mm @ {t_x:.0f}mm"
-        else: 
-            label = f"{t:.1%} @ {t_x:.0%}"
-
-        self._plot_point (x,y_u, symbol='+', color=color, text=label, textFill=pg.mkBrush (0,0,0,100))
-
-        line_x = [x,x]
-        line_y = [y_l, y_u]
-        pen = pg.mkPen(color.darker(150), width=1)
-
-        self._plot_dataItem  (line_x, line_y, pen = pen, antialias = False, zValue=1)
-
-
-    def _plot_camber (self, airfoil : Airfoil, chord: float, le_x: float, color : QColor):
-        """ plot camber highpoint with max camber line """
-
-        # plot camber line 
-        c_line = airfoil.geo.camber
-
-        x = c_line.x * chord + le_x
-        y = c_line.y * chord
-
-        style = Qt.PenStyle.DashDotLine
-        pen   = pg.mkPen(color, width=1, style=style)
-
-        self._plot_dataItem (x, y, pen = pen, name = c_line.name, zValue=1)
-
-
-        # plot camber value at highpoint 
-        x, y = c_line.highpoint.xy
-        c_x, c_y = x, y
-
-        if not self.real_size:
-            label = f"{c_y:.1%} @ {c_x:.0%}"
-        else: 
-            x   = x *   chord 
-            y   = y *   chord
-            label = f"{y:.1f}mm @ {x:.0f}mm"
-
-        self._plot_point (x+ le_x,y, symbol='x', color=color, text=label, textFill=pg.mkBrush (0,0,0,100))
-
-        line_x = [x,x]
-        line_y = [0.0, y]
-        pen = pg.mkPen(color.darker(150), width=1)
-
-        self._plot_dataItem  (line_x, line_y, pen = pen, antialias = False, zValue=1)
+            headers = ("Airfoil", "Section", "Chord", "Thickness")
+        else:
+            headers = ("Airfoil", "Section", "Thickness", "Position",
+                       "Camber", "Position")
+        header_row = "<tr>" + "".join (
+            cell(header, i, self.COLOR_LEGEND)
+            for i, header in enumerate(headers)) + "</tr>"
+        table = '<table cellspacing="0" cellpadding="0">' + header_row + "".join(rows) + "</table>"
+        label = pg.LabelItem(table, color=QColor(self.COLOR_NORMAL), size=f"{self.SIZE_NORMAL}pt")
+        background = QGraphicsRectItem(label.boundingRect(), label)
+        background.setPen(pg.mkPen(None))
+        background.setBrush(pg.mkBrush(0, 0, 0, 180))
+        background.setZValue(-1)
+        label.setParentItem(self._pi)
+        label.anchor(itemPos=(1,0), parentPos=(1,0), offset=(-20,40))
+        label.setZValue(5)
+        self._plots.append(label)
 
 
 
@@ -3352,55 +3367,186 @@ class Image_Artist (Abstract_Artist_Planform):
 
 
 
-
-
-
 class Wing_Data_Artist (Abstract_Artist_Planform):
     """
     Plot some data of the wing
     """
 
-    def _plot (self): 
- 
-        p0  = (0.15,0.3)
-        x1 = 140
-        dy = 25
+    def __init__ (self, *args, ref_wing_fn: Callable | None = None, **kwargs):
+        self._ref_wing_fn = ref_wing_fn
+        super().__init__ (*args, **kwargs)
+
+
+    @staticmethod
+    def _table_row (label: str, value: str, unit: str = "",
+                    reference_value: str | None = None) -> str:
+        reference_cell = (f'<td align="right" style="padding-left: 20px;">'
+                          f'<span style="color: {COLOR_REF_PC2.name()};">'
+                          f'{html.escape(reference_value)}</span></td>'
+                          f'<td><span style="color: {COLOR_REF_PC2.name()};">'
+                          f'{html.escape(unit)}</span></td>'
+                          if reference_value is not None else "")
+        return (f'<tr><td style="padding-right: 10px;">{html.escape(label)}</td>'
+                f'<td align="right">{html.escape(value)}</td>'
+                f"<td>{html.escape(unit)}</td>{reference_cell}</tr>")
+
+
+    def _plot (self):
 
         wing_area, wing_ar, mac, mac_le, np = self.wing.wing_data ()
+        span        = f"{self.wing.wingspan:.1f}"
+        root_chord  = f"{self.wing.chord_root:.1f}"
+        area        = f"{wing_area/10000:.2f}"
+        ar          = f"{wing_ar:.2f}"
+        mac_value   = f"{mac:.1f}"
+        mac_le      = f"{mac_le:.1f}"
+        np_x        = f"{np[1]:.1f}"
 
-        y = 0 
-        self._plot_text ("Wing Span",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{self.wing.wingspan:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
-        self._plot_text ("mm", parentPos=p0, offset=(x1, y))
+        ref_wing : Wing  = self._ref_wing_fn() if callable(self._ref_wing_fn) else None
+        if ref_wing is not None:
+            ref_area, ref_ar, ref_mac, ref_mac_le, ref_np = ref_wing.wing_data ()
+            ref_span        = f"{ref_wing.wingspan:.1f}"
+            ref_root_chord  = f"{ref_wing.chord_root:.1f}"
+            ref_area_value  = f"{ref_area/10000:.2f}"
+            ref_ar          = f"{ref_ar:.2f}"
+            ref_mac_value   = f"{ref_mac:.1f}"
+            ref_mac_le      = f"{ref_mac_le:.1f}"
+            ref_np_x        = f"{ref_np[1]:.1f}"
+        else:
+            ref_span = ref_root_chord = ref_area_value = ref_ar = None
+            ref_mac_value = ref_mac_le = ref_np_x = None
 
-        y += dy
-        self._plot_text ("Root Chord",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{self.planform.chord_root:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
-        self._plot_text ("mm", parentPos=p0, offset=(x1, y))
+        rows = []
+        if ref_wing is not None:
+            rows.append ('<tr><td></td><td></td>'
+                         f'<td></td><td align="left" colspan="2" style="padding-left: 20px;">'
+                         f'<span style="color: {COLOR_REF_PC2.name()};">'
+                         f'{html.escape(ref_wing.name)}</span></td></tr>')
+        else:
+            rows.append ('<tr></tr>')
 
-        y += dy
-        self._plot_text ("Wing Area",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{wing_area/10000:.2f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
-        self._plot_text ("dm²", parentPos=p0, offset=(x1, y))
+        rows.append (self._table_row ("Wing Span", span, "mm", ref_span))
+        rows.append (self._table_row ("Root Chord", root_chord, "mm", ref_root_chord))
+        rows.append (self._table_row ("Wing Area", area, "dm²", ref_area_value))
+        rows.append (self._table_row ("Aspect Ratio", ar, "", ref_ar))
+        rows.append (self._table_row ("MAC", mac_value, "mm", ref_mac_value))
+        rows.append (self._table_row ("MAC_LE", mac_le, "mm", ref_mac_le))
+        rows.append (self._table_row ("NP_x geometric", np_x, "mm", ref_np_x))
 
-        y += dy
-        self._plot_text ("Aspect Ratio",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{wing_ar:.2f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
+        table = '<table cellspacing="4" cellpadding="0">' + "".join(rows) + "</table>"
+        self._plot_text (table, parentPos=(0.0,0.0), itemPos=(0,0), offset=(60,30))
 
-        y += dy
-        self._plot_text ("MAC",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{mac:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
-        self._plot_text ("mm", parentPos=p0, offset=(x1, y))
 
-        y += dy
-        self._plot_text ("MAC_LE",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{mac_le:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
-        self._plot_text ("mm", parentPos=p0, offset=(x1, y))
 
-        y += dy
-        self._plot_text ("NP_x geometric",  parentPos=p0, offset=(0, y))
-        self._plot_text (f"{np[1]:.1f}", parentPos=p0, itemPos = (1,1), offset=(x1, y))
-        self._plot_text ("mm", parentPos=p0, offset=(x1, y))
+
+class Wing_Performance_Artist (Abstract_Artist_Planform):
+    """
+    Plot VLM KPIs in a table, optionally comparing a reference polar.
+    """
+
+    def __init__ (self, *args,
+                  polar_fn: Callable[[], VLM_Polar | None] | None = None,
+                  ref_polar_fn: Callable[[], VLM_Polar | None] | None = None,
+                  ref_wing_fn: Callable[[], Wing | None] | None = None,
+                  **kwargs):
+
+        self._polar_fn      = polar_fn
+        self._ref_polar_fn  = ref_polar_fn
+        self._ref_wing_fn   = ref_wing_fn
+
+        super().__init__ (*args, **kwargs)
+
+
+    @property
+    def vlm_polar (self) -> VLM_Polar | None:
+        """ current wing polar """
+        return self._polar_fn() if callable(self._polar_fn) else None
+
+    @property
+    def ref_vlm_polar (self) -> VLM_Polar | None:
+        """ reference VLM polar """
+        return self._ref_polar_fn() if callable(self._ref_polar_fn) else None
+
+
+    @staticmethod
+    def _table_row (label: str, value: str, unit: str = "",
+                    reference_value: str | None = None) -> str:
+        reference_cell = (f'<td align="right" style="padding-left: 20px;">'
+                          f'<span style="color: {COLOR_REF_PC2.name()};">'
+                          f'{html.escape(reference_value)}</span></td>'
+                          f'<td><span style="color: {COLOR_REF_PC2.name()};">'
+                          f'{html.escape(unit)}</span></td>'
+                          if reference_value is not None else "")
+        return (f'<tr><td style="padding-right: 10px;">{html.escape(label)}</td>'
+                f'<td align="right">{html.escape(value)}</td>'
+                f"<td>{html.escape(unit)}</td>{reference_cell}</tr>")
+
+
+    def _plot (self):
+
+        # polars ready?
+
+        polar = self.vlm_polar
+        if polar is None:
+            self._plot_text ("Polar not ready... ", color="dimgray",
+                             fontSize=self.SIZE_HEADER, itemPos=(0.5,1))
+            return
+
+        ref_polar = self.ref_vlm_polar
+        polars = [polar] if ref_polar is None else [polar, ref_polar]
+        for vlm_polar in polars:
+            if not vlm_polar.is_ready:
+                n_running = Polar_Task.get_total_n_polars_running()
+                if n_running > 0:
+                    self._plot_text (f"Generating airfoil polars... ({n_running} running)",
+                                     color="dimgray", fontSize=self.SIZE_HEADER, itemPos=(0.5,1))
+                elif vlm_polar.error_reason:
+                    self._plot_text ('<br>'.join(vlm_polar.error_reason),
+                                     color=COLOR_ERROR, itemPos=(0.5,0.5))
+                else:
+                    self._plot_text ("Polar not ready for opPoint - this should not happen",
+                                     color="red", itemPos=(0.5,1))
+                return
+            vlm_polar.generate_polar()
+
+        # plot data
+
+        def kpi_text (vlm_polar: VLM_Polar, kpi: VLM_KPI, decimals: int) -> str:
+            _, value, _, _ = vlm_polar.kpi_in (kpi, (VLM_Var.WING_CD, VLM_Var.WING_CL))
+            return (f"{value:.{decimals}f}"
+                    if value is not None and np.isfinite(value) else "n/a")
+
+        glide_max = kpi_text (polar, VLM_KPI.GLIDE_MAX, 1)
+        cd_min    = kpi_text (polar, VLM_KPI.CD_MIN, 5)
+        cd_0      = kpi_text (polar, VLM_KPI.CD_0, 5)
+        cl_max    = kpi_text (polar, VLM_KPI.CL_MAX, 2)
+
+        if ref_polar is not None:
+            ref_glide_max = kpi_text (ref_polar, VLM_KPI.GLIDE_MAX, 1)
+            ref_cd_min    = kpi_text (ref_polar, VLM_KPI.CD_MIN, 5)
+            ref_cd_0      = kpi_text (ref_polar, VLM_KPI.CD_0, 5)
+            ref_cl_max    = kpi_text (ref_polar, VLM_KPI.CL_MAX, 2)
+        else:
+            ref_glide_max = ref_cd_min = ref_cd_0 = ref_cl_max = None
+
+        rows = []
+        if ref_polar is not None:
+            ref_wing = self._ref_wing_fn() if callable(self._ref_wing_fn) else None
+            ref_name = ref_wing.name if ref_wing is not None else "Reference"
+            rows.append ('<tr><td></td><td></td>'
+                         f'<td></td><td align="left" colspan="2" style="padding-left: 20px;">'
+                         f'<span style="color: {COLOR_REF_PC2.name()};">'
+                         f'{html.escape(ref_name)}</span></td></tr>')
+        else:
+            rows.append ('<tr></tr>')
+
+        rows.append (self._table_row (VLM_KPI.GLIDE_MAX.value, glide_max, reference_value=ref_glide_max))
+        rows.append (self._table_row (VLM_KPI.CD_MIN.value, cd_min, reference_value=ref_cd_min))
+        rows.append (self._table_row (VLM_KPI.CD_0.value, cd_0, reference_value=ref_cd_0))
+        rows.append (self._table_row (VLM_KPI.CL_MAX.value, cl_max, reference_value=ref_cl_max))
+
+        table = '<table cellspacing="4" cellpadding="0">' + "".join(rows) + "</table>"
+        self._plot_text (table, parentPos=(0.0,0.0), itemPos=(0,0), offset=(60,50))
 
 
 
@@ -3562,4 +3708,3 @@ class Polar_Artist (Abstract_Artist_Planform):
 
         self._plot_dataItem  (x, y, name=label, pen = pen, 
                                 symbol=None, antialias = antialias, zValue=1)
-
