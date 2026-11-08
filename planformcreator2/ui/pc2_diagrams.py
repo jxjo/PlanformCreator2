@@ -2647,7 +2647,7 @@ class Diagram_Planform (Diagram_Abstract):
             CheckBox (l,r,c, text="Flaps", 
                         get=lambda: self.show_flaps, set=self.set_show_flaps,
                         toolTip="Show flaps and their hinge line in the diagrams.")
-            CheckBox (l,r,c+1, text="Flap depth", 
+            CheckBox (l,r,c+1, text="Flap Depth", 
                         get=lambda: self.show_flap_depth, set=self.set_show_flap_depth,
                         hide=lambda: not self.show_flaps,
                         toolTip="Show flap depths in millimetres and as percentages of chord.")
