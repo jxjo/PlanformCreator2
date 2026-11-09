@@ -8,7 +8,7 @@ Handle export of airfoils to file
 """
 
 import logging
-import os, re
+import re
 import io
 import numpy as np
 import shutil
@@ -133,12 +133,12 @@ class Exporter_Abstract:
         """ ensure that export directory exists """
 
         # optionally clear export directory
-        if self.clear_export_dir and os.path.isdir(self.export_dir_abs):
-            shutil.rmtree(self.export_dir_abs, ignore_errors=True)
+        export_dir = Path(self.export_dir_abs)
+        if self.clear_export_dir and export_dir.is_dir():
+            shutil.rmtree(export_dir, ignore_errors=True)
 
         # if necessary create directory 
-        if not os.path.exists(self.export_dir_abs): 
-            os.makedirs(self.export_dir_abs)
+        export_dir.mkdir(parents=True, exist_ok=True)
 
 
 # -----------------------------------------------------------------------------------
@@ -169,7 +169,7 @@ class Exporter_Airfoils (Exporter_Abstract):
 
         d = {}
         # Convert to forward slashes for cross-platform storage
-        export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
+        export_dir = Path(self._export_dir).as_posix() if self._export_dir else None
         toDict (d, "export_dir",        export_dir) 
 
         if self.adapt_te_gap:
@@ -217,16 +217,18 @@ class Exporter_Airfoils (Exporter_Abstract):
 
         # create dir if not exist - build airfoil filename
         if pathName: 
-            pathName_abs = pathName if os.path.isabs (pathName) else os.path.join (airfoil_org.workingDir, pathName)
-            if not os.path.isdir (pathName_abs):
-                os.mkdir(pathName_abs)
+            pathName_path = Path(pathName)
+            if not pathName_path.is_absolute():
+                pathName_path = Path(airfoil_org.workingDir) / pathName_path
+            if not pathName_path.is_dir():
+                pathName_path.mkdir()
         else: 
             pathName = airfoil_org.pathName
 
         # create new airfoil 
         if not airfoil_org.isLoaded: airfoil_org.load()
 
-        airfoil = airfoil_org.asCopy (name=name, pathFileName=os.path.join (pathName, fileName))
+        airfoil = airfoil_org.asCopy (name=name, pathFileName=str(Path(pathName) / fileName))
 
         # apply modifications
         if flap_def is not None or te_gap is not None: 
@@ -422,7 +424,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
         d = {}
         # Convert to forward slashes for cross-platform storage
-        export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
+        export_dir = Path(self._export_dir).as_posix() if self._export_dir else None
         toDict (d, "export_dir", export_dir) 
         d.update(self.exporter_airfoils._as_dict())
         return d
@@ -476,7 +478,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
         """
 
         targetDir = self.export_dir_abs
-        pathFileName = os.path.join (targetDir, self.xflr5_filename)
+        pathFileName = str(Path(targetDir) / self.xflr5_filename)
 
         airfoilNames = set()                                    # set of all airfoil names exported
 
@@ -676,7 +678,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
         d = {}
         # Convert to forward slashes for cross-platform storage
-        export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
+        export_dir = Path(self._export_dir).as_posix() if self._export_dir else None
         toDict (d, "export_dir", export_dir) 
         d.update(self.exporter_airfoils._as_dict())
         return d
@@ -715,7 +717,7 @@ class Exporter_FLZ (Exporter_Abstract):
 
         # if necessary create directory 
 
-        pathFileName = os.path.join (self.export_dir_abs, self.flz_filename)
+        pathFileName = Path(self.export_dir_abs) / self.flz_filename
 
         # set parameter of export
         Exporter_FLZ.PROFIL.use_nick_name = self.exporter_airfoils.use_nick_name
@@ -1086,7 +1088,7 @@ class Exporter_CSV (Exporter_Abstract):
 
         d = {}
         # Convert to forward slashes for cross-platform storage
-        export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
+        export_dir = Path(self._export_dir).as_posix() if self._export_dir else None
         toDict (d, "export_dir",        export_dir) 
         d.update(self.exporter_airfoils._as_dict())
         return d
@@ -1107,7 +1109,7 @@ class Exporter_CSV (Exporter_Abstract):
 
         # plot the different parts in a csv document 
 
-        csv_pathFileName = os.path.join (self.export_dir_abs, self.csv_filename)
+        csv_pathFileName = Path(self.export_dir_abs) / self.csv_filename
 
         with open (csv_pathFileName, mode='w', newline='') as csvfile:
             csv_writer = csv.writer (csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -1411,7 +1413,7 @@ class Exporter_DXF (Exporter_Abstract):
 
         d = {}
         # Convert to forward slashes for cross-platform storage
-        export_dir = self._export_dir.replace(os.sep, '/') if self._export_dir else None
+        export_dir = Path(self._export_dir).as_posix() if self._export_dir else None
         toDict (d, "export_dir",        export_dir) 
         toDict (d, "export_airfoils",   self._export_airfoils) 
         if self.always_as_cubic_fit:
@@ -1442,7 +1444,7 @@ class Exporter_DXF (Exporter_Abstract):
         return self.planform.le_te_as_bezier() is not None
 
 
-    def do_it (self): 
+    def do_it (self, dxf_filename: str | None = None):
         """ 
         main entry: start the export to the file defined in self parameters.
         Returns a message string what was done 
@@ -1463,7 +1465,8 @@ class Exporter_DXF (Exporter_Abstract):
 
         # save dxf document  
 
-        artist.save(os.path.join (self.export_dir_abs, self.dxf_filename))  
+        dxf_filename = dxf_filename if dxf_filename is not None else self.dxf_filename
+        artist.save(str(Path(self.export_dir_abs) / dxf_filename))
 
         # export airfoils 
 
@@ -1472,8 +1475,6 @@ class Exporter_DXF (Exporter_Abstract):
         else: 
             n_airfoils = 0 
 
-        logger.info ("DXF file " + self.dxf_filename + " written to " + self.export_dir_abs) 
+        logger.info ("DXF file " + dxf_filename + " written to " + self.export_dir_abs)
 
         return n_airfoils
-
-

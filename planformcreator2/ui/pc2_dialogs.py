@@ -8,6 +8,7 @@ Dialog windows to handle the different extra functions
 """
 
 import fnmatch             
+import re
 
 from PyQt6.QtGui                import QCursor
 from PyQt6.QtWidgets            import QLayout, QDialogButtonBox, QPushButton, QDialogButtonBox
@@ -154,7 +155,7 @@ class Dialog_Export_DXF (Dialog_Modal):
     Dialog to export dxf including airfoils to a subdirectory
     """
 
-    _width  = 420
+    _width  = 430
 
     name = "Export Planform as DXF"
 
@@ -194,7 +195,9 @@ class Dialog_Export_DXF (Dialog_Modal):
         r += 1
         SpaceR   (l, r, stretch=0, height=5)
         r += 1
-        Field    (l, r, 0, lab="File Name", width=250, get=self.exporter_dxf.dxf_filename)
+        self._dxf_filename = self.exporter_dxf.dxf_filename
+        Field(l, r, 0, lab="File Name", width=250,
+              get=lambda: self._dxf_filename, set=self._set_dxf_filename)
         r += 1
         Field  (l,r,0, width=250, lab= "To Directory", get=lambda:self.exporter_dxf.export_dir)
         ToolButton(l, r,2, icon=Icon.OPEN, set=self._select_directory)
@@ -320,7 +323,13 @@ class Dialog_Export_DXF (Dialog_Modal):
     def _export_dxf (self, *_):
         """ do export dxf"""
 
-        n_airfoils = self.exporter_dxf.do_it ()
+        try:
+            dxf_filename = self._validated_dxf_filename(self._dxf_filename)
+        except ValueError as error:
+            MessageBox.error(self, "Export DXF", str(error))
+            return
+
+        n_airfoils = self.exporter_dxf.do_it(dxf_filename=dxf_filename)
         
         self.close()
 
@@ -331,6 +340,32 @@ class Dialog_Export_DXF (Dialog_Modal):
             msg = f"Planform exported to {self.exporter_dxf.export_dir}"
 
         self._toast_message(msg)
+
+
+    def _set_dxf_filename(self, filename: str):
+        """Store the unvalidated filename while the user is editing."""
+
+        self._dxf_filename = filename
+
+
+    @staticmethod
+    def _validated_dxf_filename(filename: str) -> str:
+        """Validate a DXF filename and add its extension when omitted."""
+
+        filename = filename.strip()
+        if not filename:
+            raise ValueError("Please enter a DXF filename.")
+        if any(ord(char) < 32 or char in '<>:"/\\|?*' for char in filename):
+            raise ValueError("DXF filename must not contain path separators or invalid filename characters.")
+        if filename.endswith((".", " ")):
+            raise ValueError("DXF filename must not end with a space or period.")
+
+        filename_stem = filename.split(".", maxsplit=1)[0]
+        if re.fullmatch(r"(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])", filename_stem, re.IGNORECASE):
+            raise ValueError(f"'{filename}' is reserved on Windows and cannot be used as a cross-platform filename.")
+        if not filename.lower().endswith(".dxf"):
+            filename += ".dxf"
+        return filename
 
 
     @override
