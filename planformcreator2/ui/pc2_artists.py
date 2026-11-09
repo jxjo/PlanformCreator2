@@ -945,8 +945,6 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
         # plot distorted panels and error message for distorted panels 
 
         if self.wing.vlm_wing.has_distorted_panels:
-            text = 'Geometry of some panels is too distorted for VLM (decrease x-Panels?)'         
-            self._plot_text (text, color=QColor("red").darker(120), parentPos = (0.5,0.9), itemPos=(0.5,0.5)) #qcolors.ERROR
             self._plot_panels_distorted ()
 
         if not self.wing.is_reference_wing:
@@ -1134,6 +1132,10 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
     def _plot_panels_distorted (self):
         """ highlight all istorted panels """
 
+        text = 'Some panels are too distorted (sheared) for VLM analysis. To fix this, either:<br>'
+        text += '- Reduce the number of x-panels, or<br>'
+        text += '- Cut off the wing tip by setting a minimum tip chord.'
+        self._plot_text (text, color=QColor("red").darker(120), parentPos = (0.5,0.9), itemPos=(0.5,0.5)) #qcolors.ERROR
 
         for stripe in self.wing.vlm_wing.panels_by_stripe:
             for panel in stripe:
@@ -1144,8 +1146,12 @@ class VLM_Panels_Artist (Abstract_Artist_Planform):
                     x_mm = y * 1000
                     y_mm = x * 1000
 
-                    color = QColor ("red").darker(120)  
-                    self._plot_dataItem  (x_mm, y_mm, pen=pg.mkPen(color, width=4), name="Distorted panel", antialias=False, zValue=2)       
+                    color = QColor ("red").darker(120)
+                    fill_color = QColor (color)
+                    fill_color.setAlphaF (0.7)
+                    self._plot_dataItem (x_mm, y_mm, pen=pg.mkPen(color, width=4),
+                                         fillLevel='enclosed', fillBrush=pg.mkBrush(fill_color),
+                                         name="Distorted panel", antialias=False, zValue=2)
 
 
 
