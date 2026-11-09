@@ -497,7 +497,11 @@ class Panel_WingSection (Panel_Planform_Abstract):
     def _on_widget_changed (self, widget):
         """ user changed data in widget"""
         logger.debug (f"{self} {widget} widget changed wingSection slot")
-        self.app_model.notify_wingSection_changed ()
+
+        if self.wingSection.is_tip:
+            self.app_model.notify_planform_changed()            # tip will change planform
+        else:
+            self.app_model.notify_wingSection_changed ()
 
 
     @override
