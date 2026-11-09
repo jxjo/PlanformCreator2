@@ -439,7 +439,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
         return self._wing.parm_path.stem + '_wing.xml'
 
 
-    def do_it (self): 
+    def do_it (self, filename: str | None = None):
         """ 
         Main entry: start the export to the file defined in parameters.
         Airfoils will also be copied into the xflr5 directory
@@ -462,14 +462,15 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
         # export wing 
 
-        n_airfoils =self.export_wing ()
+        n_airfoils =self.export_wing (filename=filename)
 
-        logger.info (f"{self.xflr5_filename} and {n_airfoils} airfoils written")
+        filename = filename if filename is not None else self.xflr5_filename
+        logger.info (f"{filename} and {n_airfoils} airfoils written")
 
         return n_airfoils
 
 
-    def export_wing (self) -> int:
+    def export_wing (self, filename: str | None = None) -> int:
         """ 
         Create and write XML file for the wing and export airfoils too
 
@@ -478,7 +479,8 @@ class Exporter_Xflr5 (Exporter_Abstract):
         """
 
         targetDir = self.export_dir_abs
-        pathFileName = str(Path(targetDir) / self.xflr5_filename)
+        filename = filename if filename is not None else self.xflr5_filename
+        pathFileName = str(Path(targetDir) / filename)
 
         airfoilNames = set()                                    # set of all airfoil names exported
 
@@ -697,7 +699,7 @@ class Exporter_FLZ (Exporter_Abstract):
         return self.wing.parm_path.stem + '_wing.flz'
 
 
-    def do_it (self): 
+    def do_it (self, filename: str | None = None):
         """ 
         Main entry: start the export to the file defined in parameters.
         Airfoils will also be copied into the xflr5 directory
@@ -717,7 +719,8 @@ class Exporter_FLZ (Exporter_Abstract):
 
         # if necessary create directory 
 
-        pathFileName = Path(self.export_dir_abs) / self.flz_filename
+        filename = filename if filename is not None else self.flz_filename
+        pathFileName = Path(self.export_dir_abs) / filename
 
         # set parameter of export
         Exporter_FLZ.PROFIL.use_nick_name = self.exporter_airfoils.use_nick_name
@@ -1099,7 +1102,7 @@ class Exporter_CSV (Exporter_Abstract):
         return self._wing.parm_path.stem + '_wing.csv'
 
 
-    def do_it (self): 
+    def do_it (self, filename: str | None = None):
         """ 
         main entry: start the export to the file defined in self parameters.
         Returns a message string what was done 
@@ -1109,7 +1112,8 @@ class Exporter_CSV (Exporter_Abstract):
 
         # plot the different parts in a csv document 
 
-        csv_pathFileName = Path(self.export_dir_abs) / self.csv_filename
+        filename = filename if filename is not None else self.csv_filename
+        csv_pathFileName = Path(self.export_dir_abs) / filename
 
         with open (csv_pathFileName, mode='w', newline='') as csvfile:
             csv_writer = csv.writer (csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -1125,7 +1129,7 @@ class Exporter_CSV (Exporter_Abstract):
                                       f"{section.airfoil.fileName}"])
 
 
-        logger.info ("CSV file " + self.csv_filename + " written to " + self.export_dir_abs) 
+        logger.info ("CSV file " + filename + " written to " + self.export_dir_abs)
 
         return
 

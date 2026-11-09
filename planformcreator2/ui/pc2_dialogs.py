@@ -36,6 +36,26 @@ logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 
 
+def _validated_filename(filename: str, extension: str | None = None) -> str:
+    """Validate a portable filename and append its extension when needed."""
+
+    filename = filename.strip()
+    if not filename:
+        raise ValueError("Please enter a filename.")
+    if any(ord(char) < 32 or char in '<>:"/\\|?*' for char in filename):
+        raise ValueError("Filename must not contain path separators or invalid filename characters.")
+    if filename.endswith((".", " ")):
+        raise ValueError("Filename must not end with a space or period.")
+
+    filename_stem = filename.split(".", maxsplit=1)[0]
+    if re.fullmatch(r"(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])", filename_stem, re.IGNORECASE):
+        raise ValueError(f"'{filename}' is reserved on Windows and cannot be used as a cross-platform filename.")
+
+    if extension and not filename.lower().endswith(extension.lower()):
+        filename += extension
+    return filename
+
+
 class Dialog_Export_Airfoils (Dialog_Modal):
     """ 
     Dialog to export airfoils to a subdirectory
@@ -197,7 +217,8 @@ class Dialog_Export_DXF (Dialog_Modal):
         r += 1
         self._dxf_filename = self.exporter_dxf.dxf_filename
         Field(l, r, 0, lab="File Name", width=250,
-              get=lambda: self._dxf_filename, set=self._set_dxf_filename)
+              get=lambda: self._dxf_filename, set=self._set_dxf_filename,
+              toolTip="Enter a file name; .dxf is added automatically if omitted.")
         r += 1
         Field  (l,r,0, width=250, lab= "To Directory", get=lambda:self.exporter_dxf.export_dir)
         ToolButton(l, r,2, icon=Icon.OPEN, set=self._select_directory)
@@ -324,7 +345,7 @@ class Dialog_Export_DXF (Dialog_Modal):
         """ do export dxf"""
 
         try:
-            dxf_filename = self._validated_dxf_filename(self._dxf_filename)
+            dxf_filename = _validated_filename(self._dxf_filename, ".dxf")
         except ValueError as error:
             MessageBox.error(self, "Export DXF", str(error))
             return
@@ -346,26 +367,6 @@ class Dialog_Export_DXF (Dialog_Modal):
         """Store the unvalidated filename while the user is editing."""
 
         self._dxf_filename = filename
-
-
-    @staticmethod
-    def _validated_dxf_filename(filename: str) -> str:
-        """Validate a DXF filename and add its extension when omitted."""
-
-        filename = filename.strip()
-        if not filename:
-            raise ValueError("Please enter a DXF filename.")
-        if any(ord(char) < 32 or char in '<>:"/\\|?*' for char in filename):
-            raise ValueError("DXF filename must not contain path separators or invalid filename characters.")
-        if filename.endswith((".", " ")):
-            raise ValueError("DXF filename must not end with a space or period.")
-
-        filename_stem = filename.split(".", maxsplit=1)[0]
-        if re.fullmatch(r"(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])", filename_stem, re.IGNORECASE):
-            raise ValueError(f"'{filename}' is reserved on Windows and cannot be used as a cross-platform filename.")
-        if not filename.lower().endswith(".dxf"):
-            filename += ".dxf"
-        return filename
 
 
     @override
@@ -432,6 +433,7 @@ class Dialog_Export_Xflr5 (Dialog_Modal):
     def _init_layout(self) -> QLayout:
 
         l = QGridLayout()
+        self._output_filename = self.exporter_xflr5.xflr5_filename
         r = 0 
         Label  (l,r,0, colSpan=5, style=style.COMMENT, height=40,
                 get="A Xflr5 XML based wing definition is created from the paneled planform.<br>" +
@@ -439,7 +441,10 @@ class Dialog_Export_Xflr5 (Dialog_Modal):
         r += 1
         SpaceR   (l, r, height=5, stretch=0) 
         r += 1 
-        Field    (l,r,0, width=250, lab="File Name", get=self.exporter_xflr5.xflr5_filename)
+        Field(l, r, 0, width=250, lab="File Name",
+              get=lambda: self._output_filename,
+              set=lambda filename: setattr(self, "_output_filename", filename),
+              toolTip="Enter a file name; .xml is added automatically if omitted.")
         r += 1 
         Field    (l,r,0, width=250, lab="To Directory", get=lambda:self.exporter_xflr5.export_dir)
         ToolButton(l,r,2, icon=Icon.OPEN, set=self._select_directory)
@@ -483,12 +488,18 @@ class Dialog_Export_Xflr5 (Dialog_Modal):
     def _export_xflr5 (self, *_):
         """ do export xflr5"""
 
-        n_airfoils = self.exporter_xflr5.do_it ()
+        try:
+            filename = _validated_filename(self._output_filename, ".xml")
+        except ValueError as error:
+            MessageBox.error(self, "Export XFLR5", str(error))
+            return
+
+        n_airfoils = self.exporter_xflr5.do_it(filename=filename)
         
         self.close()
 
         plural = "s" if n_airfoils > 1 else ""
-        self._toast_message(f"Planform and {n_airfoils} airfoil{plural} exported to {self.exporter_xflr5.export_dir}")
+        self._toast_message(f"Planform ({filename}) and {n_airfoils} airfoil{plural} exported to {self.exporter_xflr5.export_dir}")
 
 
     @override
@@ -555,6 +566,7 @@ class Dialog_Export_FLZ (Dialog_Modal):
     def _init_layout(self) -> QLayout:
 
         l = QGridLayout()
+        self._output_filename = self.exporter_flz.flz_filename
         r = 0 
         Label    (l,r,0, colSpan=5, style=style.COMMENT, height=40,
                   get="A FLZ vortex project file is created from the paneled planform.<br>"+
@@ -562,7 +574,10 @@ class Dialog_Export_FLZ (Dialog_Modal):
         r += 1
         SpaceR   (l, r, height=5, stretch=0) 
         r += 1 
-        Field    (l,r,0, width=250, lab="File Name", get=self.exporter_flz.flz_filename)
+        Field(l, r, 0, width=250, lab="File Name",
+              get=lambda: self._output_filename,
+              set=lambda filename: setattr(self, "_output_filename", filename),
+              toolTip="Enter a file name; .flz is added automatically if omitted.")
         r += 1 
         Field    (l,r,0, width=250, lab= "To Directory", get=lambda:self.exporter_flz.export_dir)
         ToolButton(l,r,2, icon=Icon.OPEN, set=self._select_directory)
@@ -591,11 +606,17 @@ class Dialog_Export_FLZ (Dialog_Modal):
     def _export_flz (self, *_):
         """ do export flz"""
 
-        self.exporter_flz.do_it ()
+        try:
+            filename = _validated_filename(self._output_filename, ".flz")
+        except ValueError as error:
+            MessageBox.error(self, "Export FLZ", str(error))
+            return
+
+        self.exporter_flz.do_it(filename=filename)
 
         self.close()
 
-        self._toast_message(f"Paneled planform exported to {self.exporter_flz.export_dir}")
+        self._toast_message(f"{filename} exported to {self.exporter_flz.export_dir}")
 
 
     @override
@@ -657,10 +678,14 @@ class Dialog_Export_CSV (Dialog_Modal):
     def _init_layout(self) -> QLayout:
 
         l = QGridLayout()
+        self._output_filename = self.exporter_csv.csv_filename
         r = 0 
         SpaceR (l, r, stretch=0, height=10) 
         r += 1
-        Field  (l, r, 0,  width=200, lab="File Name",get=self.exporter_csv.csv_filename)
+        Field(l, r, 0, width=200, lab="File Name",
+              get=lambda: self._output_filename,
+              set=lambda filename: setattr(self, "_output_filename", filename),
+              toolTip="Enter a file name; .csv is added automatically if omitted.")
         r += 1
         Field  (l,r,0, width=200, lab= "To Directory", get=lambda:self.exporter_csv.export_dir)
         ToolButton(l, r,2, icon=Icon.OPEN, set=self._select_directory)
@@ -684,11 +709,17 @@ class Dialog_Export_CSV (Dialog_Modal):
     def _exporter_csv (self, *_):
         """ do export csv"""
 
-        self.wing.exporter_csv.do_it ()
+        try:
+            filename = _validated_filename(self._output_filename, ".csv")
+        except ValueError as error:
+            MessageBox.error(self, "Export CSV", str(error))
+            return
+
+        self.exporter_csv.do_it(filename=filename)
 
         self.close()
 
-        self._toast_message(f"Planform exported as {self.wing.exporter_csv.csv_filename}")
+        self._toast_message(f"Planform exported as {filename}")
 
 
     @override
@@ -769,13 +800,17 @@ class Dialog_Rename (Dialog_Modal):
     def _check_fileName_new (self, fileName_new : str) -> bool:
         """ check if new filename is valid"""
 
-        if not fileName_new.strip():
-            MessageBox.error (self, "Rename Planform", "Please enter a valid planform name.")
-            return False
-
-        if fnmatch.fnmatch (fileName_new, "*.pc2") :
+        fileName_new = fileName_new.strip()
+        if fileName_new.lower().endswith(".pc2"):
             MessageBox.error (self, "Rename Planform", "Please enter a planform name without file extension '.pc2'.")
             return False
+
+        try:
+            fileName_new = _validated_filename(fileName_new)
+        except ValueError as error:
+            MessageBox.error(self, "Rename Planform", str(error))
+            return False
+        self._fileName_new = fileName_new
 
         if fileName_new.lower() == self.wing.parm_path.stem.lower():
             MessageBox.error(self, "Rename Planform", "The new planform name is identical to the current name.")
