@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 #-------------------------------------------------------------------------------
 
 APP_NAME         = "PlanformCreator2"
-__version__      = "5.0.0"                            # hatch "version dynamic" reads this version for build
+__version__      = "5.0.1"                            # hatch "version dynamic" reads this version for build
 
 
 # DEV: Ensure compatibility with airfoileditor 5.0

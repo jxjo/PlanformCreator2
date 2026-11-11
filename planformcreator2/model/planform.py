@@ -1715,7 +1715,6 @@ class WingSections (list [WingSection]):
 
             if blendBy > 0.0:
 
-                #todo implement 5.0: ensure "fast" blend
                 airfoil.do_blend (left, right, blendBy, geometry_class)
 
                 mods = airfoil.geo.modifications_as_label

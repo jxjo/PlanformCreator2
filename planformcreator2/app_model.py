@@ -327,11 +327,11 @@ class App_Model (QObject):
     def remove_ref_pc2_file (self):
         """ remove the current ref file and make the next ref wing the current one """
 
-        if not self._ref_wing or self._ref_wing.name == Reference_Wing_Elliptical.name:
+        if not self._ref_wing or self.ref_wing_filename == Reference_Wing_Elliptical.name:
             return
 
         # index of current reference wing 
-        cur_index = self.ref_wings_filename.index(self.ref_wing.name) if self.ref_wing else -1
+        cur_index = self.ref_wings_filename.index(self.ref_wing_filename)
 
         self.wing.update_ref_pc2_files(self.ref_wing.reference_pc2_file, remove=True)
 

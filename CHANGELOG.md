@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 5.0.1
+
+### Added
+
+- Export filenames are now editable (thanks Christian)
+
+### Fixed
+
+- Reference Wings: Remove a PC2 reference
+- Reference Wing: Adjust v when rootchord differs
+- VLM: Improved sheared panel warning
+- Planform: Refesh on tip chord change (thanks Christian) 
+- Planform: Background image edit enabled (thanks Christian)
+
 ## 5.0
 
 Version 5 extends wing analysis from lift distribution and stall assessment to drag, glide performance and comparison with reference wings. Based on AirfoilEditor 5.0.
