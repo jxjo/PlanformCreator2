@@ -87,9 +87,10 @@ def _ensure_published_airfoileditor(requirement: Requirement) -> None:
 
     distribution = importlib.metadata.distribution("airfoileditor")
     install_help = (
-        "Release builds require the published AirfoilEditor package. "
-        f'Run "{sys.executable}" -m pip uninstall airfoileditor, then '
-        f'"{sys.executable}" -m pip install "{requirement}".'
+        "Release builds require the published AirfoilEditor package.\n\n"
+        "Run these commands:\n\n"
+        f'pip uninstall airfoileditor\n'
+        f'pip install "{requirement}"\n'
     )
     if distribution.read_text("direct_url.json") is not None:
         raise RuntimeError(
