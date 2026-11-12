@@ -38,7 +38,7 @@ from .model.VLM_wing         import VLM_OpPoint, VLM_Polar
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 # -----------------------------------------------------------------------------

@@ -24,7 +24,7 @@ from .VLM_wing                       import VLM_Polar
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 class Scale_Mode (StrEnum):

@@ -2,6 +2,7 @@
 ![PC2](images/PC2_logo.png "Logo")
 
 [![Latest release](https://img.shields.io/github/v/release/jxjo/PlanformCreator2)](https://github.com/jxjo/PlanformCreator2/releases/latest)
+[![PyPI](https://img.shields.io/pypi/v/planformcreator2)](https://pypi.org/project/planformcreator2/)
 [![License](https://img.shields.io/github/license/jxjo/PlanformCreator2)](LICENSE)
 
 # Version 5.0
