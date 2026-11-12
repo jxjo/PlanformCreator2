@@ -13,7 +13,7 @@ import fnmatch
 
 import logging
 
-from PyQt6.QtWidgets        import QMenu, QFileDialog, QMessageBox
+from PyQt6.QtWidgets        import QMenu, QFileDialog, QMessageBox, QToolButton
 from PyQt6.QtGui            import QDesktopServices, QCursor
 from PyQt6.QtCore           import QUrl, QObject, QProcess, QMetaObject
 
@@ -226,6 +226,7 @@ class Panel_File (Panel_Planform_Abstract):
     name = 'File'
 
     sig_open = pyqtSignal()                             # wants to open a planform
+    sig_open_recent = pyqtSignal(str)                   # wants to open a recent planform
     sig_new = pyqtSignal()                              # wants to create new planform
     sig_save = pyqtSignal()                             # wants to save current planform
     sig_exit = pyqtSignal()                             # wants to exit the application
@@ -250,9 +251,7 @@ class Panel_File (Panel_Planform_Abstract):
 
         l = QGridLayout()
         r,c = 0, 0 
-        Button (l,r,c, text="&Open", width=100, 
-                set=self.sig_open.emit, toolTip="Open new Planform",
-                button_style=button_style.PRIMARY)
+        self._add_open_button (l,r,c)
         Button (l,r,c+2, text="&New", width=80, 
                 set=self.sig_new.emit, toolTip="Create new Planform")
         
@@ -272,6 +271,38 @@ class Panel_File (Panel_Planform_Abstract):
         return l 
 
 
+    def _add_open_button (self, layout: QGridLayout, row: int, column: int):
+        """Add the split Open button shared by both file-panel layouts."""
+
+        button = ToolButton (layout, row, column, text="&Open", width=100,
+                             set=self.sig_open.emit,
+                             toolTip="Open a planform; use the arrow for recent planforms")
+        button.setAutoRaise(False)
+        button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self._recent_menu = QMenu(button)
+        self._recent_menu.setToolTipsVisible(True)
+        self._recent_menu.aboutToShow.connect(self._fill_recent_menu)
+        button.setMenu(self._recent_menu)
+
+
+    def _fill_recent_menu (self):
+        """Rebuild the recent menu from the shared model history."""
+
+        self._recent_menu.clear()
+        paths = self.app_model.recent_files.paths
+        if self.wing is not None and not self.wing.is_new_wing:
+            current_path = self.wing.parm_path_abs.resolve()
+            paths = [path for path in paths if path != current_path]
+        if not paths:
+            self._recent_menu.addAction("No other recent planforms").setEnabled(False)
+            return
+        for path in paths:
+            action = self._recent_menu.addAction(path.name.replace("&", "&&"))
+            action.setToolTip(str(path))
+            action.triggered.connect(
+                lambda _checked=False, path=path: self.sig_open_recent.emit(str(path)))
+
+
     def _more_menu (self) -> QMenu:
         """ create and return sub menu for 'more' actions"""
 
@@ -287,13 +318,26 @@ class Panel_File (Panel_Planform_Abstract):
         menue.addAction (MenuAction ("Delete temp files", self, set=self.sig_delete_temp_files.emit,
                                      toolTip=f"Delete temporary files created by {app_name} just to have a clean directoy again"))
         menue.addSeparator ()
-        menue.addAction (MenuAction ("Readme on Github", self, set=self._open_AE_url,
-                                     toolTip=f"Open the Github README file of {app_name} in a browser"))
-        menue.addAction (MenuAction ("Releases on Github", self, set= self._open_releases_url,
-                                     toolTip=f"Open the Github page with the actual release of {app_name}"))
+
+        help_menu = menue.addMenu ("Help on Github")
+        help_menu.addAction (MenuAction ("Readme", self, set=self._open_AE_url,
+                                        toolTip=f"Open the Github README file of {app_name} in a browser"))
+        help_menu.addAction (MenuAction ("About Version 5.0", self, set=self._open_about_url,
+                                        toolTip=f"Open the Github page with the details of version 5.0 of {app_name}"))
+        help_menu.addAction (MenuAction ("Releases", self, set=self._open_releases_url,
+                                        toolTip=f"Open the Github page with the actual release of {app_name}"))
+        help_menu.setToolTipsVisible(True)
+
         menue.setToolTipsVisible(True)
 
         return menue
+
+
+    def _open_about_url (self):
+        """ open Github page about version 5.0 in Browser"""
+
+        link = "https://github.com/jxjo/PlanformCreator2/blob/main/doc/About_5.0_en.md"
+        QDesktopServices.openUrl(QUrl(link))
 
 
     def _open_releases_url (self):
@@ -304,7 +348,7 @@ class Panel_File (Panel_Planform_Abstract):
 
 
     def _open_AE_url (self):
-        """ open Github AirfoilEditor repo in Browser"""
+        """ open Github PlanformCreator2 repo in Browser"""
 
         link = "https://github.com/jxjo/PlanformCreator2"
         QDesktopServices.openUrl(QUrl(link))
@@ -319,9 +363,7 @@ class Panel_File_Small (Panel_File):
 
         l = QGridLayout()
         r,c = 0, 0 
-        Button      (l,r,c, text="&Open", width=100, 
-                    set=self.sig_open.emit, toolTip="Open new Planform",
-                    button_style=button_style.PRIMARY)
+        self._add_open_button (l,r,c)
         MenuButton  (l,r,c+2, text="More...", width=80, 
                     menu=self._more_menu(), 
                     toolTip="Choose further actions for this airfoil")

@@ -22,7 +22,7 @@ from PyQt6.QtCore           import pyqtSignal, QObject, QThread, QTimer
 
 from airfoileditor.resources                import get_assets_dir as ae_assets_dir
 from airfoileditor.base.common_utils        import clip
-from airfoileditor.base.app_utils           import Settings
+from airfoileditor.base.app_utils           import Settings, Recent_Files
 from airfoileditor.model.airfoil_examples   import Example
 from airfoileditor.model.xo2_driver         import Worker
 from airfoileditor.model.polar_set          import Polar_Task, Polar_Definition, polarType
@@ -92,6 +92,7 @@ class App_Model (QObject):
         self._is_first_run      = False                 # is first run of this version
 
         self._wing : Wing                   = None      # actual wing model
+        self._recent_files      = Recent_Files()        # history of recently used main wings
         self._cur_wingSection : WingSection = None      # current selected wing section
 
         self._ref_wing : Wing               = None      # reference wing of the current planform    
@@ -489,6 +490,32 @@ class App_Model (QObject):
             return None
         
     # --- model methods -----
+
+
+    @property
+    def recent_files (self) -> Recent_Files:
+        """History of main wings; record user actions via remember_wing."""
+        return self._recent_files
+
+
+    def remember_wing (self, wing: Wing | None):
+        """Remember a saved main wing, excluding new and reference wings."""
+
+        if wing is not None and not wing.is_new_wing and not wing.is_reference_wing:
+            self._recent_files.add (wing.parm_path_abs)
+
+
+    def forget_wing_file (self, pathFilename: str | Path):
+        """Remove a deleted or renamed wing file from the history."""
+
+        self._recent_files.remove (pathFilename)
+
+
+    def open_wing (self, pathFilename: str | Path | None):
+        """Load and remember a main wing opened by the user, including startup."""
+
+        self.load_wing (pathFilename)
+        self.remember_wing (self.wing)
 
 
     def load_wing (self, pathFilename, as_new = False): 

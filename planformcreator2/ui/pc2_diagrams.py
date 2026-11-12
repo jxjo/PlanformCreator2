@@ -575,7 +575,8 @@ class Item_VLM_Panels (Item_Abstract):
     def plot_title(self, **kwargs):
 
         n_panels = self.wing.vlm_wing.n_panels
-        return super().plot_title(subtitle=f"{n_panels} panels", **kwargs)
+        strategy_name = self.wing.planform_mesh.strategy_name
+        return super().plot_title(subtitle=f"{n_panels} panels - {strategy_name}", **kwargs)
     
 
     @override

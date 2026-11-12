@@ -10,6 +10,8 @@ The modes are controlled by the Modes_Manager
 """
 import      os
 import      shutil
+from html                   import escape
+from pathlib                import Path
 
 from typing                 import override
 
@@ -249,7 +251,7 @@ class Mode_Modify (Mode_Abstract):
         """ Actions to perform when entering the mode. """
 
         self.app_model.set_mode (self.mode_id)
-        self.app_model.load_wing (pc2_file)
+        self.app_model.open_wing (pc2_file)
         super().on_enter()
 
 
@@ -278,7 +280,7 @@ class Mode_Modify (Mode_Abstract):
                 if self.wing.is_new_wing:
                     leave = self.save_as ()                 # save as new file - or cancel
                 else:
-                    self.save()                             # save parameter file
+                    leave = self.save()                     # save parameter file
 
             elif button == QMessageBox.StandardButton.Discard:
                 # on Discard remove temp dir of airfoil strak etc
@@ -305,21 +307,37 @@ class Mode_Modify (Mode_Abstract):
         newPathFilename, _ = QFileDialog.getOpenFileName(self.stacked_panel, filter=filters, directory=workingDir)
 
         if newPathFilename:                     
-            self.app_model.load_wing (newPathFilename)
+            self.app_model.open_wing (newPathFilename)
 
 
-    def save (self):
+    def open_recent (self, pathFilename: str):
+        """Open a recent wing with the usual unsaved-changes confirmation."""
+
+        path = Path(pathFilename)
+        if not path.is_file():
+            logger.warning("Recent planform no longer exists: %s", path)
+            self.app_model.forget_wing_file(path)
+            MessageBox.error(self.stacked_panel, "Open Recent Planform",
+                             f"File not found:<br>{escape(str(path))}<br><br>"
+                             "The entry has been removed from recent files.")
+            return
+        if self.confirm_close():
+            self.app_model.open_wing(str(path))
+
+
+    def save (self) -> bool:
         """ save wing data to the action parameter file - if new wing to saveAs"""
 
         if self.wing.is_new_wing:
-            self.save_as ()
-            return
+            return self.save_as ()
 
         ok = self.wing.save ()
         if ok:
+            self.app_model.remember_wing (self.wing)
             self._toast_message (f"Planform {self.wing.parm_path.name} saved", toast_style=style.GOOD)
         else:
             MessageBox.error   (self.stacked_panel,"Save Planform", f"<b>{self.wing.parm_path.name}</b> couldn't be saved", min_height= 60)
+        return ok
 
 
     def save_as (self) ->bool: 
@@ -332,17 +350,17 @@ class Mode_Modify (Mode_Abstract):
         newPathFilename, _ = QFileDialog.getSaveFileName(self.stacked_panel, filter=filters, directory=directory)
 
         if not newPathFilename: 
-            return
+            return False
 
         ok = self.wing.save (newPathFilename = newPathFilename)
         if ok:
+            self.app_model.remember_wing (self.wing)
             self._toast_message (f"Planform saved as {newPathFilename}", toast_style=style.GOOD)
             self.app_model.notify_fileName_changed()            # refresh title ...
         else:
             MessageBox.error   (self.stacked_panel,"Save Planform", f"<b>{newPathFilename}</b> couldn't be saved", min_height= 60)
 
-            self.app_model.load_wing (newPathFilename)          # reload old wing
-            return
+        return ok
 
 
 
@@ -374,11 +392,17 @@ class Mode_Modify (Mode_Abstract):
     def rename (self): 
         """ rename current airfoil as ..."""
 
+        old_path = self.wing.parm_path_abs.resolve()
         dialog = Dialog_Rename (self.stacked_panel, lambda: self.wing, 
                                 parentPos=(0.3,-0.6), dialogPos=(0,1))  
         dialog.exec()   
 
-        self.app_model.load_wing (str(self.wing.parm_path_abs))      # reload wing to apply new name / filename
+        new_path = self.wing.parm_path_abs.resolve()
+        if old_path != new_path:
+            self.app_model.forget_wing_file (old_path)
+            self.app_model.open_wing (str(new_path))
+        else:
+            self.app_model.load_wing (str(new_path))                # internal reload
 
 
 
@@ -421,6 +445,7 @@ class Mode_Modify (Mode_Abstract):
             p = Panel_File (self, self.app_model, width=250, lazy=True)
             p.sig_toggle_panel_size.connect     (self.toggle_minimized)
             p.sig_open.connect                  (self.open)
+            p.sig_open_recent.connect           (self.open_recent)
             p.sig_new.connect                   (self.new)
             p.sig_save.connect                  (self.save)
             p.sig_save_as.connect               (self.save_as)
@@ -450,6 +475,7 @@ class Mode_Modify (Mode_Abstract):
             p = Panel_File_Small (self, self.app_model, width=250, lazy=True, has_head=False)
             p.sig_toggle_panel_size.connect     (self.toggle_minimized)
             p.sig_open.connect                  (self.open)
+            p.sig_open_recent.connect           (self.open_recent)
             p.sig_new.connect                   (self.new)
             p.sig_save.connect                  (self.save)
             p.sig_save_as.connect               (self.save_as)
@@ -672,5 +698,4 @@ class Modes_Manager (QObject):
 
             # adjust new min with of data panel
             self._set_min_width()        
-
 

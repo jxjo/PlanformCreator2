@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Split Open buttons with persistent recent planforms
+- Help on Github submenu with Readme, About Version 5.0 and Releases
 - Export filenames are now editable (thanks Christian)
 
 ### Fixed

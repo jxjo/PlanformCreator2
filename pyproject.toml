@@ -12,7 +12,7 @@ authors = [{ name="Jochen Guenzel", email="jochen@jxjo.de" }]
 description = "Parametric wing planform design and aerodynamic analysis"
 readme = "doc/README_PyPi.md"
 requires-python = ">=3.12"
-dependencies = ["airfoileditor>=5.0.2,<5.1"]
+dependencies = ["airfoileditor>=5.0.3,<5.1"]
 classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.12",
