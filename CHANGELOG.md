@@ -6,16 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Split Open buttons with persistent recent planforms
+- Split Open buttons with recent planforms
 - Help on Github submenu with Readme, About Version 5.0 and Releases
 - Export filenames are now editable (thanks Christian)
 
 ### Fixed
 
 - Reference Wings: Remove a PC2 reference
-- Reference Wing: Adjust v when rootchord differs
-- VLM: Improved sheared panel warning
-- Planform: Refesh on tip chord change (thanks Christian) 
+- Reference Wing: Corrected flight speed when root chord differs
+- VLM: Improved sheared-panel warning
+- Planform: Refresh on tip chord change (thanks Christian) 
 - Planform: Background image edit enabled (thanks Christian)
 
 ## 5.0
