@@ -22,7 +22,7 @@ A short guide for developers how to create a new release
   - Ensure pyinstaller option `--noconsole` is set to have no console window during runtime
   - Check Pyinstaller -onedir result in `./dist`
   - Build against the published AirfoilEditor package installed from the package index, not an editable checkout, local archive or Git/URL installation. The build preflight rejects direct installations and source-checkout import overrides.
-  - Use `py -3 dev\win_build.py check` to run the version and package-origin checks without building. These checks use local installation metadata; they do not verify the package against PyPI online.
+  - Use `py -3 dev\win_build.py check` to check the installed version against the AirfoilEditor requirement in `pyproject.toml` and verify the package origin without building. These checks use local installation metadata; they do not verify the package against PyPI online.
   - Shared UI icons are collected explicitly from AirfoilEditor's resolved icons directory.
   - Check that `_internal/airfoileditor/icons` contains the light and dark icons, and verify them in both apps.
 

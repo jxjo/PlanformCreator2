@@ -18,12 +18,12 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-try:
-    from packaging.version import Version
-except ImportError:  # pragma: no cover - packaging should be available in build env
-    Version = None
+if TYPE_CHECKING:
+    from packaging.requirements import Requirement
 
 
 APP_NAME        = "PlanformCreator2"
@@ -32,40 +32,64 @@ PC2_ICON_NAME   = "PC2.ico"
 AE_ICON_NAME    = "AE.ico"
 
 
-def _ensure_airfoileditor_version(package_version: str) -> None:
-    """Fail if installed AirfoilEditor is older than PlanformCreator2 version."""
+def _airfoileditor_requirement(repo_root: Path) -> Requirement:
+    """Read the AirfoilEditor requirement from the project metadata."""
+
+    try:
+        from packaging.requirements import Requirement
+        from packaging.utils import canonicalize_name
+    except ImportError as exc:
+        raise RuntimeError(
+            "Python package 'packaging' is required for dependency checks. "
+            "Install it with: pip install packaging"
+        ) from exc
+
+    with (repo_root / "pyproject.toml").open("rb") as project_file:
+        project = tomllib.load(project_file)
+    dependencies = project["project"]["dependencies"]
+    requirements = [Requirement(dependency) for dependency in dependencies]
+    matches = [requirement for requirement in requirements
+               if canonicalize_name(requirement.name) == "airfoileditor"]
+    if len(matches) != 1:
+        raise RuntimeError("pyproject.toml must declare exactly one AirfoilEditor dependency.")
+    requirement = matches[0]
+    if not requirement.specifier or requirement.marker or requirement.url:
+        raise RuntimeError(
+            f"Unsupported AirfoilEditor requirement in pyproject.toml: {requirement}. "
+            "A version specifier without a marker or direct URL is required."
+        )
+    return requirement
+
+
+def _ensure_airfoileditor_version(requirement: Requirement) -> None:
+    """Fail if the installed AirfoilEditor version does not meet the requirement."""
 
     try:
         ae_version = importlib.metadata.version("airfoileditor")
     except importlib.metadata.PackageNotFoundError as exc:
         raise RuntimeError(
             "AirfoilEditor is not installed in the current Python environment. "
-            "Install or upgrade it before building."
+            f'Install it with: "{sys.executable}" -m pip install "{requirement}"'
         ) from exc
 
-    if Version is None:
+    if not requirement.specifier.contains(ae_version):
         raise RuntimeError(
-            "Python package 'packaging' is required for version comparison. "
-            "Install it with: pip install packaging"
+            f"Installed AirfoilEditor version {ae_version} does not satisfy "
+            f"the pyproject.toml requirement {requirement}. "
+            f'Install a compatible version with: "{sys.executable}" -m pip install "{requirement}"'
         )
 
-    if Version(ae_version) < Version(package_version):
-        raise RuntimeError(
-            f"AirfoilEditor version {ae_version} is older than PlanformCreator2 version {package_version}. "
-            "Please upgrade AirfoilEditor before building."
-        )
-
-    print(f"Version check OK: airfoileditor {ae_version} >= planformcreator2 {package_version}")
+    print(f"Version check OK: airfoileditor {ae_version} satisfies {requirement}")
 
 
-def _ensure_published_airfoileditor() -> None:
+def _ensure_published_airfoileditor(requirement: Requirement) -> None:
     """Require an index-installed package rather than a direct source installation."""
 
     distribution = importlib.metadata.distribution("airfoileditor")
     install_help = (
         "Release builds require the published AirfoilEditor package. "
         f'Run "{sys.executable}" -m pip uninstall airfoileditor, then '
-        f'"{sys.executable}" -m pip install "airfoileditor>=5.0.2,<5.1".'
+        f'"{sys.executable}" -m pip install "{requirement}".'
     )
     if distribution.read_text("direct_url.json") is not None:
         raise RuntimeError(
@@ -434,9 +458,9 @@ def main() -> int:
         return 2
 
     try:
-        _, package_version = _project_metadata(repo_root)
-        _ensure_airfoileditor_version(package_version)
-        _ensure_published_airfoileditor()
+        requirement = _airfoileditor_requirement(repo_root)
+        _ensure_airfoileditor_version(requirement)
+        _ensure_published_airfoileditor(requirement)
 
         if args.target == "check":
             return 0
