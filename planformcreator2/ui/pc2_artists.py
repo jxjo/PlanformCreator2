@@ -2368,6 +2368,10 @@ class WingSections_Artist (Abstract_Artist_Planform):
 
         # handle only ctrl-click
         if not (ev.modifiers() & Qt.KeyboardModifier.ControlModifier): return  
+
+        # ignore clicks that have already been accepted by a plot curve item (e.g. reference line)
+        if ev.isAccepted() and isinstance(ev.acceptedItem, pg.PlotCurveItem):
+            return
        
         # was the scene click in my viewbox?
 
