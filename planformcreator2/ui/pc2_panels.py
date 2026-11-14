@@ -15,14 +15,15 @@ import logging
 
 from PyQt6.QtWidgets        import QMenu, QFileDialog, QMessageBox, QToolButton
 from PyQt6.QtGui            import QDesktopServices, QCursor
-from PyQt6.QtCore           import QUrl, QObject, QProcess, QMetaObject
+from PyQt6.QtCore           import QUrl, QObject, QProcess, QMetaObject, QTimer
 
 from airfoileditor.base.widgets         import * 
 from airfoileditor.base.panels          import Edit_Panel, MessageBox, Disabled_Overlay
 from airfoileditor.model.airfoil        import Airfoil, GEO_BASIC, Airfoil_Bezier, Airfoil_BSpline
 
 from ..model.wing           import Wing
-from ..model.planform       import (Planform, N_Distrib_Abstract, N_Chord_Reference, N_Reference_Line,
+from ..model.planform       import (Planform, N_Distrib_Abstract, N_Chord_Reference,
+                                    N_Reference_Line_Bezier, N_Reference_Line_Polyline,
                                     Flaps, WingSections, WingSection)
 
 from ..app_model            import App_Model
@@ -179,8 +180,14 @@ class Panel_Planform_Abstract (Edit_Panel):
         return self.wing.planform.n_chord_ref
     
     @property
-    def n_ref_line (self) -> N_Reference_Line:
-        return self.wing.planform.n_ref_line
+    def n_ref_line_polyline (self) ->  N_Reference_Line_Polyline:
+        ref_line = self.wing.planform.n_ref_line
+        return ref_line if ref_line.is_polyline else None
+
+    @property
+    def n_ref_line_bezier (self) ->  N_Reference_Line_Bezier:
+        ref_line = self.wing.planform.n_ref_line
+        return ref_line if  ref_line.is_bezier else None
 
     @property    
     def flaps (self) -> Flaps:
@@ -475,8 +482,12 @@ class Panel_Chord_Reference (Panel_Planform_Abstract):
                 obj=lambda: self.n_chord_ref, prop=N_Chord_Reference.cr_tip)
         r += 1
         CheckBox (l,r,c, text="Reference line is a curve (banana)", colSpan=5,
-                obj=lambda: self.n_ref_line, prop=N_Reference_Line.is_banana,
+                obj=lambda: self.n_ref_line_bezier, prop=N_Reference_Line_Bezier.is_banana,
                 hide=lambda: not self.planform.n_distrib.isBezier)    # banana only for Bezier
+        CheckBox (l,r,c, text="Reference line has kinks bending the planform", colSpan=5,
+                get=lambda: self.n_ref_line_polyline and self.n_ref_line_polyline.has_kinks,
+                set=self._set_kinks, signal=False,
+                hide=lambda: not self.n_ref_line_polyline)
         r += 1
         CheckBox (l,r,c, text="Flaps hinge line equals Reference line", colSpan=5,  
                   obj=lambda: self.flaps, prop=Flaps.hinge_equal_ref_line)     
@@ -487,6 +498,32 @@ class Panel_Chord_Reference (Panel_Planform_Abstract):
         l.setColumnMinimumWidth (2,15)
         l.setColumnMinimumWidth (3,50)
         return l 
+
+
+    def _set_kinks (self, checked: bool):
+        """Create a first kink, or remove all existing kinks."""
+        ref_line = self.n_ref_line_polyline
+        if checked:
+            sections = ref_line.available_kink_sections
+            if not sections:
+                MessageBox.info (
+                    self, "Reference line kinks",
+                    "To add a kink, first create an intermediate wing section that defines "
+                    "the planform chord (a double trapezoid).")
+            else:
+                section = sections[0]
+                if ref_line.add_point (section):
+                    self.app_model.notify_planform_changed ()
+                    message = f"Kink {section.id} was added. Drag it vertically to bend the planform."
+                    if ref_line.available_kink_sections:
+                        message += "\n\nTo add another kink, Ctrl-click the reference line at a chord-defining wing section."
+                    MessageBox.info (self, "Reference line kinks", message)
+                else:
+                    MessageBox.error (self, "Reference line kinks", "Could not add a kink at the selected section.")
+        else:
+            ref_line.clear_kinks ()
+            self.app_model.notify_planform_changed ()
+        QTimer.singleShot (0, self.refresh)
 
 
 

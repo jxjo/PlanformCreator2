@@ -254,6 +254,73 @@ class Abstract_Artist_Planform (Artist):
 
 
 
+class Movable_Polyline (Movable_Curve):
+    """Editable polyline using the same points and callbacks as Movable_Curve."""
+
+    CLICK_TOLERANCE = 10.0
+
+    def __init__ (self, *args, **kwargs):
+        super().__init__ (*args, **kwargs)
+        if self.clickable:
+            self.setClickable (True, width=2 * self.CLICK_TOLERANCE)
+
+
+    def polyline (self) -> tuple[list, list]:
+        """Return the preview coordinates, including any derived endpoints."""
+        return self.points_xy()
+
+
+    def _section_near_click (self, x: float, y: float,
+                             intersections: list[tuple[WingSection, float, float]]) -> WingSection | None:
+        """Return the nearest candidate intersection within ten viewport pixels."""
+        view = self.getViewWidget()
+        if view is None:
+            return None
+        click = view.viewportTransform().map (self.mapToScene (pg.Point (x, y)))
+        nearest = None
+        distance_min = self.CLICK_TOLERANCE ** 2
+        for section, px, py in intersections:
+            pos = view.viewportTransform().map (self.mapToScene (pg.Point (px, py)))
+            distance = (pos.x() - click.x()) ** 2 + (pos.y() - click.y()) ** 2
+            if distance <= distance_min:
+                nearest = section
+                distance_min = distance
+        return nearest
+
+
+    @override
+    def _update_curve (self):
+        """The control points already define the polyline."""
+
+
+    @override
+    def _update_curve_item (self):
+        """Show straight segments between the current control points."""
+        if self._curve_item:
+            self._curve_item.setData (*self.polyline())
+            self._curve_item.show()
+
+
+    @override
+    def _moving_point (self, aPoint: Movable_Point):
+        """Update both the clickable line and the temporary preview."""
+        super()._moving_point (aPoint)
+        self.setData (*self.polyline())
+
+
+    @override
+    def mouseClickEvent (self, ev: MouseClickEvent):
+        """Handle Ctrl-click without allowing rejected clicks to select the curve."""
+        if self.clickable and ev.button() == Qt.MouseButton.LeftButton \
+                and ev.modifiers() & Qt.KeyboardModifier.ControlModifier \
+                and self.mouseShape().contains (ev.pos()) \
+                and self._add_point (ev.pos().x(), ev.pos().y()):
+            ev.accept()
+        else:
+            ev.ignore()
+
+
+
 class Ref_Line_Artist (Abstract_Artist_Planform):
     """
     Plot the reference line either
@@ -270,22 +337,106 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
         pen   = pg.mkPen(COLOR_REF_LINE, width=1.5)
         self._plot_dataItem  (x, y, name="Chord Reference Line", pen = pen, antialias = True, zValue=4)
 
-        # mouse helper to change ref line Bezier - only Bezier may have Banana
+        # mouse helper to change ref line 
 
-        if self.show_mouse_helper and self.planform.n_distrib.isBezier:
- 
-            # movable Bezier curve   
-            pt = self.Movable_Ref_Line_Bezier (self._pi, self.planform, 
-                                        t_fn = self.t_fn, tr_fn = self.tr_fn, 
-                                        movable=True, color=COLOR_REF_LINE,
-                                        on_changed=self.sig_planform_changed.emit)
-            self._add (pt) 
+        if self.show_mouse_helper:
 
-            if self.planform.n_ref_line.is_straight_line():
-                msg = "Reference line: ctrl-click to add point for 'banana'"
-            else: 
-                msg = "Reference line: Move Bezier control points to modify, shift-click to remove 'banana' points"
-            self.set_help_message (msg)
+            if self.planform.n_distrib.isBezier:
+    
+                pt = self.Movable_Ref_Line_Bezier (self._pi, self.planform, 
+                                            t_fn = self.t_fn, tr_fn = self.tr_fn, 
+                                            movable=True, color=COLOR_REF_LINE,
+                                            on_changed=self.sig_planform_changed.emit)
+                self._add (pt) 
+
+                if self.planform.n_ref_line.is_straight_line():
+                    msg = "Reference line: ctrl-click to add point for 'banana'"
+                else: 
+                    msg = "Reference line: Move Bezier control points to modify, shift-click to remove 'banana' points"
+                self.set_help_message (msg)
+
+            elif self.planform.n_ref_line.is_polyline and self._mode == mode.REF_TO_PLAN:
+
+                pt = self.Movable_Ref_Line_Polyline (
+                                            self._pi, self.planform, t_fn=self.t_fn, tr_fn=self.tr_fn,
+                                            movable=True, color=COLOR_REF_LINE,
+                                            on_changed=self.sig_planform_changed.emit)
+                self._add (pt)
+
+                self.set_help_message (
+                    "Reference line: Ctrl-click at a chord-defining section to add a kink, "
+                    "move vertically, shift-click to remove")
+
+
+    class Movable_Ref_Line_Polyline (Movable_Polyline):
+        """Edit reference-line points attached to chord-defining sections."""
+
+        class Movable_Kink_Point (Movable_Curve_Point):
+            """Show a kink's offset from the straight reference line."""
+
+            @override
+            def label_moving (self, *args):
+                """Return the label shown on hover and while moving."""
+                if self._jpoint.fixed:
+                    return super().label_moving (*args)
+                parent = self.parentItem()
+                if not isinstance (parent, Ref_Line_Artist.Movable_Ref_Line_Polyline):
+                    raise TypeError ("Kink point requires a reference-line polyline parent")
+                offset = parent._ref_line.displacement_from_straight (*self.xy)
+                return f"{self.name} {offset:+.1f}mm"
+
+
+        def __init__ (self, pi: pg.PlotItem, planform: Planform,
+                      t_fn=None, tr_fn=None, **kwargs):
+            self._pi = pi
+            self._planform = planform
+            self._ref_line = planform.n_ref_line
+            self._t_fn, self._tr_fn = t_fn, tr_fn
+
+            jpoints, self._sections = self._ref_line.jpoints ()
+            jpoints = JPoint.transform (jpoints, transform_fn=self._t_fn)
+
+            super().__init__ (jpoints, movable_point_class=self.Movable_Kink_Point, **kwargs)
+
+
+        @override
+        def _add_point (self, x: float, y: float) -> bool:
+            """Insert only when the click is near an eligible intersection."""
+            candidates = []
+            for section in self._ref_line.available_kink_sections:
+                xn = section.xn
+                yn = self._ref_line.at (xn)
+                px, py = self._t_fn (xn, yn) if self._t_fn else (xn, yn)
+                candidates.append ((section, px, py))
+
+            section = self._section_near_click (x, y, candidates)
+            if section is None:
+                return False
+            if not self._ref_line.add_point (section):
+                return False
+            super()._finished_point (None)
+            return True
+
+
+        @override
+        def _finished_point (self, aPoint: Movable_Point | None):
+            """Save a moved point's normalized offset after the drag finishes."""
+
+            if aPoint is not None:
+                section = self._sections[aPoint.id]
+                if section is not None:
+                    _, yn = self._tr_fn (aPoint.x, aPoint.y) if self._tr_fn else (aPoint.x, aPoint.y)
+                    self._ref_line.set_point (section, float(yn))
+            super()._finished_point (aPoint)
+
+
+        @override
+        def _delete_point (self, aPoint: Movable_Point):
+            """Remove the section's point and refresh after the click event."""
+            
+            section = self._sections[aPoint.id]
+            if section is not None and self._ref_line.remove_point (section):
+                super()._finished_point (None)
 
 
 
@@ -336,11 +487,15 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
 
             self._pi = pi
             self._planform = planform
+            ref_line = planform.n_ref_line
+            if not ref_line.is_bezier:
+                raise ValueError ("Bezier reference-line editor requires a Bezier reference line")
+            self._ref_line = ref_line
 
             self._t_fn, self._tr_fn  = t_fn, tr_fn
 
             # scale x-coordinate of Bezier jpoints depending on mode 
-            jpoints = self._planform.n_ref_line.bezier_as_jpoints ()
+            jpoints = self._ref_line.jpoints ()
             jpoints = JPoint.transform (jpoints, transform_fn = self._t_fn)
 
             super().__init__(jpoints, movable_point_class=self.Movable_Ref_Line_Point, **kwargs)
@@ -385,7 +540,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
             if jpoints is None:
                 jpoints = self.jpoints
             jpoints = JPoint.transform (jpoints, transform_fn = self._tr_fn)
-            self._planform.n_ref_line.bezier_from_jpoints (jpoints)
+            self._ref_line.bezier_from_jpoints (jpoints)
 
             super()._finished_point (aPoint)
 
@@ -2370,8 +2525,12 @@ class WingSections_Artist (Abstract_Artist_Planform):
         if not (ev.modifiers() & Qt.KeyboardModifier.ControlModifier): return  
 
         # ignore clicks that have already been accepted by a plot curve item (e.g. reference line)
-        if ev.isAccepted() and isinstance(ev.acceptedItem, pg.PlotCurveItem):
-            return
+        if ev.isAccepted():
+            if isinstance(ev.acceptedItem, pg.PlotCurveItem):
+                return
+            if isinstance(ev.acceptedItem, Movable_Point) and \
+                    isinstance(ev.acceptedItem.parentItem(), Movable_Polyline):
+                return
        
         # was the scene click in my viewbox?
 
@@ -2761,24 +2920,17 @@ class Flaps_Artist (Abstract_Artist_Planform):
 
 
 
-    class Movable_Hinge (pg.PlotDataItem):
-        """
-        pg.PlotCurveItem/UIGraphicsItem which represents 
-        the hinge polyline with its points at wing sections 
-        
-        Points are implemented with Movable_Points
-        """
+    class Movable_Hinge (Movable_Polyline):
+        """Edit the hinge polyline at wing sections."""
 
         class Movable_Hinge_Point (Movable_Point):
             """ Represents hinge movable point """
 
             def __init__ (self, *args, 
-                          planform = Planform, 
-                          t_fn = None, tr_fn = None,                                # transformation
+                          planform: Planform,
+                          tr_fn = None,
                           **kwargs):
 
-                self._planform = planform
-                self._t_fn  = t_fn
                 self._tr_fn = tr_fn
                 self._flaps : Flaps = planform.flaps
 
@@ -2789,7 +2941,7 @@ class Flaps_Artist (Abstract_Artist_Planform):
             def label_moving (self, *_):
                 """ label text during move"""
 
-                x, y = self._tr_fn (self.x, self.y)
+                x, y = self._tr_fn (self.x, self.y) if self._tr_fn else (self.x, self.y)
 
                 depth, rel_depth = self._flaps.flap_depth_at (x, hinge_y = y)  
 
@@ -2810,111 +2962,63 @@ class Flaps_Artist (Abstract_Artist_Planform):
             self._planform = planform
             self._flaps : Flaps = planform.flaps
 
-            self._color = color 
             self._t_fn, self._tr_fn  = t_fn, tr_fn
-            self._callback_changed = on_changed
-
-            # Control jpoints - transform them to current coordinate system   
-
-            self._jpoints = self._flaps.hinge_as_jpoints (transform_fn = t_fn)
-
-            # init polyline of control points as PlotCurveItem and hide it (pen=None) 
-
-            super().__init__(*self.polyline(), pen=pg.mkPen (self._color, width=0.1, style=Qt.PenStyle.DotLine))            # mouse coordinates will define hinge line  
-
-            self.setZValue (10) if movable else self.setZValue (5)             
-            self.setCurveClickable (True, width=8)                  # make clickable to add new point 
-            self.sigClicked.connect (self._hinge_item_clicked)
-
-            # init control points as Movable_Points 
-
-            for i, jpoint in enumerate (self._jpoints):
-
-                p = self.Movable_Hinge_Point (jpoint, planform=planform, id = i, parent=self, 
-                                              movable=movable, t_fn = t_fn, tr_fn = tr_fn,               # transformation
-                                              color=color, symbol='s', size=7, label_anchor=label_anchor, **kwargs) 
-                
-                p.sigPositionChanged.connect        (self._moving_point)
-                p.sigPositionChangeFinished.connect (self._finished_point)
-                p.sigShiftClick.connect             (self._delete_point)
+            jpoints = self._flaps.hinge_as_jpoints (transform_fn=t_fn)
+            point_class = lambda *args, **point_kwargs: self.Movable_Hinge_Point (
+                *args, planform=planform, tr_fn=tr_fn, **point_kwargs)
+            super().__init__ (jpoints, color=color, movable=movable,
+                              label_anchor=label_anchor, on_changed=on_changed,
+                              movable_point_class=point_class, size=7, **kwargs)
+            self.setData (*self.polyline())
 
 
-        def polyline (self) -> tuple[list]:
-            """returns coordinates of self_jpoints as x, y polyline """
-            x, y = [], []
-            for p in self._jpoints:
-                x.append(p.x)
-                y.append(p.y)
-            
-            # if left point isn't at tip, insert additional extrapolated point at tip 
-            span = self._planform.span
-            if x[-1] != span: 
-                y_tip = interpolate (x[-2], x[-1], y[-2],y[-1], span)
-                x.append (span)
+        @override
+        def polyline (self) -> tuple[list, list]:
+            """Extend the last hinge segment to the tip when necessary."""
+            x, y = self.points_xy()
+            tip_x, _ = self._t_fn (self._planform.span, 0.0) if self._t_fn \
+                       else (self._planform.span, 0.0)
+            if not isclose (x[-1], tip_x, abs_tol=1e-8):
+                y_tip = interpolate (x[-2], x[-1], y[-2], y[-1], tip_x)
+                x.append (tip_x)
                 y.append (y_tip)
-
-            return np.array(x), np.array(y)
-
-
-        def _moving_point (self, aPoint : Movable_Point):
-            """ slot - point is moved by mouse """
-            jpoint : JPoint =  self._jpoints[aPoint.id]
-            jpoint.set_y(aPoint.y)                                  # update self point list 
-
-            aPoint.setPos (*jpoint.xy)                              # update Movable point 
-            self.setData (*self.polyline())                         # update self (polyline) 
-            self.setPen (pg.mkPen (self._color, width=1, style=Qt.PenStyle.DotLine))  # and show it 
+            return x, y
 
 
         def _delete_point (self, aPoint : Movable_Point):
             """ slot - point should be deleted """
 
-            # a minimum of 3 control points 
-            if len(self._jpoints) < 3: return   
-
-            i = aPoint.id
-
-            if self._flaps.delete_hinge_point_ok (i):                 # delete hinge definition at section ok?
-
-                # remove from list
-                del self._jpoints[i]                                # update self point list 
-                self.setData (*self.polyline())                     # update self (polyline) 
-
-                self._finished_point (aPoint)
-                if aPoint.scene():                                  # sometimes scene get lost ... (?) 
-                    aPoint.scene().removeItem(aPoint)               # final delete from scene 
+            if self._flaps.delete_hinge_point_ok (aPoint.id):
+                jpoints = self.jpoints
+                del jpoints[aPoint.id]
+                self._flaps.hinge_from_jpoints (jpoints, transform_fn=self._tr_fn)
+                super()._finished_point (None)
 
 
-        def _hinge_item_clicked (self, item, ev : MouseClickEvent):
-            """ slot - hinge item clicked - try to insert a new point  """
-
-            # handle only ctrl-click
-            if not (ev.modifiers() & Qt.KeyboardModifier.ControlModifier): return  
-
-            # get y-position on the hinge line 
-            viewbox : pg.ViewBox = self.getViewBox ()               
-            pos : pg.Point = viewbox.mapSceneToView(ev.scenePos())
-            x = pos.x()
-
-            insert_ok = self._flaps.insert_hinge_point_at (x) 
-
-            if insert_ok:
-                # if successful, leave self directly without updating points 
-                ev.accept()
-                if callable(self._callback_changed):
-                    QTimer().singleShot(10, lambda: self._callback_changed())
-            else: 
-                ev.ignore()
+        @override
+        def _add_point (self, x: float, y: float) -> bool:
+            """Add a hinge point at a nearby eligible section."""
+            candidates = []
+            for section in self._flaps.wingSections:
+                if section.defines_hinge:
+                    continue
+                hinge_y = self._flaps.hinge_y_at (section.x)
+                px, py = self._t_fn (section.x, hinge_y) if self._t_fn else (section.x, hinge_y)
+                candidates.append ((section, px, py))
+            section = self._section_near_click (x, y, candidates)
+            if section is None:
+                return False
+            if self._flaps.insert_hinge_point (section):
+                super()._finished_point (None)
+                return True
+            return False
 
 
-        def _finished_point (self, aPoint):
-            """ slot - point move is finished """
-            
-            self.hide()
-            self._flaps.hinge_from_jpoints (self._jpoints, transform_fn=self._tr_fn)
-
-            if callable(self._callback_changed):
-                QTimer().singleShot(10, lambda: self._callback_changed())
+        @override
+        def _finished_point (self, aPoint: Movable_Point | None):
+            """Write the hinge definition after movement finishes."""
+            self._flaps.hinge_from_jpoints (self.jpoints, transform_fn=self._tr_fn)
+            super()._finished_point (aPoint)
 
 
 

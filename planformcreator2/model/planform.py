@@ -175,32 +175,61 @@ class N_Chord_Reference:
 #-------------------------------------------------------------------------------
 
 
-class N_Reference_Line: 
-    """ 
+class N_Reference_Line_Abstract:
+    """
+    Normalized reference line defining the chordwise offset along the span.
 
-    The reference line is in normed coordinates a horizontal line at yn=0
-    The coord distribution is applied at that line according to chord reference. 
-
-    Optionally the reference line can be a Bezier curve (banana function) which will 
-    curve the planform like a bow 
- 
-    Wing
-        |-- Planform
-            |-- Norm_Planform
-                |-- Norm_Distribution
-                |-- Norm_Chord_Reference
-                |-- Norm_Reference_Line
+    The span position xn is normalized by half span, and the returned offset
+    yn is normalized by root chord. A straight, unbent reference line has
+    zero offset; planform scaling and sweep are applied separately.
     """
 
-    def __init__(self, dataDict: dict = None):
+    is_bezier: bool = False
+    is_polyline: bool = False
 
 
-        # reference line  - init linear Bezier control points for straight line    
-       
+    def _as_dict (self) -> dict:
+        """Return the representation to save with the planform."""
+        raise NotImplementedError
+
+
+    def at (self, xn: float | Array | list, fast=True) -> float | Array:
+        """Return the normalized chordwise offset at one or more positions."""
+        raise NotImplementedError
+
+
+    def polyline (self) -> Polyline:
+        """Return normalized coordinates for displaying the reference line."""
+        raise NotImplementedError
+
+
+    def is_straight_line (self) -> bool:
+        """Return whether the reference line is straight."""
+        raise NotImplementedError
+
+
+    def _on_section_changed (self, section: WingSection):
+        """React to section removal or changes affecting point eligibility."""
+
+
+
+class N_Reference_Line_Bezier (N_Reference_Line_Abstract):
+    """
+    Bezier reference line for bending a planform smoothly along the span.
+
+    Root and tip are fixed at zero offset. Two control points describe the
+    straight default; additional control points allow a "banana" shape.
+    """
+
+    is_bezier = True
+
+    def __init__(self, dataDict: dict | None = None):
+        """Load Bezier control points, including the legacy banana format."""
+
         px = [0.0, 1.0]
         py = [0.0, 0.0]                                       
 
-        # Compatibility 3.0.0: handle banana (only 1 additional control point)
+        # Version 3 stored one optional banana point instead of point arrays.
 
         banana_p1y = fromDict (dataDict, "banana_p1y", None)  
         banana_p1x = fromDict (dataDict, "banana_p1x", 0.0)
@@ -208,19 +237,16 @@ class N_Reference_Line:
             px.insert(1, banana_p1x)
             py.insert(1, banana_p1y)
 
-        # from dict control coordinates of Bezier
-
         px    = fromDict (dataDict, "px", px)              
         py    = fromDict (dataDict, "py", py)
 
-        # create Bezier for reference line
-
         self._ref_bezier  : Bezier = Bezier (px, py)
-        self._ref_bezier_u = np.linspace(0.0, 1.0, num=50)             # default Bezier u parameter (for polyline)
+        self._ref_bezier_u = np.linspace(0.0, 1.0, num=50)
 
 
+    @override
     def _as_dict (self) -> dict:
-        """ returns a data dict with the parameters of self"""
+        """Return the existing px/py control-point representation."""
 
         d = {}
         toDict (d, "px", self._ref_bezier.cpoints_x)
@@ -228,10 +254,13 @@ class N_Reference_Line:
         return d
 
 
+    @override
     def at (self, xn: float | Array | list, fast=True) -> float | Array:
-        """ 
-        reference line yn at xn  (normally = 0.0 except if Banana-Bezier)
-            Higher Precision is achieved with interpolation of the curve (fast=False) 
+        """
+        Return normalized chordwise offsets at normalized span positions.
+
+        For a curved reference line, fast=False requests the more accurate
+        Bezier evaluation. The straight default always has zero offset.
         """
         if isinstance (xn, float) or isinstance (xn, int):
             if self._ref_bezier.ncp == 2:                       # optimize straight line 
@@ -245,42 +274,27 @@ class N_Reference_Line:
             return self._ref_bezier.eval_y_on_x (xn, fast=fast)
 
 
-
+    @override
     def is_straight_line (self) -> bool:
-        """ 
-        returns True if Bezier is either a Line 
-        or the 3 control points define (nearly a line)"""
+        """Return whether all control points lie nearly on the endpoint line."""
 
-        if self._ref_bezier.ncp == 2:
-            return True
-        else:
-
-            px = self._ref_bezier.cpoints_x
-            py = self._ref_bezier.cpoints_y
-
-            # check if the middle bezier points is on line between the two outer
-            for i, px_i in enumerate (px [1:-1]):
-                py_i = py[i]
-                py_i_interpol = interpolate (px[0], px[-1], py[0], py[-1], px_i)
-                if not isclose (py_i, py_i_interpol, abs_tol=0.005):
-                    return False  
-            return True
+        px = self._ref_bezier.cpoints_x
+        py = self._ref_bezier.cpoints_y
+        for px_i, py_i in zip (px[1:-1], py[1:-1]):
+            py_line = interpolate (px[0], px[-1], py[0], py[-1], px_i)
+            if not isclose (py_i, py_line, abs_tol=0.005):
+                return False
+        return True
 
 
     @property
     def is_banana (self) -> bool:
-        """ 
-        True if reference line is not a straight line but a curve meaning 
-        banana function 
-        """ 
+        """Return whether the Bezier has additional banana control points."""
         return self._ref_bezier.ncp > 2
 
 
-    def set_is_banana (self, aBool):
-        """ 
-        set the reference line to a Bezier curve and not a straight line
-          meaning banana function (Bezier is n>2) 
-        """ 
+    def set_is_banana (self, aBool: bool):
+        """Add a middle control point, or remove all intermediate points."""
         px = self._ref_bezier.cpoints_x
         py = self._ref_bezier.cpoints_y
 
@@ -302,10 +316,9 @@ class N_Reference_Line:
             self._ref_bezier.set_cpoints (points)
 
 
-    def polyline (self) -> tuple [Array, Array]:
-        """
-        reference line as polyline of cr 
-        """
+    @override
+    def polyline (self) -> Polyline:
+        """Return a sampled Bezier or the two endpoints of the straight line."""
 
         if self.is_banana:
             xn, yr = self._ref_bezier.eval(self._ref_bezier_u) 
@@ -316,10 +329,10 @@ class N_Reference_Line:
         return np.array(xn), np.array(yr) 
 
 
-    def bezier_as_jpoints (self)  -> list[JPoint]:
+    def jpoints (self)  -> list[JPoint]:
         """ 
-        reference line Bezier control points as JPoints with limits and fixed property
-            - in normed coordinates 
+        Return normalized Bezier control points with editing limits and labels.
+        Root and tip are fixed; intermediate points can move in both axes.
         """
         jpoints = []
         n = len (self._ref_bezier.cpoints)
@@ -344,9 +357,7 @@ class N_Reference_Line:
 
 
     def bezier_from_jpoints (self, jpoints : list[JPoint]): 
-        """ 
-        set reference line Bezier control points from JPoints   
-        """
+        """Replace the Bezier control points with normalized editing points."""
 
         px, py = [], []
         for jpoint in jpoints:
@@ -354,6 +365,211 @@ class N_Reference_Line:
             py.append(jpoint.y)
 
         self._ref_bezier.set_cpoints (px, py)
+
+
+
+
+class N_Reference_Line_Polyline (N_Reference_Line_Abstract):
+    """
+    Piecewise-linear reference line for a section-defined planform.
+
+    Each intermediate point owns its offset and refers to a chord-defining
+    wing section for its span position. Root and tip remain at zero offset.
+    Saved points use indices into the serialized non-panel sections.
+    """
+
+    is_polyline = True
+
+    def __init__ (self, planform: Planform, dataDict: dict | None = None):
+        """Load reference-line points against the unrepaired wing sections."""
+
+        self._planform = planform
+        self._points: dict[WingSection, float] = {}
+        self._overlapping_kink_positions: set[float] = set()
+
+        # build kink points from the provided data dictionary
+
+        sections = self._planform.wingSections
+        points = fromDict (dataDict, "points", [])
+        if not isinstance (points, list):
+            return
+        for point in points:
+            if not isinstance (point, (list, tuple)) or len(point) != 2:
+                continue
+            index, yn = point
+            if not isinstance (index, int) or isinstance (index, bool) or not 0 <= index < len(sections):
+                continue
+            section = sections[index]
+            if not self._is_eligible_section (section) or section in self._points \
+                    or not self._is_valid_offset (yn):
+                continue
+            self._points[section] = float(yn)
+
+
+    @override
+    def _as_dict (self) -> dict:
+        """Save points using indices into the serialized real-section list."""
+        sections = self._planform.wingSections.without_for_panels
+        indices = {section: index for index, section in enumerate(sections)}
+        points = [(indices[section], yn) for section, yn in self._points.items()]
+        points.sort (key=lambda point: point[0])
+        return {"points": points}
+
+
+    @override
+    def polyline (self) -> Polyline:
+        """Return span-ordered points, using the last section at overlapping positions."""
+
+        points = [(section.xn, self._points[section]) for section in self._planform.wingSections
+                  if section in self._points]
+        points.sort (key=lambda point: point[0])
+        xn, yn = [0.0], [0.0]
+        overlaps = set()
+        for x, y in points:
+            if x == xn[-1]:
+                overlaps.add (x)
+                yn[-1] = y
+            else:
+                xn.append (x)
+                yn.append (y)
+        if overlaps != self._overlapping_kink_positions:
+            if overlaps:
+                logger.warning ("Overlapping reference-line kinks at xn=%s; using the last section's offset",
+                                sorted (overlaps))
+            self._overlapping_kink_positions = overlaps
+        xn.append (1.0)
+        yn.append (0.0)
+        return np.array (xn, dtype=float), np.array (yn, dtype=float)
+
+
+    def jpoints (self) -> tuple[list[JPoint], list[WingSection | None]]:
+        """Return normalized editing points and their corresponding sections.
+
+        Root and tip are fixed and have no associated section. Intermediate
+        points follow their section in span and may move only chordwise.
+        """
+        points: list[tuple[WingSection, float, float]] = []
+        for section in self._planform.wingSections:
+            yn = 0.0 if section.is_root_or_tip else self.point_at_section (section)
+            if yn is not None:
+                points.append ((section, section.xn, yn))
+        points.sort (key=lambda point: point[1])
+
+        jpoints: list[JPoint] = []
+        sections: list[WingSection | None] = []
+        for section, xn, yn in points:
+            jpoint = JPoint ((xn, yn))
+            if section.is_root_or_tip:
+                jpoint.set_fixed (True)
+                jpoint.set_name (section.name_short)
+                sections.append (None)
+            else:
+                jpoint.set_x_limits ((xn, xn))
+                jpoint.set_y_limits ((-2.0, 2.0))
+                jpoint.set_name (f"Kink @ {section.id}")
+                sections.append (section)
+            jpoints.append (jpoint)
+        return jpoints, sections
+
+
+    @override
+    def at (self, xn: float | Array | list, fast=True) -> float | Array:
+        """Interpolate offsets exactly; fast is accepted for interface compatibility."""
+        px, py = self.polyline ()
+        value = np.interp (xn, px, py)
+        return float(value) if np.isscalar(value) else value
+
+
+    @override
+    def is_straight_line (self) -> bool:
+        """Return whether all intermediate offsets are zero."""
+        _, yn = self.polyline ()
+        return bool(np.all (yn == 0.0))
+
+
+    @property
+    def has_kinks (self) -> bool:
+        """Return whether the reference line has intermediate points."""
+        return bool(self._points)
+
+
+    @property
+    def available_kink_sections (self) -> list[WingSection]:
+        """Return eligible sections without a kink, ordered from root to tip."""
+        return sorted (
+            (section for section in self._planform.wingSections
+             if self._is_eligible_section (section) and section not in self._points),
+            key=lambda section: section.xn)
+
+
+    def clear_kinks (self):
+        """Remove all intermediate points without changing flap groups."""
+        self._points.clear ()
+
+
+    def add_point (self, section: WingSection) -> bool:
+        """Add a point without changing the line's shape; return whether added."""
+        if not self._is_eligible_section (section) or section in self._points:
+            logger.warning ("Cannot add reference-line point for section %r", section)
+            return False
+        self._points[section] = float(self.at (section.xn))
+        if self._planform.flaps.hinge_equal_ref_line:
+            self._planform.flaps.check_and_correct ()
+        return True
+
+
+    def point_at_section (self, section: WingSection) -> float | None:
+        """Return the section's point offset, or None if it has no point."""
+        return self._points.get (section)
+
+
+    def displacement_from_straight (self, x: float, y: float) -> float:
+        """Return the chordwise displacement in mm from the straight root-tip line.
+
+        x and y are planform coordinates, so y may be the current position of
+        a point being dragged before its new offset has been saved.
+        """
+        px, py = self._planform.ref_polyline ()
+        straight_y = interpolate (px[0], px[-1], py[0], py[-1], x)
+        return float(y - straight_y)
+
+
+    def set_point (self, section: WingSection, yn: float) -> bool:
+        """Set an existing point's normalized offset; return whether changed."""
+        if not self._is_eligible_section (section) or section not in self._points \
+                or not self._is_valid_offset (yn):
+            logger.warning ("Cannot set reference-line point for section %r to %r", section, yn)
+            return False
+        self._points[section] = float(yn)
+        return True
+
+
+    def remove_point (self, section: WingSection) -> bool:
+        """Remove a section's reference-line point; return whether removed."""
+        if section not in self._points:
+            logger.warning ("Cannot remove reference-line point for section %r", section)
+            return False
+        del self._points[section]
+        return True
+
+
+    def _is_eligible_section (self, section: WingSection) -> bool:
+        """Return whether a section can support a reference-line point."""
+        return (section in self._planform.wingSections and section.defines_cn
+                and not section.is_root_or_tip and not section.is_for_panels)
+
+
+    @staticmethod
+    def _is_valid_offset (yn: float) -> bool:
+        """Return whether a normalized offset is finite."""
+        return not isinstance (yn, bool) and isinstance (yn, (int, float)) and bool(np.isfinite (yn))
+
+
+    @override
+    def _on_section_changed (self, section: WingSection):
+        """Remove a point if its section is removed or no longer eligible."""
+        if not self._is_eligible_section (section):
+            self._points.pop (section, None)
 
 
 
@@ -1243,7 +1459,8 @@ class WingSection :
                 if aBool: 
                     self.set_cn (self.cn)
                 else: 
-                    self.set_cn (None)       
+                    self.set_cn (None)
+                self._planform._on_section_changed (self)
         return True
 
     @property
@@ -1271,6 +1488,8 @@ class WingSection :
     
     def set_is_for_panels (self, aBool : bool):
         self._is_for_panels = aBool == True 
+        if self._is_for_panels:
+            self._planform._on_section_changed (self)
 
 
     def index (self) -> int:
@@ -1629,6 +1848,7 @@ class WingSections (list [WingSection]):
                 return None
 
             self.remove (aSection)
+            self._planform._on_section_changed (aSection)
 
             if not aSection.is_for_panels:
                 self.reset_strak()                      # reset strak if "real" wing section is deleted
@@ -2063,6 +2283,12 @@ class Flap:
         x_to    = self.x_to
         if x_to < self.planform.span and flap_gap is not None:
             x_to -= flap_gap / 2.0
+        if self._flaps.hinge_equal_ref_line and self.planform.n_ref_line.is_polyline:
+            hinge_x, hinge_y = self._flaps.hinge_polyline ()
+            inside = (hinge_x > x_from) & (hinge_x < x_to)
+            x = np.concatenate (([x_from], hinge_x[inside], [x_to]))
+            y = np.interp (x, hinge_x, hinge_y)
+            return x, y
         hinge_y = self._flaps.hinge_y_at (x_to)  
         x.append(x_to)
         y.append(hinge_y)
@@ -2218,6 +2444,7 @@ class Flaps:
         if aBool:
             for sec in self.wingSections:
                 sec.set_defines_hinge (False)
+            self.check_and_correct ()
 
 
     def get (self) -> list[Flap]: 
@@ -2295,6 +2522,25 @@ class Flaps:
             if n < 2:
                 root_sec.set_hinge_cn (0.75)
                 tip_sec.set_hinge_cn (0.75)
+
+        # A kink in the reference line needs a separate physical flap on
+        # either side, but must not create a flap in a region without one.
+        if self.hinge_equal_ref_line and self._planform.n_ref_line.is_polyline:
+            ref_line = self._planform.n_ref_line
+            for i in range (1, len(sections) - 1):
+                section = sections[i]
+                group = section.flap_group
+                if group <= 0 or sections[i-1].flap_group != group \
+                        or ref_line.point_at_section (section) is None:
+                    continue
+                used_groups = {sec.flap_group for sec in sections}
+                new_group = 1
+                while new_group in used_groups:
+                    new_group += 1
+                for right_section in sections[i:]:
+                    if right_section.flap_group != group:
+                        break
+                    right_section.set_flap_group (new_group)
 
         # there must be a new flap group when there is a hinge break
         #    - but not in "Amokka case" where the second last section defines flap depth 
@@ -2465,27 +2711,23 @@ class Flaps:
 
 
     def insert_hinge_point_at (self, x : float) -> bool:
-        """ 
-        try to add a hinge 'break' at a section, which should be at x
-            Return True if successful 
-        """ 
-        section = self.wingSections.at_x (x, tolerance = 0.01) 
+        """Add a hinge break at a real section near x."""
+        section = self._planform.wingSections.at_x (x, tolerance=0.01)
+        if section is None or section.is_for_panels:
+            return False
+        return self.insert_hinge_point (section)
 
-        if section is not None: 
-            if not section.defines_hinge:
 
-                # calculate the current hinge position 
-                x_arr, y_arr = self.hinge_polyline ()
-                hinge_y = np.interp(x, x_arr, y_arr)                            # linear interpolation 
- 
-                # update section with hinge info 
-                section.set_hinge_y (hinge_y)
-
-                # ensure a new flap group will begin at this section 
-                self.check_and_correct ()
-
-                return True
-        return False 
+    def insert_hinge_point (self, section: WingSection) -> bool:
+        """Add a hinge break at a real section without changing the hinge line."""
+        if section not in self.wingSections:
+            raise ValueError ("Hinge point must belong to a real wing section")
+        if self.hinge_equal_ref_line or section.defines_hinge:
+            return False
+        hinge_y = float(self.hinge_y_at (section.x))
+        section.set_hinge_y (hinge_y)
+        self.check_and_correct ()
+        return True
 
 
 
@@ -2552,16 +2794,18 @@ class Planform:
 
         self._n_chord_ref = N_Chord_Reference (dataDict=fromDict(dataDict, "chord_reference", {}))
 
-        # init reference line either new from dataDict 
+        # init wing sections before the reference line
 
-        if chord_style == N_Distrib_Bezier.name:                    # only Distrib_Bezier may have Banana
-            self._n_ref_line = N_Reference_Line (dataDict=fromDict(dataDict, "reference_line", {}))
-        else: 
-            self._n_ref_line = N_Reference_Line (dataDict={})
-
-        # init wing sections 
-        
         self._wingSections = WingSections (self, sectionsDict=fromDict(dataDict, "wingSections", {}))
+
+        # init reference line before section repair, which may reorder or remove sections
+
+        if chord_style == N_Distrib_Bezier.name:
+            self._n_ref_line = N_Reference_Line_Bezier (dataDict=fromDict(dataDict, "reference_line", {}))
+        elif chord_style == N_Distrib_Trapezoid.name:
+            self._n_ref_line = N_Reference_Line_Polyline (self, dataDict=fromDict(dataDict, "reference_line", {}))
+        else:
+            self._n_ref_line = N_Reference_Line_Bezier (dataDict={})
 
         self._wingSections.check_n_repair ()                        # sanity check (after wingSections are initialized!)
 
@@ -2584,9 +2828,14 @@ class Planform:
 
         toDict (dataDict, "chord_distribution", self.n_distrib._as_dict()) 
         toDict (dataDict, "chord_reference",    self.n_chord_ref._as_dict()) 
-        toDict (dataDict, "reference_line",     self.n_ref_line._as_dict()) 
         toDict (dataDict, "wingSections",       self.wingSections._as_list_of_dict()) 
+        toDict (dataDict, "reference_line",     self.n_ref_line._as_dict())             # after wingSections as it may depend on them
         toDict (dataDict, "flaps",              self.flaps._as_dict()) 
+
+
+    def _on_section_changed (self, section: WingSection):
+        """Propagate section lifecycle changes to dependent geometry."""
+        self.n_ref_line._on_section_changed (section)
 
 
     @property
@@ -2657,7 +2906,7 @@ class Planform:
         return self._n_chord_ref
 
     @property
-    def n_ref_line (self) -> N_Reference_Line:
+    def n_ref_line (self) -> N_Reference_Line_Bezier | N_Reference_Line_Polyline:
         """ normalized reference line object """
         return self._n_ref_line
 
@@ -2803,7 +3052,8 @@ class Planform:
 
         is_approx = self.n_distrib.isBezier or \
                     self.n_distrib.isElliptical or \
-                    not self.n_ref_line.is_straight_line()
+                    (self.n_ref_line.is_bezier and
+                     not self.n_ref_line.is_straight_line())
         return is_approx
 
 
@@ -3232,6 +3482,3 @@ class Planform:
         xn = np.round (xn / self.span, 10)
 
         return xn, yn 
-
-
-

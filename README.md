@@ -104,7 +104,13 @@ The "banana function" bends the planform's reference line without changing the c
 
 It can also be used to fine-tune flap depth along the span: with a straight hinge line, bending the planform changes the distance between the hinge line and the trailing edge.
 
-<img src="./images/planform_banana.png" width="800" />
+<img src="./images/planform_banana.png" width="600" />
+
+For trapezoidal planforms, smooth bending would create curved lines. Instead, you can add kinks to the reference line while keeping the planform straight between sections.
+
+<img src="./images/planform_trapezoidal_kink.png" width="600" />
+
+
 
 ### Background Image
 

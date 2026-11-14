@@ -1227,18 +1227,24 @@ class Dxf_Wing_Artist (Dxf_Artist):
     def plot_ref_line (self, mirror_y=False):
         """plot reference line."""
 
-        ref_bezier : Bezier = self.planform.n_ref_line._ref_bezier
-        xn = np.asarray(ref_bezier.cpoints_x, dtype=float)
-        yn = np.asarray(ref_bezier.cpoints_y, dtype=float)
+        ref_line = self.planform.n_ref_line
+        if ref_line.is_bezier:
+            ref_bezier = ref_line._ref_bezier
+            xn = np.asarray(ref_bezier.cpoints_x, dtype=float)
+            yn = np.asarray(ref_bezier.cpoints_y, dtype=float)
+        else:
+            xn, yn = ref_line.polyline ()
 
         x, y = self.planform.t_ref_to_plan(xn, yn)
         if mirror_y:
             y = self.planform.chord_root - y
 
-        if ref_bezier.ncp == 2:
+        if len(xn) == 2:
             self._plot(Cad_Line.from_x_y (x,y))
-        else:
+        elif ref_line.is_bezier:
             self._plot(Cad_Spline.from_bezier (Bezier(x, y)))
+        else:
+            self._plot(Cad_PolyLine.from_x_y (x, y))
 
 
     def _y_mirror (self, y_arr : list) -> list:
