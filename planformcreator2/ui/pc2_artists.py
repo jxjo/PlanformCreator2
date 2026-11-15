@@ -350,7 +350,7 @@ class Ref_Line_Artist (Abstract_Artist_Planform):
                 self._add (pt) 
 
                 if self.planform.n_ref_line.is_straight_line():
-                    msg = "Reference line: ctrl-click to add point for 'banana'"
+                    msg = "Reference line: Ctrl-click to add point for 'banana'"
                 else: 
                     msg = "Reference line: Move Bezier control points to modify, shift-click to remove 'banana' points"
                 self.set_help_message (msg)
