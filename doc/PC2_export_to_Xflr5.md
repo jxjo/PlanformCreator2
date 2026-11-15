@@ -1,19 +1,19 @@
 ## Export to Xflr5
 
-When using PC2 together with Xlfr5 the major faciliation beside the definition of wing segements, is the automatic generation of all intermediate airfoils needed in Xflr5 at all wing sections. No further geometric work has to be done for wing definition and airfoils. The steps to perform wing analysis in Xflr5 together with PC2:
+When PC2 is used together with Xflr5, its main benefit, besides defining the wing segments, is the automatic generation of all intermediate airfoils required at every wing section in Xflr5. No further geometric work is needed for the wing or its airfoils.
 
-#### Actions needed:
+#### Steps
 
-| | App      | Module       |  Action        |  
-| :---| :---         |     :---        |   :---         |  
-|1 | PC2   | Wing Analysis | Export to Xflr5 the xml wing definition and all airfoils involved to a subdirectory      |
-|2 | Xflr5   | Direct Foil Design     | Open the airfoils in a single step |  
-|3 | Xflr5   | Xfoil Direct Analysis  | Batch Analysis of all the airfoils with a polarset covering the complete Reynolds range      |
-|4 | Xflr5  |Wing and Plane Design  |Create a new plane    |
-|5 | Xflr5  |Wing and Plane Design - Edit Wing |Menu button 'Other' and select 'Import Wing from xml file'   |
-|6 | Xflr5  |Wing and Plane Design  |Ready for calculation. Don't forget to define a 'Plane Mass' for T2 analysis.  |
+| # | App   | Module                            | Action |
+| :--- | :--- | :---                             | :---   |
+| 1 | PC2   | Wing Analysis                     | Export the wing definition (xml) and all airfoils involved to a subdirectory using 'Export to Xflr5'. |
+| 2 | Xflr5 | Direct Foil Design                | Open all exported airfoils in a single step. |
+| 3 | Xflr5 | Xfoil Direct Analysis             | Run a batch analysis of all airfoils with a polar set covering the complete Reynolds number range. |
+| 4 | Xflr5 | Wing and Plane Design             | Create a new plane. |
+| 5 | Xflr5 | Wing and Plane Design - Edit Wing | Click the menu button 'Other' and select 'Import Wing from xml file'. |
+| 6 | Xflr5 | Wing and Plane Design             | The wing is ready for calculation. For T2 analysis, don't forget to define a 'Plane Mass'. |
 
-#### Importing wing xml into Xflr5
+#### Wing xml imported into Xflr5
 
 <img src="../images/panelling_xflr5_loaded.png" width="800" />
 

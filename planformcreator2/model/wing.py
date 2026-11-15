@@ -179,6 +179,7 @@ class Wing:
 
         self._exporter_airfoils     = None 
         self._exporter_xflr5        = None 
+        self._exporter_flow5        = None
         self._exporter_flz          = None 
         self._exporter_dxf          = None 
         self._exporter_csv          = None 
@@ -244,6 +245,10 @@ class Wing:
 
         if self._exporter_xflr5:
             p.set ("xflr5", self._exporter_xflr5._as_dict()) 
+        if self._exporter_flow5:
+            p.set ("flow5", self._exporter_flow5._as_dict())
+        elif fromDict (self._parms, "flow5", None) is not None:
+            p.set ("flow5", fromDict (self._parms, "flow5", None))
         if self._exporter_flz:
             p.set ("flz", self._exporter_flz._as_dict()) 
         if self._exporter_airfoils:
@@ -676,6 +681,17 @@ class Wing:
             xflr5_dict         = fromDict (self._parms, "xflr5", "")
             self._exporter_xflr5 = Exporter_Xflr5 (self, self.planform_mesh, xflr5_dict) 
         return self._exporter_xflr5     
+
+
+    @property
+    def exporter_flow5 (self):
+        """Return the exporter managing flow5 plane exports."""
+        from .wing_exports import Exporter_Flow5
+
+        if self._exporter_flow5 is None:
+            flow5_dict = fromDict (self._parms, "flow5", {})
+            self._exporter_flow5 = Exporter_Flow5 (self, self.planform_mesh, flow5_dict)
+        return self._exporter_flow5
 
 
     @property

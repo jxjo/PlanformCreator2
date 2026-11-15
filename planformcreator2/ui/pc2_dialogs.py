@@ -27,7 +27,7 @@ from ..model.planform                   import Planform, WingSections
 from ..model.image_definition           import Image_Definition
 from ..model.planform_mesh              import Mesh_Strategy, Mesh_Strategy_Smooth, Mesh_Strategy_Trapezoidal, Planform_Mesh
 from ..model.wing_exports               import (Exporter_Airfoils, Exporter_DXF, Exporter_Xflr5, 
-                                                Exporter_FLZ, Exporter_CSV)
+                                                Exporter_Flow5, Exporter_FLZ, Exporter_CSV)
 
 from .pc2_artists                       import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
 
@@ -402,6 +402,12 @@ class Dialog_Export_Xflr5 (Dialog_Modal):
     _width  = 430
 
     name = "Export Paneled Planform to Xflr5"
+    _export_title = "Export XFLR5"
+    _export_subject = "Planform"
+    _export_description = ("A Xflr5 XML based wing definition is created from the paneled planform.<br>"
+                           "The involved airfoils will be exported as well into the same directory.")
+    _help_link = "https://github.com/jxjo/PlanformCreator2/blob/main/doc/PC2_export_to_Xflr5.md"
+    _help_link_label = "how to use the export in Xflr5"
 
     def __init__ (self, *args, **kwargs): 
 
@@ -412,7 +418,7 @@ class Dialog_Export_Xflr5 (Dialog_Modal):
 
         # connect dialog buttons
         self._cancel_btn.clicked.connect  (self.close)
-        self._export_btn.clicked.connect (self._export_xflr5)
+        self._export_btn.clicked.connect (self._export_xml)
 
 
     @property
@@ -424,20 +430,31 @@ class Dialog_Export_Xflr5 (Dialog_Modal):
         """ the model xflr5 exporter"""
         return self.wing.exporter_xflr5
 
+
+    @property
+    def xml_exporter (self) -> Exporter_Xflr5:
+        """Return the exporter for this XML dialog."""
+        return self.exporter_xflr5
+
+
     @property
     def exporter_airfoils (self) -> Exporter_Airfoils:
-        """ the airfoils exporter of exporter xflr5"""
-        return self.exporter_xflr5.exporter_airfoils
+        """Return the airfoil exporter associated with the XML exporter."""
+        return self.xml_exporter.exporter_airfoils
 
 
     def _init_layout(self) -> QLayout:
 
         l = QGridLayout()
-        self._output_filename = self.exporter_xflr5.xflr5_filename
+        self._output_filename = self.xml_exporter.export_filename
         r = 0 
         Label  (l,r,0, colSpan=5, style=style.COMMENT, height=40,
-                get="A Xflr5 XML based wing definition is created from the paneled planform.<br>" +
-                    "The involved airfoils will be exported as well into the same directory.")
+                get=self._export_description)
+        if self._help_link:
+            r += 1
+            link_label = Label  (l,r,0, colSpan=5, style=style.COMMENT, height=20,
+                                 get=f'See <a href="{self._help_link}">{self._help_link_label}</a>')
+            link_label.setOpenExternalLinks (True)
         r += 1
         SpaceR   (l, r, height=5, stretch=0) 
         r += 1 
@@ -446,11 +463,11 @@ class Dialog_Export_Xflr5 (Dialog_Modal):
               set=lambda filename: setattr(self, "_output_filename", filename),
               toolTip="Enter a file name; .xml is added automatically if omitted.")
         r += 1 
-        Field    (l,r,0, width=250, lab="To Directory", get=lambda:self.exporter_xflr5.export_dir)
+        Field    (l,r,0, width=250, lab="To Directory", get=lambda:self.xml_exporter.export_dir)
         ToolButton(l,r,2, icon=Icon.OPEN, set=self._select_directory)
         r += 1
         CheckBox (l,r,1, colSpan=2, text= "Clear directory before export",
-                  obj=self.exporter_xflr5, prop=Exporter_Xflr5.clear_export_dir)
+                  obj=self.xml_exporter, prop=Exporter_Xflr5.clear_export_dir)
 
         r += 1
         SpaceR   (l, r, stretch=0, height=15) 
@@ -481,25 +498,25 @@ class Dialog_Export_Xflr5 (Dialog_Modal):
                                                      directory=self.wing.workingDir)
 
         if directory: 
-            self.exporter_xflr5.set_export_dir (directory)                    
+            self.xml_exporter.set_export_dir (directory)
             self.refresh()
 
 
-    def _export_xflr5 (self, *_):
-        """ do export xflr5"""
+    def _export_xml (self, *_):
+        """Export the XML definition and airfoils."""
 
         try:
             filename = _validated_filename(self._output_filename, ".xml")
         except ValueError as error:
-            MessageBox.error(self, "Export XFLR5", str(error))
+            MessageBox.error(self, self._export_title, str(error))
             return
 
-        n_airfoils = self.exporter_xflr5.do_it(filename=filename)
+        n_airfoils = self.xml_exporter.do_it(filename=filename)
         
         self.close()
 
         plural = "s" if n_airfoils > 1 else ""
-        self._toast_message(f"Planform ({filename}) and {n_airfoils} airfoil{plural} exported to {self.exporter_xflr5.export_dir}")
+        self._toast_message(f"{self._export_subject} ({filename}) and {n_airfoils} airfoil{plural} exported to {self.xml_exporter.export_dir}")
 
 
     @override
@@ -524,6 +541,27 @@ class Dialog_Export_Xflr5 (Dialog_Modal):
 
         return buttonBox 
     
+
+
+
+class Dialog_Export_Flow5 (Dialog_Export_Xflr5):
+    """Dialog to export a flow5 plane and its airfoils."""
+
+    name = "Export Paneled Planform to flow5"
+    _export_title = "Export flow5"
+    _export_subject = "Plane"
+    _export_description = ("A flow5 plane containing the paneled wing is created.<br>"
+                           "Import the airfoils saved alongside it into flow5 before the plane.")
+    _help_link = "https://github.com/jxjo/PlanformCreator2/blob/main/doc/PC2_export_to_flow5.md"
+    _help_link_label = "how to use the export in flow5"
+
+
+    @property
+    @override
+    def xml_exporter (self) -> Exporter_Flow5:
+        """Return the flow5 plane exporter."""
+        return self.wing.exporter_flow5
+
 
 
 
@@ -1448,7 +1486,7 @@ class Dialog_Edit_Paneling (Dialog_Modal):
             tip = lambda: ("Only trapezoidal mesh is possible for trapezoidal planforms."
                            if self.is_planform_trapezoidal else
                            "Use smooth for best results with Bezier-based planforms.\n"
-                           "Use trapezoidal for export to XFLR5 or FLZ Vortex.")
+                           "Use trapezoidal to preview exports to XFLR5, flow5, or FLZ Vortex.")
             ComboBox    (l,r,c+1, width=100,
                         obj=self.mesh, prop=Planform_Mesh.strategy_name,
                         options=self.mesh.strategy_names,

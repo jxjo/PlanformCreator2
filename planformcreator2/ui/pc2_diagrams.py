@@ -33,7 +33,8 @@ from ..model.VLM_wing   import VLM_OpPoint, VLM_Var, VLM_Wing
 
 from .pc2_artists       import *
 from .pc2_dialogs       import (Dialog_Edit_Image, Dialog_Edit_Paneling, Dialog_Export_Xflr5,
-                                Dialog_Export_FLZ, Dialog_Export_CSV, Dialog_Export_Airfoils, Dialog_Export_DXF)
+                                Dialog_Export_Flow5, Dialog_Export_FLZ, Dialog_Export_CSV,
+                                Dialog_Export_Airfoils, Dialog_Export_DXF)
 
 from ..app_model        import App_Model
 
@@ -2671,14 +2672,14 @@ class Diagram_Planform (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            Button  (l,r,c, text="Export DXF", width=100, set=self.export_dxf,
+            Button  (l,r,c, text="DXF...", width=100, set=self.export_dxf,
                      toolTip="Open the dialog to export the planform as DXF.")
             l.setColumnStretch (2,2)
             r += 1
-            Button      (l,r,c, text="Export CSV", width=100, set=self.export_csv,
+            Button      (l,r,c, text="CSV...", width=100, set=self.export_csv,
                          toolTip="Open the dialog to export wing data as CSV.")
 
-            self._panel_export = Edit_Panel (title="Export", layout=l,  
+            self._panel_export = Edit_Panel (title="Export to", layout=l,
                                              auto_height=True, main_margins = (10, 5,10, 10),
                                              switchable=False, switched_on=True)
         return self._panel_export 
@@ -3217,11 +3218,11 @@ class Diagram_Airfoils (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            Button      (l,r,c, text="Export Airfoils", width=100, set=self.export_airfoils,
+            Button      (l,r,c, text="Airfoils...", width=100, set=self.export_airfoils,
                          toolTip="Open the dialog to export the wing's airfoils.")
             l.setColumnStretch (2,2)
 
-            self._panel_export = Edit_Panel (title="Export", layout=l, 
+            self._panel_export = Edit_Panel (title="Export", layout=l,
                                              auto_height=True, main_margins = (10, 5,10, 10),
                                              switchable=False, switched_on=True)
         return self._panel_export 
@@ -3353,7 +3354,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
 
         if self._panel_export is None:
             l = QGridLayout()
-            Button (l, 0, 0, text="Export OpPoint", width=100,
+            Button (l, 0, 0, text="OpPoint...", width=100,
                     set=self.export_opPoint,
                     disable=lambda: not  self.app_model.cur_vlm_opPoint,
                     toolTip="Export the current VLM operating point as a CSV file.")
@@ -3696,10 +3697,13 @@ class Diagram_Paneling (Diagram_Abstract):
 
             l = QGridLayout()
             r,c = 0, 0
-            Button      (l,r,c, text="Export Xflr5", width=100, set=self.export_xflr5,
+            Button      (l,r,c, text="Xflr5...", width=100, set=self.export_xflr5,
                          toolTip="Open the dialog to export the paneled wing for XFLR5.")
             r += 1
-            Button      (l,r,c, text="Export FLZ", width=100, set=self.export_flz,
+            Button      (l,r,c, text="flow5...", width=100, set=self.export_flow5,
+                         toolTip="Open the dialog to export a plane with the paneled wing for flow5.")
+            r += 1
+            Button      (l,r,c, text="FLZ...", width=100, set=self.export_flz,
                          toolTip="Open the dialog to export the paneled wing for FLZ_Vortex.")
             SpaceC (l,c, width=20, stretch=0)
             c += 2
@@ -3709,7 +3713,7 @@ class Diagram_Paneling (Diagram_Abstract):
             l.setColumnMinimumWidth (1,12)
             l.setColumnStretch (3,2)
 
-            self._panel_export = Edit_Panel (title="Export", layout=l, 
+            self._panel_export = Edit_Panel (title="Export to", layout=l,
                                              auto_height=True, main_margins = (10, 5,10, 10),
                                              switchable=False, switched_on=True)
         return self._panel_export 
@@ -3746,21 +3750,54 @@ class Diagram_Paneling (Diagram_Abstract):
                 artist.refresh ()
 
 
+    def _hint_trapezoidal_export (self, title: str):
+        """
+        Show a message if the current mesh is smooth: exports are always based on
+        the trapezoidal mesh, which differs from the mesh shown in the diagram
+        """
+
+        if self.wing.planform_mesh.strategy.is_trapezoidal:
+            return
+
+        MessageBox.info (self.panel_export, title,
+                         f"The current mesh type is '{self.wing.planform_mesh.strategy_name}'.<br><br>"
+                         f"Export is always based on a <b>trapezoidal</b> mesh, "
+                         f"so the exported panels will differ from the mesh shown.<br><br>"
+                         f"To see the exported mesh, change the mesh type from 'smooth' "
+                         f"to 'trapezoidal' in the paneling settings.",
+                         min_width=350)
+
+
     def export_xflr5 (self): 
         """ export wing to xflr5"""
+
+        self._hint_trapezoidal_export ("Export XFLR5")
 
         dialog = Dialog_Export_Xflr5 (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))  
         dialog.exec()   
 
+
+    def export_flow5 (self):
+        """Export the wing as a flow5 plane."""
+        self._hint_trapezoidal_export ("Export flow5")
+
+        dialog = Dialog_Export_Flow5 (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))
+        dialog.exec()
+
+
     def export_flz (self): 
         """ export wing to flz"""
 
-        dialog = Dialog_Export_FLZ (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))  
+        self._hint_trapezoidal_export ("Export FLZ")
+
+        dialog =  Dialog_Export_FLZ (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))
         dialog.exec() 
     
 
     def launch_flz (self): 
         """ export wing to FLZ and launch """
+
+        self._hint_trapezoidal_export ("Export FLZ")
 
         self.wing.exporter_flz.do_it ()
 

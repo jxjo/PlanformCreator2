@@ -6,7 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added 
 
-- Planform: Add reference-line kinks to trapezoidal planforms
+- Planform: Reference-line kinks for trapezoidal planforms
+- Paneling: Export of a flow5 plane with the wing and its airfoils
+- Paneling: Short "How To" guides for the Xflr5 and flow5 exports, linked from the export dialogs
 
 
 ## 5.0.1

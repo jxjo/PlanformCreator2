@@ -8,7 +8,6 @@ Handle export of airfoils to file
 """
 
 import logging
-import re
 import io
 import numpy as np
 import shutil
@@ -415,18 +414,17 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
     @property
     def trapezoidal_mesh (self) -> Mesh_Strategy_Trapezoidal:
-        """Return the section-wise mesh used by XFLR5 exports."""
+        """Return the section-wise mesh used by XML exports."""
         return self._planform_mesh.strategy_trapezoidal
 
 
     def _as_dict (self) -> dict:
         """ returns a data dict with the parameters of self"""
 
-        d = {}
+        d = self.exporter_airfoils._as_dict()
         # Convert to forward slashes for cross-platform storage
         export_dir = Path(self._export_dir).as_posix() if self._export_dir else None
-        toDict (d, "export_dir", export_dir) 
-        d.update(self.exporter_airfoils._as_dict())
+        toDict (d, "export_dir", export_dir)
         return d
     
 
@@ -436,13 +434,31 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
     @property
     def xflr5_filename(self): 
+        """Return the default XFLR5 wing filename."""
         return self._wing.parm_path.stem + '_wing.xml'
+
+
+    @property
+    def export_filename (self) -> str:
+        """Return the default XML filename."""
+        return self.xflr5_filename
+
+
+    def _xml_template (self) -> ET.ElementTree:
+        """Return the XML template for this export format."""
+        with Exporter_Xflr5.Xflr5_template().get_template_wing() as template:
+            return ET.parse(template)
+
+
+    def _write_xml (self, tree: ET.ElementTree, path: Path):
+        """Write the XML tree in the format expected by XFLR5."""
+        tree.write(path)
 
 
     def do_it (self, filename: str | None = None):
         """ 
         Main entry: start the export to the file defined in parameters.
-        Airfoils will also be copied into the xflr5 directory
+        Airfoils will also be copied into the export directory.
 
         Returns:
             n_airfoils : number of airfoils written 
@@ -464,7 +480,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
 
         n_airfoils =self.export_wing (filename=filename)
 
-        filename = filename if filename is not None else self.xflr5_filename
+        filename = filename if filename is not None else self.export_filename
         logger.info (f"{filename} and {n_airfoils} airfoils written")
 
         return n_airfoils
@@ -479,26 +495,21 @@ class Exporter_Xflr5 (Exporter_Abstract):
         """
 
         targetDir = self.export_dir_abs
-        filename = filename if filename is not None else self.xflr5_filename
-        pathFileName = str(Path(targetDir) / filename)
+        filename = filename if filename is not None else self.export_filename
+        pathFileName = Path(targetDir) / filename
 
         airfoilNames = set()                                    # set of all airfoil names exported
 
-        # get file object with xflr xml template 
-        templateFile = Exporter_Xflr5.Xflr5_template().get_template_wing()
-
-        # basically parse the XML-file
-        tree = ET.parse(templateFile)
-        templateFile.close()
-
-        # get root of XML-tree
+        tree = self._xml_template()
         root = tree.getroot()
 
-        # find wing-data
-        for wingXml in root.iter('wing'): pass
-
-        if (wingXml == None):
+        wingXml = root.find('.//wing')
+        if wingXml is None:
             raise ValueError ("wing not found in xml-template")
+
+        planeNameXml = root.find('./Plane/Name')
+        if planeNameXml is not None:
+            planeNameXml.text = self._wing.name
 
         # wing name
         for nameXml in wingXml.iter('Name'):
@@ -506,20 +517,17 @@ class Exporter_Xflr5 (Exporter_Abstract):
         for descriptionXml in wingXml.iter('Description'):
             descriptionXml.text = "Created by PlanformCreator2"
 
-        # find sections-data-template
-        for sectionsTemplateXml in wingXml.iter('Sections'):
-            # copy the template
-            sectionsXml = deepcopy(sectionsTemplateXml)
+        sectionsTemplateXml = wingXml.find('Sections')
+        if sectionsTemplateXml is None:
+            raise ValueError ("sections not found in xml-template")
+        sectionTemplateXml = sectionsTemplateXml.find('Section')
+        if sectionTemplateXml is None:
+            raise ValueError ("section not found in xml-template")
 
-            # remove the template from wing 
-            wingXml.remove(sectionsTemplateXml)
-
-            # find section-data-template
-            for sectionTemplateXml in sectionsXml.iter('Section'):
-                newSectionXml = deepcopy(sectionTemplateXml)
-
-                # remove the template from sections
-                sectionsXml.remove(sectionTemplateXml)
+        sectionsXml = deepcopy(sectionsTemplateXml)
+        for sectionXml in sectionsXml.findall('Section'):
+            sectionsXml.remove(sectionXml)
+        wingXml.remove(sectionsTemplateXml)
 
         # write the new section-data to the wing
         section : WingSection
@@ -543,17 +551,15 @@ class Exporter_Xflr5 (Exporter_Abstract):
             for x_number_of_panels in newSectionXml.iter('x_number_of_panels'):
                 x_number_of_panels.text = str(self.trapezoidal_mesh.wx_panels)
             for x_panel_distribution in newSectionXml.iter('x_panel_distribution'):
-                # map to xflr5 distribution names 
-                xflr5_dist = self.distrib_name_map[self.trapezoidal_mesh.wx_dist]
-                x_panel_distribution.text = str(xflr5_dist)
+                xml_dist = self.distrib_name_map[self.trapezoidal_mesh.wx_dist]
+                x_panel_distribution.text = xml_dist
 
             # y
             for y_number_of_panels in newSectionXml.iter('y_number_of_panels'):
                 y_number_of_panels.text = str(self.trapezoidal_mesh.ny_panels_of_section (iSec))
             for y_panel_distribution in newSectionXml.iter('y_panel_distribution'):
-                # map to xflr5 distribution names 
-                xflr5_dist = self.distrib_name_map[self.trapezoidal_mesh.wy_dist]
-                y_panel_distribution.text = str(xflr5_dist)
+                xml_dist = self.distrib_name_map[self.trapezoidal_mesh.wy_dist]
+                y_panel_distribution.text = xml_dist
 
             for yPosition in newSectionXml.iter('y_position'):
                 yPosition.text = f"{section_x:.2f}"
@@ -573,10 +579,10 @@ class Exporter_Xflr5 (Exporter_Abstract):
             airfoil = self.exporter_airfoils.do_section (section)
                 
             for foilName in newSectionXml.iter('Left_Side_FoilName'):
-                foilName.text = re.sub('.dat', '', airfoil.name)
+                foilName.text = airfoil.name
 
             for foilName in newSectionXml.iter('Right_Side_FoilName'):
-                foilName.text = re.sub('.dat', '', airfoil.name)
+                foilName.text = airfoil.name
 
             airfoilNames.add (airfoil.name)
 
@@ -585,7 +591,7 @@ class Exporter_Xflr5 (Exporter_Abstract):
         
         wingXml.append(sectionsXml)
 
-        tree.write(pathFileName)
+        self._write_xml(tree, pathFileName)
 
         return len (airfoilNames)
 
@@ -645,6 +651,79 @@ class Exporter_Xflr5 (Exporter_Abstract):
             templateFile.seek(0)
             return templateFile
 
+
+
+class Exporter_Flow5 (Exporter_Xflr5):
+    """Export a flow5 plane containing the paneled wing and its airfoils."""
+
+    EXPORT_DIR_SUFFIX = "_flow5"
+    distrib_name_map = {**Exporter_Xflr5.distrib_name_map, "-sine": "INV_SINE"}
+
+
+    @property
+    def flow5_filename (self) -> str:
+        """Return the default flow5 plane filename."""
+        return self._wing.parm_path.stem + '_plane.xml'
+
+
+    @property
+    @override
+    def export_filename (self) -> str:
+        """Return the default flow5 plane filename."""
+        return self.flow5_filename
+
+
+    @override
+    def _xml_template (self) -> ET.ElementTree:
+        """Create a flow5 plane template using the shared wing section template."""
+        section = super()._xml_template().find('./wing/Sections/Section')
+        if section is None:
+            raise ValueError ("section not found in XFLR5 xml-template")
+
+        root = ET.fromstring("""
+        <xflplane version="1.0">
+            <Units>
+                <length_unit_to_meter>0.001</length_unit_to_meter>
+                <mass_unit_to_kg>1</mass_unit_to_kg>
+            </Units>
+            <Plane>
+                <Name></Name>
+                <wing>
+                    <Name></Name>
+                    <Type>MAINWING</Type>
+                    <Color><red>255</red><green>255</green><blue>127</blue><alpha>255</alpha></Color>
+                    <Description></Description>
+                    <Position>0, 0, 0</Position>
+                    <Tip_Strips>1</Tip_Strips>
+                    <Rx_angle>0</Rx_angle>
+                    <Ry_angle>0</Ry_angle>
+                    <symmetric>true</symmetric>
+                    <Two_Sided>true</Two_Sided>
+                    <Closed_Inner_Side>false</Closed_Inner_Side>
+                    <AutoInertia>true</AutoInertia>
+                    <Inertia>
+                        <Mass>0</Mass><CoG>0, 0, 0</CoG>
+                        <CoG_Ixx>0</CoG_Ixx><CoG_Iyy>0</CoG_Iyy>
+                        <CoG_Izz>0</CoG_Izz><CoG_Ixz>0</CoG_Ixz>
+                    </Inertia>
+                    <Sections></Sections>
+                </wing>
+            </Plane>
+        </xflplane>
+        """)
+        sections = root.find('./Plane/wing/Sections')
+        if sections is None:
+            raise ValueError ("sections not found in flow5 xml-template")
+        sections.append(deepcopy(section))
+        return ET.ElementTree(root)
+
+
+    @override
+    def _write_xml (self, tree: ET.ElementTree, path: Path):
+        """Write a UTF-8 flow5 plane definition."""
+        with path.open('wb') as stream:
+            stream.write(b'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE flow5>\n')
+            tree.write(stream, encoding='utf-8')
 
 
 
