@@ -10,7 +10,7 @@ from enum                       import Enum
 from math                       import isclose
 import html 
 
-from PyQt6.QtGui                import QColor, QImage, QBrush, QPen, QTransform, QPainterPath, QPainter
+from PyQt6.QtGui                import QColor, QFont, QImage, QBrush, QPen, QTransform, QPainterPath, QPainter
 from PyQt6.QtCore               import Qt, pyqtSignal
 from PyQt6.QtWidgets            import QGraphicsRectItem
 
@@ -2008,10 +2008,22 @@ class VLM_Polar_Artist (Abstract_Artist_Planform):
 
 
 
+class _Region_Out_Of_Range (pg.LinearRegionItem):
+    """ shaded region which doesn't take part in the auto range of the view box """
+
+    def dataBounds (self, axis, frac=1.0, orthoRange=None):
+        # a region extending 'to infinity' would be part of the auto range (button Fit) 
+        #   and zoom the view out to its extent. The stock item returns its region here
+        return None
+
+
+
 class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
     """
     Plot the delta between the current VLM polar and a reference polar.
     """
+
+    OUT_OF_VIEW = 1e6                                   # 'infinite' extent of a shaded region 
 
     def __init__ (self, *args, 
                   delta_vars_fn : Callable = None, 
@@ -2070,10 +2082,12 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
             return
 
         # if base_var is CL mask values to cl > 0 
+        lower_label = "stall or N/A"
         if base_var == VLM_Var.WING_CL and x[0] < 0.0:
             valid &= x > 0.0
-            text = f"Only positive CL values shown"
-            self._plot_text (text, parentPos=(0,1.0), itemPos=(0,1), offset=(55,-35),color="dimgray", fontSize=self.SIZE_SMALL)
+            lower_label = "CL < 0"
+
+        self._plot_cut_regions (x, valid, lower_label=lower_label)
 
         x     = np.where (valid, x, np.nan)
         delta = np.where (valid, delta, np.nan)
@@ -2125,7 +2139,9 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
             x_level, _ = self.vlm_polar.cl_level_flight_vars (self.delta_vars)
             if x_level is None : return
 
-            y_level = np.interp (x_level, x, delta)
+            # interpolate within the compared range only - no marker in the shaded regions
+            y_level = np.interp (x_level, x[valid], delta[valid], left=np.nan, right=np.nan)
+            if not np.isfinite (y_level): return
 
             brush_color = QColor('black')
             brush_color.setAlphaF (0.6); 
@@ -2139,6 +2155,43 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
                         text=f"{y_level:{delta_format}}", textColor=textColor,
                         textFill=pg.mkBrush (brush_color),
                         textOffset=(0, 10),anchor=(0.4, 1.0))
+
+
+    def _plot_cut_regions (self, x : np.ndarray, valid : np.ndarray, 
+                           lower_label = "stall or N/A", upper_label = "stall or N/A"):
+        """ shade the regions beyond the range which is compared - with a line and a label """
+
+        if not np.any (valid): 
+            return
+
+        lower, upper = x[valid].min (), x[valid].max ()
+        x_all = x[np.isfinite (x)]
+
+        lower = lower if x_all.min () < lower else None
+        upper = upper if x_all.max () > upper else None
+
+        brush = QColor ("gray")
+        brush.setAlphaF (0.2)
+        pen   = pg.mkPen (self.COLOR_HINT, width=1, style=Qt.PenStyle.DashLine)
+        font  = QFont ()
+        font.setPointSize (self.SIZE_SMALL)
+
+        # the label is placed outside of the compared range - next to the line
+        for limit, region, anchor, label in ((lower, (-self.OUT_OF_VIEW, lower), (1.1, 0.5),  lower_label),
+                                             (upper, (upper, self.OUT_OF_VIEW),  (-0.1, 0.5), upper_label)):
+            if limit is None: continue
+
+            shade = _Region_Out_Of_Range (values=region, orientation="vertical", movable=False, 
+                                          brush=brush, pen=pg.mkPen (None))
+            shade.setZValue (0)
+            self._add (shade)
+
+            line = pg.InfiniteLine (pos=limit, angle=90, pen=pen, label=label, 
+                                    labelOpts={'position': 0.9, 'color': self.COLOR_HINT, 
+                                               'anchors': [anchor, anchor]})
+            line.label.setFont (font)
+            line.setZValue (1)
+            self._add (line)
 
 
 

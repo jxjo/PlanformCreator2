@@ -1466,10 +1466,13 @@ class Item_VLM_Polar_Delta (Item_Abstract):
 
     name        = "Polar Delta"                    # used for link and section header 
 
-    def __init__(self, *args, parent_xyVars_fn : Callable = None, **kwargs):
+    def __init__(self, *args, parent_item : 'Item_VLM_Polar' = None, **kwargs):
 
-        self._parent_xyVars_fn = parent_xyVars_fn
+        self._parent_item = parent_item
         self._x_axis_label_item = None
+        self._range_link_key = None                     # state of the current link of the cl or alpha range
+        self._range_bridge_active = False               # guard against endless range updates
+        self._range_bridge = None                       # (signal, slot) pairs of the y-to-x bridge
 
         super().__init__(*args,  **kwargs)
 
@@ -1529,7 +1532,7 @@ class Item_VLM_Polar_Delta (Item_Abstract):
     def delta_vars (self) -> tuple [VLM_Var, VLM_Var] | None:
         """ return tuple of base_var and value_var to plot """
 
-        xyVars = self._parent_xyVars_fn() if callable(self._parent_xyVars_fn) else None
+        xyVars = self._parent_item.xyVars if self._parent_item is not None else None
 
         if not isinstance (xyVars, tuple) or len (xyVars) != 2 or xyVars[0] == xyVars[1]:
             return None
@@ -1567,9 +1570,77 @@ class Item_VLM_Polar_Delta (Item_Abstract):
         self._add_artist(a)
 
 
+    def _update_range_link (self):
+        """ 
+        Link the range of the base variable (cl or alpha) of self to the range of the parent item.
+            - base variable on the x-axis of parent: x-axes are linked 
+            - base variable on the y-axis of parent: y-axis of parent and x-axis of self are bridged
+        """
+
+        parent = self._parent_item
+        delta_vars = self.delta_vars
+
+        axis = "none"
+        if parent is not None and delta_vars is not None:
+            if parent.xVar == delta_vars[0]:
+                axis = "x"
+            elif parent.yVar == delta_vars[0]:
+                axis = "y"
+
+        if axis == self._range_link_key:
+            return                                          # unchanged
+
+        # remove existing link 
+
+        if self._range_link_key in ("x", "y"):
+            self.viewBox.setXLink (None)
+            for signal, slot in self._range_bridge or []:
+                signal.disconnect (slot)
+            self._range_bridge = None
+            self.viewBox.enableAutoRange (axis=pg.ViewBox.XAxis, enable=True)    # x range of data again
+
+        self._range_link_key = axis
+
+        # set new link 
+
+        if axis == "x":
+            self.viewBox.setXLink (parent.viewBox)
+
+        elif axis == "y":
+            parent_vb : pg.ViewBox = parent.viewBox
+            own_vb    : pg.ViewBox = self.viewBox
+
+            slot_to_own    = lambda vb, rng: self._bridge_range (own_vb, "x", rng)
+            slot_to_parent = lambda vb, rng: self._bridge_range (parent_vb, "y", rng)
+            parent_vb.sigYRangeChanged.connect (slot_to_own)
+            own_vb.sigXRangeChanged.connect    (slot_to_parent)
+            self._range_bridge = [(parent_vb.sigYRangeChanged, slot_to_own),
+                                  (own_vb.sigXRangeChanged,    slot_to_parent)]
+
+            self._bridge_range (own_vb, "x", parent_vb.viewRange()[1])           # initial sync
+
+
+    def _bridge_range (self, target_vb : pg.ViewBox, axis : str, rng):
+        """ set range of axis of target_vb - guarded against endless updates between both view boxes"""
+
+        if self._range_bridge_active:
+            return
+
+        self._range_bridge_active = True
+        try:
+            if axis == "x":
+                target_vb.setXRange (rng[0], rng[1], padding=0)
+            else:
+                target_vb.setYRange (rng[0], rng[1], padding=0)
+        finally:
+            self._range_bridge_active = False
+
+
     @override
     def setup_viewRange (self):
         """ define view range of this plotItem"""
+
+        self._update_range_link ()
 
         def range_limit (value, default, step):
             """Return a default bound or round outward; the step sign selects upper/lower."""
@@ -3304,12 +3375,9 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
             self._add_item (item, 3, i, rowStretch=4)
 
             # create slave Item_VLM_Polar_Delta to reference polar
-            item_delta = Item_VLM_Polar_Delta (self, self.app_model, parent_xyVars_fn=lambda item=item: item.xyVars, 
-                                               show=False)
+            item_delta = Item_VLM_Polar_Delta (self, self.app_model, parent_item=item, show=False)
             item_delta.name = f"{Item_VLM_Polar_Delta.name}_{i+1}"
             self._add_item (item_delta, 4, i, rowStretch=2)
-            # item_delta.set_desired_xLink_name (item.name)
-            # item_delta.set_xLinked (True)
             item.sig_xyVars_changed.connect (item_delta.refresh)
 
 
