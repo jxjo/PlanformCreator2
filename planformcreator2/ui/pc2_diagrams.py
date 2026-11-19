@@ -18,7 +18,7 @@ from PyQt6.QtWidgets        import QFileDialog, QGraphicsLayoutItem
 
 from airfoileditor.base.widgets         import * 
 from airfoileditor.base.diagram         import * 
-from airfoileditor.base.panels          import Container_Panel, MessageBox, add_section_caption
+from airfoileditor.base.panels          import Container_Panel, MessageBox, Toaster, add_section_caption
 
 from airfoileditor.model.polar_set      import *
 from airfoileditor.model.xo2_driver     import Worker
@@ -33,8 +33,8 @@ from ..model.VLM_wing   import VLM_OpPoint, VLM_Var, VLM_Wing
 
 from .pc2_artists       import *
 from .pc2_dialogs       import (Dialog_Edit_Image, Dialog_Edit_Paneling, Dialog_Export_Xflr5,
-                                Dialog_Export_Flow5, Dialog_Export_FLZ, Dialog_Export_CSV,
-                                Dialog_Export_Airfoils, Dialog_Export_DXF)
+                                Dialog_Export_Flow5, Dialog_Export_FLZ,
+                                Dialog_Export_Airfoils, Dialog_Export_DXF, show_export_error)
 
 from ..app_model        import App_Model
 
@@ -110,6 +110,29 @@ class Diagram_Abstract (Diagram):
                 item._on_help_message (None, None)                  # ensure refresh of messages            
 
         self.refresh ()        
+
+
+    def _save_csv (self, title: str, pathFileName: str, save_fn: Callable):
+        """ 
+        call save_fn and tell the user the result - success or e.g. the file is open in Excel 
+        (message on self.panel_export of the subclass)
+        """
+
+        try:
+            save_fn ()
+        except (OSError, ValueError) as error:
+            show_export_error (self.panel_export, title, error)
+            return
+
+        self._toast_message (f"{os.path.basename (pathFileName)} exported")
+
+
+    def _toast_message (self, msg: str, toast_style=style.GOOD):
+        """ show a toaster message in the lower left corner of the window """
+
+        Toaster.showMessage (self.panel_export, msg, corner=Qt.Corner.BottomLeftCorner,
+                             margin=QMargins(10, 10, 10, 5), toast_style=toast_style,
+                             duration=2000, parentWindow=True)
 
 
 
@@ -2748,7 +2771,7 @@ class Diagram_Planform (Diagram_Abstract):
             l.setColumnStretch (2,2)
             r += 1
             Button      (l,r,c, text="CSV...", width=100, set=self.export_csv,
-                         toolTip="Open the dialog to export wing data as CSV.")
+                         toolTip="Export the wing sections as CSV file.")
 
             self._panel_export = Edit_Panel (title="Export to", layout=l,
                                              auto_height=True, main_margins = (10, 5,10, 10),
@@ -2764,10 +2787,16 @@ class Diagram_Planform (Diagram_Abstract):
 
 
     def export_csv (self):
-        """ export wing to csv file"""
+        """ export the wing sections to a csv file"""
 
-        dialog = Dialog_Export_CSV (self.panel_export, self.wing, parentPos=(1.3,0.0), dialogPos=(0,1.2))
-        dialog.exec()
+        filename = f"{self.wing.parm_path.stem}_wing.csv"
+        directory = os.path.join (self.wing.workingDir, filename)
+        pathFileName, _ = QFileDialog.getSaveFileName (
+            self.panel_export, caption="Export Wing Sections", directory=directory,
+            filter="CSV files (*.csv)")
+        if pathFileName:
+            self._save_csv ("Export Wing Sections", pathFileName,
+                            lambda: self.planform.wingSections.export_to_csv (pathFileName))
 
 
 
@@ -3325,6 +3354,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
 
         # Diagram refresh is handled in Diagram_Items - but view panel is owned by this class
         self.app_model.sig_vlm_changed.connect      (self._on_vlm_changed)
+        self.app_model.sig_new_polars.connect       (self._on_vlm_changed)      # airfoil polars ready - enables export buttons
         self.app_model.sig_ref_wing_changed.connect (self._on_vlm_changed)
         self.app_model.sig_new_wing.connect         (self._on_new_wing)
 
@@ -3418,7 +3448,7 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
 
     @property
     def panel_export (self) -> Edit_Panel:
-        """Panel for exporting the current VLM operating point."""
+        """Panel for exporting the current VLM operating point and polar."""
 
         if self._panel_export is None:
             l = QGridLayout()
@@ -3426,6 +3456,10 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
                     set=self.export_opPoint,
                     disable=lambda: not  self.app_model.cur_vlm_opPoint,
                     toolTip="Export the current VLM operating point as a CSV file.")
+            Button (l, 1, 0, text="Polar...", width=100,
+                    set=self.export_polar,
+                    disable=lambda: not (self.app_model.cur_vlm_polar and self.app_model.cur_vlm_polar.is_ready),
+                    toolTip="Export the current VLM polar as a CSV file.")
             l.setColumnStretch (2, 2)
             self._panel_export = Edit_Panel (title="Export", layout=l, auto_height=True,
                                              main_margins=(10, 5, 10, 10),
@@ -3440,13 +3474,35 @@ class Diagram_Aero_Analysis (Diagram_Abstract):
         if opPoint is None:
             return
 
-        filename = f"{self.wing.parm_path.stem}_VLM_v={opPoint.polar.vtas:.1f}ms_a={opPoint.alpha:.1f}.csv"
+        polar = opPoint.polar
+
+        filename = f"{self.wing.parm_path.stem}_{polar.name}_alpha{opPoint.alpha:.1f}.csv"
         directory = os.path.join (self.wing.workingDir, filename)
         pathFileName, _ = QFileDialog.getSaveFileName (
             self.panel_export, caption="Export VLM Op Point", directory=directory,
             filter="CSV files (*.csv)")
         if pathFileName:
-            opPoint.export_to_csv (pathFileName)
+            self._save_csv ("Export VLM Op Point", pathFileName,
+                            lambda: opPoint.export_to_csv (pathFileName, app_name=self.app_model.app_name,
+                                                           app_version=self.app_model.version))
+
+
+    def export_polar (self):
+        """Save the current VLM polar as CSV."""
+
+        polar = self.app_model.cur_vlm_polar
+        if polar is None or not polar.is_ready:
+            return
+
+        filename = f"{self.wing.parm_path.stem}_{polar.name}.csv"
+        directory = os.path.join (self.wing.workingDir, filename)
+        pathFileName, _ = QFileDialog.getSaveFileName (
+            self.panel_export, caption="Export VLM Polar", directory=directory,
+            filter="CSV files (*.csv)")
+        if pathFileName:
+            self._save_csv ("Export VLM Polar", pathFileName,
+                            lambda: polar.export_to_csv (pathFileName, app_name=self.app_model.app_name,
+                                                         app_version=self.app_model.version))
 
 
     def _add_polar_def (self):
@@ -3867,7 +3923,11 @@ class Diagram_Paneling (Diagram_Abstract):
 
         self._hint_trapezoidal_export ("Export FLZ")
 
-        self.wing.exporter_flz.do_it ()
+        try:
+            self.wing.exporter_flz.do_it ()
+        except OSError as error:
+            show_export_error (self, "Export FLZ", error)
+            return
 
         pathFileName = os.path.join (self.wing.exporter_flz.export_dir_abs, self.wing.exporter_flz.flz_filename) 
         try: 

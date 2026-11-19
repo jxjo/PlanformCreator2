@@ -8,6 +8,7 @@ Dialog windows to handle the different extra functions
 """
 
 import fnmatch             
+import os
 import re
 
 from PyQt6.QtGui                import QCursor
@@ -27,7 +28,7 @@ from ..model.planform                   import Planform, WingSections
 from ..model.image_definition           import Image_Definition
 from ..model.planform_mesh              import Mesh_Strategy, Mesh_Strategy_Smooth, Mesh_Strategy_Trapezoidal, Planform_Mesh
 from ..model.wing_exports               import (Exporter_Airfoils, Exporter_DXF, Exporter_Xflr5, 
-                                                Exporter_Flow5, Exporter_FLZ, Exporter_CSV)
+                                                Exporter_Flow5, Exporter_FLZ)
 
 from .pc2_artists                       import Image_Artist, Planform_Artist, Ref_Line_Artist, mode
 
@@ -54,6 +55,20 @@ def _validated_filename(filename: str, extension: str | None = None) -> str:
     if extension and not filename.lower().endswith(extension.lower()):
         filename += extension
     return filename
+
+
+def show_export_error (parent, title: str, error: Exception):
+    """ tell the user why an export failed - typically a file which is open in another program like Excel """
+
+    if isinstance (error, PermissionError):
+        name = os.path.basename (str(error.filename)) if error.filename else "A file"
+        MessageBox.error (parent, title,
+                          f"<b>{name}</b> couldn't be written or deleted.<br>"
+                          "Is the file open in another program like Excel?<br><br>"
+                          "Please close it and export again.", min_height=90)
+    else:
+        MessageBox.error (parent, title, str(error))
+
 
 
 class Dialog_Export_Airfoils (Dialog_Modal):
@@ -137,7 +152,11 @@ class Dialog_Export_Airfoils (Dialog_Modal):
     def _export_airfoils (self, *_):
         """ do export airfoils"""
 
-        n_airfoils = self.exporter_airfoils.do_it ()
+        try:
+            n_airfoils = self.exporter_airfoils.do_it ()
+        except OSError as error:
+            show_export_error (self, "Export Airfoils", error)
+            return
         
         self.close()
 
@@ -350,7 +369,11 @@ class Dialog_Export_DXF (Dialog_Modal):
             MessageBox.error(self, "Export DXF", str(error))
             return
 
-        n_airfoils = self.exporter_dxf.do_it(dxf_filename=dxf_filename)
+        try:
+            n_airfoils = self.exporter_dxf.do_it(dxf_filename=dxf_filename)
+        except OSError as error:
+            show_export_error (self, "Export DXF", error)
+            return
         
         self.close()
 
@@ -511,7 +534,11 @@ class Dialog_Export_Xflr5 (Dialog_Modal):
             MessageBox.error(self, self._export_title, str(error))
             return
 
-        n_airfoils = self.xml_exporter.do_it(filename=filename)
+        try:
+            n_airfoils = self.xml_exporter.do_it(filename=filename)
+        except OSError as error:
+            show_export_error (self, self._export_title, error)
+            return
         
         self.close()
 
@@ -650,7 +677,11 @@ class Dialog_Export_FLZ (Dialog_Modal):
             MessageBox.error(self, "Export FLZ", str(error))
             return
 
-        self.exporter_flz.do_it(filename=filename)
+        try:
+            self.exporter_flz.do_it(filename=filename)
+        except OSError as error:
+            show_export_error (self, "Export FLZ", error)
+            return
 
         self.close()
 
@@ -678,109 +709,6 @@ class Dialog_Export_FLZ (Dialog_Modal):
         buttonBox.addButton (self._export_btn, QDialogButtonBox.ButtonRole.ActionRole)
 
         return buttonBox 
-
-
-
-class Dialog_Export_CSV (Dialog_Modal):
-    """ 
-    Dialog to export paneled planform to CSV file
-    """
-
-    _width  = 370
-
-    name = "Export Wing Sections as CSV File"
-
-    def __init__ (self, *args, **kwargs): 
-
-        self._export_btn : QPushButton = None
-        self._cancel_btn : QPushButton = None 
-
-        super().__init__ ( *args, **kwargs)
-
-        # connect dialog buttons
-        self._cancel_btn.clicked.connect (self.close)
-        self._export_btn.clicked.connect (self._exporter_csv)
-
-
-    @property
-    def wing (self) -> Wing:
-        return self.dataObject
-
-    
-    @property
-    def exporter_csv (self) -> Exporter_CSV:
-        """ the model csv exporter"""
-        return self.wing.exporter_csv
-
-
-    def _init_layout(self) -> QLayout:
-
-        l = QGridLayout()
-        self._output_filename = self.exporter_csv.csv_filename
-        r = 0 
-        SpaceR (l, r, stretch=0, height=10) 
-        r += 1
-        Field(l, r, 0, width=200, lab="File Name",
-              get=lambda: self._output_filename,
-              set=lambda filename: setattr(self, "_output_filename", filename),
-              toolTip="Enter a file name; .csv is added automatically if omitted.")
-        r += 1
-        Field  (l,r,0, width=200, lab= "To Directory", get=lambda:self.exporter_csv.export_dir)
-        ToolButton(l, r,2, icon=Icon.OPEN, set=self._select_directory)
-        r += 1
-        SpaceR (l, r, stretch=0, height=10) 
-       
-        l.setColumnMinimumWidth (0,95)
-        l.setColumnStretch (4, 5)
-
-        return l
-
-    def _select_directory (self):
-        """ select directory for export"""
-
-        directory = QFileDialog.getExistingDirectory(self, caption="Select Export Directory", directory=self.wing.workingDir)
-
-        if directory: 
-            self.exporter_csv.set_export_dir (directory)                    
-            self.refresh()
-
-    def _exporter_csv (self, *_):
-        """ do export csv"""
-
-        try:
-            filename = _validated_filename(self._output_filename, ".csv")
-        except ValueError as error:
-            MessageBox.error(self, "Export CSV", str(error))
-            return
-
-        self.exporter_csv.do_it(filename=filename)
-
-        self.close()
-
-        self._toast_message(f"Planform exported as {filename}")
-
-
-    @override
-    def _on_widget_changed (self):
-        """ slot a input field changed"""
-        self.refresh()
-
-
-    @override
-    def _button_box (self):
-        """ returns the QButtonBox with the buttons of self"""
-
-        buttons = QDialogButtonBox.StandardButton.Cancel
-        buttonBox = QDialogButtonBox(buttons)
-
-        self._cancel_btn  = buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
-
-        self._export_btn = QPushButton ("&Export", parent=self)
-        self._export_btn.setFixedWidth (80)
-
-        buttonBox.addButton (self._export_btn, QDialogButtonBox.ButtonRole.ActionRole)
-
-        return buttonBox
 
 
 

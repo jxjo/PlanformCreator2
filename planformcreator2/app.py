@@ -109,7 +109,7 @@ class Main (QMainWindow):
         # --- init App Model ---------------
 
         self._app_model = App_Model (workingDir_default=Settings.user_data_dir (APP_NAME))
-        self._app_model.set_app_info (__version__, "No CHANGE_TEXT", is_first_run)
+        self._app_model.set_app_info (__version__, "No CHANGE_TEXT", is_first_run, app_name=APP_NAME)
         
         # either airfoil file or Xoptfoil2 input file
 

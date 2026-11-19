@@ -88,6 +88,7 @@ class App_Model (QObject):
 
 
         self._version           = ""                    # application version
+        self._app_name          = ""                    # application name
         self._change_text       = ""                    # change text for this version
         self._is_first_run      = False                 # is first run of this version
 
@@ -176,9 +177,22 @@ class App_Model (QObject):
 
     # --- properties
 
-    def set_app_info (self, version: str, change_text: str, is_first_run: bool):
+    @property
+    def version (self) -> str:
+        """ application version """
+        return self._version
+
+
+    @property
+    def app_name (self) -> str:
+        """ application name """
+        return self._app_name
+
+
+    def set_app_info (self, version: str, change_text: str, is_first_run: bool, app_name: str = ""):
         """ set application info """
         self._version        = version
+        self._app_name       = app_name
         self._change_text    = change_text
         self._is_first_run   = is_first_run
 

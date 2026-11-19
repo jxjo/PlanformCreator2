@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import csv
 import logging
 import os
 import numpy as np
@@ -20,7 +21,7 @@ from airfoileditor.base.spline              import *
 from airfoileditor.base.common_utils        import *
 from airfoileditor.base.cst                 import bernstein_elevate, bernstein_product
 
-from airfoileditor.model.airfoil            import Airfoil, GEO_BASIC
+from airfoileditor.model.airfoil            import Airfoil, GEO_BASIC, GEO_SPLINE
 from airfoileditor.model.polar_set          import Polar_Set
 from airfoileditor.model.xo2_driver         import Worker
 from airfoileditor.model.airfoil_examples   import Root_Example, Tip_Example
@@ -1989,6 +1990,42 @@ class WingSections (list [WingSection]):
 
         dt = perf_counter () - t0
         logger.debug (f"{self} strak calculation: {dt:.4f}s ({n_straked} regenerated, {len(self)} sections)")
+
+
+    def export_to_csv (self, pathFileName: str):
+        """
+        Write the wing sections to a csv file - a plain table with one row per wing section 
+        with the unit of the values in the header 
+        """
+
+        # sanity strak - blended airfoils get their file name when they are created
+        self.do_strak (geometry_class=GEO_SPLINE)
+
+        sections = self.without_for_panels
+        le_te    = [section.le_te() for section in sections]
+
+        # columns as (header, values per wing section, format) - format None: text 
+        columns = [("Span Pos [%]",    [section.xn * 100 for section in sections],        ".2f"),
+                   ("Span Pos [mm]",   [section.x for section in sections],               ".2f"),
+                   ("Chord [mm]",      [section.c for section in sections],               ".2f"),
+                   ("LE Pos [mm]",     [le for le, _ in le_te],                           ".2f"),
+                   ("TE Pos [mm]",     [te for _, te in le_te],                           ".2f"),
+                   ("Flap Depth [%]",  [section.flap_cn * 100 for section in sections],   ".2f"),
+                   ("Flap Group",      [section.flap_group for section in sections],      None),
+                   ("Airfoil File Name", [section.airfoil.fileName for section in sections], None)]
+
+        with open (pathFileName, mode="w", newline="") as csvfile:
+            writer = csv.writer (csvfile, dialect="excel")
+
+            writer.writerow ([header for header, _, _ in columns])
+
+            for i in range (len (sections)):
+                row = []
+                for _, values, precision in columns:
+                    row.append (str (values[i]) if precision is None else format (float (values[i]), precision))
+                writer.writerow (row)
+
+        logger.info (f"CSV file {pathFileName} written")
 
 
     def reset_strak (self): 

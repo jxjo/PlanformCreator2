@@ -9,6 +9,15 @@ All notable changes to this project will be documented in this file.
 - Planform: Reference-line kinks for trapezoidal planforms
 - Paneling: Export of a flow5 plane with the wing and its airfoils
 - Paneling: Short "How To" guides for the Xflr5 and flow5 exports, linked from the export dialogs
+- Aero Analysis: Polar delta diagram shows regions where no delta is available (e.g. CL < 0, stall) and is linked to its polar diagram
+- Aero Analysis: Export of the wing polar as CSV file
+
+### Fixed
+
+- Aero Analysis: Level flight marker is no longer shown in the polar delta diagram where no delta is available
+- VLM: Stall limit uses the lower cl max of VLM and normal airfoil polar, so drag and moment are available up to the end
+- DXF export: Airfoils only blended based on chord are dashed and marked with a hint, airfoil labels are rotated
+- CSV exports: All CSV exports are plain tables with units in the column names. 
 
 
 ## 5.0.1

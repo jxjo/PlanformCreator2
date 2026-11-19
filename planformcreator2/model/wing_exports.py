@@ -11,7 +11,6 @@ import logging
 import io
 import numpy as np
 import shutil
-import csv                                                      # csv writing
 from pathlib                import Path
 
 from copy                   import deepcopy
@@ -1154,65 +1153,6 @@ class Exporter_FLZ (Exporter_Abstract):
 
 
 
-class Exporter_CSV (Exporter_Abstract):
-    """ 
-    Handle export of the planform (wing sections) to csv file
-    """
-
-    EXPORT_DIR_SUFFIX = "_csv"
-
-    def __init__(self, wing : Wing, dataDict: dict = None):
-        super().__init__(wing, dataDict=dataDict)
- 
-
-    def _as_dict (self) -> dict:
-        """ returns a data dict with the parameters of self"""
-
-        d = {}
-        # Convert to forward slashes for cross-platform storage
-        export_dir = Path(self._export_dir).as_posix() if self._export_dir else None
-        toDict (d, "export_dir",        export_dir) 
-        d.update(self.exporter_airfoils._as_dict())
-        return d
-
-
-    @property
-    def csv_filename(self): 
-        return self._wing.parm_path.stem + '_wing.csv'
-
-
-    def do_it (self, filename: str | None = None):
-        """ 
-        main entry: start the export to the file defined in self parameters.
-        Returns a message string what was done 
-        """
-
-        self._ensure_export_dir()
-
-        # plot the different parts in a csv document 
-
-        filename = filename if filename is not None else self.csv_filename
-        csv_pathFileName = Path(self.export_dir_abs) / filename
-
-        with open (csv_pathFileName, mode='w', newline='') as csvfile:
-            csv_writer = csv.writer (csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-
-            # write header 
-            csv_writer.writerow (["Span Pos / %", "Span Pos / mm", "Chord / mm", "LE Pos / mm", "TE Pos / mm", "Flap Depth / %", "Flap Group", "Airfoil File Name"])
-            # write data for each section 
-            for section in self.planform.wingSections.without_for_panels:
-                le_y, te_y = section.le_te()
-                csv_writer.writerow ([f"{section.xn:.4f}", f"{section.x:.2f}", f"{section.c:.2f}", 
-                                      f"{le_y:.2f}", f"{te_y:.2f}", 
-                                      f"{section.flap_cn:.4f}", f"{section.flap_group}", 
-                                      f"{section.airfoil.fileName}"])
-
-
-        logger.info ("CSV file " + filename + " written to " + self.export_dir_abs)
-
-        return
-
-
 # --- Helper classes for Exporter_DXF ---
 
 
@@ -1437,7 +1377,9 @@ class Dxf_Wing_Artist (Dxf_Artist):
             artist = Dxf_Airfoil_Artist (sec.airfoil, nick_name=nick_name, 
                                          chord_mm=sec.c, xy_pos_mm=(x, y), 
                                          te_gap_mm=te_gap_mm, drawing=self.drawing,
-                                         always_as_cubic_fit=self._always_as_cubic_fit)
+                                         always_as_cubic_fit=self._always_as_cubic_fit,
+                                         text_angle=30.0,
+                                         is_blended=sec.airfoil.isBlendAirfoil)
             artist.plot()
 
 
