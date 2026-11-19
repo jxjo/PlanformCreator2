@@ -988,10 +988,10 @@ class VLM_Polar:
     def name (self) -> str:
         """ name of polar like T1-22.3-VLM"""
         if self.use_viscous_loop:
-            v = "non_linear"
+            v = ""
         else: 
-            v = "linear"
-        return f"T1-{self.vtas:.1f}-VLM_{v}"
+            v = "_linear"
+        return f"T1-{self.vtas:.1f}{v}"
 
 
     @property
@@ -1178,19 +1178,26 @@ class VLM_Polar:
 
     @property
     def cl_max_stripes (self) -> np.ndarray:
-        """Maximum lift coefficients from the interpolated stripe polars."""
+        """
+        Maximum lift coefficients of the stripes - the lower one of the VLM and the normal stripe polar.
+        Drag and moment are taken from the normal polar, so they must be available up to this limit.
+        """
 
         if self._cl_max_stripes is None:
-            self._cl_max_stripes = np.array ([polar.cl_max for polar in self.airfoil_polar_stripes])
+            self._cl_max_stripes = np.minimum (
+                [polar.cl_max for polar in self.airfoil_polar_stripes],
+                [polar.cl_max for polar in self.airfoil_polar_stripes_normal])
 
         return self._cl_max_stripes
 
     @property
     def cl_min_stripes (self) -> np.ndarray:
-        """Minimum lift coefficients from the interpolated stripe polars."""
+        """Minimum lift coefficients of the stripes - the higher one of the VLM and the normal stripe polar."""
 
         if self._cl_min_stripes is None:
-            self._cl_min_stripes = np.array ([polar.cl_min for polar in self.airfoil_polar_stripes])
+            self._cl_min_stripes = np.maximum (
+                [polar.cl_min for polar in self.airfoil_polar_stripes],
+                [polar.cl_min for polar in self.airfoil_polar_stripes_normal])
 
         return self._cl_min_stripes
 
@@ -1585,38 +1592,84 @@ class VLM_Polar:
         print (f"  CL: {cl:.3f}  Alpha: {alpha:.1f}°  CD: {cd:.3f}  Glide: {glide:.2f}  Lift: {lift:.1f}N  Drag: {drag:.1f}N")
  
 
-    # def export_to_csv (self, pathFileName, alpha_start = -3.0, alpha_end :float = None, step = 0.5):
-    #     """ 
-    #     Write polar data alpha, Cl, Lift to csv 
-    #         - if alpha_end is omitted, the polar ends when Cl is Cl_max / 2        
-    #     """
+    @property
+    def is_generated (self) -> bool:
+        """ True if the polar is completely generated and ready for export """
+        return self._is_polar_generated
 
-    #     import csv
 
-    #     alpha_max = 25.0                                # maximum for polar 
+    def xcp_of (self, cm: np.ndarray, cl: np.ndarray) -> np.ndarray:
+        """
+        Chordwise position [m] of the centre of pressure for the given cm and cl values
+            - same coordinate system and reference point as the moment calculation (cm_ref_x)
+            - nose-down moment is negative: x_cp = x_ref - cm * mac / cl 
+            - strongly increasing towards cl = 0 (like in XFLR5) - not finite at cl = 0 
+        """
 
-    #     with open(pathFileName, 'w', newline='') as csvfile:
-    #         fieldnames = ['Alpha', 'CL', 'Lift']
-    #         writer = csv.DictWriter(csvfile, fieldnames=fieldnames, dialect='excel')
+        with np.errstate (divide="ignore", invalid="ignore"):
+            return self.vlm_wing.cm_ref_x - np.asarray (cm) * self.vlm_wing.mac / np.asarray (cl)
 
-    #         writer.writerow(["PlanformCreator2"])
-    #         writer.writerow([f"Wing Name :", f"{self.vlm_wing._planform_mesh.wing.name}"])
-    #         writer.writerow([f"Speed :", f"{self.vtas:.1f}"])
-    #         writer.writerow([ ])
 
-    #         writer.writeheader()
+    def export_to_csv (self, pathFileName: str, app_name: str = "PC2", app_version: str = ""):
+        """
+        Write the polar data to a csv file - one row per opPoint
+            - meta data (program, plane, polar) are written in columns, so the file is a plain table
+            - opPoints without drag and moment are skipped: close to stall the airfoil polars 
+              don't cover the lift coefficient any longer
 
-    #         CL_max = -5.0                               # dummy initial value 
+        Args:
+            pathFileName: file to write 
+            app_name: name of the application written into column Program
+            app_version: version of the application written into column Program
+        """
 
-    #         for alpha in np.arange (alpha_start, alpha_max, step):
- 
-    #             opPoint = self.opPoint_at (alpha)
-    #             writer.writerow({'Alpha': f"{opPoint.alpha:8.1f}", 'CL': f"{opPoint.CL:8.3f}", 'Lift': f"{opPoint.Lift:8.2f}"})
+        if not self.is_generated:
+            self.generate_polar ()
+        if not self.is_generated:
+            raise ValueError (f"{self} is not completely generated")
 
-    #             if opPoint.CL < CL_max and opPoint.CL < CL_max / 2:     # handle also negative values
-    #                 break 
-    #             if opPoint.CL > CL_max:
-    #                 CL_max = opPoint.CL
+        cl = self._of_var (VLM_Var.WING_CL)
+        cm = self._of_var (VLM_Var.WING_CM)
+        cd = self._of_var (VLM_Var.WING_CD)
+        n  = len (cl)
+
+        program = f"{app_name} v{app_version}" if app_version else app_name
+
+        # columns as (header, values per opPoint, format) - format None: text 
+        columns = [("Program",     np.full (n, program),                    None),
+                   ("Plane",       np.full (n, self.vlm_wing._wing.name),   None),
+                   ("Polar type",  np.full (n, "T1"),                       None),
+                   ("Polar name",  np.full (n, self.name),                  None),
+                   ("alpha [deg]", self._of_var (VLM_Var.WING_ALPHA),       ".2f"),
+                   ("CL",          cl,                                      ".3f"),
+                   ("CDi",         self._of_var (VLM_Var.WING_CD_IND),      ".5f"),
+                   ("CDv",         self._of_var (VLM_Var.WING_CD_AIRFOIL),  ".5f"),
+                   ("CD",          cd,                                      ".5f"),
+                   ("Cm",          cm,                                      ".4f"),
+                   ("QInf",        np.full (n, self.vtas),                  ".2f"),
+                   ("XCP",         self.xcp_of (cm, cl),                    ".3f"),
+                   ("Lift [N]",    self._of_var (VLM_Var.WING_LIFT),        ".2f"),
+                   ("Drag [N]",    self._of_var (VLM_Var.WING_DRAG),        ".2f"),
+                   ("CL/CD",       self._of_var (VLM_Var.WING_GLIDE),       ".2f"),
+                   ("Cm ref x [m]", np.full (n, self.vlm_wing.cm_ref_x),    ".4f"),
+                   ("MAC [m]",     np.full (n, self.vlm_wing.mac),          ".4f")]
+
+        with open (pathFileName, mode="w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.writer (csvfile, dialect="excel")
+
+            writer.writerow ([header for header, _, _ in columns])
+
+            complete = np.isfinite (cd) & np.isfinite (cm)
+
+            for i in np.flatnonzero (complete):
+                row = []
+                for _, values, precision in columns:
+                    if precision is None:
+                        row.append (str (values[i]))
+                    else:
+                        value = float (values[i])
+                        row.append (format (value, precision) if np.isfinite (value) else "")
+                writer.writerow (row)
 
 
 
@@ -2264,25 +2317,50 @@ class VLM_OpPoint:
         return np.repeat (wj_stripes, self.wing.nx_panels)
 
 
-    def export_to_csv (self, pathFileName: str):
-        """Write this operating point in an XFLR5-like report with PC2 diagnostics."""
+    def export_to_csv (self, pathFileName: str, app_name: str = "PC2", app_version: str = ""):
+        """
+        Write this operating point to a csv file - one row per wing stripe
+            - meta data (program, plane, polar) and wing totals are written in columns, 
+              so the file is a plain table - the values are the same in every row
+
+        Args:
+            pathFileName: file to write 
+            app_name: name of the application written into column Program
+            app_version: version of the application written into column Program
+        """
 
         results = self.aero_results
         polar = self.polar
         wing = self.wing
 
+        n_stripes = len (results[VLM_Var.Y])
+
+        program = f"{app_name} v{app_version}" if app_version else app_name
+
+        # columns as (header, values per stripe, format) - format None: text 
         columns = [
+            ("Program",         np.full (n_stripes, program), None),
+            ("Plane",           np.full (n_stripes, wing._wing.name), None),
+            ("Polar type",      np.full (n_stripes, "T1"), None),
+            ("Polar name",      np.full (n_stripes, polar.name), None),
+            ("QInf",            np.full (n_stripes, polar.vtas), ".2f"),
             ("y-span [m]",      results[VLM_Var.Y], ".3f"),
             ("Chord [m]",       wing.stripes_chord, ".3f"),
-            ("Ai [deg]",        -results[VLM_Var.ALPHA_IND], ".3f"),
-            ("Cl ",             results[VLM_Var.CL], ".3f"),
+            ("Alpha [deg]",     results[VLM_Var.ALPHA], ".2f"),
+            ("Alpha eff [deg]", results[VLM_Var.ALPHA_EFF], ".2f"),
+            ("Ai [deg]",       -results[VLM_Var.ALPHA_IND], ".3f"),
+            ("Alpha0 airfoil [deg]",  results[VLM_Var.ALPHA0_AIRFOIL], ".2f"),
+            ("Cl",              results[VLM_Var.CL], ".3f"),
+            ("Cl VLM",          results[VLM_Var.CL_VLM], ".3f"),
+            ("Cl linear",       results[VLM_Var.CL_VLM_LINEAR], ".3f"),
+            ("Cd",              results[VLM_Var.CD], ".5f"),
             ("Cd airfoil",      results[VLM_Var.CD_AIRFOIL], ".5f"),
             ("Cd induced",      results[VLM_Var.CD_IND], ".5f"),
+            ("Cm PC2",          results[VLM_Var.CM], ".3f"),
             ("Cm geo",          results[VLM_Var.CM_VLM], ".3f"),
             ("Cm airf (c/4)",   results[VLM_Var.CM_AIRFOIL], ".3f"),
         ]
 
-        n_stripes = len (results[VLM_Var.Y])
         stripes = polar.airfoil_polar_stripes
         if len (stripes) == n_stripes:
             strip_cl = results[VLM_Var.CL_VLM]
@@ -2296,46 +2374,31 @@ class VLM_OpPoint:
             ])
 
         columns.extend ([
-            ("Cl VLM",              results[VLM_Var.CL_VLM], ".3f"),
-            ("Cl linear",           results[VLM_Var.CL_VLM_LINEAR], ".3f"),
-            ("Alpha [°]",           results[VLM_Var.ALPHA], ".2f"),
-            ("Alpha eff [°]",       results[VLM_Var.ALPHA_EFF], ".2f"),
-            ("Alpha0 airfoil [°]",  results[VLM_Var.ALPHA0_AIRFOIL], ".2f"),
-            ("Cd",                  results[VLM_Var.CD], ".5f"),
-            ("Cd airfoil",          results[VLM_Var.CD_AIRFOIL], ".5f"),
             ("Lift [N/m]",          results[VLM_Var.LIFT_SPAN], ".2f"),
             ("Drag induced [N/m]",  results[VLM_Var.DRAG_IND_SPAN], ".2f"),
             ("Drag airfoil [N/m]",  results[VLM_Var.DRAG_AIRFOIL_SPAN], ".2f"),
             ("Moment [N*m]",        results[VLM_Var.MOMENT_SPAN], ".2f"),
-            ("Cm PC2",              results[VLM_Var.CM], ".3f"),
-            ("VLM error",           results[VLM_Var.ERROR_MASK].astype(int), ".0f"),
-            ("CL limit",            results[VLM_Var.MAX_MASK].astype(int), ".0f"),
+            # totals of the wing 
+            ("Wing CL",             np.full (n_stripes, results[VLM_Var.WING_CL]), ".3f"),
+            ("Wing CD",             np.full (n_stripes, results[VLM_Var.WING_CD]), ".5f"),
+            ("Wing CD induced",     np.full (n_stripes, results[VLM_Var.WING_CD_IND]), ".5f"),
+            ("Wing CD airfoil",     np.full (n_stripes, results[VLM_Var.WING_CD_AIRFOIL]), ".5f"),
+            ("Wing Cm",             np.full (n_stripes, results[VLM_Var.WING_CM]), ".3f"),
+            ("Wing Moment [N*m]",   np.full (n_stripes, results[VLM_Var.WING_MOMENT]), ".2f"),
+            ("e aero",              np.full (n_stripes, results[VLM_Var.WING_EFFICIENCY]), ".3f"),
+            ("Induced drag method", np.full (n_stripes, "Trefftz" if polar._use_treffz else "Near field"), None),
         ])
 
         with open (pathFileName, mode="w", newline="", encoding="utf-8") as csvfile:
             writer = csv.writer (csvfile, dialect="excel")
 
-            writer.writerow (["PlanformCreator2 VLM"])
-            writer.writerow (["Wing",       wing._wing.name])
-            writer.writerow (["Polar",      polar.name])
-            writer.writerow (["QInf",       f"{polar.vtas:.2f}", "m/s"])
-            writer.writerow (["Alpha",      f"{self.alpha:.2f}", "deg"])
-            writer.writerow (["Beta",       "0.000000", "deg"])
-            writer.writerow (["CL",         f"{results[VLM_Var.WING_CL]:.3f}"])
-            writer.writerow (["Cy",        "0.0"])
-            writer.writerow (["CD",         f"{results[VLM_Var.WING_CD]:.5f}",
-                              "CD induced", f"{results[VLM_Var.WING_CD_IND]:.5f}",
-                              "CD airfoil", f"{results[VLM_Var.WING_CD_AIRFOIL]:.5f}"])
-            writer.writerow (["Induced drag method", "Trefftz" if polar._use_treffz else "Near field"])
-            writer.writerow (["e aero", f"{results[VLM_Var.WING_EFFICIENCY]:.3f}"])
-            writer.writerow (["Cm",         f"{results[VLM_Var.WING_CM]:.3f}"])
-            writer.writerow (["Moment",     f"{results[VLM_Var.WING_MOMENT]:.2f}", "N*m"])
-            writer.writerow ([])
-            writer.writerow (["Main Wing"])
             writer.writerow ([column[0] for column in columns])
             for stripe_index in range (n_stripes):
                 row = []
                 for _, values, precision in columns:
                     value = values[stripe_index]
-                    row.append ("" if value is None else format (float (value), precision))
+                    if precision is None:
+                        row.append (str (value))
+                    else:
+                        row.append ("" if value is None else format (float (value), precision))
                 writer.writerow (row)
