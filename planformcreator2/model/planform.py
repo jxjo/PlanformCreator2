@@ -3155,6 +3155,24 @@ class Planform:
         return x, y 
 
 
+    @property
+    def root_le_angle (self) -> float:
+        """ angle of the leading edge at the root """
+
+        x, le_y, _ = self.le_te_polyline()
+        dx = float(x[1] - x[0])
+        dy = float(le_y[1] - le_y[0])
+        return round(np.degrees(np.arctan2(dy, dx)), 2)
+
+    @property
+    def root_te_angle (self) -> float:
+        """ angle of the trailing edge at the root """
+
+        x, _, te_y = self.le_te_polyline()
+        dx = float(x[1] - x[0])
+        dy = float(te_y[1] - te_y[0])
+        return round(np.degrees(np.arctan2(dy, dx)), 2)
+
 
     def calc_area (self, normed = False) -> float:
         """ planform area either normalized or absolute in [mm²]"""

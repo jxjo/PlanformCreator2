@@ -570,15 +570,32 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
         # movable root chord and tip  
 
         pt = self.Movable_Chord_Root    (self._pi, self.planform, color=color,
-                                        on_changed=self.sig_planform_changed.emit)
+                                         label_anchor = (0.1,-0.2),
+                                         on_changed=self.sig_planform_changed.emit)
         self._add (pt) 
         pt = self.Movable_Span          (self._pi, self.planform, color=color, 
-                                        on_changed=self.sig_planform_changed.emit)
+                                         label_anchor = (0.1,-0.2),
+                                         on_changed=self.sig_planform_changed.emit)
         self._add (pt) 
         pt = self.Movable_Angle         (self._pi, self.planform, color=color, 
-                                        on_changed=self.sig_planform_changed.emit)
+                                         label_anchor = (0.1,1.2),
+                                         on_changed=self.sig_planform_changed.emit)
         self._add (pt) 
 
+        # angle of le and te at root 
+
+        x, le_y, te_y = self.planform.le_te_polyline()
+
+        xa, ya = x[0], le_y[0]
+        root_le_angle = self.planform.root_le_angle    
+        self._plot_point (xa, ya, size=0, text=f"LE {root_le_angle:g}°", anchor=(1.1,0.5),
+                          textColor=Artist.COLOR_HINT)
+
+        root_te_angle = self.planform.root_te_angle   
+        xa, ya = x[0], te_y[0]
+        self._plot_point (xa, ya, size=0, text=f"TE {root_te_angle:.2f}°", anchor=(1.1,0.5),
+                          textColor=Artist.COLOR_HINT)
+    
         self.set_help_message ("Planform: Use control points of the enclosing box to modify root chord, span and sweep angle")
 
 
@@ -590,7 +607,8 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
 
         def __init__ (self, pi : pg.PlotItem, 
                       planform : Planform, 
-                      movable = True, 
+                      movable = True,
+                      label_anchor = (0,0),
                       **kwargs):
 
             self._pi = pi
@@ -599,7 +617,7 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
             self._tmp_box_item = None 
             self._tmp_planform_item = None 
 
-            super().__init__(self._point_xy(), movable=movable, label_anchor = (0,0),
+            super().__init__(self._point_xy(), movable=movable, label_anchor = label_anchor,
                              symbol='s', size=Artist.SIZE_SMALL, show_label_static = movable,**kwargs)
 
 
@@ -649,6 +667,11 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
 
 
         @override
+        def label_hover (self, *_):
+            return self.label_static()
+
+
+        @override
         def _finished (self, _):
             """ slot - point moving is finished"""
 
@@ -679,14 +702,18 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
             super()._moving ()
 
         @override
+        def label_static (self, *_):
+            return f"{self.name} {self._planform.sweep_angle:g}°"
+        
+        @override
         def label_moving (self, *_):
-            return f"{self.name}  {self._planform.sweep_angle:.2f}°"
+            return f"{self._planform.sweep_angle:.2f}°"
 
 
 
     class Movable_Chord_Root (Movable_Box_Point):
         """ Root point of planform to change chord """
-        name = "Root Chord"
+        name = "Chord"
 
         @override
         def _point_xy (self) -> tuple: 
@@ -699,8 +726,12 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
             super()._moving ()
 
         @override
+        def label_static (self, *_):
+            return f"{self.name} {self._planform.chord_root:g}mm "
+
+        @override
         def label_moving (self, *_):
-            return f"{self.name} {self._planform.chord_root:.1f}mm "
+            return f"{self._planform.chord_root:g}mm "
 
 
 
@@ -719,8 +750,12 @@ class Planform_Box_Artist (Abstract_Artist_Planform):
             super()._moving ()
 
         @override
+        def label_static (self, *_):
+            return f"{self.name} {self._planform.span:g}mm "
+    
+        @override
         def label_moving (self, *_):
-            return f"{self.name} {self._planform.span:.1f}mm "
+            return f"{self._planform.span:g}mm "
 
 
 
@@ -2017,7 +2052,6 @@ class _Region_Out_Of_Range (pg.LinearRegionItem):
         return None
 
 
-
 class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
     """
     Plot the delta between the current VLM polar and a reference polar.
@@ -2026,28 +2060,30 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
     OUT_OF_VIEW = 1e6                                   # 'infinite' extent of a shaded region 
 
     def __init__ (self, *args, 
+                  polar_fn : Callable = None,
+                  ref_polar_fn : Callable = None,
                   delta_vars_fn : Callable = None, 
-                  delta_data_fn : Callable = None,
                   **kwargs):
 
+        self._polar_fn = polar_fn
+        self._ref_polar_fn = ref_polar_fn
         self._delta_vars_fn = delta_vars_fn                 # bound method to get base_var and value_var
-        self._delta_data_fn = delta_data_fn
         self._show_level_flight = False                     # show level flight point in polar
 
         super().__init__(*args, **kwargs)
 
     @property
     def vlm_polar(self) -> VLM_Polar:
-        return self.data_object
+        return self._polar_fn() if callable(self._polar_fn) else None
+
+    @property
+    def ref_vlm_polar(self) -> VLM_Polar:
+        return self._ref_polar_fn() if callable(self._ref_polar_fn) else None
 
     @property
     def delta_vars (self) -> tuple:
         return self._delta_vars_fn() if callable(self._delta_vars_fn) else None
 
-
-    @property
-    def delta_data (self) -> tuple[np.ndarray, np.ndarray, bool]:
-        return self._delta_data_fn() if callable(self._delta_data_fn) else (np.array([]), np.array([]), False)
 
     @property
     def show_level_flight(self) -> bool:
@@ -2064,13 +2100,31 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
                              fontSize=self.SIZE_NORMAL, itemPos=(0.5, 1))
             return
 
-        # get base and deviation values
+        # get delta data from the current and reference polars
 
-        base_var, value_var = self.delta_vars
+        polar, ref_polar = self.vlm_polar, self.ref_vlm_polar
 
-        x, delta, is_relative = self.delta_data
+        if polar is None:
+            msg = "Current wing polar is not available"
+        elif not polar.is_ready:
+            msg = "Current wing polar could not be created"
+        elif ref_polar is None:
+            msg = "Reference wing polar is not available"
+        elif not ref_polar.is_ready:
+            msg = "Reference wing polar could not be created"
+        elif not polar.opPoints:
+            msg = "Current wing polar has no operating points"
+        elif not ref_polar.opPoints:
+            msg = "Reference wing polar has no operating points"
+        else:
+            msg = None
+        if msg:
+            self._plot_text (msg, color="dimgray",  fontSize=self.SIZE_NORMAL, itemPos=(0.5, 1))
+            return
 
-        if not x.size or not delta.size:
+        x, delta, is_relative = polar.deviation_from (ref_polar, self.delta_vars)
+
+        if not x.size:
             self._plot_text ("No delta data available", color="dimgray",
                              fontSize=self.SIZE_NORMAL, itemPos=(0.5, 1))
             return
@@ -2080,6 +2134,8 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
             self._plot_text ("No comparable delta samples", color="dimgray",
                              fontSize=self.SIZE_NORMAL, itemPos=(0.5, 1))
             return
+
+        base_var, value_var = self.delta_vars
 
         # if base_var is CL mask values to cl > 0 
         lower_label = "stall or N/A"
@@ -2091,6 +2147,9 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
 
         x     = np.where (valid, x, np.nan)
         delta = np.where (valid, delta, np.nan)
+
+        x, delta = self._insert_zero_crossings (x, delta)        # fill and line meet at the zero crossing
+        valid    = np.isfinite (delta)                           # new length - mask must be recalculated
 
         # plot sections with good/bad deviations
 
@@ -2155,6 +2214,24 @@ class VLM_Polar_Delta_Artist (Abstract_Artist_Planform):
                         text=f"{y_level:{delta_format}}", textColor=textColor,
                         textFill=pg.mkBrush (brush_color),
                         textOffset=(0, 10),anchor=(0.4, 1.0))
+
+
+    @staticmethod
+    def _insert_zero_crossings (x : np.ndarray, delta : np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Return x and delta with samples inserted where delta crosses zero."""
+
+        d0, d1 = delta[:-1], delta[1:]
+
+        # NaN gaps never compare as True - so there is no crossing across a gap
+        with np.errstate (invalid="ignore"):
+            cross = np.flatnonzero (d0 * d1 < 0.0)
+
+        if not cross.size:
+            return x, delta
+
+        x_zero = x[cross] + (x[cross + 1] - x[cross]) * d0[cross] / (d0[cross] - d1[cross])
+
+        return np.insert (x, cross + 1, x_zero), np.insert (delta, cross + 1, 0.0)
 
 
     def _plot_cut_regions (self, x : np.ndarray, valid : np.ndarray, 
