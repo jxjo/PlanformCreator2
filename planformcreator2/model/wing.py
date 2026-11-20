@@ -450,7 +450,7 @@ class Wing:
         return self._halfspan
 
     def set_halfspan (self, aVal : float):
-        self._halfspan = max (0.01, aVal)
+        self._halfspan = max (0.01, round(aVal, 1))
 
 
     @property
@@ -459,7 +459,7 @@ class Wing:
         return self._chord_root
 
     def set_chord_root (self, aVal : float):
-        self._chord_root = max (0.01, aVal)
+        self._chord_root = max (0.01, round(aVal, 1))
 
 
     @property
@@ -468,7 +468,7 @@ class Wing:
         return self._sweep_angle
 
     def set_sweep_angle (self, aVal : float):
-        self._sweep_angle = clip (aVal, -75.0, 75.0)
+        self._sweep_angle = clip (round(aVal, 2), -75.0, 75.0)
 
 
     @property
