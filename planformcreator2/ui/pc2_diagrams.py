@@ -29,7 +29,7 @@ from airfoileditor.ui.util_dialogs      import Polar_Definition_Dialog, Calc_Rey
 from ..model.wing       import Wing
 from ..model.wing_reference import Scale_Mode, Reference_Wing_Elliptical
 from ..model.planform   import Planform
-from ..model.VLM_wing   import VLM_OpPoint, VLM_Var, VLM_Wing
+from ..model.VLM_wing   import VLM_OpPoint, VLM_Var, VLM_Polar_Comparison
 
 from .pc2_artists       import *
 from .pc2_dialogs       import (Dialog_Edit_Image, Dialog_Edit_Paneling, Dialog_Export_Xflr5,
@@ -1571,24 +1571,14 @@ class Item_VLM_Polar_Delta (Item_Abstract):
         return base_var, value_var
 
 
-    def get_delta_data (self) -> tuple[np.ndarray, np.ndarray, bool]:
-        """Return delta samples and their relative/absolute flag from the model."""
-
-        polar     = self.app_model.cur_vlm_polar
-        ref_polar = self.app_model.ref_vlm_polar
-        if polar is None or not polar.is_ready or ref_polar is None or not ref_polar.is_ready:
-            return np.array([]), np.array([]), False
-
-        return polar.deviation_from (ref_polar, self.delta_vars)
-
-
     @override
     def setup_artists (self):
         """ create and setup the artists of self"""
 
-        a = VLM_Polar_Delta_Artist  (self, lambda: self.app_model.cur_vlm_polar,
-                                     delta_vars_fn=lambda: self.delta_vars, 
-                                     delta_data_fn=self.get_delta_data,
+        a = VLM_Polar_Delta_Artist  (self, lambda: self.planform,
+                                     polar_fn=lambda: self.app_model.cur_vlm_polar,
+                                     ref_polar_fn=lambda: self.app_model.ref_vlm_polar,
+                                     delta_vars_fn=lambda: self.delta_vars,
                                      show=True)
         self._add_artist(a)
 
@@ -1678,7 +1668,8 @@ class Item_VLM_Polar_Delta (Item_Abstract):
         self.viewBox.setDefaultPadding(0.05)
 
         # relative or absolute delta
-        _, _, is_relative = self.get_delta_data()
+        is_relative = bool (self.delta_vars and
+                            VLM_Polar_Comparison.is_relative_deviation (self.delta_vars[1]))
 
         # set y range 
         rect = self.viewBox.childrenBoundingRect()

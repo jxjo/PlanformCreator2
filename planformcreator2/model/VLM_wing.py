@@ -85,6 +85,9 @@ class VLM_Var (StrEnum_Extended):
     DRAG_AIRFOIL_SPAN = "Drag airfoil per span [N/m]"       # airfoil drag force distribution density along span
     DRAG_SPAN       = "Drag per span [N/m]"                 # total drag force distribution density along span
 
+    XTRT            = "xtr top"                              # transition point at top surface
+    XTRB            = "xtr bottom"                           # transition point at bottom surface
+
     CM_AIRFOIL      = "cm airfoil 2D"                       # 2D profile moment coefficient (isolated around local stripe quarter-chord)
     CM_VLM          = "cm vlm"                              # VLM moment coefficient contribution around cm_ref
     CM              = "cm"                                  # total moment coefficient contribution (VLM + airfoil) around cm_ref
@@ -816,6 +819,12 @@ class VLM_Airfoil_Polar:
     def cm_at_cl (self, cl: float) -> float | None:
         return self._interpolate_at_cl (cl, self.cm)
 
+    def xtr_at_cl (self, cl: float) -> tuple[float | None, float | None]:
+        """Return the transition points xtrt and xtrb at a given cl."""
+        xtrt = self._interpolate_at_cl (cl, self.xtrt)
+        xtrb = self._interpolate_at_cl (cl, self.xtrb)
+        return xtrt, xtrb
+
 
     @property
     def _branch_mask (self) -> np.ndarray:
@@ -848,6 +857,17 @@ class VLM_Airfoil_Polar:
 
 class VLM_Polar_Comparison:
     """Aligned samples from a current polar and its interpolated reference."""
+
+    RELATIVE_DEVIATION_MIN = {
+        VLM_Var.WING_CD: 1e-8,
+        VLM_Var.WING_CD_IND: 1e-8,
+        VLM_Var.WING_CD_AIRFOIL: 1e-8,
+        VLM_Var.WING_DRAG: 1e-6,
+        VLM_Var.WING_DRAG_IND: 1e-6,
+        VLM_Var.WING_DRAG_AIRFOIL: 1e-6,
+        VLM_Var.WING_GLIDE: 0.05,
+        VLM_Var.WING_GLIDE_AIRFOIL: 0.05,
+    }
 
     def __init__ (self, current_polar: VLM_Polar, ref_polar: VLM_Polar | None):
 
@@ -886,6 +906,13 @@ class VLM_Polar_Comparison:
         reference_values[~np.isfinite (current_values)] = np.nan
 
         return current_base, current_values, reference_values
+
+
+    @classmethod
+    def is_relative_deviation (cls, value_var: VLM_Var) -> bool:
+        """Return whether deviation values for the variable are percentages."""
+
+        return value_var in cls.RELATIVE_DEVIATION_MIN
 
 
     @staticmethod
@@ -1214,6 +1241,15 @@ class VLM_Polar:
                          dtype=float)                       # None -> nan
 
 
+    def xtr_at_stripes (self, stripes_cl: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Return the transition points xtrt and xtrbfrom the interpolated normal stripe polars."""
+        xtr_top    = np.array ([polar.xtr_at_cl (cl)[0] for polar, cl in zip (self.airfoil_polar_stripes_normal, stripes_cl)],
+                         dtype=float)  
+        xtr_bottom = np.array ([polar.xtr_at_cl (cl)[1] for polar, cl in zip (self.airfoil_polar_stripes_normal, stripes_cl)],
+                         dtype=float)  
+        return xtr_top, xtr_bottom
+
+
     def kpi_in (self, kpi : VLM_KPI, xyvars : tuple [VLM_Var, VLM_Var]) -> tuple[VLM_Var | None, float | None, float | None, float | None]:
         """Return the value of the specified KPI for the given xyvars tuple."""
 
@@ -1487,16 +1523,7 @@ class VLM_Polar:
         base_var, value_var = delta_vars
         base, current, reference = VLM_Polar_Comparison (self, ref_polar).deviation (base_var, value_var)
 
-        reference_min = {
-            VLM_Var.WING_CD: 1e-8,
-            VLM_Var.WING_CD_IND: 1e-8,
-            VLM_Var.WING_CD_AIRFOIL: 1e-8,
-            VLM_Var.WING_DRAG: 1e-6,
-            VLM_Var.WING_DRAG_IND: 1e-6,
-            VLM_Var.WING_DRAG_AIRFOIL: 1e-6,
-            VLM_Var.WING_GLIDE: 0.05,
-            VLM_Var.WING_GLIDE_AIRFOIL: 0.05,
-        }.get (value_var)
+        reference_min = VLM_Polar_Comparison.RELATIVE_DEVIATION_MIN.get (value_var)
 
         if reference_min is None:
             return base, current - reference, False
@@ -1969,6 +1996,10 @@ class VLM_OpPoint:
             Drag_airfoil     = np.nan
             Drag             = np.nan
 
+        # transition points at top and bottom surfaces
+
+        xtr_top, xtr_bottom = self.polar.xtr_at_stripes (cl)  
+
         drag_results = {
             VLM_Var.Y:                 y,
             VLM_Var.CD:                cd,
@@ -1980,6 +2011,9 @@ class VLM_OpPoint:
             VLM_Var.DRAG_IND_SPAN:     drag_ind_span,
             VLM_Var.DRAG_AIRFOIL_SPAN: drag_airfoil_span,
             VLM_Var.DRAG_SPAN:         drag_span,
+
+            VLM_Var.XTRT:              xtr_top,
+            VLM_Var.XTRB:              xtr_bottom,
 
             VLM_Var.WING_CD_IND:       CD_ind,
             VLM_Var.WING_CD_AIRFOIL:   CD_airfoil,
@@ -2339,41 +2373,28 @@ class VLM_OpPoint:
 
         # columns as (header, values per stripe, format) - format None: text 
         columns = [
-            ("Program",         np.full (n_stripes, program), None),
-            ("Plane",           np.full (n_stripes, wing._wing.name), None),
-            ("Polar type",      np.full (n_stripes, "T1"), None),
-            ("Polar name",      np.full (n_stripes, polar.name), None),
-            ("QInf",            np.full (n_stripes, polar.vtas), ".2f"),
-            ("y-span [m]",      results[VLM_Var.Y], ".3f"),
-            ("Chord [m]",       wing.stripes_chord, ".3f"),
-            ("Alpha [deg]",     results[VLM_Var.ALPHA], ".2f"),
-            ("Alpha eff [deg]", results[VLM_Var.ALPHA_EFF], ".2f"),
-            ("Ai [deg]",       -results[VLM_Var.ALPHA_IND], ".3f"),
-            ("Alpha0 airfoil [deg]",  results[VLM_Var.ALPHA0_AIRFOIL], ".2f"),
-            ("Cl",              results[VLM_Var.CL], ".3f"),
-            ("Cl VLM",          results[VLM_Var.CL_VLM], ".3f"),
-            ("Cl linear",       results[VLM_Var.CL_VLM_LINEAR], ".3f"),
-            ("Cd",              results[VLM_Var.CD], ".5f"),
-            ("Cd airfoil",      results[VLM_Var.CD_AIRFOIL], ".5f"),
-            ("Cd induced",      results[VLM_Var.CD_IND], ".5f"),
-            ("Cm PC2",          results[VLM_Var.CM], ".3f"),
-            ("Cm geo",          results[VLM_Var.CM_VLM], ".3f"),
-            ("Cm airf (c/4)",   results[VLM_Var.CM_AIRFOIL], ".3f"),
-        ]
-
-        stripes = polar.airfoil_polar_stripes
-        if len (stripes) == n_stripes:
-            strip_cl = results[VLM_Var.CL_VLM]
-            xtr_top = np.array ([stripe._interpolate_at_cl (cl, stripe.xtrt)
-                                 for stripe, cl in zip (stripes, strip_cl)], dtype=object)
-            xtr_bottom = np.array ([stripe._interpolate_at_cl (cl, stripe.xtrb)
-                                    for stripe, cl in zip (stripes, strip_cl)], dtype=object)
-            columns.extend ([
-                ("XTrtop", xtr_top, ".3f"),
-                ("XTrBot", xtr_bottom, ".3f"),
-            ])
-
-        columns.extend ([
+            ("Program",             np.full (n_stripes, program), None),
+            ("Plane",               np.full (n_stripes, wing._wing.name), None),
+            ("Polar type",          np.full (n_stripes, "T1"), None),
+            ("Polar name",          np.full (n_stripes, polar.name), None),
+            ("QInf",                np.full (n_stripes, polar.vtas), ".2f"),
+            ("y-span [m]",          results[VLM_Var.Y], ".3f"),
+            ("Chord [m]",           wing.stripes_chord, ".3f"),
+            ("Alpha [deg]",         results[VLM_Var.ALPHA], ".2f"),
+            ("Alpha eff [deg]",     results[VLM_Var.ALPHA_EFF], ".2f"),
+            ("Ai [deg]",           -results[VLM_Var.ALPHA_IND], ".3f"),
+            ("Alpha0 airfoil [deg]",results[VLM_Var.ALPHA0_AIRFOIL], ".2f"),
+            ("Cl",                  results[VLM_Var.CL], ".3f"),
+            ("Cl VLM",              results[VLM_Var.CL_VLM], ".3f"),
+            ("Cl linear",           results[VLM_Var.CL_VLM_LINEAR], ".3f"),
+            ("Cd",                  results[VLM_Var.CD], ".5f"),
+            ("Cd airfoil",          results[VLM_Var.CD_AIRFOIL], ".5f"),
+            ("Cd induced",          results[VLM_Var.CD_IND], ".5f"),
+            ("Cm PC2",              results[VLM_Var.CM], ".3f"),
+            ("Cm geo",              results[VLM_Var.CM_VLM], ".3f"),
+            ("Cm airf (c/4)",       results[VLM_Var.CM_AIRFOIL], ".3f"),
+            ("Xtr top",             results[VLM_Var.XTRT], ".3f"),
+            ("Xtr bottom",          results[VLM_Var.XTRB], ".3f"),
             ("Lift [N/m]",          results[VLM_Var.LIFT_SPAN], ".2f"),
             ("Drag induced [N/m]",  results[VLM_Var.DRAG_IND_SPAN], ".2f"),
             ("Drag airfoil [N/m]",  results[VLM_Var.DRAG_AIRFOIL_SPAN], ".2f"),
@@ -2387,7 +2408,7 @@ class VLM_OpPoint:
             ("Wing Moment [N*m]",   np.full (n_stripes, results[VLM_Var.WING_MOMENT]), ".2f"),
             ("e aero",              np.full (n_stripes, results[VLM_Var.WING_EFFICIENCY]), ".3f"),
             ("Induced drag method", np.full (n_stripes, "Trefftz" if polar._use_treffz else "Near field"), None),
-        ])
+            ]
 
         with open (pathFileName, mode="w", newline="", encoding="utf-8") as csvfile:
             writer = csv.writer (csvfile, dialect="excel")
