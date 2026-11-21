@@ -24,6 +24,13 @@ echo In directory     : %cd%\dist
 rem ---- run Pytest  for test_*.py
 rem          exclude slow test like polar with -m "not slow"
 
+echo.
+echo ------ Pytest %PACKAGE_NAME% %PACKAGE_VERSION%
+echo.
+
+py -3 -m pytest tests -m "not slow"
+if %errorlevel% neq 0 goto end
+
 rem ---- build package - wheel and sdist 
 
 echo.

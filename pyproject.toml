@@ -55,3 +55,13 @@ include = [
   "README.md",
   "LICENSE"
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["planformcreator2"]          # add project root to sys.path to find planformcreator2 modules
+testpaths = ["tests"]
+filterwarnings = [
+  "ignore:.*parseAll.*deprecated.*:DeprecationWarning:pyparsing\\.util",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]

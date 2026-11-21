@@ -4,6 +4,7 @@
 
 This script replaces complex batch logic with a small, readable Python driver.
 It supports:
+- running the test suite before executable builds
 - building the shared dual-exe PyInstaller bundle
 - building the NSIS installer
 - running both steps in sequence
@@ -323,7 +324,18 @@ def _resolve_pyinstaller_output_dir(dist_dir: Path) -> Path:
     )
 
 
-def build_exe(repo_root: Path) -> None:
+def _run_pytest(repo_root: Path, mode: str) -> None:
+    if mode == "none":
+        return
+    if mode == "not-slow":
+        _run([sys.executable, "-m", "pytest", "tests", "-m", "not slow"], cwd=repo_root)
+    elif mode == "all":
+        _run([sys.executable, "-m", "pytest", "tests"], cwd=repo_root)
+    else:
+        raise ValueError(f"Unsupported test mode: {mode}")
+
+
+def build_exe(repo_root: Path, *, test_mode: str = "none") -> None:
     package_name, package_version = _project_metadata(repo_root)
 
     win_exe_dir = f"{package_name}-{package_version}_win_exe"
@@ -340,6 +352,10 @@ def build_exe(repo_root: Path) -> None:
     print(f"Package name    : {package_name}")
     print(f"Package version : {package_version}")
     print(f"Output folder   : {win_exe_dir}")
+
+    print()
+    print(f"------ Pytest ({test_mode})")
+    _run_pytest(repo_root, test_mode)
 
     pc2_icon_path = repo_root / "icons" / PC2_ICON_NAME
     if not pc2_icon_path.is_file():
@@ -467,7 +483,7 @@ def main() -> int:
             return 0
 
         if args.target in ("exe", "all"):
-            build_exe(repo_root)
+            build_exe(repo_root, test_mode="not-slow")
 
         if args.target in ("installer", "all"):
             build_installer(repo_root)

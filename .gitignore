@@ -7,15 +7,10 @@ Tip_Example.dat
 releases
 T*.txt
 tmp*.inp
-test/*
-tests/*
+tests/test_*/*
 *.xlsx
 *_tmp
 *_temp
-*_dxf
-*_xflr5
-*_flz
-*_exported
 images/~*.pptx					# tmp ppt 
 doc/rcn
 
