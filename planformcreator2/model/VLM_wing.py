@@ -30,7 +30,7 @@ from time                           import perf_counter
 
 from .VLM                           import calc_Qjj
 from airfoileditor.base.math_util   import extremum
-from airfoileditor.model.polar_set  import Polar_Set, polarType, Polar, Polar_Definition, re_scale_round_to, var
+from airfoileditor.model.polar_set  import Polar_Set, polarType, Polar, Polar_Definition, Polar_Interpolated, re_scale_round_to, var
 from airfoileditor.model.airfoil    import GEO_BASIC
 
 if TYPE_CHECKING:
@@ -651,205 +651,10 @@ class VLM_Wing:
 
 
 
-class VLM_Airfoil_Polar:
-    """Airfoil polar interpolated between two spanwise sections."""
-
-    def __init__ (self, polar_left: Polar, polar_right: Polar,
-                  chord_left: float, chord_right: float, chord: float):
-
-        self._polar_left  = polar_left
-        self._polar_right = polar_right
-
-        dc = chord_right - chord_left
-        is_valid_log = chord_left > 0.0 and chord_right > 0.0 and chord > 0.0 and dc != 0.0
-
-        # linear fraction 
-        self._chord_fraction     = (0.0 if dc == 0.0     else (chord - chord_left) / dc)
-
-        # logarithmic fraction - handles the non-linear dependency of Reynolds number and polar
-        self._chord_fraction_log = (self._chord_fraction if not is_valid_log else
-                                     (np.log (chord) - np.log (chord_left)) / (np.log (chord_right) - np.log (chord_left)))
-
-        # logger.debug (f"at chord={chord:.3f} (left={chord_left:.3f}, right={chord_right:.3f})  " +
-        #               f"fraction linear={self._chord_fraction:.4f} log={self._chord_fraction_log:.4f} " +
-        #               f"diff={(self._chord_fraction_log - self._chord_fraction) * 100:+.2f}%")
-
-        self._alpha = None
-        self._cl    = None
-        self._cd    = None
-        self._cdp   = None
-        self._cm    = None
-        self._cp_min = None
-        self._xtrt  = None
-        self._xtrb  = None
-        self._branch_mask_cache = None
-
-        # sanity - polars must be loaded
-        if not polar_left.isLoaded or not polar_right.isLoaded:
-            raise ValueError ("polars must be loaded")
-
-        # interpolate main aerodynamic coefficients
-        self._alpha, self._alpha_left, self._alpha_right = self._build_alpha_mapping ()
-        self._cl = self._interpolate_values (var.CL, log=True)
-        self._cd = self._interpolate_values (var.CD, log=True)
-
-
-    def __repr__(self) -> str:
-        # overwrite to get a nice print string 
-        return f"<{type(self).__name__} at {self._chord_fraction:.2f} >"
-
-
-    def _build_alpha_mapping (self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Align pre-stall alpha ranges from cl_min (0) to cl_max (1)."""
-
-        branches = []
-        for polar in (self._polar_left, self._polar_right):
-            alpha, cl = np.asarray (polar.alpha), np.asarray (polar.cl)
-            if not alpha.size:
-                raise ValueError ("Cannot interpolate an empty polar")
-
-            index_min, index_max = int (np.argmin (cl)), int (np.argmax (cl))
-            if index_min >= index_max:
-                raise ValueError ("Polar must have a pre-stall branch from cl_min to cl_max")
-
-            branches.append (alpha[index_min:index_max + 1])
-
-        branch_left, branch_right = branches
-        normalized = np.union1d (
-            (branch_left  - branch_left[0])  / (branch_left[-1]  - branch_left[0]),
-            (branch_right - branch_right[0]) / (branch_right[-1] - branch_right[0]))
-        alpha_left  = np.interp (normalized, [0.0, 1.0], branch_left[[0, -1]])
-        alpha_right = np.interp (normalized, [0.0, 1.0], branch_right[[0, -1]])
-
-        alpha = alpha_left + self._chord_fraction_log * (alpha_right - alpha_left)
-
-        return alpha, alpha_left, alpha_right
-
-
-    def _interpolate_values (self, polar_var: var, log: bool = False) -> np.ndarray:
-        """
-        Interpolate the given polar variable between the left and right polars.
-        - either logarithmic interpolation or linear based on chord fraction
-        """
-        fraction = self._chord_fraction_log if log else self._chord_fraction
-        values_left  = np.interp (self._alpha_left, self._polar_left.alpha,
-                                 self._polar_left._ofVar (polar_var))
-        values_right = np.interp (self._alpha_right, self._polar_right.alpha,
-                                  self._polar_right._ofVar (polar_var))
-        return values_left + fraction * (values_right - values_left)
-
-
-    @property
-    def alpha (self) -> np.ndarray:
-        return self._alpha
-
-    @property
-    def cl (self) -> np.ndarray:
-        return self._cl
-
-    @property
-    def cd (self) -> np.ndarray:
-        return self._cd
-
-    @property
-    def cdp (self) -> np.ndarray:
-        if self._cdp is None:
-            self._cdp = self._interpolate_values (var.CDP)
-        return self._cdp
-
-    @property
-    def cm (self) -> np.ndarray:
-        if self._cm is None:
-            self._cm = self._interpolate_values (var.CM)
-        return self._cm
-
-    @property
-    def cp_min (self) -> np.ndarray:
-        if self._cp_min is None:
-            self._cp_min = self._interpolate_values (var.CP_MIN)
-        return self._cp_min
-
-    @property
-    def xtrt (self) -> np.ndarray:
-        if self._xtrt is None:
-            self._xtrt = self._interpolate_values (var.XTRT)
-        return self._xtrt
-
-    @property
-    def xtrb (self) -> np.ndarray:
-        if self._xtrb is None:
-            self._xtrb = self._interpolate_values (var.XTRB)
-        return self._xtrb
-
-    @property
-    def alpha0 (self) -> float | None:
-        finite_samples = np.isfinite (self.alpha) & np.isfinite (self.cl)
-        if not finite_samples.any():
-            raise ValueError (f"{self}: Cannot estimate alpha0 without finite pre-stall samples")
-
-        alpha0 = self._interpolate_at_cl (0.0, self.alpha)
-        if alpha0 is not None:
-            return alpha0
-
-        branch_mask = self._branch_mask & finite_samples
-        if not branch_mask.any():
-            raise ValueError (f"{self}: Cannot estimate alpha0 without finite pre-stall samples")
-
-        index = np.flatnonzero (branch_mask)[np.argmin (np.abs (self.cl[branch_mask]))]
-        logger.warning (f"{self}: CL=0 is outside polar; estimating alpha0")
-        return float (self.alpha[index] - self.cl[index] / INVISCID_LIFT_SLOPE)
-
-    @property
-    def cl_max (self) -> float | None:
-        return float (np.max (self.cl)) if len (self.cl) else None
-
-    @property
-    def cl_min (self) -> float | None:
-        return float (np.min (self.cl)) if len (self.cl) else None
-
-    @property
-    def alpha_max (self) -> float | None:
-        if not len (self.cl):
-            return None
-        return float (self.alpha [np.argmax (self.cl)])
-
-    def cd_at_cl (self, cl: float) -> float | None:
-        return self._interpolate_at_cl (cl, self.cd)
-
-    def cm_at_cl (self, cl: float) -> float | None:
-        return self._interpolate_at_cl (cl, self.cm)
-
-    def xtr_at_cl (self, cl: float) -> tuple[float | None, float | None]:
-        """Return the transition points xtrt and xtrb at a given cl."""
-        xtrt = self._interpolate_at_cl (cl, self.xtrt)
-        xtrb = self._interpolate_at_cl (cl, self.xtrb)
-        return xtrt, xtrb
-
-
-    @property
-    def _branch_mask (self) -> np.ndarray:
-        """Mask of samples on the increasing-lift branch, strictly increasing in cl."""
-
-        if self._branch_mask_cache is None:
-            i_min, i_max = int (np.argmin (self.cl)), int (np.argmax (self.cl))
-            cl       = self.cl[i_min:i_max + 1]
-            prev_max = np.maximum.accumulate (np.r_[-np.inf, cl[:-1]])
-            increasing_cl_mask = cl > prev_max
-            branch_mask = np.zeros (self.cl.shape, dtype=bool)
-            branch_mask[i_min:i_max + 1] = increasing_cl_mask
-            self._branch_mask_cache = branch_mask
-        return self._branch_mask_cache
-
-
-    def _interpolate_at_cl (self, cl: float, values: np.ndarray) -> float | None:
-        """Interpolate on the increasing-lift branch, excluding post-stall points."""
-
-        if not len (self.cl) or not np.isfinite (cl):
-            return None
-
-        branch_mask = self._branch_mask
-        val = np.interp (cl, self.cl[branch_mask], values[branch_mask], left=np.nan, right=np.nan)
-        return float (val) if np.isfinite (val) else None
+# Airfoil polar interpolated between two existing polars (e.g. two spanwise
+# sections by chord) now lives in airfoileditor as Polar_Interpolated, so it
+# can be reused for interpolating between two Reynolds-bracketing T1 polars
+# of the same airfoil (T2 kernel).
 
 
 # ----------------------------------------------------------
@@ -1041,14 +846,14 @@ class VLM_Polar:
         return self._airfoil_polar_sections_normal
 
     @property
-    def airfoil_polar_stripes (self) -> list [VLM_Airfoil_Polar]:
+    def airfoil_polar_stripes (self) -> list [Polar_Interpolated]:
         """VLM airfoil polars interpolated to the panel stripes."""
         if not self._airfoil_polar_stripes:
             self._airfoil_polar_stripes = self._build_airfoil_polar_stripes (is_vlm=True)
         return self._airfoil_polar_stripes
 
     @property
-    def airfoil_polar_stripes_normal (self) -> list [VLM_Airfoil_Polar]:
+    def airfoil_polar_stripes_normal (self) -> list [Polar_Interpolated]:
         """Normal airfoil polars interpolated to the panel stripes."""
         if not self._airfoil_polar_stripes_normal:
             self._airfoil_polar_stripes_normal = self._build_airfoil_polar_stripes (is_vlm=False)
@@ -1092,7 +897,7 @@ class VLM_Polar:
         return self._use_treffz
 
 
-    def _build_airfoil_polar_stripes (self, is_vlm: bool) -> list[VLM_Airfoil_Polar]:
+    def _build_airfoil_polar_stripes (self, is_vlm: bool) -> list[Polar_Interpolated]:
         """Build one interpolated airfoil polar for each panel stripe."""
         section_polars = self.airfoil_polar_sections if is_vlm else self.airfoil_polar_sections_normal
         if not section_polars or len (section_polars) != len (self.vlm_wing.sections):
@@ -1111,7 +916,7 @@ class VLM_Polar:
                 i_left += 1
                 i_right += 1
 
-            interpolated.append (VLM_Airfoil_Polar (
+            interpolated.append (Polar_Interpolated (
                 section_polars[i_left], section_polars[i_right],
                 section_chords[i_left], section_chords[i_right], chord))
 
